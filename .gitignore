@@ -7,7 +7,7 @@ dist/
 # Local security scanner tools — not part of Amelie
 security-tools/
 
-# Claude Code local session data
+# Local editor/session data
 .claude/
 
 # Maintainer-only tooling (kept local, not published)
