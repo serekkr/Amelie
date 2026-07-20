@@ -1,0 +1,21 @@
+# Dependencies (reinstall with `npm install`)
+node_modules/
+
+# Build output
+dist/
+
+# Local security scanner tools — not part of Amelie
+security-tools/
+
+# Claude Code local session data
+.claude/
+
+# Maintainer-only tooling (kept local, not published)
+install-amelie/
+release/
+RELEASE_NOTES.md
+docs/
+
+# OS / editor cruft
+.DS_Store
+*.log

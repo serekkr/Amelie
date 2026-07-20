@@ -1,0 +1,159 @@
+<div align="center">
+  <img src="assets/amelie.png" alt="Amelie" width="128" height="128" />
+</div>
+
+<div align="center">
+  <img src="assets/hello-friend.gif" alt="Amelie — Hello friend! Your data, private by default" width="620" />
+</div>
+
+<div align="center">
+
+A local-first Markdown notes app for Linux, with optional
+end-to-end encryption and self-hosted sync over WebDAV, Wireguard or Openvpn with Samba.
+
+[![Version](https://img.shields.io/github/v/release/serekkr/Amelie?label=version&color=3fb950)](https://github.com/serekkr/Amelie/releases/latest)
+![Platform](https://img.shields.io/badge/platform-Linux-333?logo=linux&logoColor=white)
+![Electron](https://img.shields.io/badge/Electron-42-47848F?logo=electron&logoColor=white)
+![Language](https://img.shields.io/badge/code-JavaScript-f7df1e?logo=javascript&logoColor=black)
+![License](https://img.shields.io/badge/license-MIT-brightgreen)
+
+</div>
+
+---
+
+## What is Amelie?
+
+Amelie is a desktop note-taking application built around a plain-text Markdown
+vault that lives entirely **on your own machine**. There is no cloud account, no
+telemetry and no lock-in: your notes are ordinary `.md` files in a folder you
+choose. When you *do* want your notes on more than one device, Amelie syncs them
+to infrastructure **you** control — a Nextcloud/WebDAV server, a Samba share, or
+a private machine reachable through a WireGuard or OpenVPN tunnel — and can keep the whole
+vault **encrypted at rest** with a password only you know.
+
+It is designed for people who want a folder-of-Markdown workflow — wiki-links,
+live preview, plain files — in a lightweight, self-hosted, privacy-first tool
+on Linux.
+
+---
+
+## ✨ Features
+
+### Writing
+- **CodeMirror 6 editor** with a fast, distraction-free writing experience and
+  syntax highlighting inside fenced code blocks.
+- **Live Markdown preview** side-by-side or as a toggled reading view.
+- **Readable line length** — optional centered 760px measure, works with line
+  numbers on or off.
+- **Managed frontmatter** — `created` / `modified` handled for you and hidden in
+  the reading view.
+- **Images**: drag & drop, paste from clipboard, or insert from file — stored as
+  attachments alongside the vault.
+
+### Beyond text
+- **Infinite canvas / whiteboard** powered by tldraw.
+- **Mindmaps** with zoom and reset.
+- **PDF**: built-in viewer and export.
+
+### Organization
+- **Folder-based vault** with a navigable file tree.
+- **Live vault watcher** — external changes (file manager, sync) refresh the
+  tree automatically, no restart needed.
+- **Session & tab restore** — reopen exactly where you left off.
+- **Search** across your notes.
+- **10 built-in themes** (Cyberpunk/GitHub-dark, Dracula, Nord, Gruvbox,
+  Solarized, One Dark, Amber, Navy, Rose, and a Light theme).
+- **7 UI languages**: English, Italiano, Español, Français, Deutsch, Polski, Română.
+
+### Privacy & sync
+- **Encrypted vault** — AES-256-GCM with a password-derived key (scrypt / PBKDF2);
+  notes and attachments are encrypted on disk.
+- **WebDAV sync** — Nextcloud, ownCloud, or any WebDAV server.
+- **Samba / SMB sync** — local network shares, via a bundled static SMB2/3 helper
+  (no system `smbclient` required).
+- **VPN + Samba** — reach a Samba share on a remote machine over a private
+  **WireGuard or OpenVPN** tunnel; either VPN works for both **backup** and **sync**.
+- **Atomic writes** — files are written to a temp name and renamed, so a second
+  PC syncing at the same instant never sees a half-written file.
+- **Connection-tested destinations** — remote backup/sync targets only enable
+  after their connection test succeeds.
+- **Autosave** with a local backup safety net.
+
+### First run
+- **Onboarding wizard** — Vault › Security › Theme › Ready.
+- A **Welcome note** is created for a brand-new vault so you never start on a
+  blank screen.
+
+---
+
+## 🧱 Tech stack
+
+Amelie is written in **JavaScript** and runs as an **Electron** desktop app.
+
+| Layer            | Technology |
+|------------------|------------|
+| Runtime          | [Electron](https://www.electronjs.org/) (Chromium + Node.js) |
+| Language         | JavaScript — no renderer framework, vanilla JS |
+| Editor           | [CodeMirror](https://codemirror.net/) |
+| Markdown         | `marked` + `DOMPurify` + `highlight.js` |
+| Canvas           | [tldraw](https://tldraw.dev/) |
+| PDF              | `pdf-lib` |
+| Sync             | `webdav` (npm), bundled Go static SMB helper (`amelie-smb`), WireGuard, `rsync` |
+| Encryption       | Node.js `crypto` — AES-256-GCM, scrypt / PBKDF2 key derivation |
+| Bundling         | `esbuild` (CodeMirror bundle) |
+| Packaging        | `electron-builder` (AppImage) + a custom `.run` self-installer |
+| Platform         | Linux (x86-64) |
+
+> Exact bundled versions are listed on each [release](https://github.com/serekkr/Amelie/releases).
+
+
+---
+
+## 🚀 Installation
+
+Download the latest `amelie_<version>.run` from the [releases](https://github.com/serekkr/Amelie/releases), then:
+
+```bash
+chmod +x amelie_*.run
+./amelie_*.run
+```
+
+The app installs to your home directory and adds a desktop entry. To remove it:
+
+```bash
+amelie --uninstall        # or: ./amelie_*.run --uninstall
+```
+
+> Your notes are safe — uninstalling never deletes your vault folder.
+
+
+---
+
+## 📁 Where your notes live
+
+You pick the vault folder in the setup wizard. Inside it:
+
+```
+<your-vault>/
+├── notes...            # your Markdown notes (.md), in any folder structure
+├── attachments/        # images and files referenced by your notes
+└── .amelie-backups/    # local autosave safety net
+```
+
+Everything is plain files on your disk. Point any other tool at the same folder,
+or back it up however you like.
+
+---
+
+## 🔒 A note on privacy
+
+Amelie collects nothing. Sync is entirely optional and
+always to a destination you own and configure. With vault encryption enabled,
+your notes are unreadable on disk without your password — including on the remote
+share they sync to.
+
+---
+
+## 📄 License
+
+Released under the [MIT License](LICENSE).

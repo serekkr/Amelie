@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Amelie Canvas</title>
+  <link rel="stylesheet" href="tldraw-bundle.css"/>
+  <link rel="stylesheet" href="fonts.css"/>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; }
+    /* Use the same Roboto Mono as the notes for canvas text instead of tldraw's
+       handwritten font. Overrides the default "draw" font plus sans/mono. */
+    .tl-container {
+      --tl-font-draw: "Roboto Mono", monospace;
+      --tl-font-sans: "Roboto Mono", monospace;
+      --tl-font-mono: "Roboto Mono", monospace;
+    }
+    /* hide the ALT (alt text) button on the shape toolbar: it's accessibility
+       metadata, invisible on the canvas, and confused the user. */
+    [title="Alternative text"] { display: none !important; }
+    /* tick canvas: keeps compositor layer dirty every frame */
+    #__compositor_tick__ {
+      position: fixed; top: 0; left: 0; width: 1px; height: 1px;
+      opacity: 0.004; pointer-events: none; z-index: -1;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="__compositor_tick__" width="2" height="2"></canvas>
+  <div id="root"></div>
+  <script src="tldraw-bundle.js"></script>
+  <script>
+    const { React, ReactDOM, Tldraw, createShapeId, getAssetUrls } = window.__TldrawLib;
+    const { createElement: h } = React;
+    // Self-hosted tldraw assets (fonts/icons/translations/embed-icons) — served
+    // locally from tldraw-assets/ so the drawing works fully OFFLINE, no
+    // cdn.tldraw.com. Falls back to default if the bundle predates this.
+    const _assetUrls = (typeof getAssetUrls === 'function')
+      ? getAssetUrls({ baseUrl: 'tldraw-assets' }) : undefined;
+
+    let editor = null;
+    let pendingLoad = null;
+    // Background mode for image export (PNG/SVG via tldraw's native menu).
+    // The canvas is forced dark for editing; without this the export would
+    // inherit the dark background. We intercept tldraw's SVG generation and
+    // inject background/darkMode per the mode chosen in Amelie's header.
+    //   'white'       → white background, light (dark-on-white) strokes
+    //   'transparent' → no background, light strokes
+    //   'theme'       → "Dark"/"Scuro": force dark background + light strokes
+    let _exportBgMode = 'white';
+
+    function loadData(json) {
+      if (!editor || !json) return;
+      try {
+        const snapshot = JSON.parse(json);
+        if (snapshot && typeof snapshot === 'object' && Object.keys(snapshot).length > 0) {
+          editor.store.loadSnapshot(snapshot);
+        } else {
+          // Empty file — clear all shapes from current page
+          const ids = [...editor.getCurrentPageShapeIds()];
+          if (ids.length > 0) editor.deleteShapes(ids);
+        }
+      } catch(_) {}
+    }
+
+    // Rasterize the current page to PNG/SVG (honoring _exportBgMode via the
+    // getSvgElement patch) and hand the bytes back to the parent for saving.
+    async function exportImage(format, requestId) {
+      const post = (payload) => window.parent.postMessage({ type: 'EXPORT_IMAGE_RESULT', requestId, ...payload }, '*');
+      try {
+        if (!editor) return post({ ok: false, error: 'no editor' });
+        const ids = [...editor.getCurrentPageShapeIds()];
+        if (ids.length === 0) return post({ ok: false, empty: true });
+        const fmt = format === 'svg' ? 'svg' : 'png';
+        const { blob } = await editor.toImage(ids, { format: fmt });
+        const dataUrl = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result); r.onerror = () => rej(r.error);
+          r.readAsDataURL(blob);
+        });
+        post({ ok: true, format: fmt, b64: String(dataUrl).split(',')[1] || '' });
+      } catch (e) { post({ ok: false, error: String((e && e.message) || e) }); }
+    }
+
+    function App() {
+      return h(Tldraw, {
+        assetUrls: _assetUrls,
+        inferDarkMode: false,
+        onMount: (ed) => {
+          editor = ed;
+          try { editor.updateInstanceState({ colorScheme: 'dark' }); } catch(_) {}
+
+          // Intercept every image export (toImage/getSvg/copy-as-svg all funnel
+          // through getSvgElement) to apply the chosen export background, so the
+          // native "Export as PNG/SVG" menu honors it without touching the theme.
+          try {
+            const _origGetSvgElement = editor.getSvgElement.bind(editor);
+            editor.getSvgElement = (ids, opts = {}) => {
+              const inj = {};
+              if (_exportBgMode === 'white')       { inj.darkMode = false; inj.background = true; }
+              else if (_exportBgMode === 'transparent') { inj.darkMode = false; inj.background = false; }
+              // 'theme' → the "Dark"/"Scuro" option: force a real dark export
+              // (dark background + light strokes), not just "follow the canvas".
+              else if (_exportBgMode === 'theme') { inj.darkMode = true; inj.background = true; }
+              return _origGetSvgElement(ids, { ...inj, ...opts });
+            };
+          } catch(_) {}
+
+          window.parent.postMessage({ type: 'CANVAS_READY' }, '*');
+          if (pendingLoad) { loadData(pendingLoad); pendingLoad = null; }
+
+          // Only listen to user-initiated changes (not loadSnapshot)
+          editor.store.listen(() => {
+            try {
+              const snapshot = editor.store.getSnapshot();
+              const json = JSON.stringify(snapshot);
+              window.parent.postMessage({ type: 'CANVAS_CHANGE', json }, '*');
+            } catch(_) {}
+          }, { source: 'user' });
+        },
+      });
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(h(App));
+
+    window.addEventListener('message', (e) => {
+      const msg = e.data;
+
+      if (msg?.type === 'LOAD_DATA' && msg.json) {
+        if (editor) loadData(msg.json);
+        else pendingLoad = msg.json;
+        return;
+      }
+
+      if (msg?.type === 'SET_EXPORT_BG' && msg.mode) {
+        _exportBgMode = msg.mode;   // applies to the next image export
+        return;
+      }
+
+      if (msg?.type === 'EXPORT_IMAGE') {
+        exportImage(msg.format, msg.requestId);
+        return;
+      }
+
+      if (!editor) return;
+
+      if (msg?.type === 'ADD_NOTE') {
+        const { label, snippet, tags } = msg;
+        const x = 100 + Math.random() * 300;
+        const y = 100 + Math.random() * 200;
+        const titleText = label || 'Nota';
+        const bodyText  = snippet ? snippet.slice(0, 120) : '';
+        const tagsText  = tags?.length ? tags.map(t => '#'+t).join('  ') : '';
+        const text = titleText + (bodyText ? '\n\n' + bodyText : '') + (tagsText ? '\n\n' + tagsText : '');
+
+        editor.createShapes([{
+          id: createShapeId(),
+          type: 'note',
+          x, y,
+          props: { text, color: 'light-blue', size: 'm' },
+        }]);
+      }
+
+      if (msg?.type === 'SAVE_REQUEST') {
+        window.parent.postMessage({ type: 'SAVED' }, '*');
+      }
+    });
+  </script>
+  <script>
+    // Keep the iframe compositor layer dirty every frame so the software
+    // compositor always re-reads the canvas content instead of a stale frame.
+    (function() {
+      const tc = document.getElementById('__compositor_tick__');
+      const ctx = tc.getContext('2d');
+      let t = 0;
+      function tick() {
+        const v = (t++ & 1) ? 22 : 23;
+        ctx.fillStyle = 'rgb(22,27,' + v + ')';
+        ctx.fillRect(0, 0, 2, 2);
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>

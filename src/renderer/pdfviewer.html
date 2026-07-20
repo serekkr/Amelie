@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>PDF</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1a1a1a; color: #ddd;
+    font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
+    overflow: auto;
+  }
+  #status { padding: 18px; text-align: center; color: #888; font-size: 13px; }
+  #pages { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 20px; }
+  .pdf-page {
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+  #err { color: #e0758a; padding: 18px; text-align: center; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="status">Caricamento PDF…</div>
+<div id="pages"></div>
+<div id="err" style="display:none"></div>
+<script type="module">
+  import * as pdfjsLib from './pdfjs/pdf.mjs';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./pdfjs/pdf.worker.mjs', location.href).toString();
+
+  const params = new URLSearchParams(location.search);
+  const url = params.get('url');
+  const status = document.getElementById('status');
+  const pages = document.getElementById('pages');
+  const err = document.getElementById('err');
+
+  function showErr(msg) {
+    status.style.display = 'none';
+    err.style.display = 'block';
+    err.textContent = msg;
+  }
+
+  if (!url) { showErr('URL del PDF mancante.'); }
+  else {
+    (async () => {
+      try {
+        const pdf = await pdfjsLib.getDocument(url).promise;
+        status.style.display = 'none';
+        // Render at 1.5x device pixel ratio for crispness, downscaled via CSS
+        const scale = 1.5;
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          canvas.className = 'pdf-page';
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          canvas.style.width = (viewport.width / 1.5) + 'px';
+          pages.appendChild(canvas);
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        }
+      } catch (e) {
+        console.error(e);
+        showErr('Errore: ' + (e?.message || e));
+      }
+    })();
+  }
+</script>
+</body>
+</html>

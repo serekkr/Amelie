@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' 'unsafe-eval';
+    style-src 'self' 'unsafe-inline';
+    font-src 'self' data:;
+    img-src 'self' data: blob: inkwell:;
+    media-src 'self' blob: inkwell: http://127.0.0.1:*;
+  " />
+  <title>Amelie</title>
+  <link rel="stylesheet" href="fonts.css" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { display: flex; flex-direction: column; background: var(--bg-0); }
+    #det-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 16px; background: var(--bg-1);
+      border-bottom: 1px solid var(--border);
+      font-family: var(--ui-font); font-size: 13px; color: var(--text-1);
+      flex-shrink: 0;
+    }
+    #det-header svg { width: 15px; height: 15px; stroke: var(--accent); flex-shrink: 0; }
+    #det-name { font-weight: 500; color: var(--text-0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #det-badge { margin-left: auto; font-size: 11px; color: var(--text-3); }
+    #det-mode, .det-nav {
+      background: var(--bg-2); border: 1px solid var(--border);
+      color: var(--text-3); cursor: pointer; border-radius: 4px;
+      padding: 3px 6px; line-height: 1; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #det-mode svg, .det-nav svg { width: 13px; height: 13px; stroke: currentColor; }
+    #det-mode:hover, .det-nav:hover:not(:disabled) { background: var(--bg-3); color: var(--text-0); }
+    .det-nav:disabled { opacity: .35; cursor: default; }
+    #preview-pane { flex: 1; overflow-y: auto; padding: 28px 48px; background: var(--bg-0); }
+    #det-editor {
+      flex: 1; width: 100%; resize: none; border: none; outline: none;
+      background: var(--bg-0); color: var(--text-0); box-sizing: border-box;
+      font-family: var(--editor-font-family); font-size: var(--editor-font-size);
+      line-height: 1.7; padding: 28px 48px;
+      overflow-y: auto; overflow-x: hidden; display: none;
+    }
+    /* In-note search bar (Ctrl+F) */
+    #det-search {
+      display: none; align-items: center; gap: 6px;
+      padding: 5px 14px; background: var(--bg-1);
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+      font-family: var(--ui-font); font-size: 12px;
+    }
+    #det-search-input {
+      flex: 0 1 260px; background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: 5px; color: var(--text-0); font-family: var(--ui-font);
+      font-size: 12px; padding: 4px 9px; outline: none;
+    }
+    #det-search-input:focus { border-color: var(--accent-dim); }
+    #det-search-count { color: var(--text-3); min-width: 44px; }
+    mark.det-find { background: rgba(255,221,87,.30); color: inherit; border-radius: 2px; }
+    mark.det-find.current { background: rgba(255,221,87,.55); outline: 1px solid rgba(255,221,87,.85); }
+    /* Formatting toolbar — same look as the main editor's, edit mode only */
+    #det-toolbar {
+      display: none; align-items: center; gap: 2px;
+      padding: 4px 14px; background: var(--bg-1);
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    #det-toolbar button {
+      background: transparent; border: none; color: var(--text-1);
+      cursor: pointer; border-radius: 5px; padding: 4px 8px;
+      font-family: var(--ui-font); font-size: 13px; line-height: 1;
+      display: flex; align-items: center; justify-content: center; min-width: 28px;
+    }
+    #det-toolbar button:hover { background: var(--bg-3); color: var(--text-0); }
+    #det-toolbar button svg { width: 14px; height: 14px; }
+  </style>
+</head>
+<body>
+  <div id="det-header">
+    <button id="det-prev" class="det-nav" title="Nota precedente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+    <button id="det-next" class="det-nav" title="Nota successiva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+    <span id="det-name">—</span>
+    <span id="det-badge">finestra staccata</span>
+    <button id="det-search-btn" class="det-nav" title="Cerca nella nota (Ctrl+F)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+    <button id="det-mode" title="Modifica"></button>
+  </div>
+  <div id="det-search">
+    <input id="det-search-input" type="text" placeholder="Cerca nella nota…" autocomplete="off" spellcheck="false"/>
+    <span id="det-search-count"></span>
+    <button id="det-search-prev" class="det-nav" title="Precedente">↑</button>
+    <button id="det-search-next" class="det-nav" title="Successivo (Enter)">↓</button>
+    <button id="det-search-close" class="det-nav" title="Chiudi">✕</button>
+  </div>
+  <div id="det-toolbar">
+    <button data-dcmd="heading" title="Heading">H</button>
+    <button data-dcmd="bullet" title="Lista puntata"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="5" cy="6" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="18" r="1" fill="currentColor"/></svg></button>
+    <button data-dcmd="bold" title="Bold"><strong>B</strong></button>
+    <button data-dcmd="italic" title="Italic"><em>I</em></button>
+    <button data-dcmd="code" title="Code">{}</button>
+    <button data-dcmd="checklist" title="Checklist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 4.2 7.2 6.5 4.8"/><polyline points="3 12 4.2 13.2 6.5 10.8"/><polyline points="3 18 4.2 19.2 6.5 16.8"/><line x1="10" y1="6" x2="20" y2="6"/><line x1="10" y1="12" x2="20" y2="12"/><line x1="10" y1="18" x2="20" y2="18"/></svg></button>
+    <button data-dcmd="table" title="Tabella"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="1"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="4" x2="12" y2="20"/></svg></button>
+    <button data-dcmd="link" title="Link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-2.83 2.83a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></button>
+  </div>
+  <div id="preview-pane">
+    <div id="preview-content"></div>
+  </div>
+  <textarea id="det-editor" spellcheck="true"></textarea>
+
+  <script src="highlight.min.js"></script>
+  <script src="purify.min.js"></script>
+  <script src="detached.js"></script>
+</body>
+</html>

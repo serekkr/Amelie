@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'unsafe-inline';"/>
+<title>Amelie — Setup</title>
+<link rel="stylesheet" href="fonts.css"/>
+<style>
+:root{--bg-0:#0a0e17;--bg-1:#0e1520;--bg-2:#131c2b;--bg-3:#192436;--bg-4:#1f2d42;--border:#243348;--border-light:#2e4160;--text-0:#dde6f0;--text-1:#9aacbe;--text-2:#5c7490;--text-3:#344d66;--accent:#3d9970;--accent-dim:#2a6b4e;--active-bg:rgba(61,153,112,.12);--red:#e05c6a;--green:#3d9970;--yellow:#e0a84a;--ef:'Roboto Mono',monospace;--uf:'Roboto',sans-serif;--r:6px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var(--uf);font-size:14px;-webkit-font-smoothing:antialiased;overflow:hidden}
+/* titlebar drag region */
+#drag{height:32px;-webkit-app-region:drag;background:var(--bg-0);display:flex;align-items:center;padding:0 12px;flex-shrink:0}
+.tbb{width:12px;height:12px;border-radius:50%;margin-right:7px;-webkit-app-region:no-drag}
+.c1{background:#ff5f57}.c2{background:#ffbe2e}.c3{background:#28c840}
+#wrap{height:calc(100vh - 32px);display:flex;align-items:center;justify-content:center;padding:20px}
+#panel{width:100%;max-width:720px;display:flex;flex-direction:column;gap:0}
+/* Step indicator */
+#steps{display:flex;align-items:center;gap:0;margin-bottom:28px}
+.step{display:flex;align-items:center;gap:8px;opacity:1;transition:opacity .2s}
+.step.active{opacity:1}
+.step.done{opacity:.6}
+.step-num{width:24px;height:24px;border-radius:50%;background:var(--bg-3);border:1px solid var(--border);font-family:var(--ef);font-size:11px;display:flex;align-items:center;justify-content:center;color:var(--text-2);flex-shrink:0}
+.step.active .step-num{background:var(--accent-dim);color:var(--accent);border-color:var(--accent)}
+.step.done .step-num{background:var(--bg-3);color:var(--green);border-color:var(--green)}
+.step-label{font-size:12px;color:var(--text-1);white-space:nowrap}
+.step-arrow{color:var(--text-3);margin:0 8px;font-size:16px}
+/* Step panels */
+.step-panel{display:none;flex-direction:column;gap:18px}
+.step-panel.active{display:flex}
+/* Welcome/step title — non-italic, a bit larger than the body for prominence */
+.step-title{font-size:24px;font-weight:500;font-style:normal;color:var(--text-0);line-height:1.2}
+.step-desc{font-size:13px;color:var(--text-2);line-height:1.7}
+.step-desc code{font-family:var(--ef);font-size:12px;background:var(--bg-3);padding:1px 5px;border-radius:3px;color:var(--accent)}
+/* Form fields */
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-family:var(--ef);font-size:11px;color:var(--text-2);text-transform:uppercase;letter-spacing:.06em}
+.field-row{display:flex;gap:8px}
+.field input[type=text],.field input[type=password]{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r);color:var(--text-0);font-family:var(--ef);font-size:13px;padding:9px 12px;outline:none;transition:border-color .2s;flex:1}
+.field input:focus{border-color:var(--accent-dim)}
+.field input::placeholder{color:var(--text-3)}
+.btn-browse{background:var(--bg-3);border:1px solid var(--border);border-radius:var(--r);color:var(--text-1);font-family:var(--uf);font-size:13px;padding:9px 14px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s,border-color .15s;flex-shrink:0}
+.btn-browse:hover{background:var(--bg-4);color:var(--text-0);border-color:var(--border-light)}
+/* Toggle */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px}
+.toggle-row.active-row{border-color:var(--accent-dim);background:var(--active-bg)}
+.toggle-info{display:flex;flex-direction:column;gap:3px}
+.toggle-name{font-size:14px;color:var(--text-0)}
+.toggle-desc{font-size:12px;color:var(--text-2)}
+.tog{position:relative;display:inline-block;width:42px;height:22px;flex-shrink:0}
+.tog input{opacity:0;width:0;height:0}
+.sl{position:absolute;cursor:pointer;inset:0;background:var(--bg-4);border-radius:22px;transition:.2s}
+.sl::before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;left:3px;bottom:3px;background:var(--text-3);transition:.2s}
+.tog input:checked+.sl{background:var(--accent-dim)}
+.tog input:checked+.sl::before{transform:translateX(20px);background:var(--accent)}
+/* Passphrase section */
+#enc-fields{display:none;flex-direction:column;gap:10px;margin-top:4px}
+#enc-fields.show{display:flex}
+.strength-bar{height:4px;border-radius:2px;background:var(--bg-4);overflow:hidden;margin-top:4px}
+.strength-fill{height:100%;border-radius:2px;transition:width .3s,background .3s}
+.strength-label{font-family:var(--ef);font-size:10px;margin-top:3px}
+/* Security info box */
+.sec-box{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.sec-row{display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--text-2);line-height:1.5}
+.sec-icon{font-size:14px;flex-shrink:0;margin-top:1px}
+/* Navigation */
+.nav{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.btn-back{background:transparent;border:1px solid rgba(255,255,255,.25);border-radius:var(--r);color:var(--text-0);font-family:var(--uf);font-size:14px;padding:9px 20px;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.btn-back:hover{background:transparent;border-color:var(--accent);color:var(--accent)}
+/* Neutral (white) border by default; accent (green) only on hover — no fill */
+.btn-next{background:transparent;border:1px solid rgba(255,255,255,.25);border-radius:var(--r);color:var(--text-0);font-family:var(--uf);font-size:14px;padding:9px 24px;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.btn-next:hover{background:transparent;border-color:var(--accent);color:var(--accent)}
+.btn-next:disabled{opacity:.4;cursor:not-allowed}
+.err{font-family:var(--ef);font-size:12px;color:var(--red);min-height:16px}
+/* Language dropdown (collapsed by default — click to choose) */
+#lang-dd{position:relative;max-width:260px}
+#lang-dd-btn{width:100%;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r);color:var(--text-0);font-family:var(--uf);font-size:13px;padding:8px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;transition:border-color .15s}
+#lang-dd-btn:hover{border-color:var(--border-light)}
+#lang-dd-menu{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;z-index:30;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.lang-pill{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text-1);font-family:var(--uf);font-size:13px;padding:8px 12px;cursor:pointer;transition:background .12s}
+.lang-pill:hover{background:var(--active-bg)}
+.lang-pill.active{color:var(--accent)}
+/* Visual theme picker: a small card per theme showing its real colors */
+.theme-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;max-width:600px}
+.theme-card{background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:6px;cursor:pointer;display:flex;flex-direction:column;gap:6px;align-items:stretch;transition:border-color .15s,box-shadow .15s}
+.theme-card:hover{border-color:var(--accent)}
+.theme-card.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.swatch{height:40px;border-radius:5px;display:flex;align-items:center;gap:7px;padding:0 9px;border:1px solid rgba(255,255,255,.08)}
+.sw-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.sw-lines{display:flex;flex-direction:column;gap:3px;flex:1}
+.sw-line{height:3px;border-radius:2px}
+.tc-name{color:var(--text-0);text-align:center;line-height:1.2}
+.tc-def{display:block;color:var(--text-2)}
+/* Uniform WHITE text + single font across the setup screen (user request) */
+#steps .step-label, #steps .step-arrow, #steps .step-num,
+.step-desc, .field label, .toggle-desc, .sec-row, .btn-browse, .btn-back{color:var(--text-0)}
+#steps .step-num, .field label, .step-desc, .sec-row, .strength-label, .err{font-family:var(--uf)}
+.field label{text-transform:none;letter-spacing:normal;font-size:12px}
+/* One uniform font size for the WHOLE wizard; only "Welcome to Amelie" is larger */
+#panel, #panel *{font-size:14px}
+#sp-1 .step-title{font-size:24px}
+</style>
+</head>
+<body>
+<div id="drag">
+  <div id="mac-dots"><div class="tbb c1"></div><div class="tbb c2"></div><div class="tbb c3"></div></div>
+  <button id="win-close" onclick="window.inkwell.vaultClose()" title="Chiudi" style="display:none;margin-left:auto;background:transparent;border:none;color:var(--text-2);font-size:20px;line-height:1;cursor:pointer;padding:0 6px;-webkit-app-region:no-drag">×</button>
+</div>
+<div id="wrap">
+<div id="panel">
+
+  <!-- Step indicator -->
+  <div id="steps">
+    <div class="step active" id="si-1"><span class="step-num">1</span><span class="step-label">Vault</span></div>
+    <span class="step-arrow">›</span>
+    <div class="step" id="si-2"><span class="step-num">2</span><span class="step-label">Sicurezza</span></div>
+    <span class="step-arrow">›</span>
+    <div class="step" id="si-3"><span class="step-num">3</span><span class="step-label">Tema</span></div>
+    <span class="step-arrow">›</span>
+    <div class="step" id="si-4"><span class="step-num">4</span><span class="step-label">Pronto</span></div>
+  </div>
+
+  <!-- Step 1: Vault path -->
+  <div class="step-panel active" id="sp-1">
+    <!-- Header: title + language selector on the left, big Amelie logo on the right -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:28px">
+      <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+        <div class="step-title">Benvenuto in Amelie</div>
+        <div style="display:flex;flex-direction:row;align-items:center;gap:12px">
+          <span id="lang-label" style="color:var(--text-1);white-space:nowrap">Seleziona la lingua</span>
+          <div id="lang-dd">
+            <button type="button" id="lang-dd-btn"><span id="lang-dd-cur">English</span><span style="opacity:.55">▾</span></button>
+            <div id="lang-dd-menu" style="display:none">
+              <button class="lang-pill" data-lang="en">English</button>
+              <button class="lang-pill" data-lang="it">Italiano</button>
+              <button class="lang-pill" data-lang="de">Deutsch</button>
+              <button class="lang-pill" data-lang="es">Español</button>
+              <button class="lang-pill" data-lang="fr">Français</button>
+              <button class="lang-pill" data-lang="pl">Polski</button>
+              <button class="lang-pill" data-lang="ro">Română</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <img src="amelie-logo.png" alt="Amelie" style="height:112px;width:112px;object-fit:contain;flex-shrink:0"/>
+    </div>
+    <p class="step-desc" style="margin-top:24px">Scegli dove salvare i tuoi appunti. Il vault è una cartella normale sul tuo sistema.</p>
+    <div class="field">
+      <div class="field-row">
+        <input type="text" id="vault-path" placeholder="~/Documents/amelie-vault" spellcheck="false"/>
+        <button class="btn-browse" id="btn-browse">Sfoglia…</button>
+      </div>
+    </div>
+    <div class="sec-box">
+      <div class="sec-row"><span class="sec-icon">📁</span><span>I tuoi appunti sono file <code>.md</code> standard — apribili con qualsiasi editor anche senza Amelie.</span></div>
+      <div class="sec-row"><span class="sec-icon">🔒</span><span>Nel passo successivo puoi abilitare la crittografia end-to-end con AES-256-GCM.</span></div>
+    </div>
+    <div class="nav">
+      <div style="width:80px"></div>
+      <div class="err" id="err-1"></div>
+      <button class="btn-next" id="btn-1-next">Avanti →</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Encryption -->
+  <div class="step-panel" id="sp-2">
+    <div class="step-title">Sicurezza e crittografia</div>
+    <p class="step-desc">Puoi abilitare la crittografia ora o in qualsiasi momento dalle impostazioni. Con la crittografia attiva, i file vengono cifrati con <strong>AES-256-GCM</strong> prima di essere scritti su disco.</p>
+
+    <div class="toggle-row" id="enc-toggle-row">
+      <div class="toggle-info">
+        <span class="toggle-name">🔐 Crittografia vault</span>
+        <span class="toggle-desc">I file .md vengono cifrati con AES-256-GCM + PBKDF2 (310k iterazioni)</span>
+      </div>
+      <label class="tog"><input type="checkbox" id="enc-toggle"/><span class="sl"></span></label>
+    </div>
+
+    <div id="enc-fields">
+      <div class="field">
+        <label>Passphrase</label>
+        <input type="password" id="enc-pass" placeholder="Minimo 12 caratteri" autocomplete="new-password"/>
+        <div class="strength-bar"><div class="strength-fill" id="strength-fill" style="width:0"></div></div>
+        <span class="strength-label" id="strength-label" style="color:var(--text-3)"></span>
+      </div>
+      <div class="field">
+        <label>Conferma passphrase</label>
+        <input type="password" id="enc-pass2" placeholder="Ripeti la passphrase" autocomplete="new-password"/>
+      </div>
+      <div class="sec-box">
+        <div class="sec-row"><span class="sec-icon">⚠️</span><span>La passphrase <strong>non è recuperabile</strong>. Se la perdi, i tuoi appunti cifrati saranno inaccessibili. Conservala in un password manager.</span></div>
+      </div>
+    </div>
+
+    <div class="nav">
+      <button class="btn-back" id="btn-2-back">← Indietro</button>
+      <div class="err" id="err-2"></div>
+      <button class="btn-next" id="btn-2-next">Avanti →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Theme -->
+  <div class="step-panel" id="sp-3">
+    <div class="step-title">Imposta l'aspetto di Amelie</div>
+    <div class="field">
+      <label id="theme-label">Tema</label>
+      <div id="theme-grid" class="theme-grid"></div>
+    </div>
+    <div class="nav">
+      <button class="btn-back" id="btn-3-back">← Indietro</button>
+      <div class="err"></div>
+      <button class="btn-next" id="btn-3-next">Avanti →</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Done -->
+  <div class="step-panel" id="sp-4">
+    <div class="step-title">Tutto pronto 🎉</div>
+    <div class="sec-box">
+      <div class="sec-row"><span class="sec-icon">📁</span><span id="sum-vault">Vault: —</span></div>
+      <div class="sec-row"><span class="sec-icon" id="sum-enc-icon">🔓</span><span id="sum-enc">Crittografia: disabilitata</span></div>
+    </div>
+    <p class="step-desc">Puoi cambiare queste impostazioni in qualsiasi momento da <strong>Impostazioni → Vault &amp; Sicurezza</strong>.</p>
+    <div class="nav">
+      <button class="btn-back" id="btn-4-back">← Indietro</button>
+      <div class="err" id="err-3"></div>
+      <button class="btn-next" id="btn-4-start">Apri Amelie</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let currentStep = 1;
+let encEnabled = false;
+
+// ── Wizard language (the choice is saved for the WHOLE app via amelie-lang).
+// The wizard itself renders in Italian or English; other choices use the
+// English wizard and apply the chosen language in the app.
+const T = {
+  it: {
+    s2: 'Sicurezza', s3: 'Tema', s4: 'Pronto',
+    t1_title: 'Benvenuto in Amelie',
+    lang_label: 'Scegli la lingua',
+    theme_label: 'Tema', theme_hint: 'Modificabile in qualsiasi momento dalle impostazioni',
+    theme_title: 'Imposta l\'aspetto di Amelie',
+    t1_desc: 'Scegli dove salvare i tuoi appunti. Il vault è una cartella normale sul tuo sistema.',
+    path_lbl: 'Percorso vault', browse: 'Sfoglia…',
+    sec1: 'I tuoi appunti sono file <code>.md</code> standard — apribili con qualsiasi editor anche senza Amelie.',
+    sec2: 'Nel passo successivo puoi abilitare la crittografia end-to-end con AES-256-GCM.',
+    next: 'Avanti →', back: '← Indietro',
+    t2_title: 'Sicurezza e crittografia',
+    t2_desc: 'Puoi abilitare la crittografia ora o in qualsiasi momento dalle impostazioni. Con la crittografia attiva, i file vengono cifrati con <strong>AES-256-GCM</strong> prima di essere scritti su disco.',
+    tog_name: '🔐 Crittografia vault',
+    tog_desc: 'I file .md vengono cifrati con AES-256-GCM + PBKDF2 (310k iterazioni)',
+    pass_lbl: 'Passphrase', pass_ph: 'Minimo 12 caratteri',
+    pass2_lbl: 'Conferma passphrase', pass2_ph: 'Ripeti la passphrase',
+    warn: 'La passphrase <strong>non è recuperabile</strong>. Se la perdi, i tuoi appunti cifrati saranno inaccessibili. Conservala in un password manager.',
+    t3_title: 'Tutto pronto 🎉',
+    t3_desc: 'Puoi cambiare queste impostazioni in qualsiasi momento da <strong>Impostazioni → Vault &amp; Sicurezza</strong>.',
+    start: 'Apri Amelie',
+    err_path: 'Inserisci un percorso.',
+    err_short: 'Passphrase troppo corta (min 12 caratteri).',
+    err_mismatch: 'Le passphrase non corrispondono.',
+    strength: ['', 'Debole', 'Media', 'Forte', 'Ottima'],
+    sum_enc: 'Crittografia: ', enc_on: 'AES-256-GCM attiva', enc_off: 'disabilitata',
+    setting_up: 'Configurazione…', opening: '✓ Apertura…', setup_err: 'Errore durante la configurazione.',
+  },
+  en: {
+    s2: 'Security', s3: 'Theme', s4: 'Ready',
+    t1_title: 'Welcome to Amelie',
+    lang_label: 'Choose your language',
+    theme_label: 'Theme', theme_hint: 'Changeable in the settings',
+    theme_title: 'Set how Amelie looks',
+    t1_desc: 'Choose where to keep your notes. The vault is a regular folder on your system.',
+    path_lbl: 'Vault path', browse: 'Browse…',
+    sec1: 'Your notes are standard <code>.md</code> files — readable with any editor, even without Amelie.',
+    sec2: 'In the next step you can enable end-to-end encryption with AES-256-GCM.',
+    next: 'Next →', back: '← Back',
+    t2_title: 'Security & encryption',
+    t2_desc: 'You can enable encryption now or anytime from the settings. With encryption on, files are encrypted with <strong>AES-256-GCM</strong> before being written to disk.',
+    tog_name: '🔐 Vault encryption',
+    tog_desc: '.md files are encrypted with AES-256-GCM + PBKDF2 (310k iterations)',
+    pass_lbl: 'Passphrase', pass_ph: 'Minimum 12 characters',
+    pass2_lbl: 'Confirm passphrase', pass2_ph: 'Repeat the passphrase',
+    warn: 'The passphrase is <strong>not recoverable</strong>. If you lose it, your encrypted notes will be inaccessible. Keep it in a password manager.',
+    t3_title: 'All set 🎉',
+    t3_desc: 'You can change these settings anytime from <strong>Settings → Vault &amp; Security</strong>.',
+    start: 'Open Amelie',
+    err_path: 'Enter a path.',
+    err_short: 'Passphrase too short (min 12 characters).',
+    err_mismatch: 'The passphrases do not match.',
+    strength: ['', 'Weak', 'Medium', 'Strong', 'Great'],
+    sum_enc: 'Encryption: ', enc_on: 'AES-256-GCM enabled', enc_off: 'disabled',
+    setting_up: 'Setting up…', opening: '✓ Opening…', setup_err: 'Error during setup.',
+  },
+};
+let appLang = localStorage.getItem('amelie-lang') || 'en';
+const wl = () => T[appLang] ? appLang : 'en';   // wizard language (it/en)
+
+function applyLang(code, updateLabel) {
+  appLang = code;
+  try { localStorage.setItem('amelie-lang', code); } catch (_) {}
+  document.querySelectorAll('.lang-pill').forEach(b => b.classList.toggle('active', b.dataset.lang === code));
+  // Reflect the selection on the collapsed button + close the menu (only once a
+  // language has actually been chosen — on first run it stays "Choose your language").
+  if (updateLabel) {
+    const pill = document.querySelector('.lang-pill[data-lang="' + code + '"]');
+    const cur = document.getElementById('lang-dd-cur');
+    if (pill && cur) cur.textContent = pill.textContent.trim();
+    const menu = document.getElementById('lang-dd-menu'); if (menu) menu.style.display = 'none';
+  }
+  const t = T[wl()];
+  document.querySelector('#si-2 .step-label').textContent = t.s2;
+  document.querySelector('#si-3 .step-label').textContent = t.s3;
+  document.querySelector('#si-4 .step-label').textContent = t.s4;
+  document.querySelector('#sp-1 .step-title').textContent = t.t1_title;
+  { const ll = document.getElementById('lang-label'); if (ll) ll.textContent = t.lang_label; }
+  // Theme step (3): title, description, label, hint, nav buttons
+  { const tt = document.querySelector('#sp-3 .step-title'); if (tt) tt.textContent = t.theme_title;
+    const td = document.getElementById('theme-desc'); if (td) td.innerHTML = t.theme_desc;
+    const tl = document.getElementById('theme-label'); if (tl) tl.textContent = t.theme_label;
+    const th = document.getElementById('theme-hint'); if (th) th.textContent = t.theme_hint;
+    if ($('btn-3-back')) $('btn-3-back').textContent = t.back;
+    if ($('btn-3-next')) $('btn-3-next').textContent = t.next; }
+  document.querySelector('#sp-1 .step-desc').innerHTML = t.t1_desc;
+  $('btn-browse').textContent = t.browse;
+  const sec1 = document.querySelectorAll('#sp-1 .sec-row span:last-child');
+  if (sec1[0]) sec1[0].innerHTML = t.sec1;
+  if (sec1[1]) sec1[1].innerHTML = t.sec2;
+  $('btn-1-next').textContent = t.next;
+  document.querySelector('#sp-2 .step-title').textContent = t.t2_title;
+  document.querySelector('#sp-2 .step-desc').innerHTML = t.t2_desc;
+  document.querySelector('#sp-2 .toggle-name').textContent = t.tog_name;
+  document.querySelector('#sp-2 .toggle-desc').textContent = t.tog_desc;
+  const lbls = document.querySelectorAll('#enc-fields .field label');
+  if (lbls[0]) lbls[0].textContent = t.pass_lbl;
+  if (lbls[1]) lbls[1].textContent = t.pass2_lbl;
+  $('enc-pass').placeholder = t.pass_ph;
+  $('enc-pass2').placeholder = t.pass2_ph;
+  const warn = document.querySelector('#enc-fields .sec-row span:last-child');
+  if (warn) warn.innerHTML = t.warn;
+  $('btn-2-back').textContent = t.back;
+  $('btn-2-next').textContent = t.next;
+  document.querySelector('#sp-4 .step-title').textContent = t.t3_title;
+  document.querySelector('#sp-4 .step-desc').innerHTML = t.t3_desc;
+  $('btn-4-back').textContent = t.back;
+  $('btn-4-start').textContent = t.start;
+}
+document.querySelectorAll('.lang-pill').forEach(b =>
+  b.addEventListener('click', () => applyLang(b.dataset.lang, true)));
+// Collapsed dropdown: open/close on the button, close on outside click.
+(function () {
+  const btn = document.getElementById('lang-dd-btn'), menu = document.getElementById('lang-dd-menu');
+  if (btn && menu) {
+    btn.addEventListener('click', e => { e.stopPropagation(); menu.style.display = (menu.style.display === 'none') ? 'block' : 'none'; });
+    document.addEventListener('click', e => { if (!e.target.closest('#lang-dd')) menu.style.display = 'none'; });
+  }
+})();
+// Apply the saved/default language and show it on the dropdown button from the
+// start (the "Choose your language" label above the dropdown is the prompt).
+applyLang(appLang, true);
+
+// Theme picker → saved to `inkwell-theme`, which the MAIN app reads on startup
+// (shared localStorage). Each card previews the theme's real palette.
+const THEME_PALETTE = [
+  { id:'github-dark', name:'Cyberpunk',   def:true, bg:'#111111', acc:'#3fb950', txt:'#e6edf3' },
+  { id:'navy',        name:'Navy',        bg:'#0a0e17', acc:'#5b8def', txt:'#dde6f0' },
+  { id:'amber',       name:'Amber Dark',  bg:'#0b0b0d', acc:'#c9a96e', txt:'#e8e6e0' },
+  { id:'solarized',   name:'Solarized',   bg:'#002b36', acc:'#2aa198', txt:'#fdf6e3' },
+  { id:'light',       name:'Light Paper', bg:'#f5f0e8', acc:'#2e6e45', txt:'#2c2825' },
+  { id:'rose',        name:'Rosé Pine',   bg:'#191724', acc:'#c4a7e7', txt:'#e0def4' },
+  { id:'gruvbox',     name:'Gruvbox',     bg:'#1d2021', acc:'#b8bb26', txt:'#ebdbb2' },
+  { id:'nord',        name:'Nord',        bg:'#2e3440', acc:'#88c0d0', txt:'#eceff4' },
+  { id:'onedark',     name:'One Dark',    bg:'#282c34', acc:'#61afef', txt:'#e6e6e6' },
+  { id:'dracula',     name:'Dracula',     bg:'#282a36', acc:'#50fa7b', txt:'#f8f8f2' },
+];
+(function renderThemeGrid() {
+  const grid = document.getElementById('theme-grid');
+  if (!grid) return;
+  let cur = 'github-dark';
+  try { cur = localStorage.getItem('inkwell-theme') || 'github-dark'; } catch (_) {}
+  grid.innerHTML = THEME_PALETTE.map(p =>
+    '<button type="button" class="theme-card' + (p.id === cur ? ' sel' : '') + '" data-theme="' + p.id + '" title="' + p.name + '">' +
+      '<span class="swatch" style="background:' + p.bg + '">' +
+        '<span class="sw-dot" style="background:' + p.acc + '"></span>' +
+        '<span class="sw-lines"><span class="sw-line" style="background:' + p.txt + ';width:72%"></span>' +
+        '<span class="sw-line" style="background:' + p.txt + ';width:44%;opacity:.55"></span></span>' +
+      '</span>' +
+      '<span class="tc-name">' + p.name + (p.def ? '<span class="tc-def">default</span>' : '') + '</span>' +
+    '</button>').join('');
+  grid.addEventListener('click', e => {
+    const card = e.target.closest('.theme-card'); if (!card) return;
+    grid.querySelectorAll('.theme-card').forEach(c => c.classList.remove('sel'));
+    card.classList.add('sel');
+    try { localStorage.setItem('inkwell-theme', card.dataset.theme); } catch (_) {}
+  });
+})();
+
+// Step navigation
+function goStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    $(`sp-${i}`).classList.toggle('active', i === n);
+    const si = $(`si-${i}`);
+    si.classList.remove('active','done');
+    if (i === n) si.classList.add('active');
+    else if (i < n) si.classList.add('done');
+  }
+  currentStep = n;
+}
+
+// Vault path browse
+$('btn-browse').addEventListener('click', async () => {
+  const p = await window.inkwell.vault.browseFolder();
+  if (p) $('vault-path').value = p;
+});
+
+// Platform-aware titlebar: hide Mac dots on Linux/Windows, show close button instead
+if (window.inkwell.platform !== 'darwin') {
+  document.getElementById('mac-dots').style.display = 'none';
+  document.getElementById('win-close').style.display = 'block';
+}
+
+// Default path
+$('vault-path').value = '~/Documents/amelie-vault';
+
+// Step 1 → 2
+$('btn-1-next').addEventListener('click', () => {
+  const p = $('vault-path').value.trim();
+  if (!p) { $('err-1').textContent = T[wl()].err_path; return; }
+  $('err-1').textContent = '';
+  goStep(2);
+});
+
+// Encryption toggle
+$('enc-toggle').addEventListener('change', e => {
+  encEnabled = e.target.checked;
+  $('enc-fields').classList.toggle('show', encEnabled);
+  $('enc-toggle-row').classList.toggle('active-row', encEnabled);
+});
+
+// Passphrase strength
+$('enc-pass').addEventListener('input', () => {
+  const v = $('enc-pass').value;
+  const score = passStrength(v);
+  const colors = ['#e05c6a','#e0a84a','#e0a84a','#3d9970','#3d9970'];
+  const labels = T[wl()].strength;
+  const widths = [0, 25, 50, 75, 100];
+  $('strength-fill').style.width = widths[score] + '%';
+  $('strength-fill').style.background = colors[score];
+  $('strength-label').textContent = labels[score];
+  $('strength-label').style.color = colors[score];
+});
+
+function passStrength(p) {
+  if (!p) return 0;
+  let s = 0;
+  if (p.length >= 12) s++;
+  if (p.length >= 20) s++;
+  if (/[A-Z]/.test(p) && /[a-z]/.test(p)) s++;
+  if (/[0-9!@#$%^&*]/.test(p)) s++;
+  return Math.min(4, s);
+}
+
+// Step 2 (Security) → 3 (Theme)
+$('btn-2-next').addEventListener('click', () => {
+  if (encEnabled) {
+    const p1 = $('enc-pass').value;
+    const p2 = $('enc-pass2').value;
+    if (p1.length < 12) { $('err-2').textContent = T[wl()].err_short; return; }
+    if (p1 !== p2) { $('err-2').textContent = T[wl()].err_mismatch; return; }
+  }
+  $('err-2').textContent = '';
+  goStep(3);
+});
+
+// Step 3 (Theme) → 4 (Ready) — build the summary here, on the way to the last step.
+$('btn-3-next').addEventListener('click', () => {
+  const vp = $('vault-path').value.trim();
+  $('sum-vault').textContent = 'Vault: ' + vp;
+  $('sum-enc-icon').textContent = encEnabled ? '🔐' : '🔓';
+  $('sum-enc').textContent = T[wl()].sum_enc + (encEnabled ? T[wl()].enc_on : T[wl()].enc_off);
+  goStep(4);
+});
+
+$('btn-2-back').addEventListener('click', () => goStep(1));
+$('btn-3-back').addEventListener('click', () => goStep(2));
+$('btn-4-back').addEventListener('click', () => goStep(3));
+
+// Final setup
+$('btn-4-start').addEventListener('click', async () => {
+  const btn = $('btn-4-start');
+  btn.disabled = true; btn.textContent = T[wl()].setting_up;
+  $('err-3').textContent = '';
+
+  // Send the path AS TYPED: the main process expands ~ and $HOME to the
+  // user's home (stripping ~ here produced "/Documents/…" → EACCES at /).
+  const vp = $('vault-path').value.trim();
+
+  const result = await window.inkwell.vault.setup({
+    vaultPath: vp,
+    encryptionEnabled: encEnabled,
+    passphrase: encEnabled ? $('enc-pass').value : null,
+  });
+
+  if (result.ok) {
+    btn.textContent = T[wl()].opening;
+  } else {
+    $('err-3').textContent = result.error || T[wl()].setup_err;
+    btn.disabled = false; btn.textContent = T[wl()].start;
+  }
+});
+</script>
+</body>
+</html>

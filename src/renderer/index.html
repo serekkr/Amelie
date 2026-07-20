@@ -1,0 +1,1933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline';
+    font-src 'self' data:;
+    img-src 'self' data: blob: inkwell:;
+    media-src 'self' blob: inkwell: http://127.0.0.1:*;
+  " />
+  <title>Amelie</title>
+  <!-- Fonts vendored locally (was Google Fonts CDN): the app must work fully
+       offline and never phone home. See src/renderer/fonts/ + fonts.css. -->
+  <link rel="stylesheet" href="fonts.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Custom in-theme tooltip (replaces the native grey title="" bubble) -->
+  <div id="app-tooltip" role="tooltip"></div>
+  <div id="app">
+    <!-- Title bar -->
+    <div id="titlebar">
+      <!-- Sidebar view icons: Files · Recent · Bookmarks · Tags · ToDo -->
+      <div id="sidebar-section-tabs">
+        <button class="sst active" id="view-files" title="File" data-i18n-title="section.files" aria-label="File">
+          <span class="sst-default-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+          <span class="sst-check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg></span>
+        </button>
+        <button class="sst" id="view-recent" title="Recenti" data-i18n-title="section.recent" aria-label="Recenti">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        </button>
+        <button class="sst" id="view-bookmarks" title="Bookmark" data-i18n-title="section.bookmarks" aria-label="Bookmark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <button class="sst" id="view-tags" title="Tag" data-i18n-title="section.tags" aria-label="Tag">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        </button>
+        <button id="btn-notifications" class="sst sst-notif" title="Notifiche" data-i18n-title="titlebar.notifications" aria-label="Notifiche">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span id="notif-badge" style="display:none">0</span>
+        </button>
+      </div>
+      <!-- Open note tabs -->
+      <div id="tab-bar">
+        <button id="btn-focus-mode" title="Modalità lettura (nascondi colonna sinistra)" data-i18n-title="tab.focus_mode">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><path class="chev-collapse" d="M16 9l-3 3 3 3"/><path class="chev-expand" d="M13 9l3 3-3 3"/></svg>
+        </button>
+        <div id="tab-list"></div>
+        <button id="tab-new-btn" title="Nuova tab" data-i18n-title="tab.new">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 4v16m8-8H4"/></svg>
+        </button>
+      </div>
+      <div id="titlebar-actions">
+        <button id="btn-settings" class="icon-btn" title="Settings" data-i18n-title="titlebar.settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+        </button>
+      </div>
+      <div id="titlebar-controls">
+        <button class="tb-btn min" onclick="window.inkwell.minimize()" title="Minimizza" data-i18n-title="win.minimize">−</button>
+        <button class="tb-btn max" onclick="window.inkwell.maximize()" title="Massimizza" data-i18n-title="win.maximize">□</button>
+        <button class="tb-btn close" onclick="window.inkwell.close()" title="Chiudi" data-i18n-title="win.close">×</button>
+      </div>
+    </div>
+
+    <!-- Main layout -->
+    <div id="layout">
+
+      <!-- Sidebar -->
+      <aside id="sidebar">
+
+        <!-- NOTES section -->
+        <div id="section-notes">
+          <div id="search-wrap">
+            <input id="search-input" type="text" placeholder="Search notes…" data-i18n-placeholder="sidebar.search" autocomplete="off" />
+            <div id="search-results" class="empty"></div>
+          </div>
+          <div id="sidebar-views">
+            <button id="btn-new-note" class="sidebar-view-btn" title="Nuova nota" data-i18n-title="sidebar.new_note">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button id="btn-new-folder" class="sidebar-view-btn" title="Nuova cartella" data-i18n-title="sidebar.new_folder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+            </button>
+            <button id="btn-canvas" class="sidebar-view-btn" title="Draw (tldraw)" data-i18n-title="sidebar.draw">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3.5a2.121 2.121 0 0 1 3 3L7 18l-4 1 1-4L15.5 3.5z"/><path d="M13 6l3 3"/></svg>
+            </button>
+            <button id="btn-mindmap" class="sidebar-view-btn" title="Graph view" data-i18n-title="sidebar.graph">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.4" fill="currentColor" stroke="none"/><circle cx="18" cy="7" r="2.4" fill="currentColor" stroke="none"/><circle cx="8" cy="18" r="2.4" fill="currentColor" stroke="none"/><circle cx="17" cy="17" r="2.4" fill="currentColor" stroke="none"/><line x1="7.6" y1="7.4" x2="16.4" y2="15.6"/><line x1="8" y1="6.4" x2="16" y2="6.8"/><line x1="6.4" y1="8" x2="7.6" y2="16"/><line x1="9.6" y1="17.6" x2="15.4" y2="17.2"/></svg>
+            </button>
+            <button id="btn-new-todo" class="sidebar-view-btn" title="Nuovo todo" data-i18n-title="sidebar.new_todo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>
+            </button>
+          </div>
+          <div id="file-tree"></div>
+        </div>
+
+        <!-- TODO section -->
+        <div id="section-todo" style="display:none">
+          <div class="todo-header">
+            <button id="btn-add-task" class="todo-add-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 4v16m8-8H4"/></svg>
+              <span data-i18n="todo.new_task">Nuovo task</span>
+            </button>
+          </div>
+          <div id="todo-filters">
+            <button class="todo-filter active" data-filter="all" data-i18n="todo.filter_all">Tutti</button>
+            <button class="todo-filter" data-filter="today" data-i18n="todo.filter_today">Oggi</button>
+            <button class="todo-filter" data-filter="upcoming" data-i18n="todo.filter_upcoming">In arrivo</button>
+            <button class="todo-filter" data-filter="done" data-i18n="todo.filter_done">Completati</button>
+          </div>
+          <div id="todo-list"></div>
+        </div>
+
+        <!-- RECENT -->
+        <div id="section-recent" style="display:none">
+          <div class="view-title" data-i18n="section.recent">Recenti</div>
+          <div id="recent-list" class="simple-list"></div>
+        </div>
+
+        <!-- BOOKMARKS -->
+        <div id="section-bookmarks" style="display:none">
+          <div class="view-title" data-i18n="section.bookmarks">Bookmark</div>
+          <div id="bookmarks-search-wrap">
+            <input id="bookmarks-search-input" type="text" placeholder="Cerca bookmark…" data-i18n-placeholder="bookmarks.search" autocomplete="off" spellcheck="false" />
+          </div>
+          <div id="bookmarks-list" class="simple-list"></div>
+        </div>
+
+        <!-- TAGS -->
+        <div id="section-tags" style="display:none">
+          <div class="view-title" data-i18n="section.tags">Tag</div>
+          <div id="tags-search-wrap">
+            <input id="tags-search-input" type="text" placeholder="Cerca tag…" data-i18n-placeholder="tags.search" autocomplete="off" spellcheck="false" />
+          </div>
+          <div id="tags-list" class="simple-list"></div>
+        </div>
+
+        <!-- NOTIFICATIONS -->
+        <div id="section-notifications" style="display:none">
+          <div class="view-title" data-i18n="titlebar.notifications">Notifiche</div>
+          <div id="notifications-list" class="simple-list"></div>
+        </div>
+
+      </aside>
+
+      <!-- Resize handle -->
+      <div id="resize-handle"></div>
+
+      <!-- Editor area -->
+      <main id="editor-area">
+
+        <!-- ToDo view (agenda/list) -->
+        <div id="todo-view" style="display:none">
+          <div id="todo-view-inner">
+            <div id="todo-view-head">
+              <h1 class="todo-view-title">ToDo</h1>
+              <div id="todo-filters-bar">
+                <button class="tv-filter active" data-f="all" data-i18n="todo.filter_all">Tutti</button>
+                <button class="tv-filter" data-f="today" data-i18n="todo.filter_today">Oggi</button>
+                <button class="tv-filter" data-f="tomorrow" data-i18n="todo.filter_tomorrow">Domani</button>
+                <button class="tv-filter" data-f="upcoming" data-i18n="todo.filter_upcoming">In arrivo</button>
+                <button class="tv-filter" data-f="done" data-i18n="todo.filter_done">Completati</button>
+              </div>
+            </div>
+            <div id="todo-add-row"></div>
+            <div id="todo-view-list"></div>
+          </div>
+        </div>
+
+        <div id="empty-state">
+          <div class="empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+            </svg>
+          </div>
+          <p data-i18n="empty.select_note">Select a note or create a new one</p>
+        </div>
+
+        <div id="editor-container" style="display:none">
+
+          <div id="editor-toc-row">
+            <div id="editor-column">
+
+              <!-- Note header: title + Edit/View right + meta rows -->
+              <div id="note-header">
+                <!-- Row 1: title + Edit/View pills top-right -->
+                <div id="note-header-top">
+                  <button id="btn-prev-note" class="note-nav-btn" title="Nota precedente" aria-label="Nota precedente" data-i18n-title="note.prev">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                  </button>
+                  <button id="btn-next-note" class="note-nav-btn" title="Nota successiva" aria-label="Nota successiva" data-i18n-title="note.next">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                  <!-- Title input hidden: the clickable breadcrumb takes its place.
+                       Kept in the DOM (display:none) so existing JS that reads/sets
+                       its value for new-note creation keeps working. -->
+                  <input id="note-title" type="text" placeholder="Untitled" data-i18n-placeholder="note.untitled" spellcheck="false" style="display:none" />
+                  <!-- Clickable breadcrumb path, now in the title row. -->
+                  <div id="note-breadcrumb" class="note-breadcrumb"></div>
+                  <div id="mode-toggle">
+                    <!-- Single Edit/View toggle: shows the icon+label of the mode
+                         you'll switch TO. Populated by updateModeToggle() in JS. -->
+                    <button class="mode-btn" id="btn-mode-toggle">
+                      <span class="mode-toggle-icon"></span>
+                      <span class="mode-toggle-label"></span>
+                    </button>
+                    <button class="mode-btn" id="btn-audio-rec" title="Registra una nota vocale" data-i18n-title="toolbar.record_tip" style="display:none">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;vertical-align:middle"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
+                      <span id="audio-rec-label" data-i18n="toolbar.record">Rec</span>
+                    </button>
+                    <button class="mode-btn" id="btn-export-pdf" title="Click to export to PDF" data-i18n-title="toolbar.export_tip">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;vertical-align:middle"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
+                      <span data-i18n="toolbar.export">Export</span>
+                    </button>
+                    <button class="mode-btn" id="btn-sync" title="Clicca per sincronizzare" data-i18n-title="toolbar.sync_tip" style="display:none">
+                      <span id="sync-status" class="sync-idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;vertical-align:middle"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></span>
+                      <span data-i18n="toolbar.sync">Sync</span>
+                    </button>
+                    <button class="mode-btn" id="btn-backup-global" title="Esegui backup ora" data-i18n-title="toolbar.backup_tip" style="display:none">
+                      <span id="backup-status" class="sync-idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;vertical-align:middle"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></span>
+                      <span data-i18n="toolbar.backup">Backup</span>
+                    </button>
+                    <button class="mode-btn panel-toggle" id="btn-toc" title="Mostra/nascondi indice" data-i18n-title="toolbar.index">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;vertical-align:middle"><path d="M4 6h16M4 10h10M4 14h12M4 18h8"/></svg>
+                      <span data-i18n="toc.title">Index</span>
+                    </button>
+                  </div>
+                </div>
+                <!-- Row 2: dates -->
+                <div id="note-header-meta">
+                  <span class="meta-label" data-i18n="meta.created">created</span>
+                  <span id="meta-created-line">—</span>
+                  <span class="meta-sep">·</span>
+                  <span class="meta-label" data-i18n="meta.last_edited">last edited</span>
+                  <span id="meta-edited-line">—</span>
+                </div>
+                <!-- Row 3: tags (hidden if empty, edit mode only) -->
+                <div class="note-meta-row" id="meta-row-tags" style="display:none">
+                  <span class="meta-field-label" data-i18n="meta.tags">tags</span>
+                  <input class="meta-field-input" id="fm-tags" type="text" placeholder="tag1, tag2, tag3" spellcheck="false"/>
+                </div>
+                <!-- Row 4: source (hidden if empty, edit mode only) -->
+                <div class="note-meta-row" id="meta-row-source" style="display:none">
+                  <span class="meta-field-label" data-i18n="meta.source">source</span>
+                  <input class="meta-field-input" id="fm-source" type="text" placeholder="URL o riferimento" data-i18n-placeholder="meta.source_ph" spellcheck="false"/>
+                </div>
+                <input type="hidden" id="fm-title"/>
+              </div>
+
+              <!-- Toolbar: one compact row -->
+              <div id="editor-toolbar">
+                <div id="toolbar-buttons">
+                  <button class="tool-btn" id="btn-heading" title="Heading" data-i18n-title="toolbar.heading">H</button>
+                  <div id="heading-popup" style="display:none">
+                    <div class="hp-title" data-i18n="toolbar.heading">Heading</div>
+                    <div class="hp-list">
+                      <button class="hp-btn" data-level="1" style="font-size:20px">H1</button>
+                      <button class="hp-btn" data-level="2" style="font-size:17px">H2</button>
+                      <button class="hp-btn" data-level="3" style="font-size:14px">H3</button>
+                      <button class="hp-btn" data-level="4" style="font-size:12px">H4</button>
+                    </div>
+                  </div>
+                  <button class="tool-btn" data-cmd="bullet" title="Lista puntata" data-i18n-title="toolbar.bullet">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px;vertical-align:middle">
+                      <circle cx="5" cy="6" r="1.2" fill="currentColor"/>
+                      <line x1="9" y1="6" x2="20" y2="6" stroke-linecap="round"/>
+                      <circle cx="5" cy="12" r="1.2" fill="currentColor"/>
+                      <line x1="9" y1="12" x2="20" y2="12" stroke-linecap="round"/>
+                      <circle cx="5" cy="18" r="1.2" fill="currentColor"/>
+                      <line x1="9" y1="18" x2="20" y2="18" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                  <button class="tool-btn" data-cmd="bold" title="Bold" data-i18n-title="toolbar.bold"><strong>B</strong></button>
+                  <button class="tool-btn" data-cmd="italic" title="Italic" data-i18n-title="toolbar.italic"><em>I</em></button>
+                  <button class="tool-btn" id="btn-color" title="Colore testo" data-i18n-title="toolbar.text_color"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:middle"><path d="M5 16L10 5l5 11M7 12h6"/><path d="M4 20h16"/></svg></button>
+                  <button class="tool-btn" data-cmd="code" title="Code" data-i18n-title="toolbar.code">{}</button>
+                  <button class="tool-btn" data-cmd="checklist" title="Checklist" data-i18n-title="toolbar.checklist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:middle"><polyline points="3 6 4.2 7.2 6.5 4.8"/><polyline points="3 12 4.2 13.2 6.5 10.8"/><polyline points="3 18 4.2 19.2 6.5 16.8"/><line x1="10" y1="6" x2="20" y2="6"/><line x1="10" y1="12" x2="20" y2="12"/><line x1="10" y1="18" x2="20" y2="18"/></svg></button>
+                  <button class="tool-btn" id="btn-table" title="Inserisci tabella" data-i18n-title="toolbar.table">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px;vertical-align:middle"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                  </button>
+                  <div id="table-popup" style="display:none">
+                    <div class="tp-title" data-i18n="table.insert">Inserisci tabella</div>
+                    <div class="tp-grid" id="tp-grid"></div>
+                    <div class="tp-hint" id="tp-hint">1 × 1</div>
+                  </div>
+                  <button class="tool-btn" data-cmd="emoji" title="Emoji" data-i18n-title="toolbar.emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9.2" x2="9.01" y2="9.2"/><line x1="15" y1="9.2" x2="15.01" y2="9.2"/></svg></button>
+                  <button class="tool-btn" data-cmd="image" title="Insert image" data-i18n-title="toolbar.image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:middle"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="M21 16l-4.5-4.5L7 21"/></svg></button>
+                  <button class="tool-btn" data-cmd="link" title="Link" data-i18n-title="toolbar.link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:middle"><path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-2.83 2.83a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></button>
+                  <div style="flex:1"></div>
+                  <button class="tool-btn panel-toggle" id="btn-note-search" title="Cerca nella nota (Ctrl+F)" data-i18n-title="toolbar.note_search">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:middle"><path d="M21 21l-4.3-4.3"/><circle cx="11" cy="11" r="7"/></svg>
+                  </button>
+                  <button class="tool-btn" id="btn-undo" title="Annulla" data-i18n-title="toolbar.undo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:middle"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- In-note search bar -->
+              <div id="note-search-bar" style="display:none">
+                <input id="note-search-input" type="text" placeholder="Cerca nella nota…" data-i18n-placeholder="note_search.placeholder" autocomplete="off" spellcheck="false"/>
+                <span id="note-search-count"></span>
+                <button id="note-search-prev" title="Precedente" data-i18n-title="note_search.prev">↑</button>
+                <button id="note-search-next" title="Successivo (Enter)" data-i18n-title="note_search.next">↓</button>
+                <button id="note-search-close">✕</button>
+              </div>
+
+              <!-- Editor / Preview -->
+              <div id="content-split">
+                <div id="editor-pane">
+                  <div id="editor-code-bg" aria-hidden="true"></div>
+                  <div id="editor-highlight" aria-hidden="true"></div>
+                  <textarea id="markdown-editor" spellcheck="true" placeholder="Start writing your thoughts…" data-i18n-placeholder="editor.placeholder"></textarea>
+                  <div id="cm-mount" style="display:none"></div>
+                  <div id="editor-code-actions" aria-hidden="true"></div>
+                  <div id="editor-gutter" aria-hidden="true"></div>
+                </div>
+                <div id="preview-pane" style="display:none">
+                  <div id="preview-content"></div>
+                </div>
+                <!-- Drag handle to resize the split panes -->
+                <div id="split-resizer" style="display:none"></div>
+                <!-- Secondary split pane: its own note, mode toggle and close -->
+                <div id="editor-pane-b" style="display:none">
+                  <div id="split-b-actions">
+                    <button id="split-b-mode" title="Anteprima" data-i18n-title="toolbar.view_tip"></button>
+                    <button id="split-b-close" title="Chiudi vista affiancata">✕</button>
+                  </div>
+                  <textarea id="markdown-editor-b" spellcheck="true"></textarea>
+                  <div id="preview-pane-b" style="display:none">
+                    <div id="preview-content-b"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="editor-statusbar">
+                <span id="status-selection" style="margin-right:auto;display:none"></span>
+                <span id="status-path" class="status-path"></span>
+                <span id="status-words">0 words</span>
+                <span id="status-saved" data-i18n="status.saved" style="display:none">saved</span>
+              </div>
+
+            </div><!-- editor-column -->
+
+            <!-- Drag handle to resize the Index panel -->
+            <div id="toc-resizer" style="display:none"></div>
+            <!-- TOC right sidebar -->
+            <div id="toc-panel" style="display:none">
+              <div id="toc-list"></div>
+            </div>
+
+          </div><!-- editor-toc-row -->
+
+        </div>
+
+        <!-- Mindmap overlay -->
+        <div id="mindmap-overlay" style="display:none">
+          <div id="mindmap-header">
+            <span id="mindmap-title" data-i18n="mindmap.title">Mindmap</span>
+            <div id="mindmap-legend">
+              <span class="mm-legend-hint" data-i18n="mindmap.hint">Shift+trascina per collegare · click destro sulla linea per rimuovere</span>
+            </div>
+            <button id="btn-mindmap-close" class="icon-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <canvas id="mindmap-canvas"></canvas>
+          <div id="mindmap-tooltip" style="display:none"></div>
+          <div id="mindmap-zoom">
+            <button id="btn-mm-zoom-in" title="Zoom in" data-i18n-title="mindmap.zoom_in">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                <line x1="8" y1="11" x2="14" y2="11"/>
+                <line x1="11" y1="8"  x2="11" y2="14"/>
+              </svg>
+            </button>
+            <button id="btn-mm-zoom-reset" title="Reset" data-i18n-title="mindmap.zoom_reset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                <circle cx="11" cy="11" r="1.4" fill="currentColor"/>
+              </svg>
+            </button>
+            <button id="btn-mm-zoom-out" title="Zoom out" data-i18n-title="mindmap.zoom_out">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                <line x1="8" y1="11" x2="14" y2="11"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Canvas overlay — tldraw -->
+        <div id="canvas-overlay" style="display:none">
+          <div id="canvas-header">
+            <span id="canvas-title" data-i18n="canvas.draw_title">Draw</span>
+            <div id="canvas-header-actions">
+              <button id="btn-draw-import" class="cv-action-btn" data-i18n="canvas.import_draw">Importa disegno…</button>
+              <button id="btn-draw-export" class="cv-action-btn" data-i18n="canvas.export_draw">Esporta disegno…</button>
+              <span class="cv-sep"></span>
+              <label id="draw-export-bg-wrap" title="Sfondo per l'export immagine (PNG/SVG)">
+                <span data-i18n="canvas.export_bg_label">Sfondo export:</span>
+                <select id="draw-export-bg">
+                  <option value="white" data-i18n="canvas.export_bg_white">Bianco</option>
+                  <option value="transparent" data-i18n="canvas.export_bg_transparent">Trasparente</option>
+                  <option value="theme" data-i18n="canvas.export_bg_theme">Scuro</option>
+                </select>
+              </label>
+              <button id="btn-draw-png" class="cv-action-btn cv-img-btn" title="Esporta PNG" data-i18n-title="canvas.export_png">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                <span>PNG</span>
+              </button>
+              <button id="btn-draw-svg" class="cv-action-btn cv-img-btn" title="Esporta SVG" data-i18n-title="canvas.export_svg">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                <span>SVG</span>
+              </button>
+            </div>
+            <button id="btn-canvas-close" class="icon-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <!-- src set lazily in app.js on first Draw open (saves ~1.7MB tldraw load at startup) -->
+          <iframe id="canvas-iframe" frameborder="0" allow="pointer-lock" allowfullscreen></iframe>
+        </div>
+
+        <!-- PDF overlay -->
+        <div id="pdf-overlay" style="display:none">
+          <div id="pdf-header">
+            <span id="pdf-title">PDF</span>
+            <div id="pdf-tools">
+              <button id="pdf-zoom-out" class="pdf-tool-btn" title="Zoom indietro" data-i18n-title="pdf.zoom_out" aria-label="Zoom indietro">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 12h14"/></svg>
+              </button>
+              <span id="pdf-zoom-label">100%</span>
+              <button id="pdf-zoom-in" class="pdf-tool-btn" title="Zoom avanti" data-i18n-title="pdf.zoom_in" aria-label="Zoom avanti">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+              <span class="pdf-tool-sep"></span>
+              <button id="pdf-tool-pen" class="pdf-tool-btn" title="Penna" data-i18n-title="pdf.tool_pen" aria-label="Penna">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+              </button>
+              <button id="pdf-tool-hl" class="pdf-tool-btn" title="Evidenziatore" data-i18n-title="pdf.tool_highlight" aria-label="Evidenziatore">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l-4 4v3h3l4-4"/><path d="M13 7l4 4"/><path d="M8 16l-3 3"/><path d="M15 5l4 4-7 7-4-4z"/></svg>
+              </button>
+              <button id="pdf-color" class="pdf-tool-btn pdf-color-btn" title="Colore" data-i18n-title="pdf.tool_color" aria-label="Colore">
+                <span class="pdf-color-dot" style="background:#e5484d"></span>
+              </button>
+              <button id="pdf-tool-text" class="pdf-tool-btn" title="Casella di testo" data-i18n-title="pdf.tool_text" aria-label="Casella di testo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2"/><path d="M9 19h6"/><path d="M12 5v14"/></svg>
+              </button>
+              <select id="pdf-font" class="pdf-font-select" title="Font del testo" data-i18n-title="pdf.tool_font" aria-label="Font del testo"></select>
+              <select id="pdf-fontsize" class="pdf-font-select pdf-size-select" title="Dimensione testo" data-i18n-title="pdf.tool_fontsize" aria-label="Dimensione testo"></select>
+              <button id="pdf-tool-image" class="pdf-tool-btn" title="Inserisci immagine" data-i18n-title="pdf.tool_image" aria-label="Inserisci immagine">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+              </button>
+              <span class="pdf-tool-sep"></span>
+              <button id="pdf-pages" class="pdf-tool-btn" title="Pagine" data-i18n-title="pdf.pages_panel" aria-label="Pagine">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>
+              </button>
+              <button id="pdf-compress" class="pdf-tool-btn" title="Comprimi PDF" data-i18n-title="pdf.compress" aria-label="Comprimi PDF">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 0-1 1h-4"/><path d="M7 12h10"/></svg>
+              </button>
+              <button id="pdf-undo" class="pdf-tool-btn" title="Annulla" data-i18n-title="pdf.undo" aria-label="Annulla">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg>
+              </button>
+              <button id="pdf-save" class="pdf-tool-btn" title="Salva" data-i18n-title="pdf.save" aria-label="Salva" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+              </button>
+              <button id="pdf-save-as" class="pdf-tool-btn" title="Salva come nuovo file" data-i18n-title="pdf.save_as" aria-label="Salva come nuovo file" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9l7 7v9a2 2 0 0 1-2 2z"/><path d="M9 21v-6h4v6"/><path d="M17 4v4M19 6h-4"/></svg>
+              </button>
+            </div>
+            <button id="btn-pdf-close" class="icon-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div id="pdf-color-pop" class="pdf-color-pop" style="display:none">
+            <div class="pdf-color-swatches"></div>
+            <label class="pdf-color-custom">
+              <input type="color" id="pdf-color-input" value="#e5484d">
+              <span data-i18n="pdf.color_custom">Personalizzato</span>
+            </label>
+          </div>
+          <div id="pdf-compress-pop" class="pdf-compress-pop" style="display:none">
+            <button type="button" class="pdf-cmp-item" data-level="screen">
+              <b data-i18n="pdf.compress_max">Massima</b><span data-i18n="pdf.compress_max_sub">~72 DPI · più piccolo</span>
+            </button>
+            <button type="button" class="pdf-cmp-item" data-level="ebook">
+              <b data-i18n="pdf.compress_balanced">Bilanciato</b><span data-i18n="pdf.compress_balanced_sub">~150 DPI · consigliato</span>
+            </button>
+            <button type="button" class="pdf-cmp-item" data-level="printer">
+              <b data-i18n="pdf.compress_high">Alta qualità</b><span data-i18n="pdf.compress_high_sub">~300 DPI · qualità alta</span>
+            </button>
+          </div>
+          <div id="pdf-body">
+            <div id="pdf-page-panel" style="display:none"></div>
+            <div id="pdf-embed" style="flex:1;width:100%;overflow:auto;background:#1a1a1a"></div>
+          </div>
+        </div>
+
+        <!-- Image viewer: photos dropped on the sidebar open here, like PDFs -->
+        <div id="img-view-overlay" style="display:none">
+          <div id="img-view-header">
+            <span id="img-view-title">Image</span>
+            <div id="img-view-tools">
+              <button id="img-zoom-out" class="pdf-tool-btn" title="Zoom indietro" data-i18n-title="pdf.zoom_out" aria-label="Zoom out">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 12h14"/></svg>
+              </button>
+              <span id="img-zoom-label">100%</span>
+              <button id="img-zoom-in" class="pdf-tool-btn" title="Zoom avanti" data-i18n-title="pdf.zoom_in" aria-label="Zoom in">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+            </div>
+            <button id="btn-img-view-close" class="icon-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div id="img-view-embed"><img id="img-view-content" alt=""/></div>
+        </div>
+
+      </main>
+    </div>
+
+    <!-- Settings modal -->
+    <div id="settings-modal" class="modal" style="display:none">
+      <div class="modal-backdrop" id="settings-backdrop"></div>
+      <div class="modal-panel">
+        <div class="modal-header">
+          <h2 data-i18n="settings.header">Impostazioni</h2>
+          <button class="icon-btn" id="settings-close">✕</button>
+        </div>
+        <div class="modal-tabs">
+          <button class="tab-btn active" data-tab="security" data-i18n="settings.tab_vault">Vault</button>
+          <button class="tab-btn" data-tab="general" data-i18n="settings.tab_general">General</button>
+          <button class="tab-btn" data-tab="ui" data-i18n="settings.tab_ui">User Interface</button>
+          <button class="tab-btn" data-tab="sync" data-i18n="settings.tab_sync">Backup</button>
+          <button class="tab-btn" data-tab="twoway" data-i18n="settings.tab_twoway">Sync</button>
+          <button class="tab-btn" data-tab="theme" data-i18n="settings.tab_theme">Tema</button>
+          <button class="tab-btn" data-tab="shortcuts" data-i18n="settings.tab_shortcuts">Scorciatoie</button>
+          <button class="tab-btn" data-tab="about">About</button>
+        </div>
+        <div class="modal-body">
+
+          <!-- ── Sync ────────────────────────────────────────── -->
+          <div class="tab-panel" id="tab-sync">
+
+            <!-- Restore — FIRST option, its own card (separate from the backup box). -->
+            <div id="restore-block" style="border:1px solid var(--border);border-radius:10px;background:var(--bg-2,rgba(255,255,255,0.02));padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <span data-i18n="sync.restore_title">Ripristina vault</span>
+                  <span style="font-size:var(--settings-fs);font-family:var(--ui-font);color:var(--text-1)" data-i18n="sync.restore_hint">Load a .tar.gz archive or a backup folder. Your current vault is kept aside.</span>
+                </div>
+                <button class="btn-save" id="btn-restore-vault" data-i18n="sync.restore_btn">Restore</button>
+              </div>
+              <div id="restore-result" class="test-result" style="display:none"></div>
+            </div>
+
+            <!-- ── Backup: scheduling + manual backup (global) ── -->
+            <div id="backup-top-panel" style="border:1px solid var(--border);border-radius:10px;background:var(--bg-2,rgba(255,255,255,0.02));padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:14px">
+              <div class="field-group">
+                <label data-i18n="settings.backup_freq">Frequenza backup</label>
+                <select id="cfg-local-interval" class="export-select">
+                  <option value="60" data-i18n="settings.freq_hourly">Ogni ora</option>
+                  <option value="1440" selected data-i18n="settings.freq_daily">Giornaliero</option>
+                  <option value="custom" data-i18n="settings.interval_custom">Custom</option>
+                </select>
+                <div class="sip-custom-wrap" id="local-interval-custom-wrap" style="display:none;margin-top:8px">
+                  <input type="number" id="cfg-local-interval-custom" min="1" max="60" value="2" />
+                  <span data-i18n="settings.days">giorni</span>
+                </div>
+              </div>
+              <!-- Keep archives — GLOBAL retention, right under frequency. -->
+              <div class="field-group">
+                <label data-i18n="settings.backup_keep">Conserva archivi</label>
+                <select id="cfg-backup-keep" class="export-select">
+                  <option value="3" data-i18n="settings.keep_3">Ultimi 3</option>
+                  <option value="5" selected data-i18n="settings.keep_5">Ultimi 5</option>
+                  <option value="10" data-i18n="settings.keep_10">Ultimi 10</option>
+                  <option value="0" data-i18n="settings.keep_all">Tutti</option>
+                </select>
+              </div>
+              <!-- Backup format — GLOBAL: applies to every destination
+                   (Local, VPN with Samba, WebDAV). Two mutually-exclusive toggles:
+                   uncompressed folder OR .tar.gz archive. -->
+              <div class="field-group toggle-row">
+                <label data-i18n="settings.backup_normal">Backup normale (cartella non compressa)</label>
+                <label class="toggle"><input type="checkbox" id="cfg-backup-normal" checked /><span class="slider"></span></label>
+              </div>
+              <div class="field-group toggle-row" style="border-top:1px solid var(--border);padding-top:12px">
+                <label data-i18n="settings.backup_archived">Backup archiviato (.tar.gz)</label>
+                <label class="toggle"><input type="checkbox" id="cfg-backup-archived" /><span class="slider"></span></label>
+              </div>
+              <!-- Manual backup — hidden until at least one backup destination is
+                   active+saved (shown by updateActionNowButtons). -->
+              <div id="manual-backup-block" style="display:none;flex-direction:column;gap:14px">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--border);padding-top:12px">
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <span data-i18n="sync.backup_now_title">Backup manuale</span>
+                    <span style="font-size:var(--settings-fs);font-family:var(--ui-font);color:var(--text-1)" data-i18n="sync.backup_now_hint">Esegue subito il backup su tutte le destinazioni attive</span>
+                  </div>
+                  <button class="btn-save" id="btn-backup-now-top" data-i18n="sync.backup_now">Esegui backup ora</button>
+                </div>
+                <div id="backup-now-top-result" class="test-result" style="display:none"></div>
+              </div>
+            </div>
+
+            <!-- Backup destination chooser — pills like the Sync tab. Shows one
+                 destination section at a time (Local / WireGuard+Samba / WebDAV). -->
+            <div class="field-group">
+              <label data-i18n="sync.transport">Tipo di connessione</label>
+              <div class="draw-loc-pills" id="bk-transport-pills">
+                <button type="button" class="dlp active" data-bktransport="local" data-i18n="sync.local">Local</button>
+                <button type="button" class="dlp" data-bktransport="webdav" data-i18n="sync.transport_webdav">WebDAV</button>
+                <button type="button" class="dlp" data-bktransport="vpn" data-i18n="sync.transport_samba">VPN with Samba</button>
+              </div>
+            </div>
+
+            <!-- ── Section: Local (moved to the top, before WireGuard/WebDAV) ── -->
+            <div class="sync-section" id="bksec-local">
+              <div class="sync-section-header" id="ssh-local">
+                <div class="sync-section-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"/></svg>
+                  <span data-i18n="sync.local">Local</span>
+                </div>
+                <div class="sync-section-right">
+                  <label class="toggle"><input type="checkbox" id="cfg-local-enabled" /><span class="slider"></span></label>
+                  <span class="sync-section-chevron" id="chevron-local">›</span>
+                </div>
+              </div>
+              <div class="sync-section-body" id="ssb-local" style="display:none">
+                <p class="wstep-desc" data-i18n="sync.local_desc">Sincronizza con una cartella locale sul tuo sistema.</p>
+                <!-- Autosave: kept as a hidden field so the setting (and the JS
+                     that reads/writes it) still works; removed from the visible UI. -->
+                <input type="hidden" id="cfg-autosave" value="3" />
+                <div class="field-group">
+                  <label data-i18n="sync.local_path">Percorso cartella locale</label>
+                  <div class="path-input-row">
+                    <input type="text" id="cfg-local-path" placeholder="/mnt/backup/amelie" />
+                    <button type="button" class="path-browse-btn" id="btn-browse-local" title="Sfoglia…" data-i18n-title="sync.browse" aria-label="Sfoglia cartella">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="info-box" data-i18n-html="sync.local_info_box">
+                  Amelie userà <code>rsync</code>. La cartella viene creata automaticamente.
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <button class="btn-test" id="btn-test-local" data-i18n="sync.test_path_btn">Testa percorso</button>
+                </div>
+                <div id="local-test-result" class="test-result"></div>
+              </div>
+            </div><!-- sync-section local -->
+
+            <!-- ── Section: WireGuard with Remote Share ──────────────────── -->
+            <div class="sync-section" id="bksec-vpn">
+              <div class="sync-section-header" id="ssh-vpn">
+                <div class="sync-section-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                  <span data-i18n="sync.wg_remote_share">VPN with Samba share</span>
+                </div>
+                <div class="sync-section-right">
+                  <label class="toggle"><input type="checkbox" id="cfg-vpn-enabled" /><span class="slider"></span></label>
+                  <span class="sync-section-chevron" id="chevron-vpn">›</span>
+                </div>
+              </div>
+              <div class="sync-section-body" id="ssb-vpn">
+
+                <!-- Configured/active summary — shown once setup is complete -->
+                <div id="wg-configured" style="display:none;flex-direction:column;gap:10px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span id="wg-cfg-badge" style="width:9px;height:9px;border-radius:50%;background:var(--accent-dim);flex-shrink:0"></span>
+                    <span id="wg-cfg-state" data-i18n="sync.wg_inactive">Configurato (tunnel non attivo)</span>
+                  </div>
+                  <div id="wg-cfg-parsed" class="wg-parsed" style="display:none;flex-direction:column;gap:5px">
+                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_endpoint">Peer endpoint</span><span id="wg-cfg-endpoint" class="wg-val">—</span></div>
+                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.samba_share">Samba share</span><span id="wg-cfg-share" class="wg-val">—</span></div>
+                  </div>
+                  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+                    <button class="wiz-btn secondary" id="wg-reconfigure" data-i18n="sync.wg_reconfigure">Riconfigura</button>
+                    <button class="wiz-btn secondary" id="wg-test-quick" data-i18n="sync.run_smbtest">Test connessione Samba</button>
+                    <button class="wiz-btn secondary" id="wg-remove" data-i18n="sync.wg_remove">Rimuovi</button>
+                  </div>
+                </div>
+
+                <!-- Full setup wizard (hidden once configured) -->
+                <div id="wg-wizard">
+
+                <!-- VPN type selector: WireGuard or OpenVPN (one at a time). -->
+                <div class="field-group" style="margin-bottom:4px">
+                  <label data-i18n="sync.vpn_type">Tipo VPN</label>
+                  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div class="vpn-type-seg">
+                      <button type="button" class="vpn-type-btn active" data-vpn="wireguard">WireGuard</button>
+                      <button type="button" class="vpn-type-btn" data-vpn="openvpn">OpenVPN</button>
+                    </div>
+                    <span id="vpn-configured-badge" style="display:none;align-items:center;gap:5px;color:var(--green);font-size:11px;white-space:nowrap">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;flex-shrink:0"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      <span></span>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- ── Import OpenVPN .ovpn (shown only when OpenVPN selected) ── -->
+                <div class="wizard-panel" id="ovpn-step" style="display:none">
+                  <div class="wstep-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span data-i18n="sync.ovpn_import_title">Importa configurazione OpenVPN</span>
+                  </div>
+                  <div class="smb-preview" id="ovpn-already" style="display:none;color:var(--green);align-items:center;gap:8px">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;flex-shrink:0"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span data-i18n="sync.ovpn_already" style="flex:1">Configurazione OpenVPN già caricata — verrà riusata.</span>
+                    <button type="button" class="wiz-btn secondary vpn-show-config" data-target="ovpn-parsed" data-i18n="sync.show_config" style="white-space:nowrap">Mostra configurazione</button>
+                    <button type="button" class="wiz-btn secondary vpn-edit-config" data-target="ovpn-parsed" data-kind="ovpn" data-i18n="sync.modify_config" style="white-space:nowrap">Modifica configurazione</button>
+                    <button type="button" class="wiz-btn secondary vpn-remove-btn" data-i18n="sync.wg_remove" style="white-space:nowrap">Rimuovi</button>
+                    <button type="button" class="wiz-btn secondary" id="ovpn-reconfigure" data-i18n="sync.wg_reconfigure" style="white-space:nowrap">Riconfigura</button>
+                  </div>
+                  <div class="wg-drop-zone" id="ovpn-drop-zone">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span id="ovpn-drop-label" data-i18n-html="sync.ovpn_drop_label">Trascina il file <strong>.ovpn</strong><br/><small>oppure clicca per sfogliare</small></span>
+                    <input type="file" id="ovpn-file-input" accept=".ovpn,.conf" style="display:none" />
+                  </div>
+                  <div class="field-group two-col" id="ovpn-creds" style="margin-top:10px">
+                    <div><label data-i18n="sync.username">Username</label><input type="text" id="cfg-ovpn-user" autocomplete="off" placeholder="(se richiesto)" data-i18n-placeholder="sync.if_required" /></div>
+                    <div><label data-i18n="sync.password">Password</label><input type="password" id="cfg-ovpn-pass" autocomplete="new-password" placeholder="(se richiesto)" data-i18n-placeholder="sync.if_required" /></div>
+                  </div>
+                  <p class="wstep-desc" style="margin-top:6px" data-i18n="sync.ovpn_note">Se il tuo sistema non autorizza la gestione VPN per l'utente, NetworkManager potrebbe chiedere la password una volta.</p>
+                  <div id="ovpn-parsed" class="wg-parsed" style="display:none;margin-top:8px">
+                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_endpoint">Peer endpoint</span><span id="ovpn-endpoint" class="wg-val">—</span></div>
+                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_protocol">Protocollo</span><span id="ovpn-proto" class="wg-val">—</span></div>
+                  </div>
+                </div>
+
+                <!-- Flat layout: import + WG test + Samba + full test all on one
+                     page (no step navigation). A Test button sits under the
+                     WireGuard part and another under the Samba part. -->
+
+                <!-- ── Import WireGuard .conf ── -->
+                <div class="wizard-panel" id="wstep-1">
+                  <div class="wstep-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span data-i18n="sync.wg_import_title">Importa configurazione WireGuard</span>
+                  </div>
+                  <div class="smb-preview" id="wg-already" style="display:none;color:var(--green);align-items:center;gap:8px">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;flex-shrink:0"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span data-i18n="sync.tw_wg_already" style="flex:1">Configurazione WireGuard già caricata — verrà riusata.</span>
+                    <button type="button" class="wiz-btn secondary vpn-show-config" data-target="wg-parsed" data-i18n="sync.show_config" style="white-space:nowrap">Mostra configurazione</button>
+                    <button type="button" class="wiz-btn secondary vpn-edit-config" data-target="wg-parsed" data-kind="wg" data-i18n="sync.modify_config" style="white-space:nowrap">Modifica configurazione</button>
+                    <button type="button" class="wiz-btn secondary vpn-remove-btn" data-i18n="sync.wg_remove" style="white-space:nowrap">Rimuovi</button>
+                  </div>
+                  <div class="wg-drop-zone" id="wg-drop-zone">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span id="wg-drop-label" data-i18n-html="sync.wg_drop_label">Trascina il file <strong>.conf</strong><br/><small>oppure clicca per sfogliare</small></span>
+                    <input type="file" id="wg-file-input" accept=".conf" style="display:none" />
+                  </div>
+                  <div id="wg-parsed" class="wg-parsed" style="display:none">
+                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_iface">Interfaccia</span><span id="wg-iface" class="wg-val">—</span></div>
+                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_local_ip">IP locale</span><span id="wg-local-ip" class="wg-val">—</span></div>
+                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_endpoint">Peer endpoint</span><span id="wg-endpoint" class="wg-val">—</span></div>
+                    <div class="wg-parsed-row"><span class="wg-key">Allowed IPs</span><span id="wg-allowed" class="wg-val">—</span></div>
+                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_protocol">Protocollo</span><span class="wg-val" style="color:var(--accent-dim)" data-i18n="sync.wg_udp_fixed">UDP (fisso)</span></div>
+                  </div>
+                </div>
+
+
+                <!-- ── Samba share ── -->
+                <div class="wizard-panel" id="wstep-3">
+                  <div class="wstep-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    <span data-i18n="sync.samba_share">Samba share</span>
+                  </div>
+                  <p class="wstep-desc" data-i18n="sync.samba_desc">Configura la share Samba sull'IP del peer WireGuard.</p>
+                  <!-- Collapsed summary once configured — fields appear only via the buttons. -->
+                  <div class="smb-preview" id="smb-preview-backup" style="display:none;color:var(--green);align-items:center;gap:8px;flex-wrap:wrap">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                    <span id="smb-summary-backup" style="color:var(--text-1)"></span>
+                    <span style="flex:1"></span>
+                    <button type="button" class="wiz-btn secondary smb-reconfigure" data-target="backup" data-i18n="sync.smb_modify" style="white-space:nowrap">Modifica</button>
+                  </div>
+                  <div id="smb-form-backup">
+                  <div class="field-group">
+                    <label data-i18n="sync.smb_ip">Indirizzo server</label>
+                    <span class="ip-group" data-ip="cfg-smb-ip"><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="1" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="2" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="3" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="4" /></span><input type="hidden" id="cfg-smb-ip" />
+                  </div>
+                  <div class="field-group two-col" style="margin-top:10px">
+                    <div><label data-i18n="sync.smb_share_name">Nome share</label><input type="text" id="cfg-smb-share" /></div>
+                    <div><label data-i18n="sync.remote_folder">Cartella remota</label><input type="text" id="cfg-smb-path" placeholder="amelie/backup" /></div>
+                  </div>
+                  <div class="field-group two-col" style="margin-top:10px">
+                    <div><label data-i18n="sync.username">Username</label><input type="text" id="cfg-smb-user" autocomplete="off" /></div>
+                    <div><label data-i18n="sync.password">Password</label><div style="position:relative"><input type="password" id="cfg-smb-pass" autocomplete="new-password" style="width:100%;padding-right:32px" /><button type="button" id="cfg-smb-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
+                  </div>
+                  <div style="display:flex;justify-content:flex-end;margin-top:8px">
+                    <button type="button" class="wiz-btn secondary samba-remove-btn" data-scope="backup" data-i18n="sync.wg_remove">Rimuovi</button>
+                  </div>
+                  </div>
+                </div>
+
+                <!-- ── Samba write test (inline, below Samba) ── -->
+                <div class="wizard-panel" id="wstep-4">
+                  <div class="wstep-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span data-i18n="sync.smbtest_title">Test connessione Samba</span>
+                  </div>
+                  <p class="wstep-desc" data-i18n="sync.smbtest_desc">Verifica solo se Amelie riesce a scrivere sulla share Samba (attiva il tunnel se serve).</p>
+                  <div class="test-checklist" id="test-checklist">
+                    <div class="tc-row" id="tc-wg"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_wg_conn">Connesso via WireGuard</span><span class="tc-result" id="tc-wg-res"></span></div>
+                    <div class="tc-row" id="tc-reach"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_reach">Samba share raggiungibile</span><span class="tc-result" id="tc-reach-res"></span></div>
+                    <div class="tc-row" id="tc-write"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_write_folder">Scrittura nella cartella</span><span class="tc-result" id="tc-write-res"></span></div>
+                  </div>
+                  <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end">
+                    <button class="btn-test-run tc-disabled" id="btn-run-test">
+                      <span data-i18n="sync.test_connection_btn">Testa connessione</span>
+                    </button>
+                  </div>
+                  <div id="test-summary" class="test-summary" style="display:none;margin-top:8px"></div>
+                </div>
+
+                </div><!-- wg-wizard -->
+
+              </div><!-- ssb-vpn -->
+            </div><!-- sync-section vpn -->
+
+            <!-- ── Section: WebDAV ────────────────────────────────── -->
+            <div class="sync-section" id="bksec-webdav">
+              <div class="sync-section-header" id="ssh-webdav">
+                <div class="sync-section-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
+                  WebDAV
+                </div>
+                <div class="sync-section-right">
+                  <label class="toggle"><input type="checkbox" id="cfg-webdav-enabled" /><span class="slider"></span></label>
+                  <span class="sync-section-chevron" id="chevron-webdav">›</span>
+                </div>
+              </div>
+              <div class="sync-section-body" id="ssb-webdav" style="display:none">
+                <div class="field-group">
+                  <label data-i18n="sync.webdav_url">URL server</label>
+                  <input type="url" id="cfg-webdav-url" placeholder="https://…" />
+                </div>
+                <div class="field-group two-col">
+                  <div><label data-i18n="sync.username">Username</label><input type="text" id="cfg-webdav-user" autocomplete="off" /></div>
+                  <div><label data-i18n="sync.webdav_pass">Password / App token</label><div style="position:relative"><input type="password" id="cfg-webdav-pass" autocomplete="new-password" style="width:100%;padding-right:32px" /><button type="button" id="cfg-webdav-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
+                </div>
+                <div class="field-group">
+                  <label data-i18n="sync.remote_path">Percorso remoto</label>
+                  <input type="text" id="cfg-webdav-path" placeholder="/amelie/backup" />
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <button class="btn-test" id="btn-test-webdav" data-i18n="sync.test_connection_btn">Testa connessione</button>
+                  <button class="wiz-btn secondary" id="btn-webdav-save" data-i18n="sync.wg_remove">Rimuovi</button>
+                </div>
+                <div id="webdav-test-result" class="test-result"></div>
+              </div>
+            </div><!-- sync-section webdav -->
+
+          </div><!-- tab-sync -->
+
+          <!-- ── Sync (two-way) ───────────────────────────────── -->
+          <div class="tab-panel" id="tab-twoway">
+            <!-- Manual sync at the TOP, like Backup's "Backup now". Shown only when the two-way connection is ready. -->
+            <div id="sync-now-block" style="display:none;flex-direction:column;gap:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg-2,rgba(255,255,255,0.02));padding:14px;margin-bottom:16px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <span data-i18n="sync.sync_now_title">Sincronizzazione manuale</span>
+                  <span style="font-size:var(--settings-fs);font-family:var(--ui-font);color:var(--text-1)" data-i18n="sync.sync_now_hint">Sincronizza subito le note con la share</span>
+                </div>
+                <button class="btn-save" id="btn-test-twoway" data-i18n="sync.twoway_run">Sincronizza ora</button>
+              </div>
+              <div id="twoway-test-result" class="test-result" style="display:none"></div>
+            </div>
+
+            <!-- Two-way sync: a heading followed by TWO activation toggles, one per
+                 transport (WebDAV / WireGuard+Samba). They are MUTUALLY EXCLUSIVE —
+                 turning one on turns the other off — because the engine syncs with a
+                 single source of truth (_syncTwoway picks one transport). The legacy
+                 master toggle (#cfg-twoway-enabled) and transport selector
+                 (#tw-transport-pills) are kept HIDDEN and DERIVED from these toggles,
+                 so all existing save/validation/panel logic keeps working unchanged. -->
+            <div class="field-group toggle-row">
+              <label class="sync-opt-label" data-i18n="sync.twoway_title">Sincronizzazione a due vie</label>
+            </div>
+            <div class="field-group toggle-row sync-method-box">
+              <label class="sync-opt-label" data-i18n="sync.transport_webdav">WebDAV</label>
+              <label class="toggle"><input type="checkbox" id="cfg-tw-webdav-enabled" /><span class="slider"></span></label>
+            </div>
+            <div class="field-group toggle-row sync-method-box">
+              <label class="sync-opt-label" data-i18n="sync.transport_samba">VPN with Samba</label>
+              <label class="toggle"><input type="checkbox" id="cfg-tw-samba-enabled" /><span class="slider"></span></label>
+            </div>
+            <!-- Error shown when the user tries to enable both methods at once. -->
+            <div id="tw-method-error" class="test-result fail" style="display:none;margin-top:6px" data-i18n="sync.twoway_one_only">Puoi attivare un solo metodo di sync alla volta: WebDAV oppure VPN with Samba.</div>
+
+            <!-- Hidden: derived master enable + transport selector (driven by the two
+                 toggles above; read by saveSettings/updateTwowayConnView). -->
+            <input type="checkbox" id="cfg-twoway-enabled" style="display:none" />
+            <div class="draw-loc-pills" id="tw-transport-pills" style="display:none">
+              <button type="button" class="dlp" data-transport="webdav" data-i18n="sync.transport_webdav">WebDAV</button>
+              <button type="button" class="dlp active" data-transport="samba" data-i18n="sync.transport_samba">VPN with Samba</button>
+            </div>
+
+            <!-- Frequency + Conflict copies — GENERAL two-way settings, right under
+                 the on/off toggle (not tied to the chosen connection type). -->
+            <div class="field-group">
+              <label data-i18n="sync.twoway_freq">Frequenza</label>
+              <select id="cfg-twoway-interval" class="export-select">
+                <option value="realtime" data-i18n="sync.twoway_realtime_opt">Tempo reale (ad ogni modifica)</option>
+                <option value="15" selected>15 min</option>
+                <option value="60" data-i18n="settings.freq_hourly">Ogni ora</option>
+                <option value="1440" data-i18n="settings.freq_daily">Giornaliero</option>
+                <option value="custom" data-i18n="settings.interval_custom">Custom</option>
+              </select>
+              <div class="sip-custom-wrap" id="twoway-custom-wrap" style="display:none;margin-top:8px">
+                <input type="number" id="cfg-twoway-interval-custom" min="1" max="1440" value="10" />
+                <span data-i18n="settings.minutes">minuti</span>
+              </div>
+            </div>
+            <div class="field-group toggle-row" style="margin-top:4px">
+              <label><span data-i18n="sync.conflict_copies">Copie-conflitto</span> <small data-i18n="sync.conflict_copies_desc">(On = tiene entrambe le versioni in conflitto · Off = tiene la versione più recente)</small></label>
+              <label class="toggle"><input type="checkbox" id="cfg-twoway-fullsync" checked /><span class="slider"></span></label>
+            </div>
+
+            <p class="wstep-desc" data-i18n="sync.twoway_desc">Sincronizza a due vie una cartella sulla share WireGuard+Samba (riusa la connessione del backup). Le modifiche fatte da altri PC tornano nel vault; la copia locale non viene mai sovrascritta da una più vecchia.</p>
+
+            <!-- WebDAV two-way panel (shown when transport = webdav) -->
+            <div class="wizard-panel" id="tw-webdav-panel" style="display:none">
+              <div class="field-group">
+                <label data-i18n="sync.webdav_url">URL server</label>
+                <input type="text" id="tw-webdav-url" placeholder="https://nextcloud.example.com/remote.php/dav/files/utente" />
+              </div>
+              <div class="field-group two-col">
+                <div><label data-i18n="sync.username">Username</label><input type="text" id="tw-webdav-user" autocomplete="off" /></div>
+                <div><label data-i18n="sync.webdav_pass">Password / App token</label><div style="position:relative"><input type="password" id="tw-webdav-pass" autocomplete="new-password" style="width:100%;padding-right:32px" /><button type="button" id="tw-webdav-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
+              </div>
+              <div class="field-group">
+                <label data-i18n="sync.remote_folder">Cartella remota</label>
+                <input type="text" id="tw-webdav-path" placeholder="amelie/sync" />
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <button class="btn-test" id="tw-webdav-test" data-i18n="sync.test_connection_btn">Testa connessione</button>
+                <button class="wiz-btn secondary" id="tw-webdav-save" data-i18n="sync.wg_remove">Rimuovi</button>
+              </div>
+              <div id="tw-webdav-result" class="test-result" style="display:none"></div>
+            </div>
+
+            <!-- IDENTICAL view to Backup: configured summary + wizard. -->
+            <!-- Configured/active summary — shown once setup is complete -->
+            <div id="twoway-conn-ok" style="display:none;flex-direction:column;gap:10px">
+              <!-- Status header hidden in Sync: the VPN is shared with Backup, so
+                   "WireGuard configured" here is redundant (managed from Backup). -->
+              <div style="display:none">
+                <span id="tw-wg-badge" style="width:9px;height:9px;border-radius:50%;background:var(--accent-dim);flex-shrink:0"></span>
+                <span id="tw-wg-state" data-i18n="sync.wg_inactive">Configurato (tunnel non attivo)</span>
+              </div>
+              <div id="tw-cfg-parsed" class="wg-parsed" style="display:none;flex-direction:column;gap:5px">
+                <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_endpoint">Peer endpoint</span><span id="tw-cfg-endpoint" class="wg-val">—</span></div>
+                <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.samba_share">Samba share</span><span id="twoway-conn-share" class="wg-val">—</span></div>
+              </div>
+              <div id="tw-conn-test-result" class="test-result" style="display:none"></div>
+              <!-- Connection actions on one row, sized to their text, right-aligned -->
+              <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px">
+                <button class="wiz-btn secondary" id="tw-reconfigure" data-i18n="sync.modify_config">Modifica</button>
+                <button class="wiz-btn secondary" id="tw-test-conn" data-i18n="sync.test_connection_btn">Testa connessione</button>
+                <button class="wiz-btn secondary" id="twoway-remove" data-i18n="sync.wg_remove">Rimuovi</button>
+              </div>
+            </div>
+
+            <!-- Full setup wizard (hidden once configured) — same as Backup -->
+            <div id="twoway-conn-missing" style="display:none">
+
+              <!-- VPN type selector: WireGuard or OpenVPN (shared with Backup). -->
+              <div class="field-group" style="margin-bottom:4px">
+                <label data-i18n="sync.vpn_type">Tipo VPN</label>
+                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+                  <div class="vpn-type-seg">
+                    <button type="button" class="vpn-type-btn active" data-vpn="wireguard">WireGuard</button>
+                    <button type="button" class="vpn-type-btn" data-vpn="openvpn">OpenVPN</button>
+                  </div>
+                  <span id="tw-vpn-configured-badge" style="display:none;align-items:center;gap:5px;color:var(--green);font-size:11px;white-space:nowrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;flex-shrink:0"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span></span>
+                  </span>
+                </div>
+              </div>
+
+              <!-- ── Import OpenVPN .ovpn (shown only when OpenVPN selected) ── -->
+              <div class="wizard-panel ovpn-first-panel" id="tw-ovpn-step" style="display:none">
+                <div class="wstep-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  <span data-i18n="sync.ovpn_import_title">Importa configurazione OpenVPN</span>
+                </div>
+                <div class="smb-preview" id="tw-ovpn-already" style="display:none;color:var(--green);align-items:center;gap:8px">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;flex-shrink:0"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span data-i18n="sync.ovpn_already" style="flex:1">Configurazione OpenVPN già caricata — verrà riusata.</span>
+                  <button type="button" class="wiz-btn secondary vpn-show-config" data-target="tw-ovpn-parsed" data-i18n="sync.show_config" style="white-space:nowrap">Mostra configurazione</button>
+                  <button type="button" class="wiz-btn secondary vpn-edit-config" data-target="tw-ovpn-parsed" data-kind="ovpn" data-i18n="sync.modify_config" style="white-space:nowrap">Modifica configurazione</button>
+                  <button type="button" class="wiz-btn secondary vpn-remove-btn" data-i18n="sync.wg_remove" style="white-space:nowrap">Rimuovi</button>
+                  <button type="button" class="wiz-btn secondary" id="tw-ovpn-reconfigure" data-i18n="sync.wg_reconfigure" style="white-space:nowrap">Riconfigura</button>
+                </div>
+                <div class="wg-drop-zone" id="tw-ovpn-drop-zone">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  <span id="tw-ovpn-drop-label" data-i18n-html="sync.ovpn_drop_label">Trascina il file <strong>.ovpn</strong><br/><small>oppure clicca per sfogliare</small></span>
+                  <input type="file" id="tw-ovpn-file-input" accept=".ovpn,.conf" style="display:none" />
+                </div>
+                <div class="field-group two-col" id="tw-ovpn-creds" style="margin-top:10px">
+                  <div><label data-i18n="sync.username">Username</label><input type="text" id="tw-ovpn-user" autocomplete="off" placeholder="(se richiesto)" data-i18n-placeholder="sync.if_required" /></div>
+                  <div><label data-i18n="sync.password">Password</label><input type="password" id="tw-ovpn-pass" autocomplete="new-password" placeholder="(se richiesto)" data-i18n-placeholder="sync.if_required" /></div>
+                </div>
+                <p class="wstep-desc" style="margin-top:6px" data-i18n="sync.ovpn_note">Se il tuo sistema non autorizza la gestione VPN per l'utente, NetworkManager potrebbe chiedere la password una volta.</p>
+                <div id="tw-ovpn-parsed" class="wg-parsed" style="display:none;margin-top:8px">
+                  <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_endpoint">Peer endpoint</span><span id="tw-ovpn-endpoint" class="wg-val">—</span></div>
+                  <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_protocol">Protocollo</span><span id="tw-ovpn-proto" class="wg-val">—</span></div>
+                </div>
+              </div>
+
+              <!-- ── Import WireGuard .conf ── -->
+              <div class="wizard-panel" id="tw-wstep-1">
+                <div class="wstep-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  <span data-i18n="sync.wg_import_title">Importa configurazione WireGuard</span>
+                </div>
+                <div class="smb-preview" id="tw-wg-already" style="display:none;color:var(--green);align-items:center;gap:8px">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;flex-shrink:0"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span data-i18n="sync.tw_wg_already" style="flex:1">Configurazione WireGuard già caricata — verrà riusata.</span>
+                  <button type="button" class="wiz-btn secondary vpn-show-config" data-target="tw-wg-parsed" data-i18n="sync.show_config" style="white-space:nowrap">Mostra configurazione</button>
+                  <button type="button" class="wiz-btn secondary vpn-edit-config" data-target="tw-wg-parsed" data-kind="wg" data-i18n="sync.modify_config" style="white-space:nowrap">Modifica configurazione</button>
+                  <button type="button" class="wiz-btn secondary vpn-remove-btn" data-i18n="sync.wg_remove" style="white-space:nowrap">Rimuovi</button>
+                </div>
+                <div class="wg-drop-zone" id="tw-wg-drop-zone">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  <span id="tw-wg-drop-label" data-i18n-html="sync.wg_drop_label">Trascina il file <strong>.conf</strong><br/><small>oppure clicca per sfogliare</small></span>
+                  <input type="file" id="tw-wg-file-input" accept=".conf" style="display:none" />
+                </div>
+                <div id="tw-wg-parsed" class="wg-parsed" style="display:none">
+                  <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_iface">Interfaccia</span><span id="tw-iface" class="wg-val">—</span></div>
+                  <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_local_ip">IP locale</span><span id="tw-local-ip" class="wg-val">—</span></div>
+                  <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_endpoint">Peer endpoint</span><span id="tw-endpoint" class="wg-val">—</span></div>
+                  <div class="wg-parsed-row"><span class="wg-key">Allowed IPs</span><span id="tw-allowed" class="wg-val">—</span></div>
+                  <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_protocol">Protocollo</span><span class="wg-val" style="color:var(--accent-dim)" data-i18n="sync.wg_udp_fixed">UDP (fisso)</span></div>
+                </div>
+              </div>
+
+              <!-- ── Samba share ── -->
+              <div class="wizard-panel" id="tw-smb-panel">
+                <div class="wstep-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                  <span data-i18n="sync.samba_share">Samba share</span>
+                </div>
+                <p class="wstep-desc" data-i18n="sync.samba_desc">Configura la share Samba sull'IP del peer WireGuard.</p>
+                <!-- Collapsed summary once configured — fields appear only via the buttons. -->
+                <div class="smb-preview" id="smb-preview-sync" style="display:none;color:var(--green);align-items:center;gap:8px;flex-wrap:wrap">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                  <span id="smb-summary-sync" style="color:var(--text-1)"></span>
+                  <span style="flex:1"></span>
+                  <button type="button" class="wiz-btn secondary smb-reconfigure" data-target="sync" data-i18n="sync.smb_modify" style="white-space:nowrap">Modifica</button>
+                </div>
+                <div id="smb-form-sync">
+                <div class="field-group">
+                  <label data-i18n="sync.smb_ip">Indirizzo server</label>
+                  <span class="ip-group" data-ip="tw-smb-ip"><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="1" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="2" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="3" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="4" /></span><input type="hidden" id="tw-smb-ip" />
+                </div>
+                <div class="field-group two-col" style="margin-top:10px">
+                  <div><label data-i18n="sync.smb_share_name">Nome share</label><input type="text" id="tw-smb-share" /></div>
+                  <div><label data-i18n="sync.remote_folder">Cartella remota</label><input type="text" id="tw-smb-path" placeholder="amelie/sync" /></div>
+                </div>
+                <div class="field-group two-col" style="margin-top:10px">
+                  <div><label data-i18n="sync.username">Username</label><input type="text" id="tw-smb-user" autocomplete="off" /></div>
+                  <div><label data-i18n="sync.password">Password</label><div style="position:relative"><input type="password" id="tw-smb-pass" autocomplete="new-password" style="width:100%;padding-right:32px" /><button type="button" id="tw-smb-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
+                </div>
+                <div style="display:flex;justify-content:flex-end;margin-top:8px">
+                  <button type="button" class="wiz-btn secondary samba-remove-btn" data-scope="sync" data-i18n="sync.wg_remove">Rimuovi</button>
+                </div>
+                </div>
+              </div>
+
+              <!-- ── Connection test ── -->
+              <div class="wizard-panel">
+                <div class="wstep-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span data-i18n="sync.smbtest_title">Verifica connessione</span>
+                </div>
+                <p class="wstep-desc" data-i18n="sync.smbtest_desc">Verifica la connessione WireGuard e la scrittura sulla share Samba.</p>
+                <div class="test-checklist">
+                  <div class="tc-row" id="tw-tc-wg"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_wg_conn">Connesso via WireGuard</span><span class="tc-result" id="tw-tc-wg-res"></span></div>
+                  <div class="tc-row" id="tw-tc-reach"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_reach">Samba share raggiungibile</span><span class="tc-result" id="tw-tc-reach-res"></span></div>
+                  <div class="tc-row" id="tw-tc-write"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_write_folder">Scrittura nella cartella</span><span class="tc-result" id="tw-tc-write-res"></span></div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end">
+                  <button class="btn-test-run tc-disabled" id="tw-setup-test">
+                    <span data-i18n="sync.test_connection_btn">Testa connessione</span>
+                  </button>
+                </div>
+                <div id="tw-setup-result" class="test-summary" style="display:none"></div>
+              </div>
+            </div>
+
+          </div><!-- tab-twoway -->
+
+          <!-- ── Tema ───────────────────────────────────────────── -->
+          <div class="tab-panel" id="tab-theme">
+
+            <div class="theme-grid">
+
+              <div class="theme-card active" data-theme="github-dark" title="Cyberpunk (default)">
+                <div class="theme-preview">
+                  <div class="tp-sidebar" style="background:#161616"></div>
+                  <div class="tp-editor" style="background:#111111">
+                    <div class="tp-line accent" style="background:#3fb950"></div>
+                    <div class="tp-line dim" style="background:#8b949e"></div>
+                    <div class="tp-line short" style="background:#8b949e"></div>
+                    <div class="tp-line dim" style="background:#8b949e"></div>
+                    <div class="tp-line short" style="background:#3fb950"></div>
+                  </div>
+                </div>
+                <div class="theme-name">Cyberpunk</div>
+              </div>
+
+              <div class="theme-card" data-theme="navy" title="Navy">
+                <div class="theme-preview">
+                  <div class="tp-sidebar" style="background:#0e1520"></div>
+                  <div class="tp-editor" style="background:#0a0e17">
+                    <div class="tp-line accent" style="background:#3d9970"></div>
+                    <div class="tp-line dim" style="background:#9aacbe"></div>
+                    <div class="tp-line short" style="background:#9aacbe"></div>
+                    <div class="tp-line dim" style="background:#9aacbe"></div>
+                    <div class="tp-line short" style="background:#3d9970"></div>
+                  </div>
+                </div>
+                <div class="theme-name">Navy</div>
+              </div>
+
+              <div class="theme-card" data-theme="amber" title="Amber Dark">
+                <div class="theme-preview">
+                  <div class="tp-sidebar" style="background:#111114"></div>
+                  <div class="tp-editor" style="background:#0b0b0d">
+                    <div class="tp-line accent" style="background:#c9a96e"></div>
+                    <div class="tp-line dim" style="background:#b8b5ad"></div>
+                    <div class="tp-line short" style="background:#b8b5ad"></div>
+                    <div class="tp-line dim" style="background:#b8b5ad"></div>
+                    <div class="tp-line short" style="background:#c9a96e"></div>
+                  </div>
+                </div>
+                <div class="theme-name">Amber Dark</div>
+              </div>
+
+              <div class="theme-card" data-theme="solarized" title="Solarized Dark">
+                <div class="theme-preview">
+                  <div class="tp-sidebar" style="background:#073642"></div>
+                  <div class="tp-editor" style="background:#002b36">
+                    <div class="tp-line accent" style="background:#2aa198"></div>
+                    <div class="tp-line dim" style="background:#eee8d5"></div>
+                    <div class="tp-line short" style="background:#eee8d5"></div>
+                    <div class="tp-line dim" style="background:#eee8d5"></div>
+                    <div class="tp-line short" style="background:#2aa198"></div>
+                  </div>
+                </div>
+                <div class="theme-name">Solarized</div>
+              </div>
+
+              <div class="theme-card" data-theme="light" title="Light Paper">
+                <div class="theme-preview">
+                  <div class="tp-sidebar" style="background:#ede8df"></div>
+                  <div class="tp-editor" style="background:#f5f0e8">
+                    <div class="tp-line accent" style="background:#2e6e45"></div>
+                    <div class="tp-line dim" style="background:#4a4540"></div>
+                    <div class="tp-line short" style="background:#4a4540"></div>
+                    <div class="tp-line dim" style="background:#4a4540"></div>
+                    <div class="tp-line short" style="background:#2e6e45"></div>
+                  </div>
+                </div>
+                <div class="theme-name">Light Paper</div>
+              </div>
+
+              <div class="theme-card" data-theme="rose" title="Rosé Pine">
+                <div class="theme-preview">
+                  <div class="tp-sidebar" style="background:#1f1d2e"></div>
+                  <div class="tp-editor" style="background:#191724">
+                    <div class="tp-line accent" style="background:#c4a7e7"></div>
+                    <div class="tp-line dim" style="background:#e0def4"></div>
+                    <div class="tp-line short" style="background:#e0def4"></div>
+                    <div class="tp-line dim" style="background:#e0def4"></div>
+                    <div class="tp-line short" style="background:#c4a7e7"></div>
+                  </div>
+                </div>
+                <div class="theme-name">Rosé Pine</div>
+              </div>
+
+              <div class="theme-card" data-theme="gruvbox" title="Gruvbox">
+                <div class="theme-preview">
+                  <div class="tp-sidebar" style="background:#282828"></div>
+                  <div class="tp-editor" style="background:#1d2021">
+                    <div class="tp-line accent" style="background:#b8bb26"></div>
+                    <div class="tp-line dim" style="background:#ebdbb2"></div>
+                    <div class="tp-line short" style="background:#ebdbb2"></div>
+                    <div class="tp-line dim" style="background:#ebdbb2"></div>
+                    <div class="tp-line short" style="background:#fabd2f"></div>
+                  </div>
+                </div>
+                <div class="theme-name">Gruvbox</div>
+              </div>
+
+              <div class="theme-card" data-theme="nord" title="Nord">
+                <div class="theme-preview">
+                  <div class="tp-sidebar" style="background:#272c38"></div>
+                  <div class="tp-editor" style="background:#2e3440">
+                    <div class="tp-line accent" style="background:#88c0d0"></div>
+                    <div class="tp-line dim" style="background:#d8dee9"></div>
+                    <div class="tp-line short" style="background:#d8dee9"></div>
+                    <div class="tp-line dim" style="background:#d8dee9"></div>
+                    <div class="tp-line short" style="background:#88c0d0"></div>
+                  </div>
+                </div>
+                <div class="theme-name">Nord</div>
+              </div>
+
+              <div class="theme-card" data-theme="onedark" title="One Dark">
+                <div class="theme-preview">
+                  <div class="tp-sidebar" style="background:#21252b"></div>
+                  <div class="tp-editor" style="background:#282c34">
+                    <div class="tp-line accent" style="background:#61afef"></div>
+                    <div class="tp-line dim" style="background:#abb2bf"></div>
+                    <div class="tp-line short" style="background:#abb2bf"></div>
+                    <div class="tp-line dim" style="background:#abb2bf"></div>
+                    <div class="tp-line short" style="background:#98c379"></div>
+                  </div>
+                </div>
+                <div class="theme-name">One Dark</div>
+              </div>
+
+              <div class="theme-card" data-theme="dracula" title="Dracula">
+                <div class="theme-preview">
+                  <div class="tp-sidebar" style="background:#21222c"></div>
+                  <div class="tp-editor" style="background:#282a36">
+                    <div class="tp-line accent" style="background:#50fa7b"></div>
+                    <div class="tp-line dim" style="background:#f8f8f2"></div>
+                    <div class="tp-line short" style="background:#f8f8f2"></div>
+                    <div class="tp-line dim" style="background:#f8f8f2"></div>
+                    <div class="tp-line short" style="background:#ff79c6"></div>
+                  </div>
+                </div>
+                <div class="theme-name">Dracula</div>
+              </div>
+
+            </div>
+
+            <!-- Custom themes: created in ~/.amelie/themes by the Add-theme button -->
+            <div class="field-group" style="margin-top:14px">
+              <button class="btn-test btn-svg" id="btn-add-theme" style="align-self:flex-start">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                <span data-i18n="theme.add_theme">Nuovo tema</span>
+              </button>
+              <small style="color:var(--text-3);font-size:var(--settings-fs)" data-i18n="theme.themes_folder_hint">Crea un tema: si apre un file già pronto — modifica i colori, salva e riapri Amelie. La ✕ sulla card lo elimina.</small>
+            </div>
+
+          </div>
+          <div class="tab-panel active" id="tab-security">
+
+            <!-- Change the vault path (browse with the file manager) -->
+            <div class="field-group">
+              <label data-i18n="vault_settings.change_path">Percorso vault <small data-i18n="vault_settings.change_path_desc">(cartella delle note)</small></label>
+              <div class="path-input-row">
+                <input type="text" id="cfg-vault-path" placeholder="/home/…/Vault" />
+                <button type="button" class="path-browse-btn" id="btn-browse-vault" title="Sfoglia…" data-i18n-title="sync.browse" aria-label="Sfoglia cartella vault">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                </button>
+              </div>
+              <div id="vault-path-result" class="test-result"></div>
+            </div>
+
+            <!-- Vault status card. The active vault path is already shown/edited
+                 in the "Percorso vault" field above, so the redundant "Vault attivo"
+                 card was removed — the Content card now spans the full width
+                 (.sec-cards uses auto-fit grid). -->
+            <div class="sec-cards" id="vault-info-box">
+              <div class="sec-card">
+                <div class="sec-card-head">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+                  <span data-i18n="vault_settings.card_content">Contenuto</span>
+                </div>
+                <div class="sec-card-value" id="sec-content-stats" style="font-size:var(--settings-fs);line-height:1.8">—</div>
+              </div>
+            </div>
+
+            <!-- Encryption: status + passphrase controls grouped in ONE box -->
+            <div class="enc-box" style="margin-top:14px">
+              <div class="enc-box-head">
+                <span class="sec-card-ico" id="sec-enc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.83-1.2"/></svg></span>
+                <span class="enc-box-title" data-i18n="vault_settings.card_encryption">Crittografia</span>
+                <span class="enc-box-status" id="sec-enc-status" data-i18n="vault_settings.enc_off">Disabilitata</span>
+              </div>
+
+              <!-- Master toggle (like the other settings toggles): ON reveals the
+                   algorithm + passphrase to enable; OFF (when active) reveals the
+                   passphrase to decrypt/disable. -->
+              <div class="field-group toggle-row" style="margin-top:6px">
+                <label data-i18n="vault_settings.enable_enc">Abilita crittografia</label>
+                <label class="toggle"><input type="checkbox" id="cfg-encryption-toggle" /><span class="slider"></span></label>
+              </div>
+
+            <!-- Enable encryption (revealed by the toggle when OFF→ON) -->
+            <div id="sec-enable-enc" style="display:none">
+              <div class="field-group two-col">
+                <div>
+                  <label data-i18n-html="vault_settings.enable_pass_label">Passphrase <small>(non recuperabile)</small></label>
+                  <div style="position:relative">
+                    <input type="text" id="sec-new-pass" placeholder="*****" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;font-family:'AmelieMask',monospace;letter-spacing:3px;padding-right:32px"/>
+                    <button type="button" id="sec-new-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button>
+                  </div>
+                </div>
+                <div>
+                  <label data-i18n="vault_settings.confirm_pass">Conferma</label>
+                  <div style="position:relative">
+                    <input type="text" id="sec-new-pass2" placeholder="*****" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;font-family:'AmelieMask',monospace;letter-spacing:3px;padding-right:32px"/>
+                    <button type="button" id="sec-new-pass2-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button>
+                  </div>
+                </div>
+              </div>
+              <div class="field-group toggle-row" id="sec-enc-restmode" style="margin-top:8px">
+                <label><span data-i18n="vault_settings.rest_encrypt">Cifra i file a riposo</span> <small data-i18n="vault_settings.rest_open_desc">(On = file sempre cifrati · Off = i file del vault locale vengono decifrati mentre Amelie è aperta)</small></label>
+                <label class="toggle"><input type="checkbox" id="sec-enc-rest-tgl" checked /><span class="slider"></span></label>
+              </div>
+              <button class="btn-test btn-svg" id="sec-btn-enable-enc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span data-i18n="vault_settings.btn_enable">Abilita crittografia</span></button>
+              <div id="sec-enc-result" class="test-result"></div>
+            </div>
+
+            <!-- Disable encryption (revealed by the toggle when ON→OFF) -->
+            <div id="sec-disable-enc" style="display:none">
+              <div class="field-group">
+                <label data-i18n-html="vault_settings.disable_pass_label">Passphrase corrente <small>(per decifrare i file)</small></label>
+                <div style="position:relative">
+                  <input type="text" id="sec-disable-pass" placeholder="*****" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;font-family:'AmelieMask',monospace;letter-spacing:3px;padding-right:32px"/>
+                  <button type="button" id="sec-disable-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:stretch;max-width:420px">
+                <button class="btn-test btn-svg" id="sec-btn-disable-enc" style="flex:1;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.83-1.2"/></svg><span data-i18n="vault_settings.btn_disable">Disabilita crittografia</span></button>
+                <button class="btn-test" id="sec-btn-cancel-disable" data-i18n="common.cancel" style="flex:1;text-align:center">Annulla</button>
+              </div>
+              <div id="sec-disable-result" class="test-result"></div>
+            </div>
+
+            <!-- Rest-mode switch — shown only when encryption is ACTIVE -->
+            <div class="field-group toggle-row" id="sec-restmode-row" style="display:none;margin-top:8px">
+              <label><span data-i18n="vault_settings.rest_encrypt">Cifra i file a riposo</span> <small data-i18n="vault_settings.rest_open_desc">(On = file sempre cifrati · Off = i file del vault locale vengono decifrati mentre Amelie è aperta)</small></label>
+              <label class="toggle"><input type="checkbox" id="sec-enc-rest-live-tgl" checked /><span class="slider"></span></label>
+            </div>
+            <div id="sec-restmode-result" class="test-result"></div>
+
+            </div><!-- /.enc-box -->
+
+            <!-- Clear data: maintenance actions, boxed like the Content/Encryption cards -->
+            <div class="enc-box" style="margin-top:14px">
+              <div class="enc-box-head">
+                <span class="sec-card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></span>
+                <span class="enc-box-title" data-i18n="vault_settings.clear_data">Cleanup</span>
+              </div>
+              <!-- toggle-row = label (grey) on the left, button on the right, one line -->
+              <div class="field-group toggle-row" style="margin-top:6px">
+                <label data-i18n="vault_settings.unused_media_desc">Remove unreferenced photos, videos or PDFs</label>
+                <button class="btn-test" id="btn-remove-unused-media" data-i18n="vault_settings.remove_unused">Remove</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ── General ──────────────────────────────────────── -->
+          <div class="tab-panel" id="tab-general">
+
+            <!-- Readable line length (first option): ON = centered column, OFF = full width -->
+            <div class="field-group toggle-row">
+              <label data-i18n-html="settings.view_width">Lunghezza riga leggibile <small>(On = colonna centrata · Off = larghezza piena)</small></label>
+              <label class="toggle"><input type="checkbox" id="cfg-readable-width" /><span class="slider"></span></label>
+            </div>
+
+            <!-- Line numbers: shown in the editor (edit view only) -->
+            <div class="field-group toggle-row">
+              <label data-i18n-html="settings.line_numbers">Numeri di riga <small>(On = numeri di riga nel pannello di modifica · solo in edit)</small></label>
+              <label class="toggle"><input type="checkbox" id="cfg-line-numbers" /><span class="slider"></span></label>
+            </div>
+
+            <!-- Editor toolbar row (formatting buttons + search/undo) -->
+            <div class="field-group toggle-row">
+              <label>Barra strumenti <small>(On = mostra la barra degli strumenti dell'editor · Off = nascosta)</small></label>
+              <label class="toggle"><input type="checkbox" id="cfg-editor-toolbar" /><span class="slider"></span></label>
+            </div>
+
+            <!-- Hide the toolbar manual Backup / Sync icons (local UI preference) -->
+            <div class="field-group toggle-row">
+              <label data-i18n-html="settings.hide_syncbackup">Nascondi icone Backup/Sync <small>(On = nascondi le icone di backup e sync manuale nella barra)</small></label>
+              <label class="toggle"><input type="checkbox" id="cfg-hide-syncbackup" /><span class="slider"></span></label>
+            </div>
+
+            <!-- Where new items are created — same toggle-row layout as below -->
+            <div class="field-group toggle-row">
+              <label><span data-i18n="theme.note_loc_name">Nuove note</span> <small>(On = cartella corrente · Off = radice del vault)</small></label>
+              <label class="toggle"><input type="checkbox" id="cfg-note-loc" /><span class="slider"></span></label>
+            </div>
+
+            <!-- Indent guide lines for nested folders in the sidebar (3ª voce, dopo "Nuove note") -->
+            <div class="field-group toggle-row">
+              <label data-i18n-html="settings.folder_guides">Linee guida cartelle <small>(On = linee verticali di rientro nelle cartelle annidate · Off = vista pulita)</small></label>
+              <label class="toggle"><input type="checkbox" id="cfg-folder-guides" /><span class="slider"></span></label>
+            </div>
+
+            <div class="field-group toggle-row">
+              <label><span data-i18n="theme.draw_loc_name">Nuovi disegni</span> <small>(On = cartella corrente · Off = radice del vault)</small></label>
+              <label class="toggle"><input type="checkbox" id="cfg-draw-loc" /><span class="slider"></span></label>
+            </div>
+
+            <!-- GPU rendering: ON = hardware GPU (default), OFF = software rendering (less GPU memory, may be slower). Applies on restart. -->
+            <div class="field-group toggle-row">
+              <label data-i18n-html="settings.disable_gpu">GPU rendering <small>(On = GPU attiva · Off = rendering software · richiede riavvio)</small></label>
+              <label class="toggle"><input type="checkbox" id="cfg-disable-gpu" /><span class="slider"></span></label>
+            </div>
+
+            <!-- Low-memory mode: rimosso dall'UI (v1.0.643). Resta SEMPRE attivo,
+                 forzato in main.js — vedi enable-low-end-device-mode. -->
+
+          </div>
+
+          <!-- ── User Interface ───────────────────────────────── -->
+          <div class="tab-panel" id="tab-ui">
+
+            <!-- Top row: Language + Editor font side by side -->
+            <div class="ui-top-grid">
+              <div class="ui-top-col">
+                <!-- Language -->
+                <div class="color-row">
+                  <div class="color-row-info">
+                    <span class="color-row-name" data-i18n="settings.language">Lingua</span>
+                  </div>
+                  <div class="color-row-right" style="flex:0 1 230px;max-width:230px">
+                    <div id="lang-dd" class="font-dd" style="flex:1;max-width:none">
+                      <button type="button" id="lang-dd-btn" class="font-dd-btn">
+                        <span id="lang-dd-current" class="font-dd-current">🇮🇹 Italiano</span>
+                        <svg class="font-dd-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                      </button>
+                      <div id="lang-dd-menu" class="font-dd-menu" style="display:none">
+                        <button type="button" class="font-dd-item lang-pill" data-lang="de">🇩🇪 Deutsch</button>
+                        <button type="button" class="font-dd-item lang-pill" data-lang="en">🇬🇧 English</button>
+                        <button type="button" class="font-dd-item lang-pill" data-lang="es">🇪🇸 Español</button>
+                        <button type="button" class="font-dd-item lang-pill" data-lang="fr">🇫🇷 Français</button>
+                        <button type="button" class="font-dd-item lang-pill" data-lang="it">🇮🇹 Italiano</button>
+                        <button type="button" class="font-dd-item lang-pill" data-lang="pl">🇵🇱 Polski</button>
+                        <button type="button" class="font-dd-item lang-pill" data-lang="ro">🇷🇴 Română</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="ui-top-col">
+                <!-- Editor font -->
+                <div class="color-row">
+                  <div class="color-row-info">
+                    <span class="color-row-name" data-i18n="theme.font_editor">Font</span>
+                  </div>
+                  <div class="color-row-right" style="flex:0 1 230px;max-width:230px">
+                    <div id="font-dd" class="font-dd" style="flex:1;max-width:none">
+                      <button type="button" id="font-dd-btn" class="font-dd-btn">
+                        <span id="font-dd-current" class="font-dd-current">JetBrains Mono</span>
+                        <svg class="font-dd-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                      </button>
+                      <div id="font-dd-menu" class="font-dd-menu" style="display:none"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Numeric appearance settings as dropdowns (same look as Language/Font),
+                 built + wired by setupNumberDropdowns() — menus filled in JS. -->
+            <div class="appearance-sliders cols-4" style="margin-top:6px">
+              <div class="field-group">
+                <label data-i18n="theme.toolbar_size">Dimensione icone</label>
+                <div id="tbsize-dd" class="font-dd" style="max-width:none">
+                  <button type="button" id="tbsize-dd-btn" class="font-dd-btn">
+                    <span id="tbsize-dd-current" class="font-dd-current">100%</span>
+                    <svg class="font-dd-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  <div id="tbsize-dd-menu" class="font-dd-menu" style="display:none"></div>
+                </div>
+              </div>
+              <div class="field-group">
+                <label data-i18n="theme.tree_spacing">Spaziatura sidebar</label>
+                <div id="treesp-dd" class="font-dd" style="max-width:none">
+                  <button type="button" id="treesp-dd-btn" class="font-dd-btn">
+                    <span id="treesp-dd-current" class="font-dd-current">3px</span>
+                    <svg class="font-dd-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  <div id="treesp-dd-menu" class="font-dd-menu" style="display:none"></div>
+                </div>
+              </div>
+              <div class="field-group">
+                <label data-i18n="theme.tree_size">Dimensione font sidebar</label>
+                <div id="treesz-dd" class="font-dd" style="max-width:none">
+                  <button type="button" id="treesz-dd-btn" class="font-dd-btn">
+                    <span id="treesz-dd-current" class="font-dd-current">13px</span>
+                    <svg class="font-dd-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  <div id="treesz-dd-menu" class="font-dd-menu" style="display:none"></div>
+                </div>
+              </div>
+              <div class="field-group">
+                <label data-i18n="theme.editor_size">Dimensione font editor</label>
+                <div id="edsize-dd" class="font-dd" style="max-width:none">
+                  <button type="button" id="edsize-dd-btn" class="font-dd-btn">
+                    <span id="edsize-dd-current" class="font-dd-current">14px</span>
+                    <svg class="font-dd-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  <div id="edsize-dd-menu" class="font-dd-menu" style="display:none"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Text color customization -->
+            <div class="field-group" style="margin-top:2px">
+              <label data-i18n="theme.customize_colors">Personalizza colori</label>
+              <div class="color-rows">
+
+              <!-- Accent color (folders, links, selected items): presets + custom picker -->
+              <div class="color-row">
+                  <div class="color-row-info">
+                    <span class="color-row-name" data-i18n="theme.clr_accent_name">Accento</span>
+                    <span class="color-row-desc" data-i18n="theme.clr_accent_desc">Cartelle, link, elementi selezionati</span>
+                  </div>
+                  <div class="color-row-right">
+                    <div class="accent-swatches">
+                      <button class="accent-swatch" data-accent="#3fb950" style="background:#3fb950" title="Verde"></button>
+                      <button class="accent-swatch" data-accent="#2b5cad" style="background:#2b5cad" title="Blu navy"></button>
+                      <button class="accent-swatch" data-accent="#1fb6c1" style="background:#1fb6c1" title="Ciano"></button>
+                      <button class="accent-swatch" data-accent="#e3742f" style="background:#e3742f" title="Ambra"></button>
+                      <button class="accent-swatch" data-accent="#a371f7" style="background:#a371f7" title="Viola"></button>
+                    </div>
+                    <input type="color" id="clr-accent" class="color-picker" value="#3fb950" data-var="--accent" title="Custom" data-i18n-title="theme.custom"/>
+                    <button class="color-reset" data-var="--accent" data-default="#3fb950" title="Ripristina" data-i18n-title="theme.reset">↺</button>
+                  </div>
+              </div>
+
+              <!-- Folder icon style: how folders look in the tree -->
+              <div class="color-row">
+                  <div class="color-row-info">
+                    <span class="color-row-name" data-i18n="theme.folder_icon_name">Icona cartella</span>
+                    <span class="color-row-desc" data-i18n="theme.folder_icon_desc">Come appaiono le cartelle nella lista</span>
+                  </div>
+                  <div class="color-row-right">
+                    <div class="folder-icon-pills">
+                      <button class="fip" data-folder-icon="folder" title="Folder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg></button>
+                      <button class="fip" data-folder-icon="chevron" title="Chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+                      <button class="fip" data-folder-icon="graphene" title="Graphene"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 2.5l8 4.6v9.8l-8 4.6-8-4.6V7.1z"/></svg></button>
+                      <button class="fip" data-folder-icon="dot" title="Pallina"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.5"/></svg></button>
+                      <button class="fip" data-folder-icon="star" title="Stella"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><polygon points="12 2.5 14.85 8.3 21.2 9.25 16.6 13.75 17.7 20.1 12 17.1 6.3 20.1 7.4 13.75 2.8 9.25 9.15 8.3"/></svg></button>
+                    </div>
+                  </div>
+              </div>
+
+
+
+                <div class="color-row">
+                  <div class="color-row-info">
+                    <span class="color-row-name" data-i18n="theme.clr_text0_name">Testo principale</span>
+                    <span class="color-row-desc" data-i18n="theme.clr_text0_desc">Titoli, testo in primo piano</span>
+                  </div>
+                  <div class="color-row-right">
+                    <span class="color-row-preview" id="prev-text-0" style="color:var(--text-0)">Aa</span>
+                    <input type="color" id="clr-text-0" class="color-picker" value="#e6edf3" data-var="--text-0"/>
+                    <button class="color-reset" data-var="--text-0" data-default="#e6edf3" title="Ripristina" data-i18n-title="theme.reset">↺</button>
+                  </div>
+                </div>
+
+                <div class="color-row">
+                  <div class="color-row-info">
+                    <span class="color-row-name" data-i18n="theme.clr_text1_name">Testo secondario</span>
+                    <span class="color-row-desc" data-i18n="theme.clr_text1_desc">Corpo note, paragrafi</span>
+                  </div>
+                  <div class="color-row-right">
+                    <span class="color-row-preview" id="prev-text-1" style="color:var(--text-1)">Aa</span>
+                    <input type="color" id="clr-text-1" class="color-picker" value="#8b949e" data-var="--text-1"/>
+                    <button class="color-reset" data-var="--text-1" data-default="#8b949e" title="Ripristina" data-i18n-title="theme.reset">↺</button>
+                  </div>
+                </div>
+
+
+
+              </div>
+              <button class="btn-test" id="btn-reset-all-colors" style="margin-top:8px" data-i18n="theme.reset_all">↺ Ripristina tutti i colori</button>
+            </div>
+
+          </div><!-- tab-ui -->
+
+          <!-- ── Shortcuts ──────────────────────────────────── -->
+          <div class="tab-panel" id="tab-shortcuts">
+            <!-- populated dynamically by renderShortcutsTab() in app.js -->
+          </div>
+
+          <!-- ── About ──────────────────────────────────────── -->
+          <div class="tab-panel" id="tab-about">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:28px 16px 8px">
+              <img src="../../assets/icon.png" alt="Amelie" style="width:84px;height:84px;object-fit:contain"/>
+              <!-- App name + description in one Mr Robot-style green terminal
+                   typewriter (CSS-only, runs only while the About tab is visible).
+                   Replaces both the old "Amelie" title and the "A privacy-focused
+                   note app" subtitle. -->
+              <div class="mr-robot-type" aria-label="Hello friend! Amelie · your data, private by default"><span class="mrt mrt-a">Hello friend!</span><span class="mrt mrt-b">Amelie · your data, private by default</span></div>
+              <p style="font-family:var(--editor-font);font-weight:300;font-size:12px;line-height:1.9;color:var(--text-1);max-width:820px;margin:26px 0 0;padding:0 12px">
+                Markdown notes with a built-in PDF viewer &amp; editor, to-do lists and drawings — everything encrypted at rest (AES-256-GCM). Includes WireGuard &amp; OpenVPN support for encrypted backup and real-time two-way sync to your own server, plus multi-language support.
+              </p>
+              <div style="display:flex;flex-direction:column;align-items:center;gap:11px;margin-top:auto;padding-bottom:6px">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+                  <button class="btn-test btn-svg" id="btn-buy-coffee"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg><span data-i18n="about.coffee">Buy me a coffee</span></button>
+                  <button class="btn-test btn-svg" id="btn-check-updates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg><span data-i18n="about.check_updates">Check for updates</span></button>
+                </div>
+                <div style="font-family:var(--ui-font);font-size:13px;color:var(--text-1)">Made by Sebastian "serekkr" Farcas</div>
+                <div style="font-family:var(--editor-font);font-size:12px;color:var(--text-3)"><span data-i18n="about.version">Versione</span> <span id="about-version">—</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- modal-body -->
+        <!-- No footer/Save button: settings auto-save on change (see setupSettings). -->
+      </div>
+    </div>
+
+    <!-- Image context menu -->
+    <div id="img-ctx-menu" style="display:none">
+      <div class="img-ctx-info" id="img-ctx-name"></div>
+      <div class="img-ctx-sep"></div>
+      <button id="img-ctx-move" data-i18n="img.move">📤 Sposta in nota…</button>
+      <button id="img-ctx-copy" data-i18n="img.copy">📋 Copia in nota…</button>
+      <div class="img-ctx-sep"></div>
+      <button id="img-ctx-open" data-i18n="img.open">🔍 Apri immagine</button>
+      <button id="img-ctx-remove" data-i18n="img.remove" style="color:var(--red)">🗑 Rimuovi dalla nota</button>
+    </div>
+
+    <!-- Image move/copy note picker -->
+    <div id="img-note-picker" style="display:none">
+      <div class="cnp-header" id="img-picker-title" data-i18n="img.move_title">Sposta in nota</div>
+      <input class="cnp-search" id="img-picker-search" placeholder="Cerca nota…" data-i18n-placeholder="canvas.search" autocomplete="off"/>
+      <div class="cnp-list" id="img-picker-list"></div>
+    </div>
+
+
+    <!-- Note link autocomplete popup [[...]] -->
+    <div id="link-popup" style="display:none">
+      <input type="text" id="link-search" placeholder="Cerca nota da collegare…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-i18n-placeholder="editor.link_search" />
+      <div id="link-list"></div>
+    </div>
+
+    <!-- Table cell context menu -->
+    <div id="table-ctx-menu" style="display:none">
+      <button id="tctx-add-row-above" data-i18n="table.add_row_above">Aggiungi riga sopra</button>
+      <button id="tctx-add-row-below" data-i18n="table.add_row_below">Aggiungi riga sotto</button>
+      <button id="tctx-add-col-left" data-i18n="table.add_col_left">Aggiungi colonna sinistra</button>
+      <button id="tctx-add-col-right" data-i18n="table.add_col_right">Aggiungi colonna destra</button>
+      <div class="tctx-sep"></div>
+      <button id="tctx-del-row" data-i18n="table.del_row" style="color:var(--red)">Elimina riga</button>
+      <button id="tctx-del-col" data-i18n="table.del_col" style="color:var(--red)">Elimina colonna</button>
+    </div>
+
+    <!-- Task edit modal -->
+    <div id="task-modal" style="display:none">
+      <div class="task-modal-backdrop" id="task-modal-backdrop"></div>
+      <div class="task-modal-panel">
+        <div class="task-modal-header">
+          <span id="task-modal-title" data-i18n="todo.new_task">Nuovo task</span>
+          <button id="task-modal-close" class="icon-btn small"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18L18 6M6 6l12 12"/></svg></button>
+        </div>
+        <div class="task-modal-body">
+          <input id="task-name-input" type="text" placeholder="Titolo del task…" data-i18n-placeholder="todo.task_title_ph" spellcheck="false"/>
+          <textarea id="task-notes-input" placeholder="Note (opzionale)…" data-i18n-placeholder="todo.task_notes_ph" rows="3" spellcheck="false"></textarea>
+          <div class="task-field-row">
+            <label>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              <span data-i18n="todo.due">Scadenza</span>
+            </label>
+            <input id="task-due-input" type="datetime-local"/>
+          </div>
+          <div class="task-field-row">
+            <label>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+              <span data-i18n="todo.notify">Notifica</span>
+            </label>
+            <select id="task-alert-input">
+              <option value="" data-i18n="todo.alert_none">Nessuna</option>
+              <option value="0" data-i18n="todo.alert_ontime">Al momento della scadenza</option>
+              <option value="5" data-i18n="todo.alert_5">5 minuti prima</option>
+              <option value="15" data-i18n="todo.alert_15">15 minuti prima</option>
+              <option value="30" data-i18n="todo.alert_30">30 minuti prima</option>
+              <option value="60" data-i18n="todo.alert_60">1 ora prima</option>
+              <option value="1440" data-i18n="todo.alert_1440">1 giorno prima</option>
+            </select>
+          </div>
+        </div>
+        <div class="task-modal-footer">
+          <button id="task-modal-delete" class="task-btn-danger" style="display:none" data-i18n="ctx.delete">Elimina</button>
+          <div style="flex:1"></div>
+          <button id="task-modal-cancel" class="task-btn-secondary" data-i18n="common.cancel">Annulla</button>
+          <button id="task-modal-save" class="task-btn-primary" data-i18n="common.save">Salva</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Context menu -->
+    <div id="notif-popup" style="display:none">
+      <div class="notif-popup-title" data-i18n="titlebar.notifications">Notifiche</div>
+      <div id="notif-popup-list"></div>
+    </div>
+
+    <div id="context-menu" style="display:none">
+      <button id="ctx-new-note" data-i18n="ctx.new_note">Crea nota</button>
+      <button id="ctx-new-folder-here" data-i18n="ctx.new_folder">Crea cartella</button>
+      <div id="ctx-sep-create" class="ctx-sep"></div>
+      <button id="ctx-open-new-tab" data-i18n="ctx.open_new_tab">Apri in nuova tab</button>
+      <button id="ctx-rename" data-i18n="ctx.rename">Rinomina</button>
+      <button id="ctx-duplicate" data-i18n="ctx.duplicate">Duplica</button>
+      <button id="ctx-color" data-i18n="ctx.color_set">Imposta colore ›</button>
+      <button id="ctx-emoji" data-i18n="ctx.add_emoji">Aggiungi emoji</button>
+      <button id="ctx-open-location" data-i18n="ctx.open_location">Apri posizione file</button>
+      <button id="ctx-open-external" style="display:none" data-i18n="ctx.open_external">Apri con app esterna</button>
+      <button id="ctx-bookmark" data-i18n="ctx.bookmark">Aggiungi ai bookmark</button>
+      <div id="ctx-sep-sort" class="ctx-sep" style="display:none"></div>
+      <button id="ctx-sort-name" style="display:none" data-i18n="ctx.sort_name">Ordina per nome</button>
+      <button id="ctx-sort-date" style="display:none" data-i18n="ctx.sort_date">Ordina per data modifica</button>
+      <button id="ctx-delete" style="display:none" data-i18n="ctx.delete">Elimina</button>
+    </div>
+
+    <!-- Color palette popup (set the tree label color of a note/folder) -->
+    <div id="color-palette-menu" style="display:none">
+      <div class="cp-swatches">
+        <button class="cp-swatch" data-color="rose"   style="background:#e0758a" title="Rosa"></button>
+        <button class="cp-swatch" data-color="amber"  style="background:#c9a96e" title="Ambra"></button>
+        <button class="cp-swatch" data-color="sky"    style="background:#6ab0d4" title="Azzurro"></button>
+        <button class="cp-swatch" data-color="violet" style="background:#a78bda" title="Viola"></button>
+        <button class="cp-swatch" data-color="lime"   style="background:#7ec97a" title="Verde"></button>
+        <button class="cp-swatch" data-color="peach"  style="background:#d4916a" title="Pesca"></button>
+        <button class="cp-swatch cp-clear" data-color="" title="Nessun colore">✕</button>
+      </div>
+    </div>
+
+    <!-- Context menu for open note tabs -->
+    <div id="tab-context-menu" style="display:none">
+      <button id="tctx-rename" data-i18n="ctx.rename">Rinomina</button>
+      <button id="tctx-duplicate" data-i18n="ctx.duplicate">Duplica</button>
+      <button id="tctx-split-right" data-i18n="tab.split_right">Split a destra</button>
+      <button id="tctx-split-down" data-i18n="tab.split_down">Split in basso</button>
+      <button id="tctx-detach" data-i18n="tab.detach">Apri in nuova finestra</button>
+      <button id="tctx-bookmark" data-i18n="ctx.bookmark">Aggiungi ai bookmark</button>
+      <button id="tctx-close" data-i18n="tab.close">Chiudi</button>
+    </div>
+
+    <!-- Context menu for bookmark rows in the left sidebar -->
+    <div id="bookmark-context-menu" style="display:none">
+      <button id="bmctx-remove" data-i18n="ctx.unbookmark">Rimuovi dai bookmark</button>
+    </div>
+
+    <!-- Context menu for the note name in the breadcrumb (right panel) -->
+    <div id="crumb-context-menu" style="display:none">
+      <button id="crumbctx-rename" data-i18n="ctx.rename">Rinomina</button>
+      <button id="crumbctx-duplicate" data-i18n="ctx.duplicate">Duplica</button>
+      <button id="crumbctx-copy" data-i18n="ctx.copy">Copia</button>
+      <button id="crumbctx-paste" data-i18n="ctx.paste">Incolla</button>
+    </div>
+
+    <!-- Context menu for the draw title (canvas view) -->
+    <div id="draw-context-menu" style="display:none">
+      <button id="drawctx-rename" data-i18n="ctx.rename">Rinomina</button>
+      <button id="drawctx-copy" data-i18n="ctx.copy">Copia</button>
+      <button id="drawctx-paste" data-i18n="ctx.paste">Incolla</button>
+      <button id="drawctx-export" data-i18n="canvas.export_draw">Esporta disegno…</button>
+      <button id="drawctx-import" data-i18n="canvas.import_draw">Importa disegno…</button>
+    </div>
+
+  </div>
+
+  <!-- highlight.js vendored locally (was a cloudflare CDN <script>): a privacy-
+       focused offline app must not phone home on every launch, and code highlighting
+       must work with no network. v11.9.0, same as before. -->
+  <script src="highlight.min.js"></script>
+  <!-- DOMPurify: sanitizza l'HTML del markdown reso prima di metterlo in pagina,
+       così nessuno script/handler inline in una nota può eseguire (anti-XSS). -->
+  <script src="purify.min.js"></script>
+  <script src="i18n.js"></script>
+  <!-- Input modal — replaces window.prompt() -->
+  <div id="input-modal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);align-items:center;justify-content:center">
+    <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:24px 24px 20px;width:320px;display:flex;flex-direction:column;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+      <div id="input-modal-label" style="font-family:var(--ui-font);font-size:14px;color:var(--text-0)"></div>
+      <div style="position:relative">
+        <input id="input-modal-field" type="text"
+          style="background:var(--bg-2);border:1px solid var(--border);border-radius:6px;color:var(--text-0);font-family:var(--editor-font);font-size:14px;padding:9px 12px;outline:none;width:100%;transition:border-color .2s"/>
+        <button type="button" id="input-modal-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;align-items:center;line-height:0">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <div id="input-modal-err" style="display:none;font-family:var(--editor-font);font-size:12px;color:var(--red);min-height:14px;margin-top:-6px"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button id="input-modal-cancel" data-i18n="common.cancel" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-2);font-family:var(--ui-font);font-size:13px;padding:7px 16px;cursor:pointer">Annulla</button>
+        <button id="input-modal-ok" style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-family:var(--ui-font);font-size:13px;padding:7px 20px;cursor:pointer">OK</button>
+      </div>
+    </div>
+  </div>
+  <!-- Confirm modal — in-theme replacement for window.confirm() -->
+  <div id="confirm-modal" style="display:none;position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.55);align-items:center;justify-content:center">
+    <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:22px 24px 18px;width:340px;display:flex;flex-direction:column;gap:16px;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+      <div id="confirm-modal-msg" style="font-family:var(--ui-font);font-size:14px;color:var(--text-0);line-height:1.5"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button id="confirm-modal-cancel" data-i18n="common.cancel" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-2);font-family:var(--ui-font);font-size:13px;padding:7px 16px;cursor:pointer">Annulla</button>
+        <button id="confirm-modal-ok" data-i18n="common.confirm" style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-family:var(--ui-font);font-size:13px;padding:7px 20px;cursor:pointer">Conferma</button>
+      </div>
+    </div>
+  </div>
+  <!-- Export-to-PDF options modal -->
+  <div id="export-modal" style="display:none;position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.55);align-items:center;justify-content:center">
+    <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:22px 24px 18px;width:380px;display:flex;flex-direction:column;gap:18px;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+      <div style="font-family:var(--ui-font);font-size:15px;font-weight:500;color:var(--text-0)" data-i18n="export.title">Export</div>
+
+      <!-- Font scale slider -->
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-family:var(--ui-font);font-size:13px;color:var(--text-2)" data-i18n="export.font_size">Dimensione testo</span>
+          <span id="export-font-val" style="font-family:var(--ui-font);font-size:13px;color:var(--accent);font-weight:500">100%</span>
+        </div>
+        <input id="export-font" type="range" min="50" max="200" step="5" value="100" style="width:100%;accent-color:var(--accent);cursor:pointer"/>
+      </div>
+
+      <!-- Orientation -->
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <span style="font-family:var(--ui-font);font-size:13px;color:var(--text-2)" data-i18n="export.orientation">Orientamento</span>
+        <div id="export-orient" class="export-seg" style="display:flex;gap:6px">
+          <button type="button" class="export-seg-btn active" data-val="portrait" data-i18n="export.portrait">Verticale</button>
+          <button type="button" class="export-seg-btn" data-val="landscape" data-i18n="export.landscape">Orizzontale</button>
+        </div>
+      </div>
+
+      <!-- Theme -->
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <span style="font-family:var(--ui-font);font-size:13px;color:var(--text-2)" data-i18n="export.theme">Tema</span>
+        <div id="export-theme" class="export-seg" style="display:flex;gap:6px">
+          <button type="button" class="export-seg-btn active" data-val="light" data-i18n="export.theme_light">Bianco</button>
+          <button type="button" class="export-seg-btn" data-val="dark" data-i18n="export.theme_dark">Scuro</button>
+        </div>
+      </div>
+
+      <!-- Page size + margins -->
+      <div style="display:flex;gap:14px">
+        <div style="flex:1;display:flex;flex-direction:column;gap:7px">
+          <span style="font-family:var(--ui-font);font-size:13px;color:var(--text-2)" data-i18n="export.page_size">Formato</span>
+          <select id="export-pagesize" class="export-select">
+            <option value="A4">A4</option>
+            <option value="A3">A3</option>
+            <option value="A5">A5</option>
+            <option value="Letter">Letter</option>
+            <option value="Legal">Legal</option>
+            <option value="Tabloid">Tabloid</option>
+            <option value="Wide">Wide 16:9</option>
+          </select>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:7px">
+          <span style="font-family:var(--ui-font);font-size:13px;color:var(--text-2)" data-i18n="export.margins">Margini</span>
+          <select id="export-margins" class="export-select">
+            <option value="normal" data-i18n="export.margin_normal">Normali</option>
+            <option value="narrow" data-i18n="export.margin_narrow">Stretti</option>
+            <option value="wide" data-i18n="export.margin_wide">Ampi</option>
+            <option value="none" data-i18n="export.margin_none">Nessuno</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:2px">
+        <button id="export-modal-cancel" data-i18n="common.cancel" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#fff;font-family:var(--ui-font);font-size:13px;padding:7px 16px;cursor:pointer">Annulla</button>
+        <button id="export-modal-ok" data-i18n="export.do_export" style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;color:#fff;font-family:var(--ui-font);font-size:13px;padding:7px 20px;cursor:pointer">Esporta</button>
+      </div>
+    </div>
+  </div>
+  <!-- Unlock overlay — shown when vault is encrypted -->
+  <!-- First-run language picker: shown once, when no language has been chosen yet -->
+  <div id="langsetup-overlay" style="display:none;position:fixed;inset:0;z-index:9500;background:#0a0e17;align-items:center;justify-content:center;flex-direction:column;gap:20px">
+    <div style="position:absolute;top:0;left:0;right:0;height:38px;-webkit-app-region:drag;display:flex;justify-content:flex-end;align-items:center;gap:2px;padding:0 8px">
+      <button class="tb-btn min" style="-webkit-app-region:no-drag" onclick="window.inkwell.minimize()">−</button>
+      <button class="tb-btn max" style="-webkit-app-region:no-drag" onclick="window.inkwell.maximize()">□</button>
+      <button class="tb-btn close" style="-webkit-app-region:no-drag" onclick="window.inkwell.close()">×</button>
+    </div>
+    <div style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:18px;max-width:300px;width:100%;padding:20px">
+      <img src="../../assets/icon.png" alt="Amelie" style="width:104px;height:104px;object-fit:contain"/>
+      <p style="font-size:15px;color:var(--text-0);font-family:var(--ui-font);font-weight:300;margin:0">Choose your language</p>
+      <div id="langsetup-dd" class="font-dd" style="width:100%;max-width:240px">
+        <button type="button" id="langsetup-dd-btn" class="font-dd-btn" style="width:100%">
+          <span id="langsetup-dd-current" class="font-dd-current">🌐 Choose your language</span>
+        </button>
+        <div id="langsetup-dd-menu" class="font-dd-menu" style="display:none">
+          <button type="button" class="font-dd-item lang-pill" data-lang="de">🇩🇪 Deutsch</button>
+          <button type="button" class="font-dd-item lang-pill" data-lang="en">🇬🇧 English</button>
+          <button type="button" class="font-dd-item lang-pill" data-lang="es">🇪🇸 Español</button>
+          <button type="button" class="font-dd-item lang-pill" data-lang="fr">🇫🇷 Français</button>
+          <button type="button" class="font-dd-item lang-pill" data-lang="it">🇮🇹 Italiano</button>
+          <button type="button" class="font-dd-item lang-pill" data-lang="pl">🇵🇱 Polski</button>
+          <button type="button" class="font-dd-item lang-pill" data-lang="ro">🇷🇴 Română</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="unlock-overlay" style="display:none;position:fixed;inset:0;z-index:9000;background:#0a0e17;align-items:center;justify-content:center;flex-direction:column;gap:20px">
+    <div style="position:absolute;top:0;left:0;right:0;height:38px;-webkit-app-region:drag;display:flex;justify-content:flex-end;align-items:center;gap:2px;padding:0 8px">
+      <button class="tb-btn min" style="-webkit-app-region:no-drag" onclick="window.inkwell.minimize()" title="Minimizza" data-i18n-title="win.minimize">−</button>
+      <button class="tb-btn max" style="-webkit-app-region:no-drag" onclick="window.inkwell.maximize()" title="Massimizza" data-i18n-title="win.maximize">□</button>
+      <button class="tb-btn close" style="-webkit-app-region:no-drag" onclick="window.inkwell.close()" title="Chiudi" data-i18n-title="win.close">×</button>
+    </div>
+    <div style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:16px;max-width:360px;width:100%;padding:20px">
+      <img src="../../assets/icon.png" alt="Amelie" style="width:128px;height:128px;object-fit:contain"/>
+      <p style="font-size:13px;color:var(--text-2);font-family:var(--editor-font);line-height:1.6">Enter your passphrase</p>
+      <div style="position:relative;width:100%">
+        <input type="text" id="unlock-pass" placeholder="*****" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          style="width:100%;background:var(--bg-2);border:1px solid var(--border);border-radius:6px;color:var(--text-0);font-family:'AmelieMask',monospace;letter-spacing:3px;text-indent:3px;font-size:14px;padding:11px 42px;outline:none;text-align:center"/>
+        <button id="unlock-eye" type="button" title="Mostra/nascondi" aria-label="Mostra/nascondi"
+          style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <button id="unlock-btn" data-i18n="unlock.btn" style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;color:#fff;font-family:var(--ui-font);font-size:15px;padding:10px 32px;cursor:pointer;width:100%;transition:background .15s">Sblocca</button>
+      <div id="unlock-err" style="font-family:var(--editor-font);font-size:12px;color:var(--red);min-height:16px"></div>
+    </div>
+  </div>
+  <script src="vendor/cm.bundle.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
