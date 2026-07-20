@@ -1,8 +1,8 @@
-# ── Inkwell AppImage builder ──────────────────────────────────────────────────
+# ── Amelie AppImage builder ───────────────────────────────────────────────────
 # Builds a self-contained AppImage with Electron bundled inside.
 # Usage:
-#   docker build -t inkwell-builder .
-#   docker run --rm -v "$(pwd)/dist:/app/dist" inkwell-builder
+#   docker build -t amelie-builder .
+#   docker run --rm -v "$(pwd)/dist:/app/dist" amelie-builder
 #
 FROM node:20-bullseye-slim
 
@@ -30,4 +30,4 @@ COPY . .
 ENV ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES=true
 RUN npx electron-builder --linux AppImage --x64
 
-CMD ["sh", "-c", "echo '✓ Build completata: dist/*.AppImage' && ls dist/*.AppImage"]
+CMD ["sh", "-c", "echo '✓ Build complete: dist/*.AppImage' && ls dist/*.AppImage"]
