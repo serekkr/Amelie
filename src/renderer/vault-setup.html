@@ -148,7 +148,7 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
     <div class="field">
       <div class="field-row">
         <input type="text" id="vault-path" placeholder="~/Documents/amelie-vault" spellcheck="false"/>
-        <button class="btn-browse" id="btn-browse">Sfoglia…</button>
+        <button class="btn-browse" id="btn-browse">Sfoglia</button>
       </div>
     </div>
     <div class="sec-box">
@@ -246,7 +246,7 @@ const T = {
     theme_label: 'Tema', theme_hint: 'Modificabile in qualsiasi momento dalle impostazioni',
     theme_title: 'Imposta l\'aspetto di Amelie',
     t1_desc: 'Scegli dove salvare i tuoi appunti. Il vault è una cartella normale sul tuo sistema.',
-    path_lbl: 'Percorso vault', browse: 'Sfoglia…',
+    path_lbl: 'Percorso vault', browse: 'Sfoglia',
     sec1: 'I tuoi appunti sono file <code>.md</code> standard — apribili con qualsiasi editor anche senza Amelie.',
     sec2: 'Nel passo successivo puoi abilitare la crittografia end-to-end con AES-256-GCM.',
     next: 'Avanti →', back: '← Indietro',
@@ -274,7 +274,7 @@ const T = {
     theme_label: 'Theme', theme_hint: 'Changeable in the settings',
     theme_title: 'Set how Amelie looks',
     t1_desc: 'Choose where to keep your notes. The vault is a regular folder on your system.',
-    path_lbl: 'Vault path', browse: 'Browse…',
+    path_lbl: 'Vault path', browse: 'Browse',
     sec1: 'Your notes are standard <code>.md</code> files — readable with any editor, even without Amelie.',
     sec2: 'In the next step you can enable end-to-end encryption with AES-256-GCM.',
     next: 'Next →', back: '← Back',
@@ -302,7 +302,7 @@ const T = {
     theme_label: 'Design', theme_hint: 'Jederzeit in den Einstellungen änderbar',
     theme_title: 'Aussehen von Amelie festlegen',
     t1_desc: 'Wähle, wo deine Notizen gespeichert werden. Der Vault ist ein normaler Ordner auf deinem System.',
-    path_lbl: 'Vault-Pfad', browse: 'Durchsuchen…',
+    path_lbl: 'Vault-Pfad', browse: 'Durchsuchen',
     sec1: 'Deine Notizen sind normale <code>.md</code>-Dateien — mit jedem Editor lesbar, auch ohne Amelie.',
     sec2: 'Im nächsten Schritt kannst du die Ende-zu-Ende-Verschlüsselung mit AES-256-GCM aktivieren.',
     next: 'Weiter →', back: '← Zurück',
@@ -330,7 +330,7 @@ const T = {
     theme_label: 'Tema', theme_hint: 'Modificable en cualquier momento desde los ajustes',
     theme_title: 'Configura el aspecto de Amelie',
     t1_desc: 'Elige dónde guardar tus notas. El vault es una carpeta normal de tu sistema.',
-    path_lbl: 'Ruta del vault', browse: 'Explorar…',
+    path_lbl: 'Ruta del vault', browse: 'Explorar',
     sec1: 'Tus notas son archivos <code>.md</code> estándar — se abren con cualquier editor, incluso sin Amelie.',
     sec2: 'En el siguiente paso puedes activar el cifrado de extremo a extremo con AES-256-GCM.',
     next: 'Siguiente →', back: '← Atrás',
@@ -358,7 +358,7 @@ const T = {
     theme_label: 'Thème', theme_hint: 'Modifiable à tout moment dans les paramètres',
     theme_title: 'Configurez l\'apparence d\'Amelie',
     t1_desc: 'Choisissez où enregistrer vos notes. Le vault est un dossier normal sur votre système.',
-    path_lbl: 'Chemin du vault', browse: 'Parcourir…',
+    path_lbl: 'Chemin du vault', browse: 'Parcourir',
     sec1: 'Vos notes sont des fichiers <code>.md</code> standard — lisibles avec n\'importe quel éditeur, même sans Amelie.',
     sec2: 'À l\'étape suivante, vous pouvez activer le chiffrement de bout en bout avec AES-256-GCM.',
     next: 'Suivant →', back: '← Retour',
@@ -386,7 +386,7 @@ const T = {
     theme_label: 'Motyw', theme_hint: 'Można go zmienić w dowolnym momencie w ustawieniach',
     theme_title: 'Ustaw wygląd Amelie',
     t1_desc: 'Wybierz, gdzie zapisywać notatki. Vault to zwykły folder w Twoim systemie.',
-    path_lbl: 'Ścieżka vaulta', browse: 'Przeglądaj…',
+    path_lbl: 'Ścieżka vaulta', browse: 'Przeglądaj',
     sec1: 'Twoje notatki to standardowe pliki <code>.md</code> — można je otworzyć w dowolnym edytorze, nawet bez Amelie.',
     sec2: 'W następnym kroku możesz włączyć szyfrowanie end-to-end z AES-256-GCM.',
     next: 'Dalej →', back: '← Wstecz',
@@ -414,7 +414,7 @@ const T = {
     theme_label: 'Temă', theme_hint: 'Poate fi modificată oricând din setări',
     theme_title: 'Configurează aspectul Amelie',
     t1_desc: 'Alege unde să îți salvezi notițele. Vault-ul este un folder obișnuit din sistemul tău.',
-    path_lbl: 'Calea vault-ului', browse: 'Răsfoiește…',
+    path_lbl: 'Calea vault-ului', browse: 'Răsfoiește',
     sec1: 'Notițele tale sunt fișiere <code>.md</code> standard — pot fi deschise cu orice editor, chiar și fără Amelie.',
     sec2: 'La pasul următor poți activa criptarea end-to-end cu AES-256-GCM.',
     next: 'Înainte →', back: '← Înapoi',
@@ -505,7 +505,7 @@ applyLang(appLang, true);
 // Theme picker → saved to `inkwell-theme`, which the MAIN app reads on startup
 // (shared localStorage). Each card previews the theme's real palette.
 const THEME_PALETTE = [
-  { id:'github-dark', name:'Cyberpunk',   def:true, bg:'#111111', acc:'#3fb950', txt:'#e6edf3' },
+  { id:'github-dark', name:'Green Dark',   def:true, bg:'#111111', acc:'#3fb950', txt:'#e6edf3' },
   { id:'navy',        name:'Navy',        bg:'#0a0e17', acc:'#5b8def', txt:'#dde6f0' },
   { id:'amber',       name:'Amber Dark',  bg:'#0b0b0d', acc:'#c9a96e', txt:'#e8e6e0' },
   { id:'solarized',   name:'Solarized',   bg:'#002b36', acc:'#2aa198', txt:'#fdf6e3' },

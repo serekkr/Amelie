@@ -1248,7 +1248,7 @@ function _initCmEditor() {
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
-  'github-dark': { label: 'Cyberpunk',     attr: ''          },
+  'github-dark': { label: 'Green Dark',     attr: ''          },
   navy:          { label: 'Navy',          attr: 'navy'      },
   amber:         { label: 'Amber Dark',    attr: 'amber'     },
   solarized:     { label: 'Solarized',     attr: 'solarized' },

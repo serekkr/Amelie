@@ -3,7 +3,7 @@
    Fonts: Roboto (UI) + Roboto Mono (editor/code)
 ═══════════════════════════════════════════════════════════════ */
 
-/* ── DEFAULT THEME: Cyberpunk (id: github-dark) ─────────────── */
+/* ── DEFAULT THEME: Green Dark (id: github-dark) ─────────────── */
 /* Grigi NEUTRI (R=G=B) e molto scuri. Due vincoli su questo display:
    1) i grigi con punta di blu virano al viola → tutto R=G=B.
    2) --bg-0 NON deve scendere sotto #111111: l'editor è textarea+overlay e i
@@ -3169,7 +3169,7 @@ kbd {
 }
 .tag-src:hover { text-decoration: underline; }
 
-/* Cyberpunk theme only (the default green palette → no data-theme attribute,
+/* Green Dark theme only (the default green palette → no data-theme attribute,
    see applyTheme). Hovering a sidebar item turns its text the accent green. */
 html:not([data-theme]) .sst:hover,
 html:not([data-theme]) .tool-btn:hover:not(.danger),
