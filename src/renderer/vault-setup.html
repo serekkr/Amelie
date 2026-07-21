@@ -178,7 +178,7 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
     <div id="enc-fields">
       <div class="field">
         <label>Passphrase</label>
-        <input type="password" id="enc-pass" placeholder="Minimo 12 caratteri" autocomplete="new-password"/>
+        <input type="password" id="enc-pass" placeholder="Usa una password forte" autocomplete="new-password"/>
         <div class="strength-bar"><div class="strength-fill" id="strength-fill" style="width:0"></div></div>
         <span class="strength-label" id="strength-label" style="color:var(--text-3)"></span>
       </div>
@@ -254,7 +254,7 @@ const T = {
     t2_desc: 'Puoi abilitare la crittografia ora o in qualsiasi momento dalle impostazioni. Con la crittografia attiva, i file vengono cifrati con <strong>AES-256-GCM</strong> prima di essere scritti su disco.',
     tog_name: '🔐 Crittografia vault',
     tog_desc: 'I file .md vengono cifrati con AES-256-GCM + PBKDF2 (310k iterazioni)',
-    pass_lbl: 'Passphrase', pass_ph: 'Minimo 12 caratteri',
+    pass_lbl: 'Passphrase', pass_ph: 'Usa una password forte',
     pass2_lbl: 'Conferma passphrase', pass2_ph: 'Ripeti la passphrase',
     warn: 'La passphrase <strong>non è recuperabile</strong>. Se la perdi, i tuoi appunti cifrati saranno inaccessibili. Conservala in un password manager.',
     t3_title: 'Tutto pronto 🎉',
@@ -282,7 +282,7 @@ const T = {
     t2_desc: 'You can enable encryption now or anytime from the settings. With encryption on, files are encrypted with <strong>AES-256-GCM</strong> before being written to disk.',
     tog_name: '🔐 Vault encryption',
     tog_desc: '.md files are encrypted with AES-256-GCM + PBKDF2 (310k iterations)',
-    pass_lbl: 'Passphrase', pass_ph: 'Minimum 12 characters',
+    pass_lbl: 'Passphrase', pass_ph: 'Use a strong password',
     pass2_lbl: 'Confirm passphrase', pass2_ph: 'Repeat the passphrase',
     warn: 'The passphrase is <strong>not recoverable</strong>. If you lose it, your encrypted notes will be inaccessible. Keep it in a password manager.',
     t3_title: 'All set 🎉',
@@ -310,7 +310,7 @@ const T = {
     t2_desc: 'Du kannst die Verschlüsselung jetzt oder jederzeit in den Einstellungen aktivieren. Bei aktivierter Verschlüsselung werden die Dateien mit <strong>AES-256-GCM</strong> verschlüsselt, bevor sie auf die Festplatte geschrieben werden.',
     tog_name: '🔐 Vault-Verschlüsselung',
     tog_desc: '.md-Dateien werden mit AES-256-GCM + PBKDF2 (310k Iterationen) verschlüsselt',
-    pass_lbl: 'Passphrase', pass_ph: 'Mindestens 12 Zeichen',
+    pass_lbl: 'Passphrase', pass_ph: 'Verwende ein starkes Passwort',
     pass2_lbl: 'Passphrase bestätigen', pass2_ph: 'Passphrase wiederholen',
     warn: 'Die Passphrase ist <strong>nicht wiederherstellbar</strong>. Wenn du sie verlierst, sind deine verschlüsselten Notizen nicht mehr zugänglich. Bewahre sie in einem Passwort-Manager auf.',
     t3_title: 'Alles bereit 🎉',
@@ -338,7 +338,7 @@ const T = {
     t2_desc: 'Puedes activar el cifrado ahora o en cualquier momento desde los ajustes. Con el cifrado activado, los archivos se cifran con <strong>AES-256-GCM</strong> antes de escribirse en el disco.',
     tog_name: '🔐 Cifrado del vault',
     tog_desc: 'Los archivos .md se cifran con AES-256-GCM + PBKDF2 (310k iteraciones)',
-    pass_lbl: 'Frase de contraseña', pass_ph: 'Mínimo 12 caracteres',
+    pass_lbl: 'Frase de contraseña', pass_ph: 'Usa una contraseña segura',
     pass2_lbl: 'Confirmar frase de contraseña', pass2_ph: 'Repite la frase de contraseña',
     warn: 'La frase de contraseña <strong>no se puede recuperar</strong>. Si la pierdes, tus notas cifradas serán inaccesibles. Guárdala en un gestor de contraseñas.',
     t3_title: 'Todo listo 🎉',
@@ -366,7 +366,7 @@ const T = {
     t2_desc: 'Vous pouvez activer le chiffrement maintenant ou à tout moment dans les paramètres. Avec le chiffrement activé, les fichiers sont chiffrés avec <strong>AES-256-GCM</strong> avant d\'être écrits sur le disque.',
     tog_name: '🔐 Chiffrement du vault',
     tog_desc: 'Les fichiers .md sont chiffrés avec AES-256-GCM + PBKDF2 (310k itérations)',
-    pass_lbl: 'Phrase secrète', pass_ph: 'Minimum 12 caractères',
+    pass_lbl: 'Phrase secrète', pass_ph: 'Utilisez un mot de passe fort',
     pass2_lbl: 'Confirmer la phrase secrète', pass2_ph: 'Répétez la phrase secrète',
     warn: 'La phrase secrète est <strong>irrécupérable</strong>. Si vous la perdez, vos notes chiffrées seront inaccessibles. Conservez-la dans un gestionnaire de mots de passe.',
     t3_title: 'Tout est prêt 🎉',
@@ -394,7 +394,7 @@ const T = {
     t2_desc: 'Szyfrowanie możesz włączyć teraz lub w dowolnym momencie w ustawieniach. Przy włączonym szyfrowaniu pliki są szyfrowane algorytmem <strong>AES-256-GCM</strong> przed zapisaniem na dysku.',
     tog_name: '🔐 Szyfrowanie vaulta',
     tog_desc: 'Pliki .md są szyfrowane algorytmem AES-256-GCM + PBKDF2 (310 tys. iteracji)',
-    pass_lbl: 'Hasło', pass_ph: 'Minimum 12 znaków',
+    pass_lbl: 'Hasło', pass_ph: 'Użyj silnego hasła',
     pass2_lbl: 'Potwierdź hasło', pass2_ph: 'Powtórz hasło',
     warn: 'Hasła <strong>nie można odzyskać</strong>. Jeśli je zgubisz, Twoje zaszyfrowane notatki będą niedostępne. Przechowuj je w menedżerze haseł.',
     t3_title: 'Wszystko gotowe 🎉',
@@ -422,7 +422,7 @@ const T = {
     t2_desc: 'Poți activa criptarea acum sau oricând din setări. Cu criptarea activată, fișierele sunt criptate cu <strong>AES-256-GCM</strong> înainte de a fi scrise pe disc.',
     tog_name: '🔐 Criptarea vault-ului',
     tog_desc: 'Fișierele .md sunt criptate cu AES-256-GCM + PBKDF2 (310k iterații)',
-    pass_lbl: 'Parolă', pass_ph: 'Minimum 12 caractere',
+    pass_lbl: 'Parolă', pass_ph: 'Folosește o parolă puternică',
     pass2_lbl: 'Confirmă parola', pass2_ph: 'Repetă parola',
     warn: 'Parola <strong>nu poate fi recuperată</strong>. Dacă o pierzi, notițele tale criptate vor deveni inaccesibile. Păstreaz-o într-un manager de parole.',
     t3_title: 'Totul e gata 🎉',
