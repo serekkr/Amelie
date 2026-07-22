@@ -13177,11 +13177,12 @@ function showUnlockOverlay() {
     } else {
       failCount++;
       // Easter egg: every 3rd wrong try (3rd, 6th, 9th…) show one of these in
-      // green, cycling through them, instead of the usual red error.
+      // white, cycling through them, instead of the usual red error. White is
+      // hard-coded (not var(--text-0)) because the unlock overlay is always dark.
       const EGG = ['Hello, friend?', 'Control is an illusion.', 'Are you a 1 or a 0?'];
       if (failCount % 3 === 0) {
         err.textContent = EGG[(failCount / 3 - 1) % EGG.length];
-        err.style.color = 'var(--green)';
+        err.style.color = '#fff';
       } else {
         // Always use the localized string: vault:unlock only ever returns the
         // generic (hardcoded-Italian) 'Passphrase errata', so preferring
