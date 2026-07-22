@@ -103,6 +103,16 @@ const APP_HOME  = path.join(os.homedir(), '.local', 'share', 'amelie');
 const APP_CFG   = path.join(APP_HOME, 'amelie.json');   // global app config
 if (!fs.existsSync(APP_HOME)) fs.mkdirSync(APP_HOME, { recursive: true });
 
+// Window chrome is OS-specific. Linux/Windows: a frameless window with our own
+// titlebar buttons (minimize/maximize/close, drawn top-right in index.html).
+// macOS: keep the native inset traffic-lights instead — drawing our own buttons
+// on top of them would show TWO sets of controls; the renderer hides the custom
+// ones on mac (html.is-mac .tb-btn). Setting frame:false AND titleBarStyle on mac
+// was the bug that produced the doubled controls.
+const WINDOW_CHROME = process.platform === 'darwin'
+  ? { titleBarStyle: 'hiddenInset' }
+  : { frame: false };
+
 // One-shot migration: the config used to live in ~/.amelie. Move everything
 // into APP_HOME (merging directories, never overwriting), then drop the old
 // folder. Runs before anything reads APP_HOME.
@@ -1405,7 +1415,7 @@ function refreshSyncPlaintextFlag() {
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1400, height: 900, minWidth: 800, minHeight: 600,
-    backgroundColor: '#0d0d0f', titleBarStyle: 'hiddenInset', frame: false,
+    backgroundColor: '#0d0d0f', ...WINDOW_CHROME,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, nodeIntegration: false, webSecurity: true,
@@ -1562,7 +1572,7 @@ function createMainWindow() {
 function createVaultWindow() {
   vaultWindow = new BrowserWindow({
     width: 880, height: 600, resizable: false,
-    backgroundColor: '#0a0e17', titleBarStyle: 'hiddenInset', frame: false,
+    backgroundColor: '#0a0e17', ...WINDOW_CHROME,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, nodeIntegration: false, webSecurity: true,

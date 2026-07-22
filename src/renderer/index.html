@@ -16,6 +16,9 @@
        offline and never phone home. See src/renderer/fonts/ + fonts.css. -->
   <link rel="stylesheet" href="fonts.css" />
   <link rel="stylesheet" href="style.css" />
+  <!-- On macOS the native inset traffic-lights are shown, so hide our custom
+       titlebar buttons (see WINDOW_CHROME in main.js). Set early to avoid a flash. -->
+  <script>try{ if (window.inkwell && window.inkwell.platform === 'darwin') document.documentElement.classList.add('is-mac'); }catch(_){}</script>
 </head>
 <body>
   <!-- Custom in-theme tooltip (replaces the native grey title="" bubble) -->

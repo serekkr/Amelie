@@ -578,9 +578,11 @@ $('btn-browse').addEventListener('click', async () => {
   if (p) $('vault-path').value = p;
 });
 
-// Platform-aware titlebar: hide Mac dots on Linux/Windows, show close button instead
+// Platform-aware titlebar: macOS draws real native inset traffic-lights (see
+// WINDOW_CHROME in main.js), so the fake decorative dots are never needed — hide
+// them everywhere. Linux/Windows are frameless and need our own close button.
+document.getElementById('mac-dots').style.display = 'none';
 if (window.inkwell.platform !== 'darwin') {
-  document.getElementById('mac-dots').style.display = 'none';
   document.getElementById('win-close').style.display = 'block';
 }
 

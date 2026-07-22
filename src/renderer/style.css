@@ -348,6 +348,11 @@ html, body {
 }
 .tb-btn:hover          { background: var(--bg-3); color: var(--text-0); }
 .tb-btn.close:hover    { background: rgba(224,92,106,.18); color: #e05c6a; }
+/* macOS: the OS draws native inset traffic-lights (see WINDOW_CHROME in main.js),
+   so hide our own window buttons and inset the titlebar so its left-most icons
+   clear the traffic-lights. */
+html.is-mac .tb-btn { display: none; }
+html.is-mac #titlebar { padding-left: 72px; }
 #titlebar-actions {
   display: flex; align-items: center; gap: 6px; padding: 0 8px;
   -webkit-app-region: no-drag;
