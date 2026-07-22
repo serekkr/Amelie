@@ -933,6 +933,40 @@ function sweepConvertTmp(root) {
 // (.draw) + todos encrypted in place, attachments encrypted. Reused by
 // enableEncryption and the "plaintext-while-open" re-encrypt-on-quit path.
 // Crash-safe + resumable: every file is converted atomically (atomicConvertWrite),
+// Sweep the shrink-safety backups (<vault>/.amelie-backups/*.bak) alongside
+// notes/, so they track the vault's at-rest state in "plaintext while open" mode:
+// decrypted on open, re-encrypted on quit — never a plaintext .bak once closed.
+// Each .bak holds note text and is converted IN PLACE. State is detected by
+// trying to decrypt: content that's already in the target state is skipped, so
+// this is idempotent and crash-safe (a re-run won't double-convert). Failures on
+// a single backup are swallowed — backups are a best-effort net, never blocking.
+function _convertBackups(key, encrypt) {
+  try {
+    const dir = path.join(VAULT_DIR || path.dirname(NOTES_DIR), '.amelie-backups');
+    if (!key || !fs.existsSync(dir)) return;
+    for (const name of fs.readdirSync(dir)) {
+      if (!name.endsWith('.bak')) continue;
+      const full = path.join(dir, name);
+      let raw;
+      try { raw = fs.readFileSync(full, 'utf8'); } catch (_) { continue; }
+      let plain = null;
+      try { plain = decryptContent(raw, key); } catch (_) {}   // decrypts cleanly ⇒ currently encrypted
+      const isEncrypted = plain !== null;
+      try {
+        if (encrypt && !isEncrypted) {
+          const tmp = full + '.amelie-convert-tmp';
+          fs.writeFileSync(tmp, encryptContent(raw, key, ENCRYPTION_ALGO), 'utf8');
+          fs.renameSync(tmp, full);
+        } else if (!encrypt && isEncrypted) {
+          const tmp = full + '.amelie-convert-tmp';
+          fs.writeFileSync(tmp, plain, 'utf8');
+          fs.renameSync(tmp, full);
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+}
+
 // a failure on one file is RECORDED and the walk CONTINUES (no more aborting the
 // whole tree → no half-converted vault), and stray tmp files are swept first.
 // Returns { ok, converted, failed:[{file,error}] }.
@@ -963,6 +997,7 @@ function encryptVaultToDisk(key) {
   try { migrateAttachmentsEncrypt(key); } catch (_) {}
   try { migrateTodos('encrypt', null, key); } catch (_) {}
   try { migrateNotesFrontmatter(key); } catch (_) {}   // ensure date frontmatter on .md notes
+  try { _convertBackups(key, true); } catch (_) {}     // re-encrypt shrink-safety backups too
   writeVerifyToken(key);
   return { ok: failed.length === 0, converted, failed };
 }
@@ -1015,6 +1050,7 @@ function decryptVaultToDisk(key) {
   try { walk(NOTES_DIR); } catch (e) { failed.push({ file: NOTES_DIR, error: e.message }); }
   try { migrateAttachmentsDecrypt(key); } catch (_) {}
   try { migrateTodos('decrypt', key, null); } catch (_) {}
+  try { _convertBackups(key, false); } catch (_) {}    // decrypt shrink-safety backups too
   return { ok: failed.length === 0, converted, failed };
 }
 
@@ -1246,6 +1282,11 @@ function _backupBeforeShrink(filePath, relPath, oldBody, newBody) {
     const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${p(d.getMilliseconds() % 1000).padStart(3, '0')}`;
     const safe = String(relPath).replace(/[\/\\]/g, '__');
     const dest = path.join(dir, `${safe}.${stamp}.bak`);
+    // Copy the EXACT on-disk bytes: in at-rest mode that's already-encrypted
+    // content; in "plaintext while open" mode it's cleartext, matching the rest
+    // of the vault on disk. The backups folder is swept alongside notes/ by
+    // decryptVaultToDisk/encryptVaultToDisk (see _convertBackups), so it tracks
+    // the vault's at-rest state and never leaves a plaintext .bak once closed.
     fs.copyFileSync(filePath, dest);               // exact on-disk bytes (keeps at-rest encryption)
     _pruneShrinkBackups(dir);
     try { console.warn(`[amelie-safety] "${relPath}" body shrank ${oldLen}->${newLen} chars — backed up to ${dest}`); } catch (_) {}
