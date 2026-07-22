@@ -179,6 +179,10 @@ always to a destination you own and configure. With vault encryption enabled,
 your notes are unreadable on disk without your password — including on the remote
 share they sync to.
 
+Your data is never locked to the app: [`recovery/`](recovery/) ships a small,
+dependency-light Python script that decrypts a vault offline from your passphrase
+alone — so you can always read your notes without Amelie.
+
 ---
 
 ## ☕ Support
