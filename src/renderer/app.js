@@ -1628,8 +1628,8 @@ function setupGpuToggle() {
   });
 }
 
-// "Modalità basso consumo": il toggle è stato RIMOSSO dall'UI (v1.0.643); la
-// modalità è ora sempre attiva, forzata in main.js. Nessun setup lato renderer.
+// "Low-power mode": the toggle was REMOVED from the UI (v1.0.643); the mode
+// is now always on, forced in main.js. No renderer-side setup.
 
 async function _startRecording() {
   // Immediate feedback: opening the mic device can take a couple of seconds
@@ -1950,9 +1950,9 @@ function setupTheme() {
     else if (res?.error === 'limit') showToast(window.i18n.t('theme.limit_reached'));
   });
 
-  // Torni da un editor esterno (hai salvato il .css del tema)? Se il tab Theme è
-  // aperto, ri-scansiona i temi da disco così le modifiche/nuovi temi appaiono
-  // subito, senza dover cambiare tab o riavviare Amelie.
+  // Coming back from an external editor (you saved the theme's .css)? If the Theme
+  // tab is open, re-scan the themes from disk so edits/new themes show up
+  // immediately, without switching tabs or restarting Amelie.
   window.addEventListener('focus', () => {
     const modal = document.getElementById('settings-modal');
     const panel = document.getElementById('tab-theme');
@@ -2348,8 +2348,8 @@ function makeFolderEl(node, parentArray, folderPath = '') {
 
   // Lazy children: a folder's contents are put in the DOM only when it's OPEN.
   // A collapsed folder keeps ZERO child DOM — on big vaults this collapses the
-  // node count/RAM (prima i figli venivano renderizzati anche da chiusi, solo
-  // nascosti con display:none). Renderizzati una volta al primo apri, poi tenuti.
+  // node count/RAM (previously children were rendered even when collapsed, just
+  // hidden with display:none). Rendered once on first open, then kept.
   let _childrenRendered = false;
   const ensureChildren = () => {
     if (!_childrenRendered && node.children?.length) {
@@ -8814,7 +8814,7 @@ function setupSettings() {
   // Invio nei campi Samba → committa (blur) e salva, come cliccare fuori.
   ['cfg-smb-ip', 'cfg-smb-share', 'cfg-smb-path', 'cfg-smb-user', 'cfg-smb-pass'].forEach(id =>
     $(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }));
-  // Server Address = input IP a 4 gruppi (auto-punto dopo 3 cifre, gruppi cliccabili).
+  // Server Address = 4-group IP input (auto-dot after 3 digits, clickable groups).
   initIpGroup('cfg-smb-ip');
   // The former "Salva configurazione" is now "Remove": wipe the (shared) VPN +
   // Samba params in both tabs.
@@ -9638,7 +9638,7 @@ function setupTwowaySetup() {
   // Invio nei campi Samba → committa (blur) e salva, come cliccare fuori.
   ['tw-smb-ip', 'tw-smb-share', 'tw-smb-path', 'tw-smb-user', 'tw-smb-pass'].forEach(id =>
     $(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }));
-  // Server Address = input IP a 4 gruppi (auto-punto dopo 3 cifre, gruppi cliccabili).
+  // Server Address = 4-group IP input (auto-dot after 3 digits, clickable groups).
   initIpGroup('tw-smb-ip');
   // The former "Salva configurazione" is now "Remove": wipe the (shared) VPN +
   // the Samba params in both tabs — same as the other Remove buttons.

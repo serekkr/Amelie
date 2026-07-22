@@ -38,6 +38,10 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
 .field-row{display:flex;gap:8px}
 .field input[type=text],.field input[type=password]{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r);color:var(--text-0);font-family:var(--ef);font-size:13px;padding:9px 12px;outline:none;transition:border-color .2s;flex:1}
 .field input:focus{border-color:var(--accent-dim)}
+.pass-wrap{position:relative;display:flex}
+.pass-wrap input{flex:1;padding-right:38px}
+.pass-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0}
+.pass-eye:hover{color:var(--text-0)}
 .field input::placeholder{color:var(--text-3)}
 .btn-browse{background:var(--bg-3);border:1px solid var(--border);border-radius:var(--r);color:var(--text-1);font-family:var(--uf);font-size:13px;padding:9px 14px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s,border-color .15s;flex-shrink:0}
 .btn-browse:hover{background:var(--bg-4);color:var(--text-0);border-color:var(--border-light)}
@@ -178,13 +182,13 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
     <div id="enc-fields">
       <div class="field">
         <label>Passphrase</label>
-        <input type="password" id="enc-pass" placeholder="Usa una password forte" autocomplete="new-password"/>
+        <div class="pass-wrap"><input type="password" id="enc-pass" placeholder="Usa una password forte" autocomplete="new-password"/><button type="button" class="pass-eye" id="enc-pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi"></button></div>
         <div class="strength-bar"><div class="strength-fill" id="strength-fill" style="width:0"></div></div>
         <span class="strength-label" id="strength-label" style="color:var(--text-3)"></span>
       </div>
       <div class="field">
         <label>Conferma passphrase</label>
-        <input type="password" id="enc-pass2" placeholder="Ripeti la passphrase" autocomplete="new-password"/>
+        <div class="pass-wrap"><input type="password" id="enc-pass2" placeholder="Ripeti la passphrase" autocomplete="new-password"/><button type="button" class="pass-eye" id="enc-pass2-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi"></button></div>
       </div>
       <div class="sec-box">
         <div class="sec-row"><span class="sec-icon">⚠️</span><span>La passphrase <strong>non è recuperabile</strong>. Se la perdi, i tuoi appunti cifrati saranno inaccessibili. Conservala in un password manager.</span></div>
@@ -264,6 +268,7 @@ const T = {
     err_short: 'Passphrase troppo corta (min 12 caratteri).',
     err_mismatch: 'Le passphrase non corrispondono.',
     strength: ['', 'Debole', 'Media', 'Forte', 'Ottima'],
+    eye: 'Mostra/nascondi password',
     sum_enc: 'Crittografia: ', enc_on: 'AES-256-GCM attiva', enc_off: 'disabilitata',
     setting_up: 'Configurazione…', opening: '✓ Apertura…', setup_err: 'Errore durante la configurazione.',
   },
@@ -292,6 +297,7 @@ const T = {
     err_short: 'Passphrase too short (min 12 characters).',
     err_mismatch: 'The passphrases do not match.',
     strength: ['', 'Weak', 'Medium', 'Strong', 'Great'],
+    eye: 'Show/hide password',
     sum_enc: 'Encryption: ', enc_on: 'AES-256-GCM enabled', enc_off: 'disabled',
     setting_up: 'Setting up…', opening: '✓ Opening…', setup_err: 'Error during setup.',
   },
@@ -320,6 +326,7 @@ const T = {
     err_short: 'Passphrase zu kurz (min. 12 Zeichen).',
     err_mismatch: 'Die Passphrasen stimmen nicht überein.',
     strength: ['', 'Schwach', 'Mittel', 'Stark', 'Sehr stark'],
+    eye: 'Passwort anzeigen/verbergen',
     sum_enc: 'Verschlüsselung: ', enc_on: 'AES-256-GCM aktiv', enc_off: 'deaktiviert',
     setting_up: 'Einrichtung…', opening: '✓ Wird geöffnet…', setup_err: 'Fehler bei der Einrichtung.',
   },
@@ -348,6 +355,7 @@ const T = {
     err_short: 'Frase de contraseña demasiado corta (mín. 12 caracteres).',
     err_mismatch: 'Las frases de contraseña no coinciden.',
     strength: ['', 'Débil', 'Media', 'Fuerte', 'Excelente'],
+    eye: 'Mostrar/ocultar contraseña',
     sum_enc: 'Cifrado: ', enc_on: 'AES-256-GCM activado', enc_off: 'desactivado',
     setting_up: 'Configurando…', opening: '✓ Abriendo…', setup_err: 'Error durante la configuración.',
   },
@@ -376,6 +384,7 @@ const T = {
     err_short: 'Phrase secrète trop courte (min. 12 caractères).',
     err_mismatch: 'Les phrases secrètes ne correspondent pas.',
     strength: ['', 'Faible', 'Moyenne', 'Forte', 'Excellente'],
+    eye: 'Afficher/masquer le mot de passe',
     sum_enc: 'Chiffrement : ', enc_on: 'AES-256-GCM activé', enc_off: 'désactivé',
     setting_up: 'Configuration…', opening: '✓ Ouverture…', setup_err: 'Erreur lors de la configuration.',
   },
@@ -404,6 +413,7 @@ const T = {
     err_short: 'Hasło zbyt krótkie (min. 12 znaków).',
     err_mismatch: 'Hasła nie są zgodne.',
     strength: ['', 'Słabe', 'Średnie', 'Silne', 'Bardzo silne'],
+    eye: 'Pokaż/ukryj hasło',
     sum_enc: 'Szyfrowanie: ', enc_on: 'AES-256-GCM włączone', enc_off: 'wyłączone',
     setting_up: 'Konfigurowanie…', opening: '✓ Otwieranie…', setup_err: 'Błąd podczas konfiguracji.',
   },
@@ -432,6 +442,7 @@ const T = {
     err_short: 'Parolă prea scurtă (min. 12 caractere).',
     err_mismatch: 'Parolele nu coincid.',
     strength: ['', 'Slabă', 'Medie', 'Puternică', 'Excelentă'],
+    eye: 'Arată/ascunde parola',
     sum_enc: 'Criptare: ', enc_on: 'AES-256-GCM activată', enc_off: 'dezactivată',
     setting_up: 'Se configurează…', opening: '✓ Se deschide…', setup_err: 'Eroare la configurare.',
   },
@@ -479,6 +490,10 @@ function applyLang(code, updateLabel) {
   if (lbls[1]) lbls[1].textContent = t.pass2_lbl;
   $('enc-pass').placeholder = t.pass_ph;
   $('enc-pass2').placeholder = t.pass2_ph;
+  ['enc-pass-eye', 'enc-pass2-eye'].forEach(id => {
+    const b = $(id);
+    if (b) { b.title = t.eye; b.setAttribute('aria-label', t.eye); }
+  });
   const warn = document.querySelector('#enc-fields .sec-row span:last-child');
   if (warn) warn.innerHTML = t.warn;
   $('btn-2-back').textContent = t.back;
@@ -579,6 +594,22 @@ $('enc-toggle').addEventListener('change', e => {
   $('enc-fields').classList.toggle('show', encEnabled);
   $('enc-toggle-row').classList.toggle('active-row', encEnabled);
 });
+
+// Show/hide password eye toggles (flip type password↔text on click)
+const _EYE_OPEN_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+const _EYE_OFF_SVG  = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+function wireEye(input, eye) {
+  if (!input || !eye) return;
+  eye.innerHTML = _EYE_OPEN_SVG;
+  eye.addEventListener('click', () => {
+    const revealed = input.type === 'text';
+    input.type = revealed ? 'password' : 'text';
+    eye.innerHTML = revealed ? _EYE_OPEN_SVG : _EYE_OFF_SVG;
+    input.focus();
+  });
+}
+wireEye($('enc-pass'),  $('enc-pass-eye'));
+wireEye($('enc-pass2'), $('enc-pass2-eye'));
 
 // Passphrase strength
 $('enc-pass').addEventListener('input', () => {

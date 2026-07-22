@@ -847,11 +847,11 @@ class SyncManager {
       const entries = await this._smbJson(cfg, ['listr', base], { timeout: 120000, maxBuffer: 64 * 1024 * 1024 });
       if (Array.isArray(entries)) {
         for (const e of entries) {
-          if (e.dir) continue;              // solo file (come prima)
-          map[e.path] = +e.mtime || 0;      // path già relativo a base, mtime già in ms
+          if (e.dir) continue;              // files only (as before)
+          map[e.path] = +e.mtime || 0;      // path already relative to base, mtime already in ms
         }
       }
-    } catch (_) { /* errore transitorio → {} (il chiamante non cancella su lista vuota) */ }
+    } catch (_) { /* transient error → {} (the caller does not delete on an empty listing) */ }
     return map;
   }
 

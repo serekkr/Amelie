@@ -19485,7 +19485,7 @@
         const rows = [];
         c.querySelectorAll("tr").forEach((tr) => {
           const cells = [];
-          tr.querySelectorAll("th,td").forEach((td) => cells.push(mdInline(td).trim().replace(/\|/g, "\\|")));
+          tr.querySelectorAll("th,td").forEach((td) => cells.push(mdInline(td).trim().replace(/\\/g, "\\\\").replace(/\|/g, "\\|")));
           rows.push("| " + cells.join(" | ") + " |");
         });
         if (rows.length) {

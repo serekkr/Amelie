@@ -4,13 +4,13 @@
 ═══════════════════════════════════════════════════════════════ */
 
 /* ── DEFAULT THEME: Green Dark (id: github-dark) ─────────────── */
-/* Grigi NEUTRI (R=G=B) e molto scuri. Due vincoli su questo display:
-   1) i grigi con punta di blu virano al viola → tutto R=G=B.
-   2) --bg-0 NON deve scendere sotto #111111: l'editor è textarea+overlay e i
-      layer GPU promossi (scroll-sync) rendono lo stesso colore PIÙ CHIARO del
-      layer principale; sotto #111111 quel mismatch si vede come "maschera"
-      rettangolare. A #111111 i due layer coincidono (resa 17,17,17). Vedi
-      [[amelie-autofill-purple-input]]. Accenti verdi invariati. */
+/* NEUTRAL greys (R=G=B) and very dark. Two constraints on this display:
+   1) greys with a hint of blue drift toward purple → keep everything R=G=B.
+   2) --bg-0 must NOT drop below #111111: the editor is textarea+overlay and the
+      GPU-promoted layers (scroll-sync) render the same colour LIGHTER than the
+      main layer; below #111111 that mismatch shows as a rectangular "mask".
+      At #111111 the two layers match (rendered 17,17,17). See
+      [[amelie-autofill-purple-input]]. Green accents unchanged. */
 :root {
   --bg-0: #111111;
   --bg-1: #161616;
@@ -1169,20 +1169,20 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #settings-modal .modal-panel {
   /* Default size chosen by the user (am2.png). Drag-resize lasts only for
      the current session. */
-  /* Dimensione scelta perché la tab più alta (User Interface, con tutte le righe
-     "Personalizza colori") entri SENZA scrollare né ridimensionare a mano:
-     misurata via CDP: con i font ingranditi (=Scorciatoie) serve ~792px. Un filo
-     più larga (1160px). */
-  width: min(960px, 70vw);    /* -25% (era 1280/94vw): meno larga */
-  height: min(713px, 83vh);   /* -10% (era 792/92vh): meno lungo in basso */
+  /* Size chosen so the tallest tab (User Interface, with all the "Customize
+     colors" rows) fits WITHOUT scrolling or manual resizing: measured via CDP —
+     with the fonts enlarged (=Shortcuts) it needs ~792px. A touch
+     wider (1160px). */
+  width: min(960px, 70vw);    /* -25% (was 1280/94vw): less wide */
+  height: min(713px, 83vh);   /* -10% (was 792/92vh): less tall at the bottom */
   min-width: 520px; min-height: 420px;
   max-width: 96vw; max-height: 94vh;
   resize: both; overflow: hidden;
 }
-/* Pannello Impostazioni più scuro (richiesto): il pannello scende a --bg-0 e i
-   box interni a --bg-1 (un gradino sopra, per l'elevazione). Via variabili così
-   resta themeable: in un tema chiaro --bg-0/1 restano chiari. Il modale non ha
-   l'artefatto GPU dell'editor, quindi --bg-0 qui va bene. */
+/* Darker Settings panel (requested): the panel drops to --bg-0 and the inner
+   boxes to --bg-1 (one step up, for elevation). Done via variables so it stays
+   themeable: in a light theme --bg-0/1 stay light. The modal doesn't have
+   the editor's GPU artefact, so --bg-0 is fine here. */
 #settings-modal .modal-panel { background: var(--bg-0); }
 #settings-modal .sec-card,
 #settings-modal .sc-group,
@@ -1238,11 +1238,12 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #settings-modal .color-row-name { font-size: 11px; }
 #settings-modal .color-row-desc { font-size: 11px; font-family: var(--ui-font); color: var(--text-2); }
 .field-group input, .field-group select {
-  /* --bg-0 (NON --bg-3): Chromium dipinge un highlight indaco/viola sul fondo
-     dei controlli nativi se lo sfondo supera una certa chiarezza — su --bg-3
-     (#22272e) trapelava (campi viola), su --bg-0 (#0d1117, come l'editor) no.
-     Provato: appearance:none e color-scheme NON bastano, solo lo sfondo scuro.
-     Vedi [[amelie-autofill-purple-input]]. */
+  /* --bg-0 (NOT --bg-3): Chromium paints an indigo/purple highlight on the
+     background of native controls if the background is lighter than a certain
+     threshold — on --bg-3 (#22272e) it leaked through (purple fields), on --bg-0
+     (#0d1117, like the editor) it doesn't. Tried: appearance:none and color-scheme
+     are NOT enough, only the dark background works.
+     See [[amelie-autofill-purple-input]]. */
   background: var(--bg-0); border: 1px solid var(--border);
   border-radius: var(--radius); color: var(--text-0);
   font-family: var(--ui-font); font-size: 11px;
@@ -1271,9 +1272,9 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .toggle-row { flex-direction: row; align-items: center; justify-content: space-between; }
 .toggle { position: relative; display: inline-block; width: 38px; height: 20px; }
 .toggle input { opacity: 0; width: 0; height: 0; }
-/* Track OFF: --border-light (NON --bg-4): con la palette quasi-nera --bg-4 era
-   troppo scuro e la pillola spariva (si vedeva solo il cerchio). Cerchio OFF
-   schiarito a --text-1 per staccare bene dal track. */
+/* Track OFF: --border-light (NOT --bg-4): with the near-black palette --bg-4 was
+   too dark and the pill vanished (only the knob was visible). OFF knob
+   lightened to --text-1 to stand out clearly from the track. */
 .slider { position: absolute; cursor: pointer; inset: 0; background: var(--border-light); border-radius: 20px; transition: .2s; }
 .slider::before {
   content: ''; position: absolute;
@@ -1299,7 +1300,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   display: flex; align-items: center; gap: 6px; margin-top: 6px;
 }
 .sip-custom-wrap input {
-  /* --bg-0: evita l'highlight indaco di Chromium (vedi .field-group input) */
+  /* --bg-0: avoids Chromium's indigo highlight (see .field-group input) */
   width: 70px; background: var(--bg-0); border: 1px solid var(--border);
   border-radius: var(--radius); color: var(--text-0);
   font-family: var(--editor-font); font-size: 13px; padding: 6px 10px; outline: none;
@@ -1562,11 +1563,11 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .proto-desc { font-size: 11px; color: var(--text-2); line-height: 1.5; }
 .path-input-row {
   display: flex; align-items: center;
-  /* --bg-0 = stesso scuro dell'editor (richiesto). DEVE essere opaco: Chromium
-     dipinge l'highlight autofill (indaco) NEL layer di sfondo dell'input; con
-     l'input `background:transparent` quell'indaco trapelava (si vedeva viola).
-     Il trucco `:-webkit-autofill{box-shadow}` qui NON funziona (il pseudo non fa
-     match in questo Electron); un background OPACO sull'input lo copre e basta. */
+  /* --bg-0 = same dark as the editor (requested). MUST be opaque: Chromium
+     paints the autofill highlight (indigo) IN the input's background layer; with
+     the input at `background:transparent` that indigo leaked through (looked purple).
+     The `:-webkit-autofill{box-shadow}` trick does NOT work here (the pseudo doesn't
+     match in this Electron); an OPAQUE background on the input just covers it. */
   background: var(--bg-0); border: 1px solid var(--border);
   border-radius: var(--radius); overflow: hidden;
 }
@@ -1592,15 +1593,15 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .tc-dot.fail { background: var(--red); }
 .tc-label { flex: 1; font-size: 11px; color: var(--text-1); }
 .tc-result { font-family: var(--editor-font); font-size: 11px; color: var(--text-3); }
-/* Stessi colori di .wiz-btn.secondary (Modifica/Rimuovi accanto): bg-3 a riposo,
-   bg-4 in hover, bordo border-light. (Il bordo verde in hover arriva dalla regola
-   :root:not([data-theme]) più sotto, come per gli altri pulsanti azione.) */
+/* Same colours as .wiz-btn.secondary (Modify/Remove alongside): bg-3 at rest,
+   bg-4 on hover, border-light border. (The green hover border comes from the
+   :root:not([data-theme]) rule further down, like the other action buttons.) */
 .btn-test-run { display: flex; align-items: center; gap: 8px; background: var(--bg-3); border: 1px solid var(--border-light); color: var(--text-0); padding: 9px 18px; border-radius: var(--radius); cursor: pointer; font-family: var(--ui-font); font-size: 13px; transition: background .15s, border-color .15s; align-self: flex-start; }
 .btn-test-run svg { width: 15px; height: 15px; stroke: var(--accent); }
 .btn-test-run:hover { background: var(--bg-4); }
-/* "Test connection" (Verifica connessione): SEMPRE dall'aspetto normale, anche
-   prima che la configurazione sia completa. La classe .tc-disabled resta applicata
-   dal JS ma non sfuma più il pulsante (era solo estetica: il click funziona sempre). */
+/* "Test connection": ALWAYS looks normal, even before the configuration is
+   complete. The .tc-disabled class is still applied by the JS but no longer dims
+   the button (it was purely cosmetic: the click always works). */
 .test-summary { padding: 10px 14px; border-radius: var(--radius); font-size: 13px; line-height: 1.6; border: 1px solid var(--border); }
 .test-summary.ok { border-color: var(--green); color: var(--green); background: rgba(61,153,112,.07); }
 .test-summary.fail { border-color: var(--red); color: var(--red); background: rgba(224,92,106,.07); }
@@ -1612,7 +1613,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .wiz-btn.secondary:hover { background: var(--bg-4); color: var(--text-0); }
 .wiz-btn.primary { background: var(--bg-4); border-color: var(--border); color: var(--text-0); }
 .wiz-btn.primary:hover { background: var(--bg-3); border-color: var(--border-light); }
-/* Samba/VPN: "Salva configurazione" stessa altezza del tasto "Verifica connessione" (.btn-test-run, padding 9px) */
+/* Samba/VPN: "Save configuration" same height as the "Test connection" button (.btn-test-run, padding 9px) */
 #btn-vpn-save-config, #tw-setup-save { padding: 9px 18px; }
 .wiz-btn.danger { background: transparent; border-color: var(--red); color: var(--red); margin-right: auto; }
 .wiz-btn.danger:hover { background: var(--red); color: #fff; }
@@ -2123,8 +2124,8 @@ body.split-open .pane-focused { box-shadow: inset 0 0 0 1.5px var(--accent-dim);
 .toc-item.h4 { padding-left: 46px; font-size: 11px; color: var(--text-3); }
 .toc-item.h5, .toc-item.h6 { display: none; }
 /* Active state — placed AFTER h1-h4 so its color wins specificity ties.
-   Stessi colori della nota attiva nel pannello sinistro (accent del tema),
-   niente blu/viola hardcoded. */
+   Same colors as the active note in the left panel (theme accent),
+   no hardcoded blue/purple. */
 .toc-item.active,
 .toc-item.h1.active,
 .toc-item.h2.active,
@@ -2336,7 +2337,7 @@ body.split-open .pane-focused { box-shadow: inset 0 0 0 1.5px var(--accent-dim);
 .cv-img-btn span { font-size: 11px; font-weight: 500; letter-spacing: .02em; }
 .cv-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
 .tool-sep { width: 1px; height: 18px; background: var(--border); margin: 0 6px; flex-shrink: 0; align-self: center; }
-/* "Mostra configurazione / Show config" buttons are pointless (the summary/wizard
+/* "Show config" buttons are pointless (the summary/wizard
    already shows what's needed) — hidden everywhere; only the modify/reconfigure
    actions remain. */
 .vpn-show-config { display: none !important; }
@@ -2473,10 +2474,10 @@ body.split-open .pane-focused { box-shadow: inset 0 0 0 1.5px var(--accent-dim);
    with a vertical divider between the two columns. */
 .vc-table { display: flex; flex-direction: column; border-radius: 6px; overflow: hidden; margin-top: 2px; }
 .vc-row { display: flex; padding: 5px 9px; }
-.vc-row:nth-child(odd)  { background: var(--bg-3); }   /* meno scura */
-.vc-row:nth-child(even) { background: var(--bg-1); }   /* più scura */
+.vc-row:nth-child(odd)  { background: var(--bg-3); }   /* less dark */
+.vc-row:nth-child(even) { background: var(--bg-1); }   /* darker */
 .vc-cell { flex: 1; min-width: 0; display: flex; justify-content: space-between; gap: 10px; padding-right: 18px; }
-.vc-cell + .vc-cell { border-left: 1px solid var(--border-light); padding-right: 0; padding-left: 18px; }   /* divisore */
+.vc-cell + .vc-cell { border-left: 1px solid var(--border-light); padding-right: 0; padding-left: 18px; }   /* divider */
 .vc-num  { color: var(--text-0); }
 /* Encryption: status header + passphrase controls in ONE bordered box */
 .enc-box {
@@ -2492,9 +2493,9 @@ body.split-open .pane-focused { box-shadow: inset 0 0 0 1.5px var(--accent-dim);
 }
 .enc-box-status { margin-left: auto; font-size: 11px; color: var(--text-1); }
 /* Controls inside the box: separate them from the header / each other */
-/* `:not(.test-result)`: i div risultato (es. #sec-restmode-result) sono vuoti ma
-   prendevano il border-top → comparivano come una "barra/striscia" sotto la
-   crittografia. Escludendoli, il separatore resta solo sulle sezioni vere. */
+/* `:not(.test-result)`: the result divs (e.g. #sec-restmode-result) are empty but
+   were picking up the border-top → they showed as a "bar/strip" below the
+   encryption. Excluding them keeps the separator only on the real sections. */
 .enc-box > div[id]:not(.test-result) { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .enc-box .sec-section-title { margin-top: 0; }
 /* Space the action button away from the passphrase fields above it */
@@ -2640,8 +2641,8 @@ body.split-open .pane-focused { box-shadow: inset 0 0 0 1.5px var(--accent-dim);
 #preview-content img {
   max-width: 100%; height: auto; display: block;
   border-radius: 5px; border: 1px solid var(--border);
-  /* Cursore normale sull'immagine: il resize (nw-resize) è SOLO sulla maniglia
-     nell'angolo in basso a destra (.img-resize-handle), non su tutta la foto. */
+  /* Normal cursor over the image: the resize (nw-resize) is ONLY on the handle
+     in the bottom-right corner (.img-resize-handle), not over the whole photo. */
   cursor: default; position: relative;
 }
 .img-resize-wrap {
@@ -3114,7 +3115,7 @@ kbd {
 #section-notes, #section-todo, #section-recent, #section-bookmarks, #section-tags, #section-todo-vault, #section-notifications { flex-direction: column; flex: 1; overflow: hidden; }
 #section-notes { display: flex; }
 
-/* ─── Viste sidebar (Recent/Bookmarks/Tags/ToDo) ─────────────── */
+/* ─── Sidebar views (Recent/Bookmarks/Tags/ToDo) ─────────────── */
 .view-title {
   font-family: var(--editor-font); font-size: 11px; text-transform: uppercase;
   letter-spacing: .08em; color: var(--text-3); padding: 12px 14px 8px;
@@ -3204,7 +3205,7 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 .todo-v-row.done .todo-v-text { color: var(--text-3); text-decoration: line-through; }
 .todo-v-row.done .todo-v-check { color: var(--green); border-color: var(--green); }
 
-/* Voce ToDo nell'albero */
+/* ToDo entry in the tree */
 .todo-tree-entry { color: var(--text-0); }
 .todo-tree-entry .tree-folder-icon svg { color: var(--accent); }
 .todo-tree-entry.active { background: var(--bg-3); }
@@ -3269,7 +3270,7 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 .kc-alert-custom { background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; color: var(--text-1); font-family: var(--ui-font); font-size: 12px; padding: 5px 7px; outline: none; width: 120px; }
 .kc-alert-custom:focus { border-color: var(--accent); }
 
-/* Calendario custom (dark) */
+/* Custom calendar (dark) */
 .dp-wrap { position: relative; flex: 1; min-width: 150px; }
 .dp-trigger { display: flex; align-items: center; gap: 7px; width: 100%; box-sizing: border-box; background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; color: var(--text-1); font-family: var(--ui-font); font-size: 12px; padding: 6px 9px; cursor: pointer; text-align: left; }
 .dp-trigger:hover { border-color: var(--border-light); }
@@ -3304,7 +3305,7 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 .emoji-cell { height: 34px; border: none; background: transparent; border-radius: 6px; cursor: pointer; font-size: 19px; line-height: 1; padding: 0; }
 .emoji-cell:hover { background: var(--bg-4); }
 
-/* Campanella notifiche + badge */
+/* Notification bell + badge */
 #notif-badge {
   position: absolute; top: 5px; left: calc(50% + 4px); background: #fff; color: #1c1c1c;
   font-size: 8px; font-family: var(--editor-font); border-radius: 8px;
@@ -3377,7 +3378,7 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 
 .todo-editor { display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--bg-2); border: 1px solid var(--border-light); border-radius: 8px; margin-bottom: 6px; }
 
-/* Drag & drop tra sezioni */
+/* Drag & drop between sections */
 .todo-section { min-height: 44px; border-radius: 8px; transition: background .12s, box-shadow .12s; }
 .todo-section.drop-hover { background: var(--accent-glow, rgba(91,141,239,.12)); box-shadow: inset 0 0 0 1px var(--accent); }
 .todo-row { cursor: grab; }
@@ -3596,13 +3597,13 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 }
 /* 2 columns, column-first. DOM order: accent, folder, bg, text0, text1 —
    remapped via `order` to:
-     Col1 = Testo principale / Testo secondario / Sfondo principale
-     Col2 = Accento (top) / Icona cartella     ← Accento sopra Icona cartella */
-.color-rows > .color-row:nth-child(1) { order: 4; }   /* Accento → col2, riga 1 */
-.color-rows > .color-row:nth-child(2) { order: 5; }   /* Icona cartella → col2, riga 2 */
-.color-rows > .color-row:nth-child(3) { order: 3; }   /* Sfondo principale → col1, riga 3 */
-.color-rows > .color-row:nth-child(4) { order: 1; }   /* Testo principale → col1, riga 1 */
-.color-rows > .color-row:nth-child(5) { order: 2; }   /* Testo secondario → col1, riga 2 */
+     Col1 = Main text / Secondary text / Main background
+     Col2 = Accent (top) / Folder icon     ← Accent above Folder icon */
+.color-rows > .color-row:nth-child(1) { order: 4; }   /* Accent → col2, row 1 */
+.color-rows > .color-row:nth-child(2) { order: 5; }   /* Folder icon → col2, row 2 */
+.color-rows > .color-row:nth-child(3) { order: 3; }   /* Main background → col1, row 3 */
+.color-rows > .color-row:nth-child(4) { order: 1; }   /* Main text → col1, row 1 */
+.color-rows > .color-row:nth-child(5) { order: 2; }   /* Secondary text → col1, row 2 */
 .color-row {
   display: flex; align-items: center; justify-content: space-between;
   background: var(--bg-3); border: 1px solid var(--border);
@@ -3798,13 +3799,13 @@ html:not([data-theme]) .notif-row:hover .simple-name {
   .mr-robot-type .mrt-b { width: auto; }
 }
 
-/* ═══ Settings panel — UNICA manopola per la dimensione di TUTTO il contenuto
-   dentro le schede (la barra in alto .tab-btn resta 15px, indipendente).
-   Per ingrandire/rimpicciolire tutto in una volta cambia SOLO --settings-fs.
-   Prefisso #settings-modal → vince per specificità/ordine su tutte le regole
-   sopra, senza !important. ═══ */
+/* ═══ Settings panel — A SINGLE knob for the size of ALL the content
+   inside the tabs (the top bar .tab-btn stays 15px, independent).
+   To enlarge/shrink everything at once, change ONLY --settings-fs.
+   The #settings-modal prefix → wins by specificity/order over all the rules
+   above, without !important. ═══ */
 #settings-modal { --settings-fs: 13px; --settings-nav-fs: 13px; --settings-btn-fs: 13px; }
-/* Testo (--settings-fs) */
+/* Text (--settings-fs) */
 #settings-modal .field-group label:not(.toggle),
 #settings-modal .field-group label:not(.toggle) small,
 #settings-modal .field-group.toggle-row > label:not(.toggle),
@@ -3837,10 +3838,10 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 #settings-modal .wg-key,
 #settings-modal .wg-val,
 #settings-modal .sc-hint { font-size: var(--settings-fs); }
-/* Il riepilogo Samba (host/share · folder) segue il suo box compatto
-   .smb-preview (11px monospace), NON la manopola del contenuto — altrimenti
-   sporgeva troppo grande dentro il boxino. */
-/* Bottoni (--settings-btn-fs), regolabili separati dal testo */
+/* The Samba summary (host/share · folder) follows its own compact box
+   .smb-preview (11px monospace), NOT the content knob — otherwise it
+   stuck out too big inside the little box. */
+/* Buttons (--settings-btn-fs), tunable separately from the text */
 #settings-modal .wiz-btn,
 #settings-modal .btn-test,
 #settings-modal .btn-test-run,
@@ -3850,8 +3851,8 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 #settings-modal .dlp { font-size: var(--settings-btn-fs); }
 
 /* Uniform action-button geometry across ALL settings tabs: identical height,
-   padding, radius and icon/label centering so every button (Salva, Testa
-   connessione, Verifica connessione, Modifica, Rimuovi, Mostra config, Ripristina…)
+   padding, radius and icon/label centering so every button (Save, Test
+   connection, Verify connection, Modify, Remove, Show config, Restore…)
    is the same size and lines up the same everywhere. Pills (.dlp / .vpn-type-btn)
    keep their own sizing — not included here. */
 #settings-modal .wiz-btn,
@@ -3877,7 +3878,7 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 #settings-modal :is(.wiz-btn, .btn-test, .btn-test-run, .btn-save)
   + :is(.wiz-btn, .btn-test, .btn-test-run, .btn-save) { margin-left: 0; }
 /* Exceptions that keep their own layout: the footer Save button (space-between
-   footer) and the full-width flex:1 encryption confirm pair (Disabilita/Annulla). */
+   footer) and the full-width flex:1 encryption confirm pair (Disable/Cancel). */
 #settings-modal .modal-footer .btn-save,
 #sec-btn-disable-enc, #sec-btn-cancel-disable { margin-left: 0; }
 /* A button that sits as the right-hand control of a toggle-row (e.g. the Cleanup

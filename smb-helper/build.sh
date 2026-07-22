@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Compila il binario SMB2/3 helper `amelie-smb` (Go, statico, ~3.5MB) che viene
-# incorporato nell'AppImage. Serve la toolchain Go SOLO qui (macchina di build);
-# l'utente finale riceve il binario già pronto.
+# Builds the SMB2/3 helper binary `amelie-smb` (Go, static, ~3.5MB) that gets
+# embedded into the AppImage. The Go toolchain is needed ONLY here (build machine);
+# the end user receives the ready-made binary.
 #
-# Uso:  ./smb-helper/build.sh          (usa il `go` di sistema se c'è)
-#       il binario resta in smb-helper/amelie-smb (bundlato via extraResources)
+# Usage:  ./smb-helper/build.sh          (uses the system `go` if present)
+#         the binary stays in smb-helper/amelie-smb (bundled via extraResources)
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# Trova un Go utilizzabile: prima quello di sistema, poi uno portabile scaricato
-# in una cache locale (nessun root richiesto).
+# Find a usable Go: first the system one, then a portable one downloaded
+# into a local cache (no root required).
 GO=""
 if command -v go >/dev/null 2>&1; then
   GO="go"

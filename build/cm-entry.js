@@ -182,7 +182,9 @@ function mdBlocks(node, indent) {
       const rows = [];
       c.querySelectorAll('tr').forEach((tr) => {
         const cells = [];
-        tr.querySelectorAll('th,td').forEach((td) => cells.push(mdInline(td).trim().replace(/\|/g, '\\|')));
+        // Escape the escape char (\) BEFORE the pipe, so content like "a\|b"
+        // can't leak an un-escaped pipe that breaks the table column.
+        tr.querySelectorAll('th,td').forEach((td) => cells.push(mdInline(td).trim().replace(/\\/g, '\\\\').replace(/\|/g, '\\|')));
         rows.push('| ' + cells.join(' | ') + ' |');
       });
       if (rows.length) {

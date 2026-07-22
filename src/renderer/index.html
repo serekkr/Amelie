@@ -1404,7 +1404,7 @@
               <label class="toggle"><input type="checkbox" id="cfg-note-loc" /><span class="slider"></span></label>
             </div>
 
-            <!-- Indent guide lines for nested folders in the sidebar (3ª voce, dopo "Nuove note") -->
+            <!-- Indent guide lines for nested folders in the sidebar (3rd item, after "Nuove note") -->
             <div class="field-group toggle-row">
               <label data-i18n-html="settings.folder_guides">Linee guida cartelle <small>(On = linee verticali di rientro nelle cartelle annidate · Off = vista pulita)</small></label>
               <label class="toggle"><input type="checkbox" id="cfg-folder-guides" /><span class="slider"></span></label>
@@ -1421,8 +1421,8 @@
               <label class="toggle"><input type="checkbox" id="cfg-disable-gpu" /><span class="slider"></span></label>
             </div>
 
-            <!-- Low-memory mode: rimosso dall'UI (v1.0.643). Resta SEMPRE attivo,
-                 forzato in main.js — vedi enable-low-end-device-mode. -->
+            <!-- Low-memory mode: removed from the UI (v1.0.643). It stays ALWAYS on,
+                 forced in main.js — see enable-low-end-device-mode. -->
 
           </div>
 
@@ -1783,8 +1783,8 @@
        focused offline app must not phone home on every launch, and code highlighting
        must work with no network. v11.9.0, same as before. -->
   <script src="highlight.min.js"></script>
-  <!-- DOMPurify: sanitizza l'HTML del markdown reso prima di metterlo in pagina,
-       così nessuno script/handler inline in una nota può eseguire (anti-XSS). -->
+  <!-- DOMPurify: sanitizes the HTML of the rendered markdown before putting it on the page,
+       so no inline script/handler in a note can run (anti-XSS). -->
   <script src="purify.min.js"></script>
   <script src="i18n.js"></script>
   <!-- Input modal — replaces window.prompt() -->
