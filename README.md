@@ -45,7 +45,7 @@ development:
 ## ✨ Features
 
 ### Writing
-- **CodeMirror 6 editor** with a fast, distraction-free writing experience and
+- **CodeMirror editor** with a fast, distraction-free writing experience and
   syntax highlighting inside fenced code blocks.
 - **Markdown reading view** — a toggled, formatted view of the current note.
 - **Readable line length** — optional centered 760px measure, works with line
