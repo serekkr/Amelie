@@ -10,6 +10,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
+const { argon2id } = require('hash-wasm');   // memory-hard KDF for new vaults (WASM, no native build)
 const { WireGuardManager } = require('../sync/wireguardManager');
 
 // Last-resort safety net: without these, an unhandled promise rejection in the
@@ -139,11 +140,19 @@ let ENCRYPTION_KEY  = null;  // Buffer(32) or null — the DATA key (DEK) once u
 let ENCRYPTION_ALGO = 'aes'; // AES-256-GCM only. (ChaCha20 was removed — absent from Electron's BoringSSL. The
                              // decrypt paths below still RECOGNISE a 'chacha' header defensively so no vault can
                              // ever become unreadable, but the app never CREATES chacha content anymore.)
-let KDF = 'pbkdf2';          // key-derivation: 'scrypt' (new vaults) | 'pbkdf2' (legacy). Set on unlock/enable from config.
+let KDF = 'pbkdf2';          // key-derivation: 'argon2id' (new vaults) | 'scrypt' (older vaults) | 'pbkdf2' (legacy). Set on unlock/enable from config.
 // scrypt cost params — memory-hard, resists GPU/ASIC brute-force far better than
 // PBKDF2. N*r*128 ≈ 32 MiB. These are part of the vault format: changing them
 // breaks decryption, so they're fixed (and mirrored in recovery/amelie-recovery.py).
 const SCRYPT_PARAMS = { N: 32768, r: 8, p: 1 };
+// Argon2id — OWASP's first-choice KDF, used for NEW vaults (kdf: 'argon2id').
+// Profile: 19 MiB memory, 2 passes, 1 lane (OWASP minimum m=19456 KiB, t=2, p=1).
+// Like SCRYPT_PARAMS these are part of the vault format — changing them breaks
+// decryption of vaults created with the old values, so they're fixed.
+const ARGON2_PARAMS = { memorySize: 19456, iterations: 2, parallelism: 1 };
+// Normalise a header/config kdf string to one of the three we support; anything
+// unknown (or a pre-envelope legacy vault) falls back to pbkdf2.
+function normKdf(v) { return (v === 'scrypt' || v === 'argon2id') ? v : 'pbkdf2'; }
 
 function resolveVaultPaths(vaultDir) {
   VAULT_DIR       = vaultDir;
@@ -371,9 +380,22 @@ function getOrCreateSalt() {
   return salt;
 }
 
-function deriveKey(passphrase, kdf, salt) {
+async function deriveKey(passphrase, kdf, salt) {
   salt = salt || getOrCreateSalt();
-  if ((kdf || KDF) === 'scrypt') {
+  const k = kdf || KDF;
+  if (k === 'argon2id') {
+    // Memory-hard, OWASP's preferred KDF. Output depends only on
+    // (passphrase, salt, m, t, p, 32) so it's reproducible offline.
+    const out = await argon2id({
+      password: passphrase, salt,
+      memorySize:  ARGON2_PARAMS.memorySize,
+      iterations:  ARGON2_PARAMS.iterations,
+      parallelism: ARGON2_PARAMS.parallelism,
+      hashLength: 32, outputType: 'binary',
+    });
+    return Buffer.from(out);
+  }
+  if (k === 'scrypt') {
     // maxmem must exceed 128*N*r (~32 MiB) or scryptSync throws; output depends
     // only on (passphrase, salt, N, r, p, 32), so the recovery tool reproduces it.
     return crypto.scryptSync(passphrase, salt, 32,
@@ -807,7 +829,9 @@ function writeVaultHeader(dek, kek, salt) {
   const header = {
     amelie: 'vault', version: 1,
     kdf: KDF,
-    kdfParams: KDF === 'scrypt' ? SCRYPT_PARAMS : { iterations: 310000, hash: 'sha512' },
+    kdfParams: KDF === 'argon2id' ? ARGON2_PARAMS
+             : KDF === 'scrypt'   ? SCRYPT_PARAMS
+             : { iterations: 310000, hash: 'sha512' },
     salt: Buffer.from(salt).toString('hex'),
     algo: ENCRYPTION_ALGO,
     wrappedKey: wrapDEK(dek, kek, ENCRYPTION_ALGO),
@@ -861,7 +885,7 @@ function reconcileEncryptionFromHeader() {
     cfg.encryption = {
       enabled: true,
       algo: h.algo === 'chacha' ? 'chacha' : 'aes',
-      kdf:  h.kdf  === 'scrypt' ? 'scrypt' : 'pbkdf2',
+      kdf:  normKdf(h.kdf),
       openPlaintext: cfg.encryption?.openPlaintext === true,
     };
     writeAppConfig(cfg);
@@ -1719,7 +1743,7 @@ ipcMain.handle('vault:setup', async (_, opts) => {
     return { ok: false, error: `Impossibile accedere a "${vaultPath}": ${e.message}` };
   }
 
-  if (encryptionEnabled) KDF = 'scrypt';   // fresh encrypted vault → memory-hard KDF
+  if (encryptionEnabled) KDF = 'argon2id';   // fresh encrypted vault → OWASP's first-choice KDF
   const appCfg = { vaultPath, encryption: encryptionEnabled ? { enabled: true, algo: 'aes', kdf: KDF } : { enabled: false } };
   writeAppConfig(appCfg);
   resolveVaultPaths(vaultPath);
@@ -1736,12 +1760,12 @@ ipcMain.handle('vault:setup', async (_, opts) => {
     // random DEK would orphan those notes.
     const hasEnc = (function any(dir){ try { for (const it of fs.readdirSync(dir,{withFileTypes:true})) { if (it.isDirectory()) { if (any(path.join(dir,it.name))) return true; } else if (it.name.endsWith(ENC_EXT) || it.name.endsWith(LEGACY_ENC_EXT)) return true; } } catch(_){} return false; })(NOTES_DIR);
     if (hasEnc) {
-      ENCRYPTION_KEY = deriveKey(passphrase);
+      ENCRYPTION_KEY = await deriveKey(passphrase);
     } else {
       // Fresh encrypted vault → ENVELOPE: random DEK wrapped by the password key.
       ENCRYPTION_ALGO = 'aes';
       const salt = getOrCreateSalt();
-      const kek = deriveKey(passphrase, KDF, salt);
+      const kek = await deriveKey(passphrase, KDF, salt);
       const dek = crypto.randomBytes(32);
       writeVaultHeader(dek, kek, salt);
       ENCRYPTION_KEY = dek;
@@ -1824,7 +1848,7 @@ ipcMain.handle('vault:pickRestoreFile', async () => {
 // temp staging dir; `move:false` COPIES (a folder backup must survive). The
 // current notes/attachments are moved aside (never deleted). Returns the same
 // shapes vault:restoreArchive always returned.
-function _finalizeRestore(srcDir, passphrase, { move = false, cleanup = null, restoredFrom = '' } = {}) {
+async function _finalizeRestore(srcDir, passphrase, { move = false, cleanup = null, restoredFrom = '' } = {}) {
   const clean = () => { if (cleanup) { try { fs.rmSync(cleanup, { recursive: true, force: true }); } catch (_) {} } };
   if (!NOTES_DIR) { clean(); return { ok: false, error: 'Nessun vault aperto' }; }
   const vaultDir = path.dirname(NOTES_DIR);
@@ -1845,8 +1869,8 @@ function _finalizeRestore(srcDir, passphrase, { move = false, cleanup = null, re
       if (!passphrase) { clean(); return { ok: false, needsPassword: true }; }
       try {
         const algo = restoredHdr.algo === 'chacha' ? 'chacha' : 'aes';
-        const kdf  = restoredHdr.kdf  === 'scrypt' ? 'scrypt' : 'pbkdf2';
-        const kek  = deriveKey(passphrase, kdf, Buffer.from(restoredHdr.salt, 'hex'));
+        const kdf  = normKdf(restoredHdr.kdf);
+        const kek  = await deriveKey(passphrase, kdf, Buffer.from(restoredHdr.salt, 'hex'));
         restoredDEK = unwrapDEK(restoredHdr.wrappedKey, kek, algo);   // throws on a wrong password
       } catch (_) { clean(); return { ok: false, needsPassword: true, wrongPass: true }; }
     }
@@ -1876,7 +1900,7 @@ function _finalizeRestore(srcDir, passphrase, { move = false, cleanup = null, re
     if (restoredDEK) {
       ENCRYPTION_KEY  = restoredDEK;
       ENCRYPTION_ALGO = restoredHdr.algo === 'chacha' ? 'chacha' : 'aes';
-      KDF             = restoredHdr.kdf  === 'scrypt' ? 'scrypt' : 'pbkdf2';
+      KDF             = normKdf(restoredHdr.kdf);
       try { if (fs.existsSync(PASSKEY_FILE)) fs.unlinkSync(PASSKEY_FILE); } catch (_) {}
     }
     try {
@@ -1904,7 +1928,7 @@ ipcMain.handle('vault:restoreArchive', async (_, rawFile, passphrase) => {
   try {
     fs.mkdirSync(staging, { recursive: true });
     await require('tar').x({ file, cwd: staging });
-    return _finalizeRestore(staging, passphrase, { move: true, cleanup: staging, restoredFrom: path.basename(file) });
+    return await _finalizeRestore(staging, passphrase, { move: true, cleanup: staging, restoredFrom: path.basename(file) });
   } catch (e) {
     try { fs.rmSync(staging, { recursive: true, force: true }); } catch (_) {}
     return { ok: false, error: e.message };
@@ -1921,7 +1945,7 @@ ipcMain.handle('vault:restoreFolder', async (_, rawDir, passphrase) => {
   catch (e) { return { ok: false, error: e.message }; }
   // Allow picking either the snapshot root (has notes/) or a wrapper that contains
   // a single vault folder — but keep it simple: require notes/ directly inside.
-  return _finalizeRestore(dir, passphrase, { move: false, restoredFrom: path.basename(dir) });
+  return await _finalizeRestore(dir, passphrase, { move: false, restoredFrom: path.basename(dir) });
 });
 
 // Folder picker for the "restore from folder" option.
@@ -2294,28 +2318,28 @@ ipcMain.handle('dialog:pickFolder', async (_, title) => {
 ipcMain.handle('vault:changePassphrase', async (_, oldPass, newPass) => {
   // Works whether unlocked at-rest (ENCRYPTION_KEY) or plaintext-while-open (_REENCRYPT_KEY).
   const dek = ENCRYPTION_KEY || _REENCRYPT_KEY;
-  if (!dek) return { ok: false, error: 'Encryption non attiva' };
+  if (!dek) return { ok: false, error: 'Encryption non attiva', code: 'ENC_INACTIVE' };
   const header = readVaultHeader();
   if (header) {
     // ENVELOPE: changing the password only RE-WRAPS the data key — the DEK and
     // every encrypted note/attachment stay byte-for-byte the same (instant).
     try {
-      const oldKek = deriveKey(oldPass, header.kdf === 'scrypt' ? 'scrypt' : 'pbkdf2', Buffer.from(header.salt, 'hex'));
-      if (!unwrapDEK(header.wrappedKey, oldKek, header.algo).equals(dek)) return { ok: false, error: 'Passphrase corrente errata' };
-    } catch (_) { return { ok: false, error: 'Passphrase corrente errata' }; }
+      const oldKek = await deriveKey(oldPass, normKdf(header.kdf), Buffer.from(header.salt, 'hex'));
+      if (!unwrapDEK(header.wrappedKey, oldKek, header.algo).equals(dek)) return { ok: false, error: 'Passphrase corrente errata', code: 'WRONG_CURRENT_PASS' };
+    } catch (_) { return { ok: false, error: 'Passphrase corrente errata', code: 'WRONG_CURRENT_PASS' }; }
     // Re-wrap with the new password (keep the same salt + algo).
     const salt = Buffer.from(header.salt, 'hex');
-    const newKek = deriveKey(newPass, KDF, salt);
+    const newKek = await deriveKey(newPass, KDF, salt);
     writeVaultHeader(dek, newKek, salt);
   } else {
     // LEGACY vault without a header (shouldn't normally happen post-unlock since
     // unlock migrates) → re-encrypt everything with the new key, the old way.
-    const oldKey = deriveKey(oldPass);
+    const oldKey = await deriveKey(oldPass);
     try {
       const testNotes = fs.readdirSync(NOTES_DIR).filter(f => f.endsWith(ENC_EXT));
       if (testNotes.length > 0) decryptContent(fs.readFileSync(path.join(NOTES_DIR, testNotes[0]), 'utf8'), oldKey);
-    } catch(_) { return { ok: false, error: 'Passphrase corrente errata' }; }
-    const newKey = deriveKey(newPass);
+    } catch(_) { return { ok: false, error: 'Passphrase corrente errata', code: 'WRONG_CURRENT_PASS' }; }
+    const newKey = await deriveKey(newPass);
     const reencryptDir = (dir) => {
       for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, item.name);
@@ -2356,20 +2380,20 @@ ipcMain.handle('vault:changePassphrase', async (_, oldPass, newPass) => {
 });
 
 ipcMain.handle('vault:enableEncryption', async (_, passphrase, algo, openPlaintext) => {
-  if (!passphrase) return { ok: false, error: 'Passphrase richiesta' };
+  if (!passphrase) return { ok: false, error: 'Passphrase richiesta', code: 'PASS_REQUIRED' };
   ENCRYPTION_ALGO = 'aes';   // AES-256-GCM only (ChaCha20 removed — not in Electron's BoringSSL)
   // Fail FAST & clean if the runtime can't use AES (shouldn't happen) so the IPC
   // returns an error instead of leaving the UI stuck on "encrypting…".
   if (!cipherAvailable('aes')) {
-    return { ok: false, error: 'AES-256 non disponibile in questa versione' };
+    return { ok: false, error: 'AES-256 non disponibile in questa versione', code: 'AES_UNAVAILABLE' };
   }
-  KDF = 'scrypt';   // new vaults use the memory-hard scrypt KDF
+  KDF = 'argon2id';   // new vaults use Argon2id (OWASP's first-choice, memory-hard) KDF
   const openPlain = !!openPlaintext;
   // Envelope: a RANDOM data key (DEK) encrypts the vault; the password-derived
   // key (KEK) only WRAPS it in the header. Changing the password later just
   // re-wraps — the DEK (and the encrypted notes) never change.
   const salt = getOrCreateSalt();
-  const kek = deriveKey(passphrase, KDF, salt);
+  const kek = await deriveKey(passphrase, KDF, salt);
   const key = crypto.randomBytes(32);   // the DEK
   const cfg = readAppConfig();
   cfg.encryption = { enabled: true, algo: ENCRYPTION_ALGO, kdf: KDF, openPlaintext: openPlain };
@@ -2391,20 +2415,20 @@ ipcMain.handle('vault:enableEncryption', async (_, passphrase, algo, openPlainte
 ipcMain.handle('vault:disableEncryption', async (_, passphrase) => {
   // In "plaintext while open" mode ENCRYPTION_KEY is null but _REENCRYPT_KEY holds it.
   const dek = ENCRYPTION_KEY || _REENCRYPT_KEY;   // the live DATA key
-  if (!dek) return { ok: false, error: 'Encryption non attiva' };
-  if (!passphrase) return { ok: false, error: 'Passphrase errata' };
+  if (!dek) return { ok: false, error: 'Encryption non attiva', code: 'ENC_INACTIVE' };
+  if (!passphrase) return { ok: false, error: 'Passphrase errata', code: 'WRONG_PASS' };
   // VERIFY the passphrase. Envelope: derive the KEK and check it unwraps to the
   // live DEK. Legacy (no header): fall back to the verify token / note-decrypt.
   const header = readVaultHeader();
   if (header) {
     try {
-      const kek = deriveKey(passphrase, header.kdf === 'scrypt' ? 'scrypt' : 'pbkdf2', Buffer.from(header.salt, 'hex'));
-      if (!unwrapDEK(header.wrappedKey, kek, header.algo).equals(dek)) return { ok: false, error: 'Passphrase errata' };
-    } catch (_) { return { ok: false, error: 'Passphrase errata' }; }
+      const kek = await deriveKey(passphrase, normKdf(header.kdf), Buffer.from(header.salt, 'hex'));
+      if (!unwrapDEK(header.wrappedKey, kek, header.algo).equals(dek)) return { ok: false, error: 'Passphrase errata', code: 'WRONG_PASS' };
+    } catch (_) { return { ok: false, error: 'Passphrase errata', code: 'WRONG_PASS' }; }
   } else {
-    const key = deriveKey(passphrase);
+    const key = await deriveKey(passphrase);
     const vt = verifyKey(key);
-    if (vt === false) return { ok: false, error: 'Passphrase errata' };
+    if (vt === false) return { ok: false, error: 'Passphrase errata', code: 'WRONG_PASS' };
     if (vt === null) {
       try {
         const testNotes = [];
@@ -2418,13 +2442,13 @@ ipcMain.handle('vault:disableEncryption', async (_, passphrase) => {
         findFirst(NOTES_DIR);
         if (testNotes.length > 0) decryptContent(fs.readFileSync(testNotes[0], 'utf8'), key); // throws if wrong
       } catch(_) {
-        return { ok: false, error: 'Passphrase errata' };
+        return { ok: false, error: 'Passphrase errata', code: 'WRONG_PASS' };
       }
     }
   }
   // Decrypt everything back to plaintext (a no-op if already plaintext-on-disk).
   let decReport;
-  try { decReport = decryptVaultToDisk(dek); } catch (_) { return { ok: false, error: 'Passphrase errata' }; }
+  try { decReport = decryptVaultToDisk(dek); } catch (_) { return { ok: false, error: 'Passphrase errata', code: 'WRONG_PASS' }; }
   ENCRYPTION_KEY = null;
   _REENCRYPT_KEY = null;   // stop the re-encrypt-on-quit
   // No more vault to unlock → remembered passphrase, verify token + envelope header are moot.
@@ -2441,7 +2465,7 @@ ipcMain.handle('vault:disableEncryption', async (_, passphrase) => {
 // the passphrase. Requires the vault to be unlocked.
 ipcMain.handle('vault:setRestMode', async (_, openPlaintext) => {
   const cfg = readAppConfig();
-  if (!cfg.encryption?.enabled) return { ok: false, error: 'Encryption non attiva' };
+  if (!cfg.encryption?.enabled) return { ok: false, error: 'Encryption non attiva', code: 'ENC_INACTIVE' };
   const want = !!openPlaintext;
   const isPlain = (cfg.encryption.openPlaintext === true);
   if (want === isPlain) {
@@ -2690,14 +2714,14 @@ function migrateAudioToAudioFolder(key) {
   return moved;
 }
 
-function unlockWithPassphrase(passphrase) {
+async function unlockWithPassphrase(passphrase) {
   const cfg = readAppConfig();
   if (!cfg.encryption?.enabled) return { ok: true };
   const header = readVaultHeader();
   // Algo/KDF: the header is authoritative (it travels with the vault, so a 2nd PC
   // gets the right values even if its local config is stale); else fall back to config.
   ENCRYPTION_ALGO = (header?.algo || cfg.encryption?.algo) === 'chacha' ? 'chacha' : 'aes';
-  KDF = (header?.kdf || cfg.encryption?.kdf) === 'scrypt' ? 'scrypt' : 'pbkdf2';
+  KDF = normKdf(header?.kdf || cfg.encryption?.kdf);
   const openPlain = cfg.encryption?.openPlaintext === true;
   let key;   // the DATA key (DEK) — everything downstream uses it exactly as before
   try {
@@ -2705,7 +2729,7 @@ function unlockWithPassphrase(passphrase) {
       // ENVELOPE: derive the KEK with the HEADER's salt, unwrap the DEK. A wrong
       // password fails the AEAD tag here → caught below as "Passphrase errata".
       const salt = Buffer.from(header.salt, 'hex');
-      const kek = deriveKey(passphrase, KDF, salt);
+      const kek = await deriveKey(passphrase, KDF, salt);
       key = unwrapDEK(header.wrappedKey, kek, ENCRYPTION_ALGO);
       // Cache the salt locally so the recovery tool / other paths still find it.
       try { if (!fs.existsSync(SALT_FILE)) fs.writeFileSync(SALT_FILE, salt); } catch (_) {}
@@ -2714,9 +2738,9 @@ function unlockWithPassphrase(passphrase) {
       // with the token (or by decrypting one note), then ADOPT the derived key as
       // the DEK and write a header — migrating the vault to envelope IN PLACE,
       // WITHOUT re-encrypting anything (DEK == the existing key).
-      key = deriveKey(passphrase);
+      key = await deriveKey(passphrase);
       const vt = verifyKey(key);
-      if (vt === false) return { ok: false, error: 'Passphrase errata' };
+      if (vt === false) return { ok: false, error: 'Passphrase errata', code: 'WRONG_PASS' };
       if (vt === null) {
         const testNotes = [];
         const findFirst = (dir) => {
@@ -2758,11 +2782,11 @@ function unlockWithPassphrase(passphrase) {
     refreshSyncPlaintextFlag();   // pause sync if unlocked into plaintext-while-open mode
     return { ok: true };
   } catch(_) {
-    return { ok: false, error: 'Passphrase errata' };
+    return { ok: false, error: 'Passphrase errata', code: 'WRONG_PASS' };
   }
 }
 
-ipcMain.handle('vault:unlock', async (_, passphrase) => unlockWithPassphrase(passphrase));
+ipcMain.handle('vault:unlock', async (_, passphrase) => await unlockWithPassphrase(passphrase));
 
 // AES-256-GCM is the only offered cipher (ChaCha20 removed — absent from Electron's
 // BoringSSL). `chacha: false` is kept in the shape so any older UI check stays happy.

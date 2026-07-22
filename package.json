@@ -1,12 +1,19 @@
 {
   "name": "amelie",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Amelie — Your data, private by default",
   "main": "src/main/main.js",
   "scripts": {
-    "build:cm": "esbuild build/cm-entry.js --bundle --format=iife --outfile=src/renderer/vendor/cm.bundle.js --legal-comments=none"
+    "start": "electron .",
+    "dev": "electron .",
+    "build:cm": "esbuild build/cm-entry.js --bundle --format=iife --outfile=src/renderer/vendor/cm.bundle.js --legal-comments=none",
+    "build": "electron-builder --linux AppImage --x64",
+    "build:linux": "electron-builder --linux AppImage --x64",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win"
   },
   "dependencies": {
+    "hash-wasm": "^4.12.0",
     "pdf-lib": "^1.17.1",
     "tar": "^7.5.15",
     "webdav": "^5.5.0"

@@ -8585,8 +8585,7 @@ function setupSettings() {
   $('btn-settings').addEventListener('click', openSettings);
   $('settings-close').addEventListener('click', closeSettings);
   $('settings-backdrop').addEventListener('click', closeSettings);
-  // About: support the author + check for new releases (opens in the browser).
-  $('btn-buy-coffee')?.addEventListener('click', () => window.inkwell.openExternal('https://buymeacoffee.com/serekkr').catch(() => {}));
+  // About: check for new releases (opens in the browser).
   $('btn-check-updates')?.addEventListener('click', () => window.inkwell.openExternal('https://github.com/serekkr/amelie/releases').catch(() => {}));
   // No Save button: settings persist AUTOMATICALLY on any change. Toggles and
   // selects apply immediately (e.g. flipping the WireGuard flag on brings the
@@ -13187,7 +13186,10 @@ function showUnlockOverlay() {
         err.textContent = EGG[(failCount / 3 - 1) % EGG.length];
         err.style.color = 'var(--green)';
       } else {
-        err.textContent = result.error || window.i18n.t('unlock.error');
+        // Always use the localized string: vault:unlock only ever returns the
+        // generic (hardcoded-Italian) 'Passphrase errata', so preferring
+        // result.error would leak Italian into every other UI language.
+        err.textContent = window.i18n.t('unlock.error');
         err.style.color = 'var(--red)';
       }
       btn.disabled = false; btn.textContent = window.i18n.t('unlock.btn');
@@ -13419,6 +13421,20 @@ function setupSecurityTab() {
     }
   });
 
+  // Map a vault IPC error to a localized message. The main process returns a
+  // machine `code` (WRONG_PASS, …) plus a hardcoded-Italian `error` string;
+  // prefer the localized code so the message follows the UI language.
+  const vaultErrMsg = (r) => {
+    const KEY = {
+      WRONG_PASS:         'error.wrong_pass',
+      WRONG_CURRENT_PASS: 'error.wrong_current_pass',
+      ENC_INACTIVE:       'error.enc_inactive',
+      PASS_REQUIRED:      'error.pass_required',
+      AES_UNAVAILABLE:    'error.aes_unavailable',
+    }[r && r.code];
+    return KEY ? window.i18n.t(KEY) : ((r && r.error) || window.i18n.t('status.error'));
+  };
+
   document.getElementById('sec-btn-enable-enc')?.addEventListener('click', async () => {
     const p1 = document.getElementById('sec-new-pass').value;
     const p2 = document.getElementById('sec-new-pass2').value;
@@ -13437,7 +13453,7 @@ function setupSecurityTab() {
         res.className = result.failed ? 'test-result fail' : 'test-result ok';
         await openSecurityTab();
       } else {
-        res.textContent = '✗ ' + (result.error || window.i18n.t('status.error')); res.className = 'test-result fail';
+        res.textContent = '✗ ' + vaultErrMsg(result); res.className = 'test-result fail';
       }
     } catch (e) {
       res.textContent = '✗ ' + (e && e.message || window.i18n.t('status.error')); res.className = 'test-result fail';
@@ -13490,7 +13506,7 @@ function setupSecurityTab() {
       res.className = result.failed ? 'test-result fail' : 'test-result ok';
       await openSecurityTab();
     } else {
-      res.textContent = '✗ ' + (result.error || window.i18n.t('status.error')); res.className = 'test-result fail';
+      res.textContent = '✗ ' + vaultErrMsg(result); res.className = 'test-result fail';
     }
   });
 
@@ -13520,7 +13536,7 @@ function setupSecurityTab() {
       document.getElementById('sec-old-pass').value = '';
       document.getElementById('sec-change-new').value = '';
     } else {
-      res.textContent = '✗ ' + (result.error || window.i18n.t('status.error')); res.className = 'test-result fail';
+      res.textContent = '✗ ' + vaultErrMsg(result); res.className = 'test-result fail';
     }
   });
 }

@@ -66,7 +66,7 @@ on Linux.
 - **7 UI languages**: English, Italiano, Español, Français, Deutsch, Polski, Română.
 
 ### Privacy & sync
-- **Encrypted vault** — AES-256-GCM with a password-derived key (scrypt / PBKDF2);
+- **Encrypted vault** — AES-256-GCM with an Argon2id password-derived key;
   notes and attachments are encrypted on disk.
 - **WebDAV sync** — Nextcloud, ownCloud, or any WebDAV server.
 - **Samba / SMB sync** — local network shares, via a bundled static SMB2/3 helper
@@ -99,7 +99,7 @@ Amelie is written in **JavaScript** and runs as an **Electron** desktop app.
 | Canvas           | [tldraw](https://tldraw.dev/) |
 | PDF              | `pdf-lib` |
 | Sync             | `webdav` (npm), bundled Go static SMB helper (`amelie-smb`), WireGuard, `rsync` |
-| Encryption       | Node.js `crypto` — AES-256-GCM, scrypt / PBKDF2 key derivation |
+| Encryption       | Node.js `crypto` — AES-256-GCM; Argon2id (`hash-wasm`) key derivation |
 | Bundling         | `esbuild` (CodeMirror bundle) |
 | Packaging        | `electron-builder` (AppImage) + a custom `.run` self-installer |
 | Platform         | Linux (x86-64) |
@@ -129,6 +129,33 @@ amelie --uninstall        # or: ./amelie_*.run --uninstall
 
 ---
 
+## 🛠️ Build from source
+
+Requires **Node.js 18+**. Clone the repo, then:
+
+```bash
+npm install          # install dependencies (Electron is fetched for your OS)
+npm start            # run the app in development
+```
+
+To produce a distributable package:
+
+```bash
+npm run build        # AppImage (Linux, x64) — the default target
+npm run build:mac    # macOS build
+npm run build:win    # Windows build
+```
+
+> Amelie is developed and shipped for **Linux**. It runs from source on macOS and
+> Windows via `npm start`, but the sync helpers (`rsync`, the Go SMB binary) are
+> Linux-only, so those features won't work off Linux.
+>
+> The CodeMirror editor bundle (`src/renderer/vendor/cm.bundle.js`) is committed,
+> so you don't need to build it. If you change the editor, rebuild it with
+> `npm run build:cm`.
+
+---
+
 ## 📁 Where your notes live
 
 You pick the vault folder in the setup wizard. Inside it:
@@ -151,6 +178,19 @@ Amelie collects nothing. Sync is entirely optional and
 always to a destination you own and configure. With vault encryption enabled,
 your notes are unreadable on disk without your password — including on the remote
 share they sync to.
+
+---
+
+## ☕ Support
+
+Amelie is free and open source. If you find it useful and want to support its
+development, you can buy me a coffee.
+
+<div align="center">
+
+<a href="https://www.buymeacoffee.com/serekkr" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50" width="210"></a>
+
+</div>
 
 ---
 

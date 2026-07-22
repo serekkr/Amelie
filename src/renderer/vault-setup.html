@@ -174,7 +174,7 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
     <div class="toggle-row" id="enc-toggle-row">
       <div class="toggle-info">
         <span class="toggle-name">🔐 Crittografia vault</span>
-        <span class="toggle-desc">I file .md vengono cifrati con AES-256-GCM + PBKDF2 (310k iterazioni)</span>
+        <span class="toggle-desc">I file .md vengono cifrati con AES-256-GCM + Argon2id</span>
       </div>
       <label class="tog"><input type="checkbox" id="enc-toggle"/><span class="sl"></span></label>
     </div>
@@ -236,6 +236,13 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
 
 <script>
 const $ = id => document.getElementById(id);
+// Block dragging text/images OUT of the wizard window. On KDE, dropping such a
+// drag on the desktop makes Plasma spawn a widget. The wizard has no draggable
+// elements, so cancel every drag gesture. Selection + Ctrl+C still work.
+document.addEventListener('dragstart', (e) => {
+  const t = e.target;
+  if (!(t && t.closest && t.closest('[draggable="true"]'))) e.preventDefault();
+}, true);
 let currentStep = 1;
 let encEnabled = false;
 
@@ -257,7 +264,7 @@ const T = {
     t2_title: 'Sicurezza e crittografia',
     t2_desc: 'Puoi abilitare la crittografia ora o in qualsiasi momento dalle impostazioni. Con la crittografia attiva, i file vengono cifrati con <strong>AES-256-GCM</strong> prima di essere scritti su disco.',
     tog_name: '🔐 Crittografia vault',
-    tog_desc: 'I file .md vengono cifrati con AES-256-GCM + PBKDF2 (310k iterazioni)',
+    tog_desc: 'I file .md vengono cifrati con AES-256-GCM + Argon2id',
     pass_lbl: 'Passphrase', pass_ph: 'Usa una password forte',
     pass2_lbl: 'Conferma passphrase', pass2_ph: 'Ripeti la passphrase',
     warn: 'La passphrase <strong>non è recuperabile</strong>. Se la perdi, i tuoi appunti cifrati saranno inaccessibili. Conservala in un password manager.',
@@ -286,7 +293,7 @@ const T = {
     t2_title: 'Security & encryption',
     t2_desc: 'You can enable encryption now or anytime from the settings. With encryption on, files are encrypted with <strong>AES-256-GCM</strong> before being written to disk.',
     tog_name: '🔐 Vault encryption',
-    tog_desc: '.md files are encrypted with AES-256-GCM + PBKDF2 (310k iterations)',
+    tog_desc: '.md files are encrypted with AES-256-GCM + Argon2id',
     pass_lbl: 'Passphrase', pass_ph: 'Use a strong password',
     pass2_lbl: 'Confirm passphrase', pass2_ph: 'Repeat the passphrase',
     warn: 'The passphrase is <strong>not recoverable</strong>. If you lose it, your encrypted notes will be inaccessible. Keep it in a password manager.',
@@ -315,7 +322,7 @@ const T = {
     t2_title: 'Sicherheit & Verschlüsselung',
     t2_desc: 'Du kannst die Verschlüsselung jetzt oder jederzeit in den Einstellungen aktivieren. Bei aktivierter Verschlüsselung werden die Dateien mit <strong>AES-256-GCM</strong> verschlüsselt, bevor sie auf die Festplatte geschrieben werden.',
     tog_name: '🔐 Vault-Verschlüsselung',
-    tog_desc: '.md-Dateien werden mit AES-256-GCM + PBKDF2 (310k Iterationen) verschlüsselt',
+    tog_desc: '.md-Dateien werden mit AES-256-GCM + Argon2id verschlüsselt',
     pass_lbl: 'Passphrase', pass_ph: 'Verwende ein starkes Passwort',
     pass2_lbl: 'Passphrase bestätigen', pass2_ph: 'Passphrase wiederholen',
     warn: 'Die Passphrase ist <strong>nicht wiederherstellbar</strong>. Wenn du sie verlierst, sind deine verschlüsselten Notizen nicht mehr zugänglich. Bewahre sie in einem Passwort-Manager auf.',
@@ -344,7 +351,7 @@ const T = {
     t2_title: 'Seguridad y cifrado',
     t2_desc: 'Puedes activar el cifrado ahora o en cualquier momento desde los ajustes. Con el cifrado activado, los archivos se cifran con <strong>AES-256-GCM</strong> antes de escribirse en el disco.',
     tog_name: '🔐 Cifrado del vault',
-    tog_desc: 'Los archivos .md se cifran con AES-256-GCM + PBKDF2 (310k iteraciones)',
+    tog_desc: 'Los archivos .md se cifran con AES-256-GCM + Argon2id',
     pass_lbl: 'Frase de contraseña', pass_ph: 'Usa una contraseña segura',
     pass2_lbl: 'Confirmar frase de contraseña', pass2_ph: 'Repite la frase de contraseña',
     warn: 'La frase de contraseña <strong>no se puede recuperar</strong>. Si la pierdes, tus notas cifradas serán inaccesibles. Guárdala en un gestor de contraseñas.',
@@ -373,7 +380,7 @@ const T = {
     t2_title: 'Sécurité et chiffrement',
     t2_desc: 'Vous pouvez activer le chiffrement maintenant ou à tout moment dans les paramètres. Avec le chiffrement activé, les fichiers sont chiffrés avec <strong>AES-256-GCM</strong> avant d\'être écrits sur le disque.',
     tog_name: '🔐 Chiffrement du vault',
-    tog_desc: 'Les fichiers .md sont chiffrés avec AES-256-GCM + PBKDF2 (310k itérations)',
+    tog_desc: 'Les fichiers .md sont chiffrés avec AES-256-GCM + Argon2id',
     pass_lbl: 'Phrase secrète', pass_ph: 'Utilisez un mot de passe fort',
     pass2_lbl: 'Confirmer la phrase secrète', pass2_ph: 'Répétez la phrase secrète',
     warn: 'La phrase secrète est <strong>irrécupérable</strong>. Si vous la perdez, vos notes chiffrées seront inaccessibles. Conservez-la dans un gestionnaire de mots de passe.',
@@ -402,7 +409,7 @@ const T = {
     t2_title: 'Bezpieczeństwo i szyfrowanie',
     t2_desc: 'Szyfrowanie możesz włączyć teraz lub w dowolnym momencie w ustawieniach. Przy włączonym szyfrowaniu pliki są szyfrowane algorytmem <strong>AES-256-GCM</strong> przed zapisaniem na dysku.',
     tog_name: '🔐 Szyfrowanie vaulta',
-    tog_desc: 'Pliki .md są szyfrowane algorytmem AES-256-GCM + PBKDF2 (310 tys. iteracji)',
+    tog_desc: 'Pliki .md są szyfrowane algorytmem AES-256-GCM + Argon2id',
     pass_lbl: 'Hasło', pass_ph: 'Użyj silnego hasła',
     pass2_lbl: 'Potwierdź hasło', pass2_ph: 'Powtórz hasło',
     warn: 'Hasła <strong>nie można odzyskać</strong>. Jeśli je zgubisz, Twoje zaszyfrowane notatki będą niedostępne. Przechowuj je w menedżerze haseł.',
@@ -431,7 +438,7 @@ const T = {
     t2_title: 'Securitate și criptare',
     t2_desc: 'Poți activa criptarea acum sau oricând din setări. Cu criptarea activată, fișierele sunt criptate cu <strong>AES-256-GCM</strong> înainte de a fi scrise pe disc.',
     tog_name: '🔐 Criptarea vault-ului',
-    tog_desc: 'Fișierele .md sunt criptate cu AES-256-GCM + PBKDF2 (310k iterații)',
+    tog_desc: 'Fișierele .md sunt criptate cu AES-256-GCM + Argon2id',
     pass_lbl: 'Parolă', pass_ph: 'Folosește o parolă puternică',
     pass2_lbl: 'Confirmă parola', pass2_ph: 'Repetă parola',
     warn: 'Parola <strong>nu poate fi recuperată</strong>. Dacă o pierzi, notițele tale criptate vor deveni inaccesibile. Păstreaz-o într-un manager de parole.',
