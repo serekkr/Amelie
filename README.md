@@ -35,6 +35,15 @@ It is designed for people who want a folder-of-Markdown workflow — wiki-links,
 live preview, plain files — in a lightweight, self-hosted, privacy-first tool
 on Linux.
 
+Amelie is free and open source. If you find it useful, you can support its
+development:
+
+<div align="center">
+
+<a href="https://www.buymeacoffee.com/serekkr" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50" width="210"></a>
+
+</div>
+
 ---
 
 ## ✨ Features
@@ -182,19 +191,6 @@ share they sync to.
 Your data is never locked to the app: [`recovery/`](recovery/) ships a small,
 dependency-light Python script that decrypts a vault offline from your passphrase
 alone — so you can always read your notes without Amelie.
-
----
-
-## ☕ Support
-
-Amelie is free and open source. If you find it useful and want to support its
-development, you can buy me a coffee.
-
-<div align="center">
-
-<a href="https://www.buymeacoffee.com/serekkr" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50" width="210"></a>
-
-</div>
 
 ---
 
