@@ -51,7 +51,7 @@ development:
 ### Writing
 - **CodeMirror 6 editor** with a fast, distraction-free writing experience and
   syntax highlighting inside fenced code blocks.
-- **Live Markdown preview** side-by-side or as a toggled reading view.
+- **Markdown reading view** — a toggled, formatted view of the current note.
 - **Readable line length** — optional centered 760px measure, works with line
   numbers on or off.
 - **Managed frontmatter** — `created` / `modified` handled for you and hidden in
@@ -60,9 +60,11 @@ development:
   attachments alongside the vault.
 
 ### Beyond text
+- **To-do lists** — built-in task lists / checklists.
+- **Mind maps** with zoom and reset.
+- **PDF** — built-in viewer, editor and export.
+- **Audio & video player** — play media attachments inline, with seeking.
 - **Infinite canvas / whiteboard** powered by tldraw.
-- **Mindmaps** with zoom and reset.
-- **PDF**: built-in viewer and export.
 
 ### Organization
 - **Folder-based vault** with a navigable file tree.
