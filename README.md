@@ -24,8 +24,8 @@ end-to-end encryption and self-hosted sync over WebDAV, Wireguard or Openvpn wit
 ## What is Amelie?
 
 Amelie is a desktop note-taking application built around a plain-text Markdown
-vault that lives entirely **on your own machine**. There is no cloud account, no
-telemetry and no lock-in: your notes are ordinary `.md` files in a folder you
+vault that lives entirely **on your own machine**. There is no telemetry and no
+lock-in: your notes are ordinary `.md` files in a folder you
 choose. When you *do* want your notes on more than one device, Amelie syncs them
 to infrastructure **you** control — a Nextcloud/WebDAV server, a Samba share, or
 a private machine reachable through a WireGuard or OpenVPN tunnel — and can keep the whole
