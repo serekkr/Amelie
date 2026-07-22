@@ -86,11 +86,6 @@ development:
   after their connection test succeeds.
 - **Autosave** with a local backup safety net.
 
-### First run
-- **Onboarding wizard** — Vault › Security › Theme › Ready.
-- A **Welcome note** is created for a brand-new vault so you never start on a
-  blank screen.
-
 ---
 
 ## 🧱 Tech stack
