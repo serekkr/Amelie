@@ -60,16 +60,13 @@ class SyncManager {
     if (this._twowayTimer) { clearInterval(this._twowayTimer); this._twowayTimer = null; }
   }
 
-  // SMB/WebDAV passwords are stored encrypted at rest as { __sec: <base64> }
-  // (OS keyring via safeStorage, done in main.js). Tolerant: the in-memory config
-  // may hold either the encrypted object (loaded from disk) or a plaintext string
-  // (just set from the renderer). Decrypt only at the point of use.
+  // SMB/WebDAV passwords are stored encrypted at rest as { __sec } (OS keyring)
+  // or { __enc } (app-level key when the keyring is unavailable) — see
+  // credCrypto.js. Tolerant: the in-memory config may hold either the encrypted
+  // object (loaded from disk) or a plaintext string (just set from the
+  // renderer). Decrypt only at the point of use.
   _decSecret(v) {
-    if (v && typeof v === 'object' && typeof v.__sec === 'string') {
-      try { const { safeStorage } = require('electron'); return safeStorage.decryptString(Buffer.from(v.__sec, 'base64')); }
-      catch (_) { return ''; }
-    }
-    return v;
+    return require('../main/credCrypto').decSecret(v);
   }
 
   _setupWebDAV() {

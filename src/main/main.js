@@ -242,12 +242,13 @@ function startVaultWatcher() {
 
 // ── Credential encryption at rest (SMB / WebDAV passwords) ──────────────────
 // Beyond the 0600 file perms, the SMB/WebDAV passwords in settings.json are
-// encrypted with the OS keyring (Electron safeStorage) and stored as
-// { __sec: <base64> } — an object, so a plaintext password can NEVER be mistaken
-// for an encrypted one. They're decrypted only in-memory: at the point of use
-// (sync) and when handing the config to the renderer UI. OpenVPN needs none of
-// this (its password lives only in NetworkManager). If the keyring is unavailable
-// the value is left plaintext (no worse than before, never a crash).
+// encrypted at rest and stored as an object ({ __sec } via the OS keyring, or
+// { __enc } via an app-level key when the keyring is unavailable) — so a
+// plaintext password is NEVER written to disk. They're decrypted only in-memory:
+// at the point of use (sync) and when handing the config to the renderer UI.
+// OpenVPN needs none of this (its password lives only in NetworkManager).
+// See credCrypto.js for the encryption details.
+const { encSecret, decSecret } = require('./credCrypto');
 const _SEC_PATHS = [
   ['sync', 'vpn', 'smb', 'password'],
   ['sync', 'twoway', 'smb', 'password'],
@@ -255,22 +256,6 @@ const _SEC_PATHS = [
   ['sync', 'webdav', 'password'],
   ['sync', 'samba', 'password'],
 ];
-function _secAvailable() {
-  try { const { safeStorage } = require('electron'); return !!safeStorage.isEncryptionAvailable(); } catch (_) { return false; }
-}
-function encSecret(v) {
-  if (v == null || v === '' || typeof v === 'object') return v;   // empty or already {__sec}
-  if (!_secAvailable()) return v;                                 // keyring down → leave plaintext
-  try { const { safeStorage } = require('electron'); return { __sec: safeStorage.encryptString(String(v)).toString('base64') }; }
-  catch (_) { return v; }
-}
-function decSecret(v) {
-  if (v && typeof v === 'object' && typeof v.__sec === 'string') {
-    try { const { safeStorage } = require('electron'); return safeStorage.decryptString(Buffer.from(v.__sec, 'base64')); }
-    catch (_) { return ''; }
-  }
-  return v;
-}
 // Return a deep clone of `cfg` with every known secret path mapped through `fn`.
 function mapConfigSecrets(cfg, fn) {
   if (!cfg || typeof cfg !== 'object') return cfg;
