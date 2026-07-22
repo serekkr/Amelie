@@ -31,10 +31,6 @@ to infrastructure **you** control — a Nextcloud/WebDAV server, a Samba share, 
 a private machine reachable through a WireGuard or OpenVPN tunnel — and can keep the whole
 vault **encrypted at rest** with a password only you know.
 
-It is designed for people who want a folder-of-Markdown workflow — wiki-links,
-plain files — in a lightweight, self-hosted, privacy-first tool on Linux. It also
-bundles a mind map, to-do lists, a PDF editor and an audio/video player.
-
 Amelie is free and open source. If you find it useful, you can support its
 development:
 
