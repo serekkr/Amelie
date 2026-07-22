@@ -2117,6 +2117,11 @@ async function init() {
   setupAudioRecording();
   setupGpuToggle();
 
+  // Load the event-notification log BEFORE the unlock gate: a wrong-password
+  // notification fired during unlock must merge into the saved history, not
+  // overwrite it (setupSidebarViews loads it again later — harmless reload).
+  _loadEventNotifs();
+
   // Check if vault is encrypted and needs unlock
   await checkVaultLock();
 
@@ -13164,6 +13169,7 @@ function showUnlockOverlay() {
   const err  = document.getElementById('unlock-err');
 
   let failCount = 0;
+  let _failNotif = null;   // the single bell entry for THIS unlock session (updated with the running count)
   const doUnlock = async () => {
     if (btn.disabled) return;   // ignore re-entrant submits while checking
     btn.disabled = true; btn.textContent = window.i18n.t('unlock.checking'); err.textContent = '';
@@ -13192,6 +13198,21 @@ function showUnlockOverlay() {
       }
       btn.disabled = false; btn.textContent = window.i18n.t('unlock.btn');
       pass.value = ''; pass.focus();
+      // Security trail: after MORE than 3 wrong tries, keep ONE bell entry for
+      // this unlock session showing the running total (so 6 wrong tries → a
+      // single "6 failed unlock attempts", not six rows) with the date/time.
+      // Under 4 tries → a simple typo, not worth a notification.
+      if (failCount > 3) {
+        try {
+          if (_failNotif) _eventNotifs = _eventNotifs.filter(x => x !== _failNotif);
+          else _eventUnread++;   // count this session once toward the bell badge
+          _failNotif = { text: window.i18n.t('notif.unlock_failed', { n: failCount }), ts: Date.now(), ok: false };
+          _eventNotifs.unshift(_failNotif);
+          _eventNotifs = _eventNotifs.slice(0, 30);
+          _saveEventNotifs();
+          updateNotifBell();
+        } catch (_) {}
+      }
     }
   };
 
