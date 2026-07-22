@@ -8,9 +8,6 @@
 
 <div align="center">
 
-A local-first Markdown notes app for Linux, with optional
-end-to-end encryption and self-hosted sync over WebDAV, Wireguard or Openvpn with Samba.
-
 [![Version](https://img.shields.io/github/v/release/serekkr/Amelie?label=version&color=3fb950)](https://github.com/serekkr/Amelie/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Linux-333?logo=linux&logoColor=white)
 ![Electron](https://img.shields.io/badge/Electron-42-47848F?logo=electron&logoColor=white)
