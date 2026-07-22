@@ -2175,8 +2175,9 @@ async function checkDepsOnStartup() {
   const labels = d.missing.map(m => m.label).join(', ');
   const sig = d.missing.map(m => m.key).sort().join(',');
   const ASKED = 'amelie-deps-asked';
-  // Always keep a notification in the bell so it's discoverable.
-  addEventNotif(window.i18n.t('deps.missing_notif') + ': ' + labels, false);
+  // Surface as a transient toast (NOT the bell — the notifications bell is
+  // reserved for backup/sync failures and to-do deadlines).
+  showToast('✗ ' + window.i18n.t('deps.missing_notif') + ': ' + labels);
   if (localStorage.getItem(ASKED) === sig) return;   // already asked for this set
   localStorage.setItem(ASKED, sig);
   if (!d.installCmd) return;   // unknown distro → notification only
@@ -2186,10 +2187,10 @@ async function checkDepsOnStartup() {
   if (!confirm(msg)) return;
   const r = await window.inkwell.deps.install({ installCmd: d.installCmd });
   if (r && r.ok) {
-    addEventNotif(window.i18n.t('deps.installed'), true);
+    showToast('✓ ' + window.i18n.t('deps.installed'));
     localStorage.removeItem(ASKED);
   } else {
-    addEventNotif(window.i18n.t('deps.install_failed') + (r && r.error ? ': ' + r.error : ''), false);
+    showToast('✗ ' + window.i18n.t('deps.install_failed') + (r && r.error ? ': ' + r.error : ''));
   }
 }
 
@@ -9276,11 +9277,10 @@ function setupSettings() {
       const msg = msgBase + ' (' + when + ')';
       if (res) { res.textContent = '✓ ' + msg; res.className = 'test-result ok'; }
       showToast('✓ ' + msg);
-      // Notification: no time in the text — the date/time already shows below it.
-      addEventNotif(msgBase, true);
+      // Success is shown inline + as a toast; the bell is reserved for failures.
     } else if (result && result.noDestination) {
       if (res) { res.textContent = '✗ ' + window.i18n.t('toast.no_backup_dest'); res.className = 'test-result fail'; }
-      addEventNotif(window.i18n.t('toast.no_backup_dest'), false);
+      showToast('✗ ' + window.i18n.t('toast.no_backup_dest'));
     } else {
       const err = (result && result.error) ? ': ' + result.error : '';
       if (res) { res.textContent = '✗ ' + window.i18n.t('toast.backup_failed') + err; res.className = 'test-result fail'; }
@@ -9311,8 +9311,7 @@ function setupSettings() {
       const r = (result.results && result.results.twoway) || {};
       resultEl.textContent = _fmtSyncResult(r);
       resultEl.className = 'test-result ok';
-      // Notification: no time in the text — the date/time already shows below it.
-      addEventNotif(window.i18n.t('toast.manual_sync_ok') + ' — ' + _fmtSyncResult(r).replace(/^✓ /, ''), true);
+      // Success shows inline; the bell is reserved for failures.
       try { await loadTree(); } catch (_) {}
     } else {
       const msg = (result && result.error) ? result.error : window.i18n.t('toast.sync_failed');
@@ -11069,13 +11068,11 @@ function setupSync() {
       const when = (() => { const d = new Date(), p2 = n => String(n).padStart(2, '0'); return p2(d.getHours()) + ':' + p2(d.getMinutes()); })();
       const msgBase = window.i18n.t('toast.manual_backup_ok');
       showToast('✓ ' + msgBase + ' (' + when + ')');
-      // Notification: no time in the text — the date/time already shows below it.
-      addEventNotif(msgBase, true);
+      // Success is shown as a toast; the bell is reserved for failures.
     } else if (result && result.noDestination) {
       // Nothing selected — clear message, not a "failure".
       if (dot) dot.className = 'sync-idle';
       showToast(window.i18n.t('toast.no_backup_dest'));
-      addEventNotif(window.i18n.t('toast.no_backup_dest'), false);
     } else {
       // No red flash on the icon — the failure is reported in the notifications.
       if (dot) dot.className = 'sync-idle';
@@ -11092,8 +11089,8 @@ function setupSync() {
     if (result.success) {
       syncStatusDot.className = 'sync-ok';
       const r2 = (result.results && result.results.twoway) || {};
-      // Notification: no time in the text — the date/time already shows below it.
-      addEventNotif(window.i18n.t('toast.manual_sync_ok') + ' — ' + _fmtSyncResult(r2).replace(/^✓ /, ''), true);
+      // Success shows as a toast + the green dot; the bell is reserved for failures.
+      showToast(_fmtSyncResult(r2));
     } else {
       // No error flash on the icon — surface the failure in the notifications bell.
       syncStatusDot.className = 'sync-idle';
@@ -11523,11 +11520,11 @@ function setupCanvas() {
       _exportImgPending.delete(msg.requestId);
       if (!pend) return;
       const t = (k) => window.i18n ? window.i18n.t(k) : k;
-      if (msg.empty) { addEventNotif(t('canvas.export_img_empty'), false); return; }
-      if (!msg.ok)   { addEventNotif(t('canvas.export_img_failed') + ': ' + (msg.error || ''), false); return; }
+      if (msg.empty) { showToast('✗ ' + t('canvas.export_img_empty')); return; }
+      if (!msg.ok)   { showToast('✗ ' + t('canvas.export_img_failed') + ': ' + (msg.error || '')); return; }
       const r = await window.inkwell.exportDrawImage(pend.name, msg.format, msg.b64).catch(e => ({ ok: false, error: e?.message }));
-      if (r && r.ok) addEventNotif(t('canvas.export_img_ok') + ': ' + pend.name + '.' + msg.format, true);
-      else if (r && !r.canceled) addEventNotif(t('canvas.export_img_failed') + ': ' + (r.error || ''), false);
+      if (r && r.ok) showToast('✓ ' + t('canvas.export_img_ok') + ': ' + pend.name + '.' + msg.format);
+      else if (r && !r.canceled) showToast('✗ ' + t('canvas.export_img_failed') + ': ' + (r.error || ''));
       return;
     }
     if (msg?.type === 'CANVAS_READY') {
@@ -13098,10 +13095,10 @@ async function exportDrawToTldr(drawPath) {
     const tldr = _snapshotToTldr(snapJson);
     const name = drawPath.split('/').pop().replace(/\.draw$/i, '');
     const r = await window.inkwell.exportTldr(name, tldr);
-    if (r && r.ok) addEventNotif((window.i18n ? window.i18n.t('canvas.export_ok') : 'Disegno esportato') + ': ' + name, true);
+    if (r && r.ok) showToast('✓ ' + (window.i18n ? window.i18n.t('canvas.export_ok') : 'Disegno esportato') + ': ' + name);
     else if (r && !r.canceled) throw new Error(r.error || 'save failed');
   } catch (e) {
-    addEventNotif((window.i18n ? window.i18n.t('canvas.export_failed') : 'Export disegno fallito') + ': ' + (e?.message || e), false);
+    showToast('✗ ' + (window.i18n ? window.i18n.t('canvas.export_failed') : 'Export disegno fallito') + ': ' + (e?.message || e));
   }
 }
 
@@ -13111,7 +13108,7 @@ async function importDrawFromFile(file, destFolder) {
     const text = await file.text();
     snapJson = JSON.stringify(_normalizeDrawSnapshot(text));
   } catch (e) {
-    addEventNotif((window.i18n ? window.i18n.t('canvas.import_failed') : 'Import disegno fallito') + ': ' + (e?.message || e), false);
+    showToast('✗ ' + (window.i18n ? window.i18n.t('canvas.import_failed') : 'Import disegno fallito') + ': ' + (e?.message || e));
     return;
   }
   // Name the new drawing after the imported file (deduped), like newDraw().
@@ -13130,7 +13127,7 @@ async function importDrawFromFile(file, destFolder) {
   if (folder) openFolderAncestors(folder);
   await loadTree();
   openDrawFile({ type: 'draw', name, path: filePath });
-  addEventNotif((window.i18n ? window.i18n.t('canvas.import_ok') : 'Disegno importato') + ': ' + name, true);
+  showToast('✓ ' + (window.i18n ? window.i18n.t('canvas.import_ok') : 'Disegno importato') + ': ' + name);
 }
 
 // ─── Vault & Security ────────────────────────────────────────────────────────
