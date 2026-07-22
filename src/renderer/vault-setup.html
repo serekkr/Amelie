@@ -265,7 +265,7 @@ const T = {
     t3_desc: 'Puoi cambiare queste impostazioni in qualsiasi momento da <strong>Impostazioni → Vault &amp; Sicurezza</strong>.',
     start: 'Apri Amelie',
     err_path: 'Inserisci un percorso.',
-    err_short: 'Passphrase troppo corta (min 12 caratteri).',
+    err_short: 'Passphrase troppo corta (min 8 caratteri).',
     err_mismatch: 'Le passphrase non corrispondono.',
     strength: ['', 'Debole', 'Media', 'Forte', 'Ottima'],
     eye: 'Mostra/nascondi password',
@@ -294,7 +294,7 @@ const T = {
     t3_desc: 'You can change these settings anytime from <strong>Settings → Vault &amp; Security</strong>.',
     start: 'Open Amelie',
     err_path: 'Enter a path.',
-    err_short: 'Passphrase too short (min 12 characters).',
+    err_short: 'Passphrase too short (min 8 characters).',
     err_mismatch: 'The passphrases do not match.',
     strength: ['', 'Weak', 'Medium', 'Strong', 'Great'],
     eye: 'Show/hide password',
@@ -323,7 +323,7 @@ const T = {
     t3_desc: 'Du kannst diese Einstellungen jederzeit unter <strong>Einstellungen → Vault &amp; Sicherheit</strong> ändern.',
     start: 'Amelie öffnen',
     err_path: 'Gib einen Pfad ein.',
-    err_short: 'Passphrase zu kurz (min. 12 Zeichen).',
+    err_short: 'Passphrase zu kurz (min. 8 Zeichen).',
     err_mismatch: 'Die Passphrasen stimmen nicht überein.',
     strength: ['', 'Schwach', 'Mittel', 'Stark', 'Sehr stark'],
     eye: 'Passwort anzeigen/verbergen',
@@ -352,7 +352,7 @@ const T = {
     t3_desc: 'Puedes cambiar estos ajustes en cualquier momento desde <strong>Ajustes → Vault y seguridad</strong>.',
     start: 'Abrir Amelie',
     err_path: 'Introduce una ruta.',
-    err_short: 'Frase de contraseña demasiado corta (mín. 12 caracteres).',
+    err_short: 'Frase de contraseña demasiado corta (mín. 8 caracteres).',
     err_mismatch: 'Las frases de contraseña no coinciden.',
     strength: ['', 'Débil', 'Media', 'Fuerte', 'Excelente'],
     eye: 'Mostrar/ocultar contraseña',
@@ -381,7 +381,7 @@ const T = {
     t3_desc: 'Vous pouvez modifier ces paramètres à tout moment depuis <strong>Paramètres → Vault et sécurité</strong>.',
     start: 'Ouvrir Amelie',
     err_path: 'Saisissez un chemin.',
-    err_short: 'Phrase secrète trop courte (min. 12 caractères).',
+    err_short: 'Phrase secrète trop courte (min. 8 caractères).',
     err_mismatch: 'Les phrases secrètes ne correspondent pas.',
     strength: ['', 'Faible', 'Moyenne', 'Forte', 'Excellente'],
     eye: 'Afficher/masquer le mot de passe',
@@ -410,7 +410,7 @@ const T = {
     t3_desc: 'Te ustawienia możesz zmienić w dowolnym momencie w <strong>Ustawienia → Vault i bezpieczeństwo</strong>.',
     start: 'Otwórz Amelie',
     err_path: 'Podaj ścieżkę.',
-    err_short: 'Hasło zbyt krótkie (min. 12 znaków).',
+    err_short: 'Hasło zbyt krótkie (min. 8 znaków).',
     err_mismatch: 'Hasła nie są zgodne.',
     strength: ['', 'Słabe', 'Średnie', 'Silne', 'Bardzo silne'],
     eye: 'Pokaż/ukryj hasło',
@@ -439,7 +439,7 @@ const T = {
     t3_desc: 'Poți schimba aceste setări oricând din <strong>Setări → Vault și securitate</strong>.',
     start: 'Deschide Amelie',
     err_path: 'Introdu o cale.',
-    err_short: 'Parolă prea scurtă (min. 12 caractere).',
+    err_short: 'Parolă prea scurtă (min. 8 caractere).',
     err_mismatch: 'Parolele nu coincid.',
     strength: ['', 'Slabă', 'Medie', 'Puternică', 'Excelentă'],
     eye: 'Arată/ascunde parola',
@@ -639,7 +639,7 @@ $('btn-2-next').addEventListener('click', () => {
   if (encEnabled) {
     const p1 = $('enc-pass').value;
     const p2 = $('enc-pass2').value;
-    if (p1.length < 12) { $('err-2').textContent = T[wl()].err_short; return; }
+    if (p1.length < 8) { $('err-2').textContent = T[wl()].err_short; return; }
     if (p1 !== p2) { $('err-2').textContent = T[wl()].err_mismatch; return; }
   }
   $('err-2').textContent = '';

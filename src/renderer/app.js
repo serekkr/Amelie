@@ -13423,7 +13423,7 @@ function setupSecurityTab() {
     const p1 = document.getElementById('sec-new-pass').value;
     const p2 = document.getElementById('sec-new-pass2').value;
     const res = document.getElementById('sec-enc-result');
-    if (p1.length < 12) { res.textContent = '✗ ' + window.i18n.t('error.pass_short'); res.className = 'test-result fail'; return; }
+    if (p1.length < 8) { res.textContent = '✗ ' + window.i18n.t('error.pass_short'); res.className = 'test-result fail'; return; }
     if (p1 !== p2)       { res.textContent = '✗ ' + window.i18n.t('error.pass_mismatch'); res.className = 'test-result fail'; return; }
     res.textContent = window.i18n.t('vault_settings.encrypting'); res.className = 'test-result';
     const algo = document.getElementById('sec-enc-algo')?.dataset.algo || 'aes';
@@ -13512,7 +13512,7 @@ function setupSecurityTab() {
     const oldP = document.getElementById('sec-old-pass').value;
     const newP = document.getElementById('sec-change-new').value;
     const res  = document.getElementById('sec-change-result');
-    if (!oldP || newP.length < 12) { res.textContent = '✗ ' + window.i18n.t('vault_settings.invalid_passphrase'); res.className = 'test-result fail'; return; }
+    if (!oldP || newP.length < 8) { res.textContent = '✗ ' + window.i18n.t('vault_settings.invalid_passphrase'); res.className = 'test-result fail'; return; }
     res.textContent = window.i18n.t('vault_settings.updating'); res.className = 'test-result';
     const result = await window.inkwell.vault.changePassphrase(oldP, newP);
     if (result.ok) {
