@@ -1779,24 +1779,49 @@ ipcMain.handle('vault:setup', async (_, opts) => {
     return { ok: false, error: `Impossibile accedere a "${vaultPath}": ${e.message}` };
   }
 
-  if (encryptionEnabled) KDF = 'argon2id';   // fresh encrypted vault → OWASP's first-choice KDF
-  const appCfg = { vaultPath, encryption: encryptionEnabled ? { enabled: true, algo: 'aes', kdf: KDF } : { enabled: false } };
-  writeAppConfig(appCfg);
   resolveVaultPaths(vaultPath);
 
+  // Inspect the target BEFORE committing config or keys: an existing vault must
+  // never be re-keyed or have its KDF rewritten — that would orphan its notes.
   const existingHeader = readVaultHeader();
+  // Encrypted notes but no header = a legacy (pre-envelope) direct-key vault.
+  const hasEnc = (function any(dir){ try { for (const it of fs.readdirSync(dir,{withFileTypes:true})) { if (it.isDirectory()) { if (any(path.join(dir,it.name))) return true; } else if (it.name.endsWith(ENC_EXT) || it.name.endsWith(LEGACY_ENC_EXT)) return true; } } catch(_){} return false; })(NOTES_DIR);
+
+  // Only a genuinely FRESH encrypted vault gets the modern Argon2id envelope.
+  // For a legacy vault we must NOT force argon2id: deriveKey() reads the global
+  // KDF, so forcing it here derived the WRONG key even for the CORRECT passphrase
+  // (and writing kdf:argon2id to config would keep unlock deriving wrong keys,
+  // permanently locking the vault). Leave KDF at its legacy default (pbkdf2).
+  const freshEncrypted = encryptionEnabled && !existingHeader && !hasEnc;
+  if (freshEncrypted) KDF = 'argon2id';
+  const cfgKdf = existingHeader ? normKdf(existingHeader.kdf)
+               : (encryptionEnabled && hasEnc) ? undefined   // legacy → unlock derives with the default (pbkdf2)
+               : KDF;
+  const encCfg = encryptionEnabled ? { enabled: true, algo: 'aes' } : { enabled: false };
+  if (encCfg.enabled && cfgKdf) encCfg.kdf = cfgKdf;
+  writeAppConfig({ vaultPath, encryption: encCfg });
+
   if (existingHeader) {
     // Picking an EXISTING encrypted vault (e.g. one synced from another PC):
     // never touch its keys — just make config know it's encrypted so the unlock
     // prompt appears. The user enters the password to open it.
     reconcileEncryptionFromHeader();
   } else if (encryptionEnabled && passphrase) {
-    // Does the folder already hold encrypted notes but no header (legacy)? Then
-    // keep the old direct-key model (unlock migrates it later) — creating a fresh
-    // random DEK would orphan those notes.
-    const hasEnc = (function any(dir){ try { for (const it of fs.readdirSync(dir,{withFileTypes:true})) { if (it.isDirectory()) { if (any(path.join(dir,it.name))) return true; } else if (it.name.endsWith(ENC_EXT) || it.name.endsWith(LEGACY_ENC_EXT)) return true; } } catch(_){} return false; })(NOTES_DIR);
     if (hasEnc) {
-      ENCRYPTION_KEY = await deriveKey(passphrase);
+      // Legacy encrypted vault: VERIFY the passphrase against a real note before
+      // adopting the key. A wrong (or wrongly-derived) key must never be adopted —
+      // it would orphan the notes and corrupt them on the next save. If it checks
+      // out we adopt it (app opens unlocked); otherwise leave the vault locked so
+      // the main window's unlock prompt can retry + migrate to the envelope.
+      try {
+        const key = await deriveKey(passphrase);
+        const testNotes = [];
+        (function findFirst(dir){ for (const it of fs.readdirSync(dir,{withFileTypes:true})){ if (testNotes.length) return; if (it.isDirectory()){ findFirst(path.join(dir,it.name)); continue; } if (it.name.endsWith(ENC_EXT) || it.name.endsWith(LEGACY_ENC_EXT)) testNotes.push(path.join(dir,it.name)); } })(NOTES_DIR);
+        if (testNotes.length) decryptContent(fs.readFileSync(testNotes[0], 'utf8'), key);  // throws on a wrong key
+        ENCRYPTION_KEY = key;
+      } catch (_) {
+        ENCRYPTION_KEY = null;   // stays locked → unlock prompt verifies + migrates
+      }
     } else {
       // Fresh encrypted vault → ENVELOPE: random DEK wrapped by the password key.
       ENCRYPTION_ALGO = 'aes';

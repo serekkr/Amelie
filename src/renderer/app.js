@@ -8975,7 +8975,7 @@ function setupSettings() {
   // the WebDAV password / app-token.
   [['cfg-smb-pass', 'cfg-smb-pass-eye'], ['tw-smb-pass', 'tw-smb-pass-eye'],
    ['cfg-webdav-pass', 'cfg-webdav-pass-eye'], ['tw-webdav-pass', 'tw-webdav-pass-eye']].forEach(([i, e]) =>
-    wirePasswordTypeEye($(i), $(e)));
+    wirePasswordSecEye($(i), $(e)));
 
   // Sync transport chooser (WireGuard+Samba ↔ WebDAV) + WebDAV test.
   document.querySelectorAll('#tw-transport-pills .dlp').forEach(b => b.addEventListener('click', async () => {
@@ -13356,15 +13356,17 @@ function wirePasswordEye(input, eye) {
   });
 }
 
-// Eye toggle for a real type=password input (Samba password): flips type
-// password↔text so the value shows in clear on demand.
-function wirePasswordTypeEye(input, eye) {
+// Eye toggle for a masked type=text input (Samba/WebDAV password): flips the
+// CSS mask (-webkit-text-security) so the value shows in clear on demand. The
+// field stays type=text on purpose — a real type=password would let Chromium's
+// password manager harvest/autofill the credential into its profile (userData).
+function wirePasswordSecEye(input, eye) {
   if (!input || !eye || eye.dataset.wired) return;
   eye.dataset.wired = '1';
   eye.innerHTML = _EYE_OPEN_SVG;
   eye.addEventListener('click', () => {
-    const revealed = input.type === 'text';
-    input.type = revealed ? 'password' : 'text';
+    const revealed = input.style.webkitTextSecurity === 'none';
+    input.style.webkitTextSecurity = revealed ? 'disc' : 'none';
     eye.innerHTML = revealed ? _EYE_OPEN_SVG : _EYE_OFF_SVG;
     input.focus();
   });
