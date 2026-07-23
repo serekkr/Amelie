@@ -39,7 +39,12 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
 .field input[type=text],.field input[type=password]{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r);color:var(--text-0);font-family:var(--ef);font-size:13px;padding:9px 12px;outline:none;transition:border-color .2s;flex:1}
 .field input:focus{border-color:var(--accent-dim)}
 .pass-wrap{position:relative;display:flex}
-.pass-wrap input{flex:1;padding-right:38px}
+/* Passphrase fields stay type=text so Chromium's password manager never
+   harvests or autofills the vault passphrase into its profile (userData). The
+   masking is purely visual; the eye toggle flips .reveal. Mirrors the main
+   app's AmelieMask approach (style.css), self-contained for this standalone page. */
+.pass-wrap input{flex:1;padding-right:38px;-webkit-text-security:disc}
+.pass-wrap input.reveal{-webkit-text-security:none}
 .pass-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0}
 .pass-eye:hover{color:var(--text-0)}
 .field input::placeholder{color:var(--text-3)}
@@ -182,13 +187,13 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
     <div id="enc-fields">
       <div class="field">
         <label>Passphrase</label>
-        <div class="pass-wrap"><input type="password" id="enc-pass" placeholder="Usa una password forte" autocomplete="new-password"/><button type="button" class="pass-eye" id="enc-pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi"></button></div>
+        <div class="pass-wrap"><input type="text" id="enc-pass" placeholder="Usa una password forte" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/><button type="button" class="pass-eye" id="enc-pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi"></button></div>
         <div class="strength-bar"><div class="strength-fill" id="strength-fill" style="width:0"></div></div>
         <span class="strength-label" id="strength-label" style="color:var(--text-3)"></span>
       </div>
       <div class="field">
         <label>Conferma passphrase</label>
-        <div class="pass-wrap"><input type="password" id="enc-pass2" placeholder="Ripeti la passphrase" autocomplete="new-password"/><button type="button" class="pass-eye" id="enc-pass2-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi"></button></div>
+        <div class="pass-wrap"><input type="text" id="enc-pass2" placeholder="Ripeti la passphrase" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/><button type="button" class="pass-eye" id="enc-pass2-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi"></button></div>
       </div>
       <div class="sec-box">
         <div class="sec-row"><span class="sec-icon">⚠️</span><span>La passphrase <strong>non è recuperabile</strong>. Se la perdi, i tuoi appunti cifrati saranno inaccessibili. Conservala in un password manager.</span></div>
@@ -611,9 +616,10 @@ function wireEye(input, eye) {
   if (!input || !eye) return;
   eye.innerHTML = _EYE_OPEN_SVG;
   eye.addEventListener('click', () => {
-    const revealed = input.type === 'text';
-    input.type = revealed ? 'password' : 'text';
-    eye.innerHTML = revealed ? _EYE_OPEN_SVG : _EYE_OFF_SVG;
+    // Fields are always type=text (keeps Chromium's password manager away); the
+    // eye toggles the visual mask (-webkit-text-security) via the .reveal class.
+    const revealed = input.classList.toggle('reveal');
+    eye.innerHTML = revealed ? _EYE_OFF_SVG : _EYE_OPEN_SVG;
     input.focus();
   });
 }
