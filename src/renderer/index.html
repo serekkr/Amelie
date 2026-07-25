@@ -375,6 +375,56 @@
           </div>
           <canvas id="mindmap-canvas"></canvas>
           <div id="mindmap-tooltip" style="display:none"></div>
+
+          <!-- Graph settings: Filters / Display / Forces (Obsidian-style) -->
+          <div id="mm-settings">
+            <button id="btn-mm-settings" class="icon-btn" title="Impostazioni grafo" data-i18n-title="mindmap.settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="7"  x2="20" y2="7"/><circle cx="9"  cy="7"  r="2.2"/>
+                <line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2.2"/>
+                <line x1="4" y1="17" x2="20" y2="17"/><circle cx="8"  cy="17" r="2.2"/>
+              </svg>
+            </button>
+            <div id="mm-settings-panel">
+              <details open>
+                <summary data-i18n="mindmap.filters">Filtri</summary>
+                <div class="mm-sec">
+                  <input type="search" id="mm-f-search" class="mm-search" placeholder="Cerca…" data-i18n-placeholder="mindmap.search">
+                  <label class="mm-check"><input type="checkbox" id="mm-f-folders"><span data-i18n="mindmap.f_folders">Cartelle come nodi</span></label>
+                  <label class="mm-check"><input type="checkbox" id="mm-f-tags"><span data-i18n="mindmap.f_tags">Collegamenti per tag</span></label>
+                  <label class="mm-check"><input type="checkbox" id="mm-f-attach"><span data-i18n="mindmap.f_attach">Allegati</span></label>
+                  <label class="mm-check"><input type="checkbox" id="mm-f-orphans"><span data-i18n="mindmap.f_orphans">Note isolate</span></label>
+                </div>
+              </details>
+              <details open>
+                <summary data-i18n="mindmap.display">Visualizzazione</summary>
+                <div class="mm-sec">
+                  <label class="mm-slider"><span data-i18n="mindmap.d_textfade">Soglia dissolvenza testo</span>
+                    <input type="range" id="mm-d-textfade" min="0" max="2" step="0.05"></label>
+                  <label class="mm-slider"><span data-i18n="mindmap.d_nodesize">Dimensione nodi</span>
+                    <input type="range" id="mm-d-nodesize" min="0.4" max="2.5" step="0.05"></label>
+                  <label class="mm-slider"><span data-i18n="mindmap.d_linkwidth">Spessore collegamenti</span>
+                    <input type="range" id="mm-d-linkw" min="0.3" max="3" step="0.05"></label>
+                  <label class="mm-check"><input type="checkbox" id="mm-d-arrows"><span data-i18n="mindmap.d_arrows">Frecce</span></label>
+                </div>
+              </details>
+              <details open>
+                <summary data-i18n="mindmap.forces">Forze</summary>
+                <div class="mm-sec">
+                  <label class="mm-slider"><span data-i18n="mindmap.fo_center">Forza centrale</span>
+                    <input type="range" id="mm-fo-center" min="0" max="1" step="0.01"></label>
+                  <label class="mm-slider"><span data-i18n="mindmap.fo_repel">Repulsione</span>
+                    <input type="range" id="mm-fo-repel" min="0" max="30" step="0.5"></label>
+                  <label class="mm-slider"><span data-i18n="mindmap.fo_link">Forza collegamenti</span>
+                    <input type="range" id="mm-fo-link" min="0" max="2" step="0.02"></label>
+                  <label class="mm-slider"><span data-i18n="mindmap.fo_dist">Distanza collegamenti</span>
+                    <input type="range" id="mm-fo-dist" min="30" max="320" step="2"></label>
+                </div>
+              </details>
+              <button id="btn-mm-restore" class="mm-restore" data-i18n="mindmap.restore">Ripristina predefiniti</button>
+            </div>
+          </div>
+
           <div id="mindmap-zoom">
             <button id="btn-mm-zoom-in" title="Zoom in" data-i18n-title="mindmap.zoom_in">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
