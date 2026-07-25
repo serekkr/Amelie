@@ -469,6 +469,42 @@ const linkColorPlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: (v) => v.decorations });
 
+// ── Inline #tag colouring (edit mode) ───────────────────────────────────────
+// Colour `#tag` blue so tags read as tags while writing. Viewport-scoped (cheap,
+// like linkColorPlugin) and SKIPPED inside fenced code blocks (so `#include`,
+// `#!/bin/sh`, etc. stay plain). Same match rule as the sidebar Tags parser:
+// a `#` at line start or after whitespace, then a letter and word chars/hyphens.
+const mdTagMark = Decoration.mark({ class: 'cm-md-tag' });
+const TAG_RE = /(^|\s)(#[A-Za-z][\w-]*)/g;
+function _tagInCode(pos, fences, doc) {
+  if (!fences || fences.length < 2) return false;
+  for (let i = 0; i + 1 < fences.length; i += 2) {
+    if (pos >= fences[i] && pos <= doc.lineAt(fences[i + 1]).to) return true;
+  }
+  return false;
+}
+const tagColorPlugin = ViewPlugin.fromClass(class {
+  constructor(view) { this.decorations = this.build(view); }
+  update(u) { if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view); }
+  build(view) {
+    const builder = new RangeSetBuilder();
+    const doc = view.state.doc;
+    let fences = null; try { fences = view.state.field(fenceField); } catch (_) {}
+    for (const { from, to } of view.visibleRanges) {
+      const text = doc.sliceString(from, to);
+      TAG_RE.lastIndex = 0;
+      let m;
+      while ((m = TAG_RE.exec(text))) {
+        const s = from + m.index + m[1].length;   // start of '#'
+        const e = s + m[2].length;
+        if (!_tagInCode(s, fences, doc)) builder.add(s, e, mdTagMark);
+        if (TAG_RE.lastIndex === m.index) TAG_RE.lastIndex++;   // zero-length safety
+      }
+    }
+    return builder.finish();
+  }
+}, { decorations: (v) => v.decorations });
+
 // CONTENT-LOSS FIREWALL. On a large virtualized doc, CM's applyDOMChange can misread
 // the partial (viewport-only) DOM after a keystroke and emit an `input.type` (or
 // input.*) transaction that REPLACES THE WHOLE DOCUMENT with just the visible lines
@@ -590,6 +626,7 @@ window.AmelieCM = {
           codeBlockPlugin,
           codeHighlightPlugin,
           linkColorPlugin,
+          tagColorPlugin,
           searchField,
           updateListener,
         ],

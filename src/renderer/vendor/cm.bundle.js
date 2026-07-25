@@ -19784,6 +19784,44 @@
       return builder.finish();
     }
   }, { decorations: (v) => v.decorations });
+  var mdTagMark = Decoration.mark({ class: "cm-md-tag" });
+  var TAG_RE = /(^|\s)(#[A-Za-z][\w-]*)/g;
+  function _tagInCode(pos, fences, doc2) {
+    if (!fences || fences.length < 2) return false;
+    for (let i2 = 0; i2 + 1 < fences.length; i2 += 2) {
+      if (pos >= fences[i2] && pos <= doc2.lineAt(fences[i2 + 1]).to) return true;
+    }
+    return false;
+  }
+  var tagColorPlugin = ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.decorations = this.build(view);
+    }
+    update(u) {
+      if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view);
+    }
+    build(view) {
+      const builder = new RangeSetBuilder();
+      const doc2 = view.state.doc;
+      let fences = null;
+      try {
+        fences = view.state.field(fenceField);
+      } catch (_) {
+      }
+      for (const { from, to } of view.visibleRanges) {
+        const text = doc2.sliceString(from, to);
+        TAG_RE.lastIndex = 0;
+        let m;
+        while (m = TAG_RE.exec(text)) {
+          const s = from + m.index + m[1].length;
+          const e = s + m[2].length;
+          if (!_tagInCode(s, fences, doc2)) builder.add(s, e, mdTagMark);
+          if (TAG_RE.lastIndex === m.index) TAG_RE.lastIndex++;
+        }
+      }
+      return builder.finish();
+    }
+  }, { decorations: (v) => v.decorations });
   var contentLossGuard = EditorState.transactionFilter.of((tr) => {
     try {
       if (!tr.docChanged) return tr;
@@ -19859,6 +19897,7 @@
             codeBlockPlugin,
             codeHighlightPlugin,
             linkColorPlugin,
+            tagColorPlugin,
             searchField,
             updateListener2
           ]

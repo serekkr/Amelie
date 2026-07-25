@@ -929,9 +929,9 @@ class WireGuardManager {
     // Reports THREE sub-results so the user sees exactly what worked:
     //   1) connected via WireGuard, 2) Samba share reachable, 3) write to folder.
     const steps = [
-      { key: 'wg',    label: 'Connesso via WireGuard',     ok: false, detail: '' },
-      { key: 'reach', label: 'Samba share raggiungibile',  ok: false, detail: '' },
-      { key: 'write', label: 'Scrittura nella cartella',   ok: false, detail: '' },
+      { key: 'wg',    label: 'Connesso via WireGuard',     lkey: 'sync.ts_step_wg',    ok: false, detail: '' },
+      { key: 'reach', label: 'Samba share raggiungibile',  lkey: 'sync.ts_step_reach', ok: false, detail: '' },
+      { key: 'write', label: 'Scrittura nella cartella',   lkey: 'sync.ts_step_write', ok: false, detail: '' },
     ];
     const done = (ok) => ({ ok, steps });
     // Leave an already-active tunnel alone; tear down one WE brought up for the test.

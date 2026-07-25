@@ -3175,6 +3175,11 @@ kbd {
 }
 .tag-src:hover { text-decoration: underline; }
 
+/* Inline #tags in the note body — blue in BOTH the editor (.cm-md-tag) and the
+   rendered preview (.md-tag) so a hashtag reads clearly as a tag. Fixed blue
+   (not a theme var: --link/--accent aren't blue in every theme). */
+.md-tag, .cm-md-tag { color: #2f7ef2; }
+
 /* Green Dark theme only (the default green palette → no data-theme attribute,
    see applyTheme). Hovering a sidebar item turns its text the accent green. */
 html:not([data-theme]) .sst:hover,

@@ -1195,6 +1195,22 @@ function _readCreatedHead(filePath) {
   } catch (_) { return null; }
 }
 
+// A note's "created" for the sidebar/meta: prefer the MANAGED frontmatter
+// `created` (stable), because the atomic tmp+rename write gives the file a new
+// inode on EVERY save — resetting the filesystem birthtime/ctime to "now", which
+// made the displayed creation date jump forward each time the note was edited.
+// Falls back to the fs timestamp for notes with no frontmatter yet, draws, and
+// (cheaply) encrypted vaults where the head can't be plain-read.
+function _noteCreatedISO(filePath, stat) {
+  try {
+    if (!ENCRYPTION_KEY) {
+      const c = _readCreatedHead(filePath);            // "YYYY-MM-DD HH:MM" (local)
+      if (c) { const d = new Date(c.replace(' ', 'T')); if (!isNaN(d.getTime())) return d.toISOString(); }
+    }
+  } catch (_) {}
+  return (stat.birthtime && stat.birthtime.getTime() > 0 ? stat.birthtime : stat.ctime).toISOString();
+}
+
 function readNoteContent(relPath) {
   const filePath = noteFilePath(relPath);
   _assertRealInside(NOTES_DIR, filePath);   // reject a note that symlinks outside the vault
@@ -1264,11 +1280,13 @@ function _backupBeforeShrink(filePath, relPath, oldBody, newBody) {
   try {
     const oldLen = String(oldBody || '').trim().length;
     const newLen = String(newBody || '').trim().length;
-    // Fire ONLY on a dramatic shrink of a non-trivial note: kept it from firing on
-    // every small edit while still catching truncation down to a few lines.
-    if (oldLen < 200) return;                      // note was already tiny — nothing worth saving
+    // Fire on a dramatic shrink. Thresholds LOWERED (v1.0.6) so SHORT notes also
+    // get a safety net — a bug/race that wipes a 60-char note was previously
+    // unrecoverable (old floor was 200). Still won't fire on normal editing:
+    // needs to lose >half AND at least ~40 chars of a ≥40-char note.
+    if (oldLen < 40) return;                        // truly trivial note — nothing worth saving
     if (newLen >= Math.floor(oldLen * 0.5)) return; // lost less than half → normal editing
-    if (oldLen - newLen < 200) return;             // absolute loss too small to bother
+    if (oldLen - newLen < 40) return;               // absolute loss too small to bother
     const root = VAULT_DIR || path.dirname(NOTES_DIR);
     const dir = path.join(root, '.amelie-backups');
     fs.mkdirSync(dir, { recursive: true });
@@ -1309,7 +1327,10 @@ function writeNoteContent(relPath, content) {
         // can't be partial-read). Data-loss protection is unchanged — only faster.
         const encrypted = !!ENCRYPTION_KEY;
         let oldBytes = 0; try { oldBytes = fs.statSync(filePath).size; } catch (_) {}
-        const maybeShrink = oldBytes >= 200 && Buffer.byteLength(body, 'utf8') < oldBytes * 0.6;
+        // Any shrink to <60% takes the full read + backup path (the old `>= 200`
+        // floor left short notes with no safety net). A GROWING/steady note still
+        // skips the full read (cheap head only) — so autosave stays fast.
+        const maybeShrink = oldBytes > 0 && Buffer.byteLength(body, 'utf8') < oldBytes * 0.6;
         if (maybeShrink || encrypted) {
           const prevRaw = fs.readFileSync(filePath, 'utf8');
           const prevText = encrypted ? decryptContent(prevRaw, ENCRYPTION_KEY) : prevRaw;
@@ -3041,6 +3062,7 @@ ipcMain.handle('fs:writeNote', async (_, filePath, content) => {
 });
 
 ipcMain.handle('fs:deleteNote', async (_, filePath) => {
+  _internalWriteUntil = Date.now() + 1500;   // our own delete — the UI refreshes itself; don't fire the watcher
   const fullPath = noteFilePath(filePath);
   if (!fullPath.startsWith(NOTES_DIR + path.sep)) throw new Error('Invalid path');
   if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
@@ -3072,6 +3094,7 @@ ipcMain.handle('fs:createFolder', async (_, folderPath) => {
 });
 
 ipcMain.handle('fs:deleteFolder', async (_, folderPath) => {
+  _internalWriteUntil = Date.now() + 1500;   // our own delete — the UI refreshes itself; don't fire the watcher
   const fullPath = path.join(NOTES_DIR, folderPath);
   // Guard: must be strictly inside NOTES_DIR (never the vault root itself)
   if (!fullPath.startsWith(NOTES_DIR + path.sep)) throw new Error('Invalid path');
@@ -3336,6 +3359,7 @@ ipcMain.handle('attachment:importPath', async (_, srcPath, targetName) => {
 // Delete an attachment (right-click → "Elimina media"). Subfolders allowed,
 // escaping ATTACHMENTS_DIR is not.
 ipcMain.handle('attachment:delete', async (_, name) => {
+  _internalWriteUntil = Date.now() + 1500;   // our own delete — the UI refreshes itself; don't fire the watcher
   const fullPath = path.resolve(ATTACHMENTS_DIR, String(name || ''));
   if (!fullPath.startsWith(path.resolve(ATTACHMENTS_DIR) + path.sep)) throw new Error('Invalid path');
   fs.rmSync(encDisk(fullPath), { force: true });   // delete whichever form exists
@@ -5013,12 +5037,16 @@ function listNotesRecursive(dir, base = '') {
         const stat = fs.statSync(path.join(dir, item.name));
         const isDraw = logicalName.endsWith('.draw');
         const relLogical = base ? `${base}/${logicalName}` : logicalName;
+        const fullPath = path.join(dir, item.name);
         entries.push({
           type: isDraw ? 'draw' : 'note',
           name: isDraw ? logicalName.replace('.draw', '') : logicalName.replace('.md', ''),
           path: relLogical,
           modified: stat.mtime.toISOString(),
-          created: (stat.birthtime && stat.birthtime.getTime() > 0 ? stat.birthtime : stat.ctime).toISOString(),
+          // Notes: created comes from the frontmatter (stable across the atomic
+          // save's inode swap); draws/no-frontmatter fall back to the fs time.
+          created: isDraw ? (stat.birthtime && stat.birthtime.getTime() > 0 ? stat.birthtime : stat.ctime).toISOString()
+                          : _noteCreatedISO(fullPath, stat),
           size: stat.size,
         });
       }

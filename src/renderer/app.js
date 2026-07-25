@@ -40,6 +40,23 @@ function persistOpenFolders() {
   try { localStorage.setItem('amelie.openFolders', JSON.stringify([...state.openFolders])); } catch (_) {}
 }
 
+// Sticky view mode: once the user flips the Edit/View toggle, that choice is
+// remembered and applied to EVERY note they open next — and across restarts —
+// so switching to preview stays in preview as you click through notes. Set only
+// by the explicit user toggle (toggleViewMode); programmatic setViewMode calls
+// don't change it. Special tabs (pdf/mindmap/canvas) return early and ignore it.
+let _stickyViewMode = (() => { try { return localStorage.getItem('amelie.viewMode') === 'view' ? 'view' : 'edit'; } catch (_) { return 'edit'; } })();
+function setStickyViewMode(m) {
+  _stickyViewMode = (m === 'view') ? 'view' : 'edit';
+  try { localStorage.setItem('amelie.viewMode', _stickyViewMode); } catch (_) {}
+}
+// The single user-facing Edit⇄View flip: remember the new mode globally, then apply.
+function toggleViewMode() {
+  const next = state.viewMode === 'edit' ? 'view' : 'edit';
+  setStickyViewMode(next);
+  setViewMode(next, { preserveScroll: true });
+}
+
 // ─── Tab system ───────────────────────────────────────────────────────────────
 // Each tab: { path, name, content, isDirty, viewMode, scrollPos, cursorPos }
 const tabs = [];
@@ -94,6 +111,7 @@ function hideAllSpecialViews() {
 // only the active tab is switched to at the end. Inactive tabs load lazily on click
 // (the `!tab.content` guard in switchTab). This keeps startup O(1) render, not O(N).
 function openTab(node, activate = true) {
+  if (activate) _returnToFilesView();   // a real open (not lazy session-restore) → back to the tree
   // Focus-based routing: with the split pane open and last focused, a click on
   // a note (sidebar tree, recent/bookmarks/tags lists, links) loads it into
   // the SPLIT pane instead of the main tabs. Only regular .md notes — special
@@ -127,6 +145,7 @@ async function closeTab(idx, e) {
   if (tab?.isDirty) {
     if (!await showConfirmModal(`"${tab.name}" ha modifiche non salvate. Chiudere comunque?`)) return;
   }
+  const wasActive = (idx === activeTabIdx);
   tabs.splice(idx, 1);
   if (tab?.type === 'pdf') _destroyPdfDoc();   // free pdf.js worker memory (reloaded if a PDF tab is reopened)
   if (tabs.length === 0) {
@@ -134,9 +153,19 @@ async function closeTab(idx, e) {
     state.currentPath = null;
     editorContainer.style.display = 'none';
     emptyState.style.display = 'flex';
-  } else {
+  } else if (wasActive) {
+    // Closed the ACTIVE tab → move to whichever note slid into its slot and load it.
     const newIdx = Math.min(idx, tabs.length - 1);
     switchTab(newIdx);
+  } else {
+    // Closed a BACKGROUND tab → the active note MUST stay active; only its array
+    // index shifted. DATA-LOSS FIX: the old code reselected by slot index
+    // (switchTab(min(idx,…))), which — when the closed tab sat BEFORE the active
+    // one — swapped in a neighbouring note under the active tab; the 2s autosave
+    // then wrote the editor buffer to the wrong/empty path and wiped the note the
+    // user was on (observed by deleting a PDF while editing another note). Just
+    // adjust the index; never reload the editor here.
+    if (activeTabIdx > idx) activeTabIdx--;
   }
   renderTabBar();
 }
@@ -187,6 +216,11 @@ async function switchTab(idx) {
   activeTabIdx = idx;
   const tab = tabs[idx];
   if (!tab) return;
+
+  // Close the TOC/index when this navigation leaves the note it was built for —
+  // a different note, or any special view (mindmap/draw/pdf). A same-note
+  // refresh (sync, spurious re-open) keeps it: tab.path still matches _tocPath.
+  if (tocVisible && (tab.type || tab.path !== _tocPath)) closeTOC();
 
   // CM engine: is this a reload of the note CM ALREADY has loaded (same path)?
   // Then it's a spurious re-open (sync/refresh) — we must NOT reset value/cursor/
@@ -254,7 +288,14 @@ async function switchTab(idx) {
     $('pdf-title').textContent = tab.name || 'PDF';
     state.currentPath = tab.path || null;
     const embed = $('pdf-embed');
-    if (tab.attachmentName && embed.dataset.loaded !== tab.attachmentName) {
+    // Returning to a PDF that still holds UNSAVED edits reloads the clean saved
+    // file: leaving the PDF for a note (or anything) and coming back must NOT
+    // show pen/text/form/page changes you never saved. renderPdfPages re-reads
+    // the bytes from disk and resets every edit-state global, so the discard is
+    // total. (A clean PDF keeps its cached render — no needless re-render.)
+    const _sameDirtyPdf = _pdfAttName === tab.attachmentName
+      && (_pdfDirty || _pdfFormDirty || _pdfPagesDirty);
+    if (tab.attachmentName && (embed.dataset.loaded !== tab.attachmentName || _sameDirtyPdf)) {
       embed.dataset.loaded = tab.attachmentName;
       renderPdfPages(tab.attachmentName, embed);
     }
@@ -283,7 +324,7 @@ async function switchTab(idx) {
 
   // Show editor immediately — before async IPC — so it's never stuck hidden
   state.currentPath = tab.path;
-  state.viewMode = tab.viewMode || 'edit';
+  state.viewMode = _stickyViewMode;   // sticky: every note follows the last Edit/View choice
   noteTitle.value = tab.name;
   if (!_cmSameNote) editor.value = tab.content || '';
   try { closeKanban(); } catch(_) {}
@@ -2308,8 +2349,11 @@ function updateNodePaths(node, oldPath, newPath) {
 
 async function moveFolderOnDisk(oldPath, newPath) {
   if (oldPath === newPath) return;
+  await _flushBeforePathChange(oldPath);   // flush + disarm autosave so no ghost file mid-move
   await window.inkwell.renameNote(oldPath, newPath);
   renameInTreeOrder(oldPath, newPath);   // remap the moved folder's children order
+  if (_cmLoadedPath === oldPath) _cmLoadedPath = newPath;
+  else if (_cmLoadedPath && _cmLoadedPath.startsWith(oldPath + '/')) _cmLoadedPath = newPath + '/' + _cmLoadedPath.slice(oldPath.length + 1);
   tabs.forEach(t => {
     if (!t.path) return;
     if (t.path === oldPath) t.path = newPath;
@@ -2404,15 +2448,14 @@ function makeFolderEl(node, parentArray, folderPath = '') {
     if (!state.draggingNote && !state.draggingFolder) return;
     e.preventDefault(); e.stopPropagation();
     row.classList.remove('drag-over-folder', 'drag-over-top', 'drag-over-bottom');
-    if (state.draggingFolder) {
-      const rect = row.getBoundingClientRect();
-      const relY = (e.clientY - rect.top) / rect.height;
-      if (relY < 0.3) row.classList.add('drag-over-top');
-      else if (relY > 0.7) row.classList.add('drag-over-bottom');
-      else row.classList.add('drag-over-folder');
-    } else {
-      row.classList.add('drag-over-folder');
-    }
+    // Both notes AND folders can now land above / inside / below a folder: the
+    // top and bottom thirds reorder at the folder's level (so a note can sit
+    // ABOVE the folder), the middle third drops INTO it.
+    const rect = row.getBoundingClientRect();
+    const relY = (e.clientY - rect.top) / rect.height;
+    if (relY < 0.3) row.classList.add('drag-over-top');
+    else if (relY > 0.7) row.classList.add('drag-over-bottom');
+    else row.classList.add('drag-over-folder');
   });
   row.addEventListener('dragleave', e => {
     e.stopPropagation();
@@ -2427,24 +2470,44 @@ function makeFolderEl(node, parentArray, folderPath = '') {
     if (state.draggingNote) {
       state.draggingNote = false;
       if (srcPath === node.path) return;
+      const rect = row.getBoundingClientRect();
+      const relY = (e.clientY - rect.top) / rect.height;
+      const dropInside = relY >= 0.3 && relY <= 0.7;
       const found = findAndRemoveFromTree(srcPath, state.notes);
       if (!found) return;
       const moved = found.node;
       const fileName = moved.path.split('/').pop();
-      const newPath = `${node.path}/${fileName}`;
-      if (newPath !== moved.path) {
+      const srcParent = srcPath.split('/').slice(0, -1).join('/');
+      // Helper: move the note on disk to `destParent` (rename), keeping tab + colour in sync.
+      const relocate = async destParent => {
+        const newPath = destParent ? `${destParent}/${fileName}` : fileName;
+        if (newPath === moved.path) return;
+        await _flushBeforePathChange(moved.path);   // no ghost file / lost edits mid-move
         await window.inkwell.renameNote(moved.path, newPath);
+        migrateNoteColorPath(moved.path, newPath);   // keep the label colour across the move
+        if (_cmLoadedPath === moved.path) _cmLoadedPath = newPath;
         const tab = tabs.find(t => t.path === moved.path);
         if (tab) { tab.path = newPath; if (state.currentPath === moved.path) state.currentPath = newPath; renderTabBar(); }
         moved.path = newPath;
+      };
+      if (dropInside) {
+        // Middle third → move INTO this folder (appended at the end).
+        await relocate(node.path);
+        node.children = node.children || [];
+        node.children.push(moved);
+        state.openFolders.add(node.path || node.name);
+        saveManualOrder(node.path, node.children);
+      } else {
+        // Top / bottom third → place the note ABOVE / BELOW the folder at the
+        // folder's OWN level (this is what lets a note sit above the folders).
+        await relocate(folderPath);
+        const arr = parentArray || state.notes;
+        const dstIdx = arr.findIndex(n => n.path === node.path);
+        if (dstIdx === -1) arr.push(moved); else arr.splice(relY > 0.7 ? dstIdx + 1 : dstIdx, 0, moved);
+        saveManualOrder(folderPath, arr);
       }
-      node.children = node.children || [];
-      node.children.push(moved);
-      state.openFolders.add(node.path || node.name);
-      // Persist the file order of both the destination folder and the source.
-      saveManualOrder(node.path, node.children);
-      if (found.parentArr && found.parentArr !== node.children) {
-        saveManualOrder(srcPath.split('/').slice(0, -1).join('/'), found.parentArr);
+      if (found.parentArr && found.parentArr !== node.children && found.parentArr !== (parentArray || state.notes)) {
+        saveManualOrder(srcParent, found.parentArr);
       }
       renderTree();
     } else if (state.draggingFolder) {
@@ -2456,6 +2519,8 @@ function makeFolderEl(node, parentArray, folderPath = '') {
       const rect = row.getBoundingClientRect();
       const relY = (e.clientY - rect.top) / rect.height;
 
+      const srcParent = srcPath.split('/').slice(0, -1).join('/');
+      let destLevel, destArr;
       if (relY >= 0.3 && relY <= 0.7) {
         // Drop INSIDE: move folder into this folder
         const folderName = moved.path.split('/').pop();
@@ -2465,6 +2530,7 @@ function makeFolderEl(node, parentArray, folderPath = '') {
         node.children = node.children || [];
         node.children.push(moved);
         state.openFolders.add(node.path || node.name);
+        destLevel = node.path; destArr = node.children;
       } else {
         // Reorder at same level — also move on disk if parent changes
         const arr = parentArray || state.notes;
@@ -2478,7 +2544,12 @@ function makeFolderEl(node, parentArray, folderPath = '') {
           updateNodePaths(moved, srcPath, newPath);
           await moveFolderOnDisk(srcPath, newPath);
         }
+        destLevel = targetParent; destArr = arr;
       }
+      // Persist the interleaved order at the destination (and source) level so the
+      // folder's new position — including a folder placed below a note — sticks.
+      saveManualOrder(destLevel, destArr);
+      if (found.parentArr && found.parentArr !== destArr) saveManualOrder(srcParent, found.parentArr);
       renderTree();
     }
   });
@@ -2567,7 +2638,10 @@ function makeNoteEl(node, parentArray, folderPath = '') {
       const fileName = moved.path.split('/').pop();
       const newPath = folderPath ? `${folderPath}/${fileName}` : fileName;
       if (newPath !== moved.path) {
+        await _flushBeforePathChange(moved.path);   // no ghost file / lost edits mid-move
         await window.inkwell.renameNote(moved.path, newPath);
+        migrateNoteColorPath(moved.path, newPath);   // keep the label colour across the move
+        if (_cmLoadedPath === moved.path) _cmLoadedPath = newPath;
         const tab = tabs.find(t => t.path === moved.path);
         if (tab) { tab.path = newPath; if (state.currentPath === moved.path) state.currentPath = newPath; renderTabBar(); }
         moved.path = newPath;
@@ -2580,12 +2654,11 @@ function makeNoteEl(node, parentArray, folderPath = '') {
         await moveFolderOnDisk(moved.path, newPath);
       }
     }
-    // Persist the new manual order for the affected level(s). (Attach drags
-    // (wasAttach) only reach here, so they persist too.)
-    if (!wasFolder) {
-      saveManualOrder(folderPath, arr);
-      if (found.parentArr && found.parentArr !== arr) saveManualOrder(srcFolder, found.parentArr);
-    }
+    // Persist the new manual order for the affected level(s). Now saved for
+    // FOLDER drops too (a folder dropped on a note reorders to this level) so the
+    // interleaved folder/note order sticks. (Attach drags also reach here.)
+    saveManualOrder(folderPath, arr);
+    if (found.parentArr && found.parentArr !== arr) saveManualOrder(srcFolder, found.parentArr);
     renderTree();
   });
   return el;
@@ -2593,6 +2666,7 @@ function makeNoteEl(node, parentArray, folderPath = '') {
 
 // ─── Note open/save ───────────────────────────────────────────────────────────
 async function openNote(node) {
+  _returnToFilesView();   // leaving Recent/Bookmarks/Tags/Notifications → back to the tree
   // Opening a note clears any folder selection: from now on a new note follows
   // the open note's folder again (until the user clicks another folder).
   state.selectedFolder = null;
@@ -3277,14 +3351,20 @@ async function deleteNote(node) {
   // Close the tab if this note is open
   const tabIdx = tabs.findIndex(t => t.path === node.path);
   if (tabIdx !== -1) {
+    const wasActive = (tabIdx === activeTabIdx);
     tabs.splice(tabIdx, 1);
     if (tabs.length === 0) {
       activeTabIdx = -1;
       state.currentPath = null;
       editorContainer.style.display = 'none';
       emptyState.style.display = 'flex';
-    } else {
+    } else if (wasActive) {
+      // Deleted the note the user was on → switch to its neighbour and load it.
       await switchTab(Math.min(tabIdx, tabs.length - 1));
+    } else if (activeTabIdx > tabIdx) {
+      // Deleted a BACKGROUND note → keep the SAME note active; only its index
+      // shifted. Same data-loss fix as closeTab: never reselect by slot index.
+      activeTabIdx--;
     }
     renderTabBar();
   }
@@ -3417,6 +3497,18 @@ function attachNameGuard(el, opts) {
   });
 }
 
+// Before a rename/move changes a note's on-disk path: flush any pending unsaved
+// edits of the AFFECTED active note to its CURRENT path and cancel the armed
+// autosave, so the 2s timer can't fire mid-rename and recreate a ghost file at
+// the old path (nor lose the edits). Safe no-op when nothing dirty/affected.
+async function _flushBeforePathChange(oldPath) {
+  if (state.saveTimer) { clearTimeout(state.saveTimer); state.saveTimer = null; }
+  const t = getActiveTab();
+  if (t && t.isDirty && t.path && (t.path === oldPath || t.path.startsWith(oldPath + '/'))) {
+    try { await saveCurrentNote(); } catch (_) {}
+  }
+}
+
 async function _applyRename(node, newName) {
   const isFolder = node.type === 'folder';
   const safeName = newName.replace(FORBIDDEN_NAME_RE_G, '').replace(/\.md$/, '').trim();
@@ -3424,8 +3516,13 @@ async function _applyRename(node, newName) {
   parts[parts.length - 1] = isFolder ? safeName : safeName + '.md';
   const newPath = parts.join('/');
   if (newPath === node.path) return;
+  await _flushBeforePathChange(node.path);   // no ghost file / no lost edits mid-rename
   await window.inkwell.renameNote(node.path, newPath);
   renameInTreeOrder(node.path, newPath);   // keep manual order across the rename
+  // Keep the CM "loaded path" in step so switchTab's data-loss guard still
+  // matches the right tab after the rename.
+  if (_cmLoadedPath === node.path) _cmLoadedPath = newPath;
+  else if (_cmLoadedPath && _cmLoadedPath.startsWith(node.path + '/')) _cmLoadedPath = newPath + '/' + _cmLoadedPath.slice(node.path.length + 1);
   if (isFolder) {
     const prefix = node.path + '/';
     tabs.forEach(t => {
@@ -3920,10 +4017,8 @@ function setupEditor() {
   // Heading picker
   setupHeadingPicker();
 
-  // Single Edit/View toggle: flip to the other mode on click.
-  $('btn-mode-toggle')?.addEventListener('click', () => {
-    setViewMode(state.viewMode === 'edit' ? 'view' : 'edit', { preserveScroll: true });
-  });
+  // Single Edit/View toggle: flip to the other mode on click (and make it sticky).
+  $('btn-mode-toggle')?.addEventListener('click', () => { toggleViewMode(); });
 
   // Undo / Redo header buttons — focus the editor first so the native history
   // applies to the note text.
@@ -4807,6 +4902,44 @@ function renderPreviewIncremental(token, html, widthsByTable) {
 // all the DOM-decoration passes over #preview-content. Syntax highlighting is
 // kept (colours!) but dispatched to highlightCodeChunked so it batches over idle
 // time instead of blocking on a code-heavy note. `token` guards against staleness.
+// Colour inline #tags blue in the rendered preview so they read as tags. Walks
+// TEXT nodes only (never touches links, code, or existing markup) and skips code
+// spans/blocks. Same match rule as the editor + the sidebar Tags parser.
+function highlightInlineTags(root) {
+  if (!root) return;
+  const re = /(^|\s)(#[A-Za-z][\w-]*)/g;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue || node.nodeValue.indexOf('#') === -1) return NodeFilter.FILTER_REJECT;
+      const p = node.parentElement;
+      if (!p || p.closest('code, pre, a, .md-tag')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const targets = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) targets.push(n);
+  for (const node of targets) {
+    const text = node.nodeValue;
+    re.lastIndex = 0;
+    if (!re.test(text)) continue;
+    re.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let last = 0, m;
+    while ((m = re.exec(text))) {
+      const start = m.index + m[1].length;       // start of '#'
+      if (start > last) frag.appendChild(document.createTextNode(text.slice(last, start)));
+      const span = document.createElement('span');
+      span.className = 'md-tag';
+      span.textContent = m[2];                    // #tag
+      frag.appendChild(span);
+      last = start + m[2].length;
+      if (re.lastIndex === m.index) re.lastIndex++;
+    }
+    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+  }
+}
+
 function enhancePreviewContent(token, widthsByTable) {
   if (typeof hljs !== 'undefined') {
     highlightCodeChunked(() => token === _previewRenderToken,
@@ -4814,6 +4947,9 @@ function enhancePreviewContent(token, widthsByTable) {
   }
   // Code blocks: language label (top-left) + copy button (top-right corner)
   decorateCodeBlocks();
+
+  // Colour #tags blue (after code decoration so code spans are already skipped).
+  try { highlightInlineTags(previewContent); } catch (_) {}
 
   // Task-list checkboxes: make them clickable (Obsidian style)
   enhanceCheckboxes();
@@ -5380,6 +5516,7 @@ function updateSelectionCount() {
 // ─── TOC (Table of Contents) ──────────────────────────────────────────────────
 
 let tocVisible = false;
+let _tocPath = null;   // the note path the open TOC was built for (to close it on navigation)
 
 function setupTOC() {
   $('btn-toc').addEventListener('click', toggleTOC);
@@ -5423,6 +5560,18 @@ function toggleTOC() {
   const rz = $('toc-resizer'); if (rz) rz.style.display = tocVisible ? 'block' : 'none';
   $('btn-toc').classList.toggle('active', tocVisible);
   if (tocVisible) { _restoreTocWidth(); renderTOC(); }
+}
+
+// Close the TOC/index panel. Called when navigating to a DIFFERENT note or to a
+// special view (mindmap / draw / pdf / todo): the index belongs to the note it
+// was opened on, so it must not linger — stale — over the next thing you open.
+function closeTOC() {
+  if (!tocVisible) return;
+  tocVisible = false;
+  _tocPath = null;
+  const p = $('toc-panel'); if (p) p.style.display = 'none';
+  const rz = $('toc-resizer'); if (rz) rz.style.display = 'none';
+  const b = $('btn-toc'); if (b) b.classList.remove('active');
 }
 
 // ─── Export note → PDF ────────────────────────────────────────────────────────
@@ -5703,6 +5852,7 @@ function mdInlineToText(md) {
 function renderTOC() {
   const list = $('toc-list');
   if (!list) return;
+  _tocPath = state.currentPath;   // remember which note this index belongs to
 
   // Use marked.lexer to walk source tokens — this is the ONLY way to reliably
   // distinguish ATX (`# foo`) headings from setext-style ones (`foo\n===`)
@@ -6160,7 +6310,10 @@ async function loadTreeOrderFromVault() {
 }
 // Persist the file order of one tree level (the array of sibling nodes).
 function saveManualOrder(folderPath, arr) {
-  const paths = arr.filter(isFileNode).map(n => n.path);
+  // Save the FULL sibling order (folders AND files interleaved) so a note can sit
+  // above/between folders — not just files-after-folders. A level with no saved
+  // order still defaults to folders-first (see applyManualOrder).
+  const paths = arr.map(n => n.path).filter(Boolean);
   if (paths.length) treeOrder[folderPath] = paths; else delete treeOrder[folderPath];
   saveTreeOrder();
 }
@@ -6179,6 +6332,7 @@ function renameInTreeOrder(oldPath, newPath) {
     else treeOrder[k] = list;
   }
   saveTreeOrder();
+  migrateNoteColorPath(oldPath, newPath);   // labels follow the rename/move too
 }
 // Drop a path (and any descendants/keys) from the saved order on delete.
 function removeFromTreeOrder(path) {
@@ -6189,17 +6343,27 @@ function removeFromTreeOrder(path) {
   }
   saveTreeOrder();
 }
-// Reorder each level so files follow the saved manual order; folders untouched.
+// Order each level by the saved manual order (folders AND files interleaved, so a
+// note can sit above/between folders). A level with NO saved order keeps the
+// classic folders-first default. Items not in the saved order fall to the end,
+// folders-first among themselves (freshly created notes/folders).
 function applyManualOrder(nodes, folderPath = '') {
-  const folders = nodes.filter(n => n.type === 'folder');
-  const files   = nodes.filter(isFileNode);
   const order = treeOrder[folderPath];
+  let out;
   if (order && order.length) {
-    const idx = p => { const i = order.indexOf(p); return i === -1 ? Infinity : i; };
-    files.sort((a, b) => idx(a.path) - idx(b.path));   // stable: unsaved files keep backend order
+    const pos = new Map(order.map((p, i) => [p, i]));
+    out = [...nodes].sort((a, b) => {
+      const ia = pos.has(a.path) ? pos.get(a.path) : Infinity;
+      const ib = pos.has(b.path) ? pos.get(b.path) : Infinity;
+      if (ia !== ib) return ia - ib;                                  // both saved (or one saved) → by index
+      if ((a.type === 'folder') !== (b.type === 'folder')) return a.type === 'folder' ? -1 : 1; // unsaved: folders first
+      return 0;                                                       // stable: keep backend order otherwise
+    });
+  } else {
+    out = [...nodes.filter(n => n.type === 'folder'), ...nodes.filter(isFileNode)];  // default: folders first
   }
-  folders.forEach(f => { if (f.children) f.children = applyManualOrder(f.children, f.path); });
-  return [...folders, ...files];
+  out.forEach(n => { if (n.type === 'folder' && n.children) n.children = applyManualOrder(n.children, n.path); });
+  return out;
 }
 
 // Stored as { [path]: colorKey }
@@ -6210,6 +6374,24 @@ const noteColors = (() => {
 
 function saveNoteColors() {
   try { localStorage.setItem('amelie-note-colors', JSON.stringify(noteColors)); } catch(_) {}
+}
+
+// A note/folder/attachment changed path (rename OR move): carry its label colour
+// — and, for a folder, every descendant's colour (both keyed by path) — over to
+// the new path so the colour is never dropped. Prefix remap mirrors
+// renameInTreeOrder. [[amelie-visual-mindmap-prefs]]
+function migrateNoteColorPath(oldPath, newPath) {
+  if (!oldPath || !newPath || oldPath === newPath) return;
+  const remap = p =>
+    p === oldPath ? newPath
+    : p.startsWith(oldPath + '/') ? newPath + p.slice(oldPath.length)
+    : p;
+  let changed = false;
+  for (const k of Object.keys(noteColors)) {
+    const nk = remap(k);
+    if (nk !== k) { noteColors[nk] = noteColors[k]; delete noteColors[k]; changed = true; }
+  }
+  if (changed) saveNoteColors();
 }
 
 function setNoteColor(path, colorKey) {
@@ -6983,15 +7165,28 @@ function openSplitView(path, name, orient = 'right') {
   const active = getActiveTab();
   if (active && active.path === path) {
     edB.value = editor.value;
+    _splitLoading = null;
   } else {
     const t = getTab(path);
-    edB.value = (t && t.content) || '';
-    if (!edB.value) window.inkwell.readNote(path).then(c => {
-      if (_splitPath === path) {
-        edB.value = c || '';
-        if (_splitMode === 'view') renderSplitPreview();
-      }
-    }).catch(() => {});
+    if (t && t.content) {
+      edB.value = t.content;
+      _splitLoading = null;
+    } else {
+      // Content not cached → read from disk ASYNC. DATA-LOSS GUARD: mark the pane
+      // as LOADING so its input handler won't persist a truncated buffer (typing
+      // before the read lands used to autosave just the typed chars over the whole
+      // note). Editing is ignored until the real content arrives.
+      edB.value = '';
+      _splitLoading = path;
+      window.inkwell.readNote(path).then(c => {
+        if (_splitPath === path && _splitLoading === path) {
+          edB.value = c || '';
+          _splitLoading = null;
+          const tt = getTab(path); if (tt && !tt.content) tt.content = c || '';
+          if (_splitMode === 'view') renderSplitPreview();
+        }
+      }).catch(() => { if (_splitLoading === path) _splitLoading = null; });
+    }
   }
   // Toggle layout direction; reset to a 50% split only on first open (loading
   // another note into an already-open pane keeps the user's size).
@@ -7444,6 +7639,10 @@ function setupSplitView() {
   // if that note is the active tab (same-path parallel view).
   edB.addEventListener('input', () => {
     if (_splitSyncing || !_splitPath) return;
+    // The pane's note hasn't finished loading from disk — ignore edits so we
+    // never persist a truncated buffer over the real note (the load will fill
+    // edB.value in a moment). DATA-LOSS GUARD.
+    if (_splitLoading === _splitPath) return;
     const t = getTab(_splitPath);
     if (t) { t.content = edB.value; t.isDirty = true; }
     const active = getActiveTab();
@@ -7476,6 +7675,7 @@ function setupSplitView() {
 }
 let _splitSaveTimer = null;
 let _splitRenderTimer = null;
+let _splitLoading = null;   // path whose content is still being read into pane B (edits/saves blocked until it lands)
 
 // Keep pane B in sync when the main editor changes the SAME note.
 function syncSplitFromMain() {
@@ -7576,10 +7776,10 @@ function getNodeAtEvent(e) {
 
 function setupMindmap() {
   $('btn-mindmap').addEventListener('click', () => {
-    // Re-clicking while the mindmap is already on screen is a no-op: stay on
-    // the view (closing goes through the ✕ button or the keyboard shortcut).
+    // Toggle: clicking the icon while the graph is already on screen closes it
+    // and returns to the notes (same as the ✕ button / keyboard shortcut).
     const ov = $('mindmap-overlay');
-    if (ov.style.display && ov.style.display !== 'none') return;
+    if (ov.style.display && ov.style.display !== 'none') { closeMindmap(); return; }
     openMindmap();
   });
   $('btn-mindmap-close').addEventListener('click', closeMindmap);
@@ -9411,11 +9611,11 @@ function setupSettings() {
     if (res) { res.style.display = 'block'; res.className = 'test-result'; res.textContent = window.i18n.t('sync.tw_testing'); }
     try {
       const tf = await window.inkwell.wg.testSmbWrite(smb, 'sync');
-      const stepsHtml = (tf.steps || []).map(s => { const d = vpnStepDetail(s); return `<div>${s.ok ? '✓' : '✗'} ${escHtml(s.label)}${d ? ' — ' + escHtml(d) : ''}</div>`; }).join('');
+      const stepsHtml = (tf.steps || []).map(s => { const d = vpnStepDetail(s); return `<div>${s.ok ? '✓' : '✗'} ${escHtml(vpnStepLabel(s))}${d ? ' — ' + escHtml(d) : ''}</div>`; }).join('');
       if (res) { res.style.display = 'block'; res.className = 'test-result ' + (tf.ok ? 'ok' : 'fail'); res.innerHTML = stepsHtml; }
       if (!tf.ok) {
         const failed = tf.steps?.find(s => !s.ok);
-        const reason = failed ? (failed.label + (failed.detail ? ' — ' + failed.detail : '')) : window.i18n.t('sync.test_failed');
+        const reason = failed ? (vpnStepLabel(failed) + (failed.detail ? ' — ' + vpnStepDetail(failed) : '')) : window.i18n.t('sync.test_failed');
         try { addEventNotif(window.i18n.t('sync.smbtest_title') + ': ' + reason, false); } catch (_) {}
       }
       // Refresh the tunnel status (last handshake) after the test.
@@ -9610,7 +9810,7 @@ function setupTwowaySetup() {
         if (_vpnType === 'openvpn') setOvpnCredsVisible(false);
       } else {
         const failed = tf.steps?.find(s => !s.ok);
-        const reason = failed ? (failed.label + (failed.detail ? ' — ' + failed.detail : '')) : window.i18n.t('sync.test_failed');
+        const reason = failed ? (vpnStepLabel(failed) + (failed.detail ? ' — ' + vpnStepDetail(failed) : '')) : window.i18n.t('sync.test_failed');
         // Detailed reason lives in the checklist row; the box gives a short,
         // clearly visible failure signal (no duplication).
         res.className = 'test-summary fail';
@@ -10222,6 +10422,14 @@ function vpnStepDetail(step) {
   return (step && step.detail) || '';
 }
 
+// Localize a connection-test step LABEL: the backend ships an i18n `lkey`
+// alongside the raw (Italian) label — translate it, falling back to the raw
+// label for older shapes. (Same idea as vpnStepDetail for the detail text.)
+function vpnStepLabel(step) {
+  if (step && step.lkey) { try { return window.i18n.t(step.lkey); } catch (_) {} }
+  return (step && step.label) || '';
+}
+
 // FULL wizard UI reset (both tabs): Samba/credential fields, parsed info and
 // — crucially — the connection-test checklist rows and result boxes, which
 // otherwise keep showing the PREVIOUS connection's outcome after a Remove or a
@@ -10517,7 +10725,9 @@ async function runConnectionTest() {
     if (_vpnType === 'openvpn') setOvpnCredsVisible(false);
   } else {
     const failedStep = result.steps?.find(s => !s.ok);
-    const reason = failedStep ? (failedStep.label + (failedStep.detail ? ' — ' + failedStep.detail : '')) : (result.error || window.i18n.t('sync.test_failed'));
+    const reason = failedStep
+      ? (vpnStepLabel(failedStep) + (failedStep.detail ? ' — ' + vpnStepDetail(failedStep) : ''))
+      : (result.error || window.i18n.t('sync.test_failed'));
     // The failed step row shows the detailed message — the summary box gives a
     // SHORT visible failure signal (a long wait ending in a tiny row note went
     // unnoticed), without duplicating the full reason.
@@ -10760,6 +10970,12 @@ async function openSettings() {
   // Configured connection → only the "config loaded" row (Importa un'altra /
   // Riconfigura / Rimuovi) and the connection test stay visible in the wizards.
   refreshVpnWizardVisibility();
+  // Always reopen on the DEFAULT (Vault/Security) tab — never the last sub-view
+  // the user left open (Backup/Samba, Sync/VPN, WebDAV wizard…). The .active
+  // class otherwise lingers in the DOM from the previous session and the modal
+  // reopens deep in a half-configured panel instead of the overview.
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === 'security'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-security'));
   $('settings-modal').style.display = 'flex';
   // Vault is the default active tab: populate path/encryption right away.
   if (typeof openSecurityTab === 'function') openSecurityTab();
@@ -11342,7 +11558,7 @@ function setupKeyboard() {
       // Ctrl/Cmd+S still force-saves (hardcoded — no longer a configurable shortcut).
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 's' || e.key === 'S')) { e.preventDefault(); await saveCurrentNote(); return; }
       if (fires('newNote'))    { e.preventDefault(); await createNewNote(newNoteFolder()); return; }
-      if (fires('toggleView')) { e.preventDefault(); setViewMode(state.viewMode==='edit'?'view':'edit', { preserveScroll: true }); return; }
+      if (fires('toggleView')) { e.preventDefault(); toggleViewMode(); return; }
       if (fires('search'))     { e.preventDefault(); toggleNoteSearch(); return; }
       if (fires('closeTab'))   { e.preventDefault(); if (activeTabIdx !== -1) closeTab(activeTabIdx); return; }
       if (fires('toc'))        { e.preventDefault(); toggleTOC(); return; }
@@ -11457,10 +11673,10 @@ const EMPTY_DRAW = '{}';
 
 function setupCanvas() {
   $('btn-canvas').addEventListener('click', () => {
-    // Re-clicking while a draw is already on screen must NOT spawn another
-    // draw file: stay on the current one.
+    // Toggle: clicking the icon while a draw is already on screen closes it and
+    // returns to the notes (a re-click never spawns a second draw file).
     const ov = $('canvas-overlay');
-    if (ov.style.display && ov.style.display !== 'none') return;
+    if (ov.style.display && ov.style.display !== 'none') { closeCanvas(); return; }
     newDraw();
   });
   $('btn-canvas-close').addEventListener('click', closeCanvas);
@@ -12496,6 +12712,31 @@ function _updatePdfPageDirty() {
   _updatePdfDirty();   // page edits also light up the toolbar Save / Save-as
 }
 
+// Lazy thumbnail loading + a render-concurrency cap. A large PDF (hundreds of
+// pages) would otherwise fire ONE pdf.js render per page the instant the Pages
+// panel opens — flooding the single pdf.js worker so the panel takes forever or
+// never paints. Instead a page's thumbnail renders only when its card scrolls
+// into the list (IntersectionObserver), at most a few at a time.
+let _pdfThumbIO = null;
+let _thumbActive = 0;
+const _thumbQueue = [];
+function _thumbPump() {
+  while (_thumbActive < 3 && _thumbQueue.length) {
+    const job = _thumbQueue.shift();
+    _thumbActive++;
+    Promise.resolve(job()).catch(() => {}).finally(() => { _thumbActive--; _thumbPump(); });
+  }
+}
+function _queueThumb(img) {
+  if (!img || img.dataset.loaded) return;
+  _thumbQueue.push(async () => {
+    if (img.dataset.loaded) return;
+    const url = await _getPageThumb(img.dataset.src, parseInt(img.dataset.srcindex, 10)).catch(() => null);
+    if (url) { img.src = url; img.dataset.loaded = '1'; }
+  });
+  _thumbPump();
+}
+
 // Render one page of a source doc to a cached PNG data URL for the thumbnail.
 async function _getPageThumb(src, srcIndex) {
   const ck = src + ':' + srcIndex;
@@ -12529,9 +12770,14 @@ function _buildPdfThumb(p, idx) {
   img.alt = '';
   img.draggable = false;   // don't let the native image-drag hijack the reorder
   img.style.transform = `rotate(${p.rot}deg)`;
+  // Lazy: the thumbnail renders when the card scrolls into view (observed in
+  // renderPdfPagePanel). An already-cached page paints instantly.
+  img.dataset.src = p.src;
+  img.dataset.srcindex = String(p.srcIndex);
+  const _ck = p.src + ':' + p.srcIndex;
+  if (_pdfThumbCache.has(_ck)) { img.src = _pdfThumbCache.get(_ck); img.dataset.loaded = '1'; }
   imgWrap.appendChild(img);
   card.appendChild(imgWrap);
-  _getPageThumb(p.src, p.srcIndex).then(url => { if (url) img.src = url; });
 
   const foot = document.createElement('div');
   foot.className = 'pp-thumb-foot';
@@ -12656,6 +12902,26 @@ function renderPdfPagePanel() {
   list.className = 'pp-list';
   _pdfPages.forEach((p, idx) => list.appendChild(_buildPdfThumb(p, idx)));
   panel.appendChild(list);
+
+  // Lazy-render thumbnails as their cards scroll into the list (only visible
+  // pages hit pdf.js → a 500-page PDF opens instantly instead of flooding the
+  // worker). Recreate the observer each render; drop any queued work from a
+  // previous PDF/panel (cached pages already painted in _buildPdfThumb).
+  if (_pdfThumbIO) { try { _pdfThumbIO.disconnect(); } catch (_) {} }
+  _thumbQueue.length = 0;
+  _pdfThumbIO = new IntersectionObserver((entries) => {
+    for (const en of entries) {
+      if (!en.isIntersecting) continue;
+      _queueThumb(en.target.querySelector('img'));
+      _pdfThumbIO.unobserve(en.target);
+    }
+  }, { root: list, rootMargin: '300px 0px' });
+  // Observe all cards; eagerly render the first handful (visible on open) so the
+  // top of the list paints even before the observer's first async callback.
+  list.querySelectorAll('.pp-thumb').forEach((card, i) => {
+    _pdfThumbIO.observe(card);
+    if (i < 8) _queueThumb(card.querySelector('img'));
+  });
 
   // Saving is done from the toolbar Save / Save-as (they commit page ops too).
   // The panel only needs a Revert to undo the staged reorder/rotate/delete/merge.
@@ -15524,6 +15790,7 @@ function openTodoView() {
   if (_kanbanOpen && tv0 && tv0.style.display !== 'none') return;
   // Leave whatever view we were in (note editor, mindmap, canvas, pdf) first.
   hideAllSpecialViews();
+  try { closeTOC(); } catch (_) {}   // the index belongs to a note, not the ToDo board
   _kanbanOpen = true;
   const es = $('empty-state'); if (es) es.style.display = 'none';
   const ec = $('editor-container'); if (ec) ec.style.display = 'none';
@@ -15948,6 +16215,13 @@ function toggleNotifPopup() {
   pop.style.display = 'block';
 }
 
+// Opening or creating a note (or any file) while a non-Files sidebar view is
+// showing (Recent / Bookmarks / Tags / Notifications) returns the sidebar to
+// Files — so the user just sees the note + the tree, not the list they came from.
+function _returnToFilesView() {
+  if (_sidebarView !== 'files') switchSidebarView('files');
+}
+
 function switchSidebarView(view) {
   _sidebarView = view;
   // If we were in the ToDo (kanban) view, leave it and restore the editor /
@@ -16050,7 +16324,12 @@ function setupSidebarViews() {
   $('view-recent')?.addEventListener('click', () => switchSidebarView('recent'));
   $('view-bookmarks')?.addEventListener('click', () => switchSidebarView('bookmarks'));
   $('view-tags')?.addEventListener('click', () => switchSidebarView('tags'));
-  $('btn-new-todo')?.addEventListener('click', addTodo);
+  $('btn-new-todo')?.addEventListener('click', () => {
+    // Toggle: if the ToDo board is already open, a second click returns to the
+    // notes (restores the editor), matching the Files-icon toggle.
+    if (_kanbanOpen) { switchSidebarView('files'); return; }
+    addTodo();
+  });
   $('ctx-bookmark')?.addEventListener('click', () => { if (state.contextTarget) toggleBookmark(state.contextTarget); const m = $('context-menu'); if (m) m.style.display = 'none'; });
   document.querySelectorAll('.tv-filter').forEach(b => b.addEventListener('click', () => setTodoFilter(b.dataset.f)));
   // Notifications behave like Bookmarks/Tags: open the sidebar view, no popup.
