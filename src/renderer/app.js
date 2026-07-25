@@ -288,16 +288,27 @@ async function switchTab(idx) {
     $('pdf-title').textContent = tab.name || 'PDF';
     state.currentPath = tab.path || null;
     const embed = $('pdf-embed');
-    // Returning to a PDF that still holds UNSAVED edits reloads the clean saved
-    // file: leaving the PDF for a note (or anything) and coming back must NOT
-    // show pen/text/form/page changes you never saved. renderPdfPages re-reads
-    // the bytes from disk and resets every edit-state global, so the discard is
-    // total. (A clean PDF keeps its cached render — no needless re-render.)
-    const _sameDirtyPdf = _pdfAttName === tab.attachmentName
-      && (_pdfDirty || _pdfFormDirty || _pdfPagesDirty);
-    if (tab.attachmentName && (embed.dataset.loaded !== tab.attachmentName || _sameDirtyPdf)) {
+    // Returning to a PDF that still holds UNSAVED edits must NOT show them — you
+    // never saved them. Two cases, so it's instant instead of a slow full reload:
+    //   • pen/text/image edits are OVERLAYS on top of the page images → just wipe
+    //     the overlays + reset the annot state. No page re-render at all (this is
+    //     why the edits used to linger ~2s: renderPdfPages kept the old pages up
+    //     while it slowly re-rendered). Instant, no flash.
+    //   • form-field / page-op edits change the document itself → a clean reload
+    //     from disk is required; wipe overlays first so nothing stale flashes.
+    const _samePdf = _pdfAttName === tab.attachmentName;
+    const _annotOnlyDirty = _samePdf && _pdfDirty && !_pdfFormDirty && !_pdfPagesDirty;
+    const _deepDirty      = _samePdf && (_pdfFormDirty || _pdfPagesDirty);
+    if (tab.attachmentName && embed.dataset.loaded !== tab.attachmentName) {
       embed.dataset.loaded = tab.attachmentName;
-      renderPdfPages(tab.attachmentName, embed);
+      renderPdfPages(tab.attachmentName, embed);          // different PDF → full render
+    } else if (_deepDirty) {
+      try { _clearPdfOverlays(); } catch (_) {}           // no stale flash while it reloads
+      renderPdfPages(tab.attachmentName, embed);          // form/page edits → clean reload
+    } else if (_annotOnlyDirty) {
+      try { _clearPdfOverlays(); } catch (_) {}           // instantly drop the drawn edits
+      _pdfAnnots = []; _pdfDirty = false; setPdfTool(null);
+      try { _updatePdfDirty(); } catch (_) {}
     }
     renderTabBar();
     renderTree();
@@ -2787,7 +2798,10 @@ function parseFrontmatter(content) {
     const m = line.match(/^(\w+):\s*(.*)$/);
     if (!m) continue;
     const [, key, val] = m;
-    if (['title','tags','source'].includes(key)) fm[key] = val.trim();
+    // First occurrence wins: a duplicate key (e.g. two `source:` lines) keeps the
+    // FIRST value, not the last. serializeFrontmatter then writes a single line,
+    // so a re-save collapses the duplicates.
+    if (['title','tags','source'].includes(key) && !fm[key]) fm[key] = val.trim();
   }
   return { fm, body };
 }
