@@ -254,7 +254,7 @@ async function switchTab(idx) {
       // tiny circle from a stale canvas size.
       resizeMindmapCanvas();
       layoutMindmap();
-      resetMindmapView();   // fit + centre = the "initial view" the reset button returns to
+      fitMindmapView();   // fit the WHOLE graph in view on entry (nothing cut off at the edges)
       // Welcome wobble: give the graph a gentle jiggle the moment you enter the
       // mindmap (no click/selection needed).
       kickMindmap();
@@ -2301,6 +2301,10 @@ function makeTodoTreeEntry() {
 }
 
 function renderTree() {
+  // Live-refresh the graph if it's on screen and the tree structure changed
+  // (move/rename/add/delete, incl. external vault edits — loadTree ends here,
+  // and drag-moves call renderTree directly). No-op otherwise.
+  try { refreshMindmapIfActive(); } catch (_) {}
   const query = state.searchQuery.toLowerCase();
   fileTree.innerHTML = '';
   // The "ToDo" entry is no longer shown in the tree: the ToDo board is
@@ -7764,7 +7768,7 @@ function sortFolderChildren(folderNode, mode) {
 
 let mmDragging = false, mmDragStart = {x:0,y:0}, mmOffset = {x:0,y:0};
 let mmScale = 1;
-let mmNodes = [], mmEdges = [], mmWikiLinks = [];
+let mmNodes = [], mmEdges = [], mmWikiLinks = [], mmAttachLinks = [];
 let mmHover = null;
 let mmDraggingNode = null;
 let mmConnectFrom = null;
@@ -7866,7 +7870,10 @@ function setupMindmap() {
     } else if (mmDownHit && !mmDragStarted) {
       // Click without drag → open note
       if (mmDownHit.type !== 'folder') {
-        openNote({ path: mmDownHit.path, name: mmDownHit.label, modified: mmDownHit.modified });
+        // Pass type + attachmentName through so PDFs/images open via their real
+        // loader (a bare {path,name} would drop the 'pdf/…' attachmentName).
+        openNote({ path: mmDownHit.path, name: mmDownHit.label, modified: mmDownHit.modified,
+          type: mmDownHit.type, attachmentName: mmDownHit.attachmentName });
       }
     }
     mmDownHit = null;
@@ -7958,11 +7965,15 @@ function kickMindmap() {
   // axis with an amplitude that decays to zero, then sits exactly back at home. No
   // spring/repulsion physics (that overshot into little "orbits" and expanded the
   // graph). Purely a decaying sine, so it's fluid and never zooms/drifts.
+  // Amplitude is a constant SCREEN size (÷ mmScale), so the wobble stays clearly
+  // visible whatever the zoom — before it was in world units, so on a big
+  // fit-zoomed-out graph it shrank to a couple of pixels and looked like jitter.
+  const _sc = mmScale || 1;
   mmNodes.forEach(n => {
     n.hx = n.x; n.hy = n.y;                       // home
     const ang = Math.random() * Math.PI * 2;
     n.wdx = Math.cos(ang); n.wdy = Math.sin(ang); // wobble axis
-    n.wAmp = 7 + Math.random() * 4;               // amplitude (px)
+    n.wAmp = (7 + Math.random() * 2.5) / _sc;     // subtle ~7-9px on screen at any zoom
     n.wPhase = Math.random() * Math.PI * 2;       // desync the nodes a little
     n.vx = 0; n.vy = 0;
   });
@@ -7984,8 +7995,8 @@ function tickMindmapPhysics() {
   // (L=52), so touching a node yanked everything outward — the graph visibly
   // "zoomed"/expanded. Now IDEAL_DIST≈layout spacing and repulsion is short-range +
   // weak, so connected nodes follow gently without blowing the layout up.
-  const IDEAL_DIST = 60;
-  const REPULSION  = 700;
+  const IDEAL_DIST = 95;   // match the layout's edge length so a drag doesn't yank neighbours inward
+  const REPULSION  = 900;
   const DAMPING    = 0.80;
   const SETTLE_D   = 0.85; // gentler damping → visible wobble for ~2s
   const MAX_V      = 6;
@@ -8040,7 +8051,7 @@ function tickMindmapPhysics() {
       const a = mmNodes[i], b = mmNodes[j];
       const dx = b.x - a.x, dy = b.y - a.y;
       const dist = Math.sqrt(dx*dx + dy*dy) || 1;
-      if (dist > 200) continue;   // short-range only → far nodes don't get pushed (no expansion)
+      if (dist > 280) continue;   // short-range only → far nodes don't get pushed (no expansion)
       const f = REPULSION / (dist * dist);
       const fx = (dx / dist) * f, fy = (dy / dist) * f;
       if (a !== mmDraggingNode) { a.vx -= fx; a.vy -= fy; }
@@ -8105,14 +8116,47 @@ function resizeMindmapCanvas() {
   canvas._dpr = dpr;
 }
 
+// A cheap signature of the tree STRUCTURE (every folder/note/attachment path).
+// Changes on move / rename / add / delete — but NOT on a pure reorder or a
+// sidebar folder expand (same path set) — so the live refresh below only rebuilds
+// the graph when something that actually affects it changed.
+let _mmSig = '';
+let _mmRefreshTimer = null;
+function _mmSignature() {
+  const paths = [];
+  const walk = (nodes) => { if (!nodes) return; for (const n of nodes) { paths.push(n.path); if (n.children) walk(n.children); } };
+  try { walk(state.notes); } catch (_) {}
+  return paths.sort().join('|');
+}
+// Live-refresh the mindmap when it's ON SCREEN and the tree structure changed
+// (a note/PDF moved, renamed, added or removed — including external vault edits).
+// Keeps the current zoom/pan so the view doesn't jump. Debounced.
+function refreshMindmapIfActive() {
+  const ov = document.getElementById('mindmap-overlay');
+  if (!ov || ov.style.display === 'none') return;      // graph not visible → nothing to do
+  const sig = _mmSignature();
+  if (sig === _mmSig) return;                          // structure unchanged
+  _mmSig = sig;
+  if (_mmRefreshTimer) clearTimeout(_mmRefreshTimer);
+  _mmRefreshTimer = setTimeout(() => {
+    buildMindmapData().then(() => { try { drawMindmap(); } catch (_) {} }).catch(() => {});
+  }, 250);
+}
+
 async function buildMindmapData() {
   mmNodes = [];
   mmEdges = [];
   mmWikiLinks = [];
+  mmAttachLinks = [];
 
-  // ── Pass 1: folder nodes (top-level only) ──────────────────────────────────
-  for (const n of state.notes) {
-    if (n.type === 'folder') {
+  // ── Pass 1: folder nodes (ALL folders, nested included) ────────────────────
+  // Every folder becomes a node so notes in SUB-folders cluster under their own
+  // folder (before, only top-level folders were nodes, so nested notes scattered
+  // into the root). `_folder` = the parent folder path → a folder→sub-folder edge
+  // is added in rebuildMindmapEdges, so the hierarchy shows.
+  const walkFolders = (nodes, parentPath) => {
+    for (const n of nodes) {
+      if (n.type !== 'folder') continue;
       const colorKey = noteColors[n.path];
       const color = colorKey ? NOTE_COLORS.find(c => c.key === colorKey)?.hex : null;
       mmNodes.push({
@@ -8123,16 +8167,33 @@ async function buildMindmapData() {
         tags: [],
         modified: null,
         x: 0, y: 0,
-        _folder: null,
+        _folder: parentPath,
         _conns: 0
       });
+      if (n.children) walkFolders(n.children, n.path);
     }
-  }
+  };
+  walkFolders(state.notes, null);
 
-  // ── Pass 2: note nodes + extract wiki-links ───────────────────────────────
+  // ── Pass 2: note + attachment nodes, extract wiki-links & attachment refs ──
   const allNotes = flattenTree(state.notes);
   const wikiRe = /\[\[([^\]|\n]+)(?:\|[^\]\n]+)?\]\]/g;
+  const attMdRe = /!?\[[^\]\n]*\]\((attachments\/[^)\s]+)\)/g;   // ![](attachments/…) / [x](attachments/…)
   for (const n of allNotes) {
+    const isAttach = (n.type === 'pdf' || n.type === 'image');
+    const colorKey = noteColors[n.path];
+    const color = colorKey ? NOTE_COLORS.find(c => c.key === colorKey)?.hex : null;
+    const _folder = n.path.includes('/') ? n.path.split('/').slice(0, -1).join('/') : null;
+    if (isAttach) {
+      // Attachments are binary — never read as text. They join the graph as leaf
+      // nodes; the note→attachment edge added below (from the note that embeds
+      // them) pulls each referenced PDF/image next to that note, so it lands in
+      // the note's folder cluster instead of floating in the root.
+      // Keep the real type + attachmentName so a click opens it correctly (a PDF
+      // in attachments/pdf/ needs the 'pdf/…' attachmentName, not just the base).
+      mmNodes.push({ path: n.path, label: n.name, type: n.type, attachmentName: n.attachmentName, isAttach: true, tags: [], color, modified: n.modified, x: 0, y: 0, _folder, _conns: 0 });
+      continue;
+    }
     let tags = [];
     const tab = getTab(n.path);
     // Lazy tab restore: an OPEN tab may not have loaded its content yet (empty
@@ -8140,9 +8201,6 @@ async function buildMindmapData() {
     const content = (tab && tab.content) ? tab.content : (await window.inkwell.readNote(n.path).catch(() => ''));
     const { fm } = parseFrontmatter(content);
     if (fm.tags) tags = fm.tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-    const colorKey = noteColors[n.path];
-    const color = colorKey ? NOTE_COLORS.find(c => c.key === colorKey)?.hex : null;
-    const _folder = n.path.includes('/') ? n.path.split('/').slice(0, -1).join('/') : null;
     mmNodes.push({
       path: n.path,
       label: n.name,
@@ -8155,19 +8213,28 @@ async function buildMindmapData() {
       _conns: 0
     });
 
-    // Find every `[[target]]` in this note's content and resolve to a note.
+    // `[[target]]`: a note→note link, or (if it doesn't resolve to a note) maybe
+    // an attachment embed like ![[file.pdf]] — deferred to rebuildMindmapEdges.
     wikiRe.lastIndex = 0;
     let m;
     while ((m = wikiRe.exec(content)) !== null) {
-      const resolved = resolveNoteLink(m[1].trim());
-      if (resolved && resolved.path !== n.path) {
-        mmWikiLinks.push({ from: n.path, to: resolved.path });
-      }
+      const target = m[1].trim();
+      const resolved = resolveNoteLink(target);
+      if (resolved && resolved.path !== n.path) mmWikiLinks.push({ from: n.path, to: resolved.path });
+      else mmAttachLinks.push({ from: n.path, target });
+    }
+    // Markdown embeds/links into attachments/ (the Amelie/Obsidian-import form).
+    attMdRe.lastIndex = 0;
+    let am;
+    while ((am = attMdRe.exec(content)) !== null) {
+      let ap = am[1].trim(); try { ap = decodeURIComponent(ap); } catch (_) {}
+      mmAttachLinks.push({ from: n.path, target: ap });
     }
   }
 
   rebuildMindmapEdges();
   layoutMindmap();
+  _mmSig = _mmSignature();   // baseline for the live-refresh diff
 }
 
 function rebuildMindmapEdges() {
@@ -8177,10 +8244,10 @@ function rebuildMindmapEdges() {
   const byPath = {};
   mmNodes.forEach((n, i) => { byPath[n.path] = i; });
 
-  // ── Folder→note edges ─────────────────────────────────────────────────────
+  // ── Folder→child edges (folder→note AND folder→sub-folder) ─────────────────
   for (let i = 0; i < mmNodes.length; i++) {
     const n = mmNodes[i];
-    if (n.type === 'note' && n._folder != null) {
+    if (n._folder != null && !n.isAttach) {   // notes + sub-folders (attachments cluster via their note link)
       const fi = byPath[n._folder];
       if (fi != null) {
         mmEdges.push({ from: fi, to: i, edgeType: 'folder', strength: 1 });
@@ -8213,6 +8280,34 @@ function rebuildMindmapEdges() {
     const fi = byPath[wl.from], ti = byPath[wl.to];
     if (fi != null && ti != null) {
       mmEdges.push({ from: fi, to: ti, edgeType: 'wiki', strength: 1 });
+    }
+  }
+
+  // ── Note→attachment edges: a PDF/image embedded or linked from a note sits
+  // NEXT to that note (so it lands in the note's folder cluster, not the root).
+  if (mmAttachLinks.length) {
+    const attachByPath = {}, attachByName = {};
+    mmNodes.forEach((nd, i) => {
+      if (!nd.isAttach) return;
+      attachByPath[nd.path.toLowerCase()] = i;
+      const base = nd.path.split('/').pop().toLowerCase();
+      attachByName[base] = i;
+      const lbl = (nd.label || '').toLowerCase();
+      if (lbl && lbl !== base) attachByName[lbl] = i;
+    });
+    const seen = new Set();
+    for (const al of mmAttachLinks) {
+      const fi = byPath[al.from]; if (fi == null) continue;
+      const t = String(al.target || '').toLowerCase();
+      let ai = attachByPath[t];
+      if (ai == null) {
+        const base = t.split('/').pop();
+        ai = attachByName[base];
+        if (ai == null && !/\.[a-z0-9]+$/.test(base)) ai = attachByName[base + '.pdf'];   // wiki without extension
+      }
+      if (ai == null || ai === fi) continue;
+      const key = fi + '-' + ai; if (seen.has(key)) continue; seen.add(key);
+      mmEdges.push({ from: fi, to: ai, edgeType: 'attach', strength: 1 });
     }
   }
 
@@ -8471,13 +8566,17 @@ function layoutMindmap() {
   // pulls related notes together and keeps long edges from crossing the graph.
   const disp = mmNodes.map(() => ({ x: 0, y: 0 }));
 
-  // Ideal edge length — shorter ⇒ tighter clusters. Kept small so connected
-  // notes sit close together.
-  const L = 52;
-  // Repulsion only acts within this radius. Beyond it nodes ignore each other,
-  // so unconnected notes don't push the whole graph apart (which used to blow
-  // the layout up and force a tiny zoom). This keeps everything compact.
-  const REP_RADIUS = L * 2.2;
+  // Ideal edge length. Sized so a connected note sits clear of its neighbour's
+  // LABEL (labels are drawn to the right of the dot and are ~100-140px wide), so
+  // linked notes don't overlap into an unreadable cluster.
+  const L = 95;
+  // Repulsion reaches this far. Widened so SIBLINGS around a busy hub push each
+  // other apart around the ring (better angular spread), not just immediate
+  // neighbours — that's what un-crowds a dense star cluster.
+  const REP_RADIUS = L * 2.8;
+  // Node degree (connections). A hub with many children gets LONGER edges below,
+  // so its children ring out on a bigger circle and their labels stop colliding.
+  const deg = mmNodes.map(n => n._conns || 0);
   // Per-type pull: structural + wiki keep notes close; shared-tag links are weak
   // so unrelated notes that merely share a tag don't get yanked together.
   const edgeWeight = (t) => (t === 'wiki' ? 1.4 : t === 'tag' ? 0.25 : 1.0);
@@ -8507,20 +8606,23 @@ function layoutMindmap() {
       }
     }
 
-    // Attraction along edges: f = (d² / L) * weight
+    // Attraction along edges: f = (d² / Le) * weight, where Le grows with the
+    // busier endpoint's degree — so a hub with N children rings them out on a
+    // wider circle (labels fit) while a simple 1-1 link stays tight.
     for (const e of mmEdges) {
       const a = mmNodes[e.from], b = mmNodes[e.to];
       const i = e.from, j = e.to;
       let dx = a.x - b.x, dy = a.y - b.y;
       let d = Math.sqrt(dx * dx + dy * dy) || 0.01;
-      const f = ((d * d) / L) * edgeWeight(e.edgeType);
+      const Le = L * (1 + 0.28 * Math.min(Math.max(deg[i], deg[j]), 12));
+      const f = ((d * d) / Le) * edgeWeight(e.edgeType);
       const ux = dx / d, uy = dy / d;
       disp[i].x -= ux * f; disp[i].y -= uy * f;
       disp[j].x += ux * f; disp[j].y += uy * f;
     }
 
-    // Gravity toward centre — stronger now so detached / loosely-connected
-    // notes are pulled in and the whole cloud stays compact.
+    // Gravity toward centre — keeps detached notes from drifting off, but gentle
+    // so it doesn't fight the wider spacing above and re-cram the clusters.
     for (let i = 0; i < mmNodes.length; i++) {
       disp[i].x += (cx - mmNodes[i].x) * 0.04;
       disp[i].y += (cy - mmNodes[i].y) * 0.04;
@@ -8586,6 +8688,29 @@ function resetMindmapView() {
   drawMindmap();
 }
 
+// ENTRY view: fit the whole graph into the viewport so nothing is cut off at the
+// edges — but never zoom IN past 100% (a small graph stays 1:1; a big one zooms
+// OUT to fit). The Reset button keeps its 100%-centred behaviour above; only the
+// initial open uses this. Extra right/bottom margin leaves room for the node
+// LABELS, which extend to the right of each dot.
+function fitMindmapView() {
+  if (!mmNodes || !mmNodes.length) return;
+  const canvas = $('mindmap-canvas');
+  const dpr = canvas._dpr || 1;
+  const W = canvas.width / dpr, H = canvas.height / dpr;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of mmNodes) { if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x; if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y; }
+  const PAD_R = 150, PAD = 40;                 // label room on the right + a small frame
+  minX -= PAD; minY -= PAD; maxX += PAD_R; maxY += PAD;
+  const gw = (maxX - minX) || 1, gh = (maxY - minY) || 1;
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const fit = Math.min(W / gw, H / gh);
+  mmScale = Math.min(1.0, Math.max(0.2, fit));
+  mmOffset.x = W / 2 - cx * mmScale;
+  mmOffset.y = H / 2 - cy * mmScale;
+  drawMindmap();
+}
+
 function drawMindmap() {
   const canvas = $('mindmap-canvas');
   const ctx = canvas.getContext('2d');
@@ -8622,41 +8747,28 @@ function drawMindmap() {
   const dimMul = (a) => focused ? a * DIM : a;
 
   // ── Draw edges ─────────────────────────────────────────────────────────────
-  // Per-type styling. Structural links (folder→note, shared-tag) are muted grey
-  // so they read as quiet "containment". Wiki-links — the `[[…]]` references the
-  // user actually wrote — are bright blue and drawn last (on top) so they stand
-  // out clearly.
-  const edgeStyle = (type) => {
-    switch (type) {
-      case 'wiki':   return { color: '#5b8def', width: 1.7, alpha: 0.95, dash: [] };
-      case 'custom': return { color: '#8aa0b8', width: 1.3, alpha: 0.7,  dash: [] };
-      case 'tag':    return { color: '#475061', width: 0.9, alpha: 0.45, dash: [3, 3] };
-      case 'folder':
-      default:       return { color: '#39414e', width: 1.0, alpha: 0.6,  dash: [] };
-    }
-  };
-  // Draw order: structural first, wiki on top. (Lower priority drawn first.)
-  const edgePrio = (t) => (t === 'wiki' ? 3 : t === 'custom' ? 2 : t === 'tag' ? 0 : 1);
+  // UNIFORM look: every link is the same muted grey by default (no per-type
+  // colours). Hovering a node turns ITS links the accent green and brightens
+  // them, while every other link fades back — so the neighbourhood stands out
+  // uniformly. Draw the focused (green) links LAST so they sit on top.
+  const EDGE_GREY = '#4a5460';
+  ctx.setLineDash([]);
   const drawOrder = mmEdges
     .map((_, i) => i)
-    .sort((i, j) => edgePrio(mmEdges[i].edgeType) - edgePrio(mmEdges[j].edgeType));
+    .sort((i, j) => (highlightEdges.has(i) ? 1 : 0) - (highlightEdges.has(j) ? 1 : 0));
 
   drawOrder.forEach((ei) => {
     const e = mmEdges[ei];
     const a = mmNodes[e.from], b = mmNodes[e.to];
-    const st = edgeStyle(e.edgeType);
-    const isHL = !focused || highlightEdges.has(ei);
+    const isFocusEdge = focused && highlightEdges.has(ei);
 
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
-    ctx.strokeStyle = st.color;
-    ctx.lineWidth = st.width;
-    ctx.setLineDash(st.dash);
-    ctx.globalAlpha = isHL ? st.alpha : dimMul(st.alpha);
-
+    ctx.strokeStyle = isFocusEdge ? clrAccent : EDGE_GREY;
+    ctx.lineWidth = isFocusEdge ? 1.9 : 1.1;
+    ctx.globalAlpha = isFocusEdge ? 0.95 : (focused ? 0.10 : 0.5);
     ctx.stroke();
-    ctx.setLineDash([]);
     ctx.globalAlpha = 1;
   });
 
@@ -8675,6 +8787,11 @@ function drawMindmap() {
   }
 
   // ── Draw nodes ─────────────────────────────────────────────────────────────
+  // Labels are COLLECTED here and drawn in a second pass with collision
+  // avoidance (below), so a dense cluster doesn't turn into a wall of
+  // overlapping text — only labels that fit are shown, the rest reappear on
+  // hover or as you zoom in.
+  const labelJobs = [];
   mmNodes.forEach((n, ni) => {
     const isHover = focused === n;
     const isHL = !focused || highlightIdx.has(ni);
@@ -8683,7 +8800,7 @@ function drawMindmap() {
     ctx.globalAlpha = isHL ? 1 : DIM;
 
     if (n.type === 'folder') {
-      const dotR = 14 + (isHover ? 5 : 0);
+      const dotR = 5 + (isHover ? 2 : 0);
       const dotColor = n.color || '#2a4a6a';
 
       if (isHover) {
@@ -8704,16 +8821,13 @@ function drawMindmap() {
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // Label
-      const showLabel = mmScale > 0.3 || isHover;
-      if (showLabel) {
+      // Label collected for the collision-avoidance pass. Folders get top
+      // priority so their labels are never the ones dropped.
+      {
         const maxLen = 20;
         const label = n.label.length > maxLen ? n.label.slice(0, maxLen - 1) + '…' : n.label;
-        ctx.font = `500 12px 'Roboto', system-ui, sans-serif`;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = isHover ? '#dde6f0' : '#a0bcd0';
-        ctx.fillText(label, n.x + dotR + 6, n.y);
+        labelJobs.push({ nx: n.x, ny: n.y, dotR, gap: 6 / mmScale, label, px: 14 / mmScale, bold: true,
+          color: isHover ? '#dde6f0' : '#a0bcd0', alpha: isHL ? 1 : DIM, isHover, weight: 1e6 + dotR });
       }
     } else {
       // note node
@@ -8743,24 +8857,68 @@ function drawMindmap() {
       }
       ctx.shadowBlur = 0;
 
-      const showLabel = mmScale > 0.5 || isHover;
-      if (showLabel) {
+      // Label collected for the collision-avoidance pass. Constant SCREEN size
+      // (font ÷ mmScale). More-connected notes get priority so hubs keep labels.
+      {
         const maxLen = 22;
         const label = n.label.length > maxLen ? n.label.slice(0, maxLen - 1) + '…' : n.label;
-        const fontSize = isHover ? 12 : 11;
-        ctx.font = `${fontSize}px 'Roboto', system-ui, sans-serif`;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = isHover
-          ? '#dde6f0'
-          : conns > 2
-            ? '#8a9aaa'
-            : '#5c6a78';
-        ctx.fillText(label, n.x + dotR + 5, n.y);
+        const color = isHover ? '#dde6f0' : conns > 2 ? '#9fb1c2' : '#7a8896';
+        labelJobs.push({ nx: n.x, ny: n.y, dotR, gap: 5 / mmScale, label, px: (isHover ? 14 : 13) / mmScale, bold: false,
+          color, alpha: isHL ? 1 : DIM, isHover, weight: dotR * 10 + conns });
       }
     }
   });
+
+  // ── Label collision-avoidance pass ─────────────────────────────────────────
+  // Draw labels by priority (hovered first, then folders/hubs by weight); SKIP
+  // any whose box overlaps a label already placed. So a crowded cluster shows
+  // only the labels that fit instead of an unreadable pile — the dropped ones
+  // reappear on hover, or as the user zooms in and the nodes separate on screen.
+  // PERF: this pass (measureText + O(n²) overlap test + a bg fill per label) is
+  // skipped WHILE the graph is animating (wobble / drag), so those run at a
+  // smooth 60fps on just dots+edges; labels snap back in the moment it settles.
+  if (!mmPhysicsRunning) {
+  labelJobs.sort((a, b) => (b.isHover - a.isHover) || (b.weight - a.weight));
+  const _placed = [];
+  const _pad = 1.5 / mmScale;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  const _overlaps = (b) => { for (const p of _placed) { if (b.x < p.r && b.r > p.x && b.y < p.b && b.b > p.y) return true; } return false; };
+  for (const j of labelJobs) {
+    ctx.font = `${j.bold ? '500 ' : ''}${j.px}px 'Roboto', system-ui, sans-serif`;
+    const w = ctx.measureText(j.label).width, h = j.px;
+    // Candidate label positions around the dot: right, left, above, below. The
+    // first that doesn't collide with an already-placed label wins — so far more
+    // labels fit than a right-only placement (fewer bare dots in a cluster).
+    const cands = [
+      { x: j.nx + j.dotR + j.gap,       y: j.ny },
+      { x: j.nx - j.dotR - j.gap - w,   y: j.ny },
+      { x: j.nx - w / 2,                y: j.ny - j.dotR - j.gap - h / 2 },
+      { x: j.nx - w / 2,                y: j.ny + j.dotR + j.gap + h / 2 },
+    ];
+    let chosen = null;
+    for (const c of cands) {
+      const box = { x: c.x - _pad, y: c.y - h / 2 - _pad, r: c.x + w + _pad, b: c.y + h / 2 + _pad };
+      if (!_overlaps(box)) { chosen = { c, box }; break; }
+    }
+    if (!chosen) {
+      if (!j.isHover) continue;                          // no room → drop (hover/zoom reveals it)
+      const c = cands[0];
+      chosen = { c, box: { x: c.x - _pad, y: c.y - h / 2 - _pad, r: c.x + w + _pad, b: c.y + h / 2 + _pad } };
+    }
+    _placed.push(chosen.box);
+    // Mask the edge lines behind the text (graph-bg fill) so links never cross
+    // through a label and make it unreadable.
+    const _bpx = 3 / mmScale, _bpy = 1.5 / mmScale;
+    ctx.globalAlpha = j.alpha * 0.82;
+    ctx.fillStyle = '#0d0d0f';
+    ctx.fillRect(chosen.c.x - _bpx, chosen.c.y - h / 2 - _bpy, w + _bpx * 2, h + _bpy * 2);
+    ctx.globalAlpha = j.alpha;
+    ctx.fillStyle = j.color;
+    ctx.fillText(j.label, chosen.c.x, chosen.c.y);
+  }
   ctx.globalAlpha = 1;
+  }   // end if (!mmPhysicsRunning) — labels skipped while animating
 
   ctx.restore();
 
