@@ -3117,15 +3117,15 @@ ipcMain.handle('fs:renameNote', async (_, oldPath, newPath) => {
   return true;
 });
 
-// ─── IPC: Export drawing → native tldraw .tldr ───────────────────────────────
-// The renderer hands us the already-built .tldr JSON (file-format wrapper around
-// the store records); we just let the user pick where to save it.
+// ─── IPC: Export drawing → native .excalidraw ────────────────────────────────
+// The renderer hands us the already-built scene JSON; we just let the user pick
+// where to save it. (Channel name kept for compatibility with the preload.)
 ipcMain.handle('draw:exportTldr', async (_, name, tldrJson) => {
   const safeName = String(name || 'disegno').replace(/[\/\\:*?"<>|]/g, '_').slice(0, 120) || 'disegno';
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow || undefined, {
-    title: 'Esporta disegno (.tldr)',
-    defaultPath: path.join(app.getPath('documents') || os.homedir(), `${safeName}.tldr`),
-    filters: [{ name: 'tldraw', extensions: ['tldr'] }],
+    title: 'Esporta disegno (.excalidraw)',
+    defaultPath: path.join(app.getPath('documents') || os.homedir(), `${safeName}.excalidraw`),
+    filters: [{ name: 'Excalidraw', extensions: ['excalidraw'] }],
   });
   if (canceled || !filePath) return { canceled: true };
   try {
@@ -3135,7 +3135,7 @@ ipcMain.handle('draw:exportTldr', async (_, name, tldrJson) => {
 });
 
 // Export the current drawing to a PNG/SVG image. The renderer rasterizes via
-// tldraw (honoring the chosen export background) and hands us base64 bytes.
+// Excalidraw (honoring the chosen export background) and hands us base64 bytes.
 ipcMain.handle('draw:exportImage', async (_, name, format, b64) => {
   const fmt = (format === 'svg') ? 'svg' : 'png';
   const safeName = String(name || 'disegno').replace(/[\/\\:*?"<>|]/g, '_').slice(0, 120) || 'disegno';

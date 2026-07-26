@@ -125,7 +125,11 @@
           post({ type: 'CANVAS_READY' });
           if (pendingLoad) { loadData(pendingLoad); pendingLoad = null; }
         },
-        initialData: { appState: { viewBackgroundColor: '#1a1a1a', currentItemFontFamily: 3 } },
+        // Excalidraw's dark theme INVERTS the canvas, so viewBackgroundColor is
+        // given in light-theme terms: white here renders as the dark canvas that
+        // matches the rest of Amelie. Setting a dark value would inverted into a
+        // light grey sheet — which is exactly what it did.
+        initialData: { appState: { viewBackgroundColor: '#ffffff', currentItemFontFamily: 3 } },
         // Every scene mutation lands here. NOT wrapped in a silent try/catch: a
         // throw means edits stop reaching the parent and the drawing is not being
         // saved, which has to be visible.
