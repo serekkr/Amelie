@@ -309,8 +309,12 @@
               <div id="note-search-bar" style="display:none">
                 <input id="note-search-input" type="text" placeholder="Cerca nella nota…" data-i18n-placeholder="note_search.placeholder" autocomplete="off" spellcheck="false"/>
                 <span id="note-search-count"></span>
-                <button id="note-search-prev" title="Precedente" data-i18n-title="note_search.prev">↑</button>
-                <button id="note-search-next" title="Successivo (Enter)" data-i18n-title="note_search.next">↓</button>
+                <button id="note-search-prev" title="Precedente" data-i18n-title="note_search.prev" aria-label="Precedente">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                </button>
+                <button id="note-search-next" title="Successivo (Enter)" data-i18n-title="note_search.next" aria-label="Successivo">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
                 <button id="note-search-close">✕</button>
               </div>
 
@@ -522,7 +526,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 0-1 1h-4"/><path d="M7 12h10"/></svg>
               </button>
               <button id="pdf-undo" class="pdf-tool-btn" title="Annulla" data-i18n-title="pdf.undo" aria-label="Annulla">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
               </button>
               <button id="pdf-save" class="pdf-tool-btn" title="Salva" data-i18n-title="pdf.save" aria-label="Salva" disabled>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
