@@ -18,14 +18,11 @@ import {
   Excalidraw,
   serializeAsJSON,
   restore,
-  exportToBlob,
-  exportToSvg,
   convertToExcalidrawElements,
 } from '@excalidraw/excalidraw';
 
 window.__ExcalidrawLib = {
   React, ReactDOM,
-  Excalidraw, serializeAsJSON, restore,
-  exportToBlob, exportToSvg, convertToExcalidrawElements,
+  Excalidraw, serializeAsJSON, restore, convertToExcalidrawElements,
 };
 window.excalidrawReady = true;

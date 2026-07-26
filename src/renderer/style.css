@@ -2399,23 +2399,6 @@ body.split-open .pane-focused { box-shadow: inset 0 0 0 1.5px var(--accent-dim);
   padding: 4px 12px; transition: background .12s, border-color .12s;
 }
 .cv-action-btn:hover { background: var(--bg-4); border-color: var(--border-light); color: var(--text-0); }
-#draw-export-bg-wrap {
-  display: flex; align-items: center; gap: 6px;
-  color: var(--text-1); font-family: var(--ui-font); font-size: 12px;
-  cursor: pointer; user-select: none;
-}
-#draw-export-bg {
-  background: var(--bg-3); border: 1px solid var(--border);
-  border-radius: 5px; color: var(--text-1);
-  font-family: var(--ui-font); font-size: 12px;
-  padding: 3px 6px; cursor: pointer;
-}
-#draw-export-bg:hover { border-color: var(--border-light); color: var(--text-0); }
-#draw-export-bg option { background: var(--bg-2); color: var(--text-0); }
-.cv-img-btn { padding: 4px 9px; gap: 5px; }
-.cv-img-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
-.cv-img-btn span { font-size: 11px; font-weight: 500; letter-spacing: .02em; }
-.cv-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
 .tool-sep { width: 1px; height: 18px; background: var(--border); margin: 0 6px; flex-shrink: 0; align-self: center; }
 /* "Show config" buttons are pointless (the summary/wizard
    already shows what's needed) — hidden everywhere; only the modify/reconfigure

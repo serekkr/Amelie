@@ -29,7 +29,7 @@
   <script>
     const {
       React, ReactDOM, Excalidraw,
-      serializeAsJSON, restore, exportToBlob, exportToSvg, convertToExcalidrawElements,
+      serializeAsJSON, restore, convertToExcalidrawElements,
     } = window.__ExcalidrawLib;
     const { createElement: h } = React;
 
@@ -37,12 +37,6 @@
     let pendingLoad = null;
     let suppressChange = 0;      // >0 while WE are loading a scene, so the
                                  // resulting onChange isn't reported as a user edit
-    // Background mode for image export, driven by Amelie's header:
-    //   'white'       → white background
-    //   'transparent' → no background
-    //   'theme'       → dark background (matches the canvas)
-    let _exportBgMode = 'white';
-
     const post = (msg) => window.parent.postMessage(msg, '*');
 
     // ── File format ──────────────────────────────────────────────────────────
@@ -83,39 +77,6 @@
       }
     }
 
-    // Rasterize the scene to PNG/SVG honouring _exportBgMode, and hand the bytes
-    // back to the parent for saving.
-    async function exportImage(format, requestId) {
-      const reply = (payload) => post({ type: 'EXPORT_IMAGE_RESULT', requestId, ...payload });
-      try {
-        if (!api) return reply({ ok: false, error: 'no api' });
-        const elements = api.getSceneElements().filter(el => !el.isDeleted);
-        if (!elements.length) return reply({ ok: true, empty: true });
-        const files = api.getFiles();
-        const dark = _exportBgMode === 'theme';
-        const appState = {
-          exportBackground: _exportBgMode !== 'transparent',
-          viewBackgroundColor: dark ? '#1a1a1a' : '#ffffff',
-          exportWithDarkMode: dark,
-        };
-        const fmt = format === 'svg' ? 'svg' : 'png';
-        let b64;
-        if (fmt === 'svg') {
-          const svg = await exportToSvg({ elements, appState, files });
-          b64 = btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(svg))));
-        } else {
-          const blob = await exportToBlob({ elements, appState, files, mimeType: 'image/png' });
-          const dataUrl = await new Promise((res, rej) => {
-            const r = new FileReader();
-            r.onload = () => res(r.result); r.onerror = () => rej(r.error);
-            r.readAsDataURL(blob);
-          });
-          b64 = String(dataUrl).split(',')[1] || '';
-        }
-        reply({ ok: true, format: fmt, b64 });
-      } catch (e) { reply({ ok: false, error: String((e && e.message) || e) }); }
-    }
-
     function App() {
       return h(Excalidraw, {
         theme: 'dark',
@@ -151,16 +112,6 @@
       if (msg?.type === 'LOAD_DATA' && msg.json) {
         if (api) loadData(msg.json);
         else pendingLoad = msg.json;
-        return;
-      }
-
-      if (msg?.type === 'SET_EXPORT_BG' && msg.mode) {
-        _exportBgMode = msg.mode;   // applies to the next image export
-        return;
-      }
-
-      if (msg?.type === 'EXPORT_IMAGE') {
-        exportImage(msg.format, msg.requestId);
         return;
       }
 

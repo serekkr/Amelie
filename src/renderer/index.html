@@ -462,23 +462,10 @@
             <div id="canvas-header-actions">
               <button id="btn-draw-import" class="cv-action-btn" data-i18n="canvas.import_draw">Importa disegno…</button>
               <button id="btn-draw-export" class="cv-action-btn" data-i18n="canvas.export_draw">Esporta disegno…</button>
-              <span class="cv-sep"></span>
-              <label id="draw-export-bg-wrap" title="Sfondo per l'export immagine (PNG/SVG)">
-                <span data-i18n="canvas.export_bg_label">Sfondo export:</span>
-                <select id="draw-export-bg">
-                  <option value="white" data-i18n="canvas.export_bg_white">Bianco</option>
-                  <option value="transparent" data-i18n="canvas.export_bg_transparent">Trasparente</option>
-                  <option value="theme" data-i18n="canvas.export_bg_theme">Scuro</option>
-                </select>
-              </label>
-              <button id="btn-draw-png" class="cv-action-btn cv-img-btn" title="Esporta PNG" data-i18n-title="canvas.export_png">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-                <span>PNG</span>
-              </button>
-              <button id="btn-draw-svg" class="cv-action-btn cv-img-btn" title="Esporta SVG" data-i18n-title="canvas.export_svg">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-                <span>SVG</span>
-              </button>
+              <!-- Image export lives in Excalidraw's own ☰ menu now ("Export
+                   image…", with background and dark-mode options). The selector
+                   and PNG/SVG buttons that used to be here existed only because
+                   tldraw's native export ignored them. -->
             </div>
             <button id="btn-canvas-close" class="icon-btn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18L18 6M6 6l12 12"/></svg>

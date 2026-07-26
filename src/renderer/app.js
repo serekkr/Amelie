@@ -12023,9 +12023,6 @@ let activeCanvasPath = null;
 // this instead of the disk file, which can lag up to the 1.5s autosave debounce
 // (exporting right after drawing would otherwise produce a stale/empty file).
 let _liveCanvasJson = null;
-// Pending PNG/SVG image-export requests (renderer ⇄ canvas iframe round-trip).
-let _exportImgReq = 0;
-const _exportImgPending = new Map();
 let canvasIframeReady = false;
 const EMPTY_DRAW = '{}';
 
@@ -12047,21 +12044,6 @@ function setupCanvas() {
   $('btn-draw-import')?.addEventListener('click', () => {
     pickDrawFileToImport();   // imports as a NEW drawing (honors the drawLocation pref)
   });
-
-  // Quick PNG/SVG image export — saves via a dialog, using the chosen background.
-  $('btn-draw-png')?.addEventListener('click', () => requestImageExport('png'));
-  $('btn-draw-svg')?.addEventListener('click', () => requestImageExport('svg'));
-
-  // Export-background selector — drives Excalidraw's native "Export image"
-  // menu (white / transparent / follow-the-dark-canvas) without changing theme.
-  const bgSel = $('draw-export-bg');
-  if (bgSel) {
-    bgSel.value = getDrawExportBg();
-    bgSel.addEventListener('change', () => {
-      localStorage.setItem('amelie-draw-export-bg', bgSel.value);
-      sendExportBgToIframe();
-    });
-  }
 
   // Double-click the Draw title → inline rename (same gesture as the note name
   // in the breadcrumb). Single clicks do nothing — the title stays put.
@@ -12094,22 +12076,9 @@ function setupCanvas() {
 
   window.addEventListener('message', async (e) => {
     const msg = e.data;
-    if (msg?.type === 'EXPORT_IMAGE_RESULT') {
-      const pend = _exportImgPending.get(msg.requestId);
-      _exportImgPending.delete(msg.requestId);
-      if (!pend) return;
-      const t = (k) => window.i18n ? window.i18n.t(k) : k;
-      if (msg.empty) { showToast('✗ ' + t('canvas.export_img_empty')); return; }
-      if (!msg.ok)   { showToast('✗ ' + t('canvas.export_img_failed') + ': ' + (msg.error || '')); return; }
-      const r = await window.inkwell.exportDrawImage(pend.name, msg.format, msg.b64).catch(e => ({ ok: false, error: e?.message }));
-      if (r && r.ok) showToast('✓ ' + t('canvas.export_img_ok') + ': ' + pend.name + '.' + msg.format);
-      else if (r && !r.canceled) showToast('✗ ' + t('canvas.export_img_failed') + ': ' + (r.error || ''));
-      return;
-    }
     if (msg?.type === 'CANVAS_READY') {
       canvasIframeReady = true;
       _iframeCompositorKicked = false;
-      sendExportBgToIframe();   // the iframe just (re)mounted — tell it the chosen export bg
       if (activeCanvasPath) _sendDrawToIframe(activeCanvasPath);
     }
     // The canvas refused the file. Say so and STOP tracking it as the active
@@ -12151,25 +12120,6 @@ async function _sendDrawToIframe(filePath) {
     const json = await window.inkwell.readNote(filePath).catch(() => null);
     $('canvas-iframe').contentWindow?.postMessage({ type: 'LOAD_DATA', json: json || EMPTY_DRAW }, '*');
   } catch(_) {}
-}
-
-// Chosen background for drawing image-export (white | transparent | theme).
-function getDrawExportBg() {
-  const v = localStorage.getItem('amelie-draw-export-bg');
-  return (v === 'transparent' || v === 'theme') ? v : 'white';   // default white
-}
-function sendExportBgToIframe() {
-  try { $('canvas-iframe')?.contentWindow?.postMessage({ type: 'SET_EXPORT_BG', mode: getDrawExportBg() }, '*'); } catch(_) {}
-}
-
-// Ask the canvas iframe to rasterize the current drawing to PNG/SVG; the result
-// comes back as EXPORT_IMAGE_RESULT and is saved via a dialog (draw:exportImage).
-function requestImageExport(format) {
-  if (!activeCanvasPath) return;
-  const name = activeCanvasPath.split('/').pop().replace(/\.draw$/i, '');
-  const requestId = ++_exportImgReq;
-  _exportImgPending.set(requestId, { name, format });
-  try { $('canvas-iframe')?.contentWindow?.postMessage({ type: 'EXPORT_IMAGE', format, requestId }, '*'); } catch(_) {}
 }
 
 async function newDraw() {

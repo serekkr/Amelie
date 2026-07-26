@@ -284,15 +284,6 @@ const TRANSLATIONS = {
     'canvas.export_ok':       'Disegno esportato',
     'canvas.export_failed':   'Export disegno fallito',
     'sync.smb_modify':              'Modifica',
-    'canvas.export_bg_label':       'Sfondo export:',
-    'canvas.export_bg_white':       'Bianco',
-    'canvas.export_bg_transparent': 'Trasparente',
-    'canvas.export_bg_theme':       'Scuro',
-    'canvas.export_png':            'Esporta PNG',
-    'canvas.export_svg':            'Esporta SVG',
-    'canvas.export_img_ok':         'Immagine esportata',
-    'canvas.export_img_empty':      'Disegno vuoto: niente da esportare',
-    'canvas.export_img_failed':     'Export immagine fallito',
     'canvas.close':           'Chiudi',
 
     // Mindmap
@@ -1143,15 +1134,6 @@ const TRANSLATIONS = {
     'canvas.export_ok':       'Drawing exported',
     'canvas.export_failed':   'Drawing export failed',
     'sync.smb_modify':              'Modify',
-    'canvas.export_bg_label':       'Export background:',
-    'canvas.export_bg_white':       'White',
-    'canvas.export_bg_transparent': 'Transparent',
-    'canvas.export_bg_theme':       'Dark',
-    'canvas.export_png':            'Export PNG',
-    'canvas.export_svg':            'Export SVG',
-    'canvas.export_img_ok':         'Image exported',
-    'canvas.export_img_empty':      'Empty drawing: nothing to export',
-    'canvas.export_img_failed':     'Image export failed',
     'canvas.close':           'Close',
 
     // Mindmap

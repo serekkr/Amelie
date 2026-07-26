@@ -3134,22 +3134,6 @@ ipcMain.handle('draw:exportTldr', async (_, name, tldrJson) => {
   } catch (e) { return { ok: false, error: e.message }; }
 });
 
-// Export the current drawing to a PNG/SVG image. The renderer rasterizes via
-// Excalidraw (honoring the chosen export background) and hands us base64 bytes.
-ipcMain.handle('draw:exportImage', async (_, name, format, b64) => {
-  const fmt = (format === 'svg') ? 'svg' : 'png';
-  const safeName = String(name || 'disegno').replace(/[\/\\:*?"<>|]/g, '_').slice(0, 120) || 'disegno';
-  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow || undefined, {
-    title: fmt === 'svg' ? 'Esporta disegno (.svg)' : 'Esporta disegno (.png)',
-    defaultPath: path.join(app.getPath('documents') || os.homedir(), `${safeName}.${fmt}`),
-    filters: [{ name: fmt.toUpperCase(), extensions: [fmt] }],
-  });
-  if (canceled || !filePath) return { canceled: true };
-  try {
-    fs.writeFileSync(filePath, Buffer.from(String(b64 || ''), 'base64'));
-    return { ok: true, filePath };
-  } catch (e) { return { ok: false, error: e.message }; }
-});
 
 // ─── IPC: Export note → PDF ──────────────────────────────────────────────────
 // The renderer hands us a self-contained HTML document (markdown already
