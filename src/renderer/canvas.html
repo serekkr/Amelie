@@ -50,18 +50,29 @@
     //   'theme'       → "Dark"/"Scuro": force dark background + light strokes
     let _exportBgMode = 'white';
 
+    // tldraw 5 RENAMED the store snapshot methods: getSnapshot → getStoreSnapshot
+    // and loadSnapshot → loadStoreSnapshot. Both calls used to sit inside a silent
+    // try/catch, so on the old names the upgrade stopped saving drawings with no
+    // error anywhere. Resolve whichever the loaded bundle provides; the on-disk
+    // shape is the same either way, so .draw files written by older versions keep
+    // opening (loadStoreSnapshot still runs the schema migrations).
+    const storeSnapshot = (ed) =>
+      ed.store.getStoreSnapshot ? ed.store.getStoreSnapshot() : ed.store.getSnapshot();
+    const storeLoad = (ed, snap) =>
+      ed.store.loadStoreSnapshot ? ed.store.loadStoreSnapshot(snap) : ed.store.loadSnapshot(snap);
+
     function loadData(json) {
       if (!editor || !json) return;
       try {
         const snapshot = JSON.parse(json);
         if (snapshot && typeof snapshot === 'object' && Object.keys(snapshot).length > 0) {
-          editor.store.loadSnapshot(snapshot);
+          storeLoad(editor, snapshot);
         } else {
           // Empty file — clear all shapes from current page
           const ids = [...editor.getCurrentPageShapeIds()];
           if (ids.length > 0) editor.deleteShapes(ids);
         }
-      } catch(_) {}
+      } catch (e) { console.error('[canvas] load failed', e); }
     }
 
     // Rasterize the current page to PNG/SVG (honoring _exportBgMode via the
@@ -110,13 +121,14 @@
           window.parent.postMessage({ type: 'CANVAS_READY' }, '*');
           if (pendingLoad) { loadData(pendingLoad); pendingLoad = null; }
 
-          // Only listen to user-initiated changes (not loadSnapshot)
+          // Only listen to user-initiated changes (not loadSnapshot).
+          // NOT silent: a throw in here means edits stop reaching the parent and
+          // the drawing never gets saved — that has to be visible in the console.
           editor.store.listen(() => {
             try {
-              const snapshot = editor.store.getSnapshot();
-              const json = JSON.stringify(snapshot);
+              const json = JSON.stringify(storeSnapshot(editor));
               window.parent.postMessage({ type: 'CANVAS_CHANGE', json }, '*');
-            } catch(_) {}
+            } catch (e) { console.error('[canvas] snapshot failed', e); }
           }, { source: 'user' });
         },
       });
