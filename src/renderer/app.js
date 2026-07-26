@@ -12038,13 +12038,6 @@ function setupCanvas() {
 
   // Import / Export buttons on the drawing's header bar — visible while you're
   // inside a drawing (the right-click title menu was too hidden to find).
-  $('btn-draw-export')?.addEventListener('click', () => {
-    if (activeCanvasPath) exportDrawToTldr(activeCanvasPath);
-  });
-  $('btn-draw-import')?.addEventListener('click', () => {
-    pickDrawFileToImport();   // imports as a NEW drawing (honors the drawLocation pref)
-  });
-
   // Double-click the Draw title → inline rename (same gesture as the note name
   // in the breadcrumb). Single clicks do nothing — the title stays put.
   const ct = $('canvas-title');
@@ -13609,122 +13602,6 @@ function setupDrawContextMenu() {
     renderTabBar();
     await loadTree();
   });
-  // Export the open drawing as a native .excalidraw file (openable on
-  // excalidraw.com / other Excalidraw editors), completing the round-trip.
-  $('drawctx-export')?.addEventListener('click', () => {
-    menu.style.display = 'none';
-    if (activeCanvasPath) exportDrawToTldr(activeCanvasPath);
-  });
-  // Import a drawing FILE (an Amelie .draw or a native .excalidraw) as a NEW
-  // drawing in the vault — for the round-trip "export → someone edits → re-import".
-  $('drawctx-import')?.addEventListener('click', () => {
-    menu.style.display = 'none';
-    pickDrawFileToImport();   // no folder → honors the drawLocation pref
-  });
-}
-
-// Open a hidden file picker for a drawing and import the chosen file. Shared by
-// the draw-title menu and the tree context menu. `destFolder`: undefined → use
-// the drawLocation pref (root|current); a string → import into that folder.
-function pickDrawFileToImport(destFolder) {
-  const inp = document.createElement('input');
-  inp.type = 'file';
-  inp.accept = '.draw,.excalidraw,.json';
-  inp.style.display = 'none';
-  inp.addEventListener('change', () => { const f = inp.files && inp.files[0]; if (f) importDrawFromFile(f, destFolder); inp.remove(); });
-  document.body.appendChild(inp);
-  inp.click();
-}
-
-// Turn whatever a drawing file holds into an Excalidraw scene.
-// Accepts: Amelie's own .draw (already a scene), a native
-// .excalidraw file ({type,version,elements,appState,files}), or an empty {}.
-function _normalizeDrawSnapshot(text) {
-  const data = JSON.parse(text);
-  if (data && typeof data === 'object' && !Array.isArray(data)) {
-    // Excalidraw scene (.excalidraw or one of our .draw files)
-    if (Array.isArray(data.elements)) {
-      return { type: 'excalidraw', version: data.version || 2, source: 'amelie',
-               elements: data.elements, appState: data.appState || {}, files: data.files || {} };
-    }
-    // Empty file — a blank drawing, not an error.
-    if (Object.keys(data).length === 0) return {};
-    // Written by the tldraw-based canvas Amelie used before v1.0.7: that format
-    // can't be rendered here, and importing it would produce a blank drawing.
-    if (data.store && data.schema) throw new Error('formato tldraw non supportato');
-    if (Array.isArray(data.records) && data.schema) throw new Error('formato tldraw non supportato');
-  }
-  throw new Error('unrecognized drawing format');
-}
-
-// Wrap an Amelie .draw scene into a standalone .excalidraw file
-// shape ({type,version,elements,appState,files}) so external Excalidraw editors
-// can open it. Inverse of the records→store map done on import.
-function _snapshotToExcalidraw(snapJson) {
-  // A .draw IS an Excalidraw scene, so exporting is just a passthrough with the
-  // fields a standalone .excalidraw file is expected to carry.
-  const scene = JSON.parse(snapJson || '{}');
-  return JSON.stringify({
-    type: 'excalidraw',
-    version: scene.version || 2,
-    source: 'amelie',
-    elements: Array.isArray(scene.elements) ? scene.elements : [],
-    appState: scene.appState || {},
-    files: scene.files || {},
-  });
-}
-
-async function exportDrawToTldr(drawPath) {
-  try {
-    // Prefer the LIVE on-screen snapshot for the active drawing — the disk file
-    // can lag behind by up to the 1.5s autosave debounce, so reading it right
-    // after drawing would export a stale (or empty) drawing.
-    let snapJson = null;
-    if (drawPath === activeCanvasPath && _liveCanvasJson) {
-      snapJson = _liveCanvasJson;
-      // Flush the pending autosave so disk matches what we just exported.
-      if (canvasSaveTimer) { clearTimeout(canvasSaveTimer); canvasSaveTimer = null; }
-      try { await window.inkwell.writeNote(activeCanvasPath, snapJson); } catch(_) {}
-    } else {
-      snapJson = await window.inkwell.readNote(drawPath).catch(() => null);
-    }
-    if (!snapJson) throw new Error('drawing empty');
-    const scene = _snapshotToExcalidraw(snapJson);
-    const name = drawPath.split('/').pop().replace(/\.draw$/i, '');
-    const r = await window.inkwell.exportTldr(name, scene);
-    if (r && r.ok) showToast('✓ ' + (window.i18n ? window.i18n.t('canvas.export_ok') : 'Disegno esportato') + ': ' + name);
-    else if (r && !r.canceled) throw new Error(r.error || 'save failed');
-  } catch (e) {
-    showToast('✗ ' + (window.i18n ? window.i18n.t('canvas.export_failed') : 'Export disegno fallito') + ': ' + (e?.message || e));
-  }
-}
-
-async function importDrawFromFile(file, destFolder) {
-  let snapJson;
-  try {
-    const text = await file.text();
-    snapJson = JSON.stringify(_normalizeDrawSnapshot(text));
-  } catch (e) {
-    showToast('✗ ' + (window.i18n ? window.i18n.t('canvas.import_failed') : 'Import disegno fallito') + ': ' + (e?.message || e));
-    return;
-  }
-  // Name the new drawing after the imported file (deduped), like newDraw().
-  const base = (file.name || 'disegno').replace(/\.(draw|excalidraw|json)$/i, '').replace(FORBIDDEN_NAME_RE_G, '-').trim() || 'disegno';
-  // Tree menu passes the right-clicked folder; the title menu passes nothing,
-  // so fall back to the drawLocation pref (root|current).
-  const folder = (destFolder !== undefined && destFolder !== null)
-    ? destFolder
-    : ((loadAppearance().drawLocation === 'current') ? currentFolderPath() : '');
-  const pathFor = n => folder ? `${folder}/${n}.draw` : `${n}.draw`;
-  const flat = flattenTree(state.notes);
-  let name = base, c = 1;
-  while (flat.some(x => x.path === pathFor(name))) name = `${base} (${c++})`;
-  const filePath = pathFor(name);
-  await window.inkwell.writeNote(filePath, snapJson);
-  if (folder) openFolderAncestors(folder);
-  await loadTree();
-  openDrawFile({ type: 'draw', name, path: filePath });
-  showToast('✓ ' + (window.i18n ? window.i18n.t('canvas.import_ok') : 'Disegno importato') + ': ' + name);
 }
 
 // ─── Vault & Security ────────────────────────────────────────────────────────

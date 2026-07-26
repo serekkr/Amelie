@@ -460,8 +460,8 @@
           <div id="canvas-header">
             <span id="canvas-title" data-i18n="canvas.draw_title">Draw</span>
             <div id="canvas-header-actions">
-              <button id="btn-draw-import" class="cv-action-btn" data-i18n="canvas.import_draw">Importa disegno…</button>
-              <button id="btn-draw-export" class="cv-action-btn" data-i18n="canvas.export_draw">Esporta disegno…</button>
+              <!-- Import/export of drawing FILES lives in Excalidraw's ☰ menu
+                   ("Open" / "Save to…"), which uses the File System Access API. -->
               <!-- Image export lives in Excalidraw's own ☰ menu now ("Export
                    image…", with background and dark-mode options). The selector
                    and PNG/SVG buttons that used to be here existed only because
@@ -1816,8 +1816,6 @@
       <button id="drawctx-rename" data-i18n="ctx.rename">Rinomina</button>
       <button id="drawctx-copy" data-i18n="ctx.copy">Copia</button>
       <button id="drawctx-paste" data-i18n="ctx.paste">Incolla</button>
-      <button id="drawctx-export" data-i18n="canvas.export_draw">Esporta disegno…</button>
-      <button id="drawctx-import" data-i18n="canvas.import_draw">Importa disegno…</button>
     </div>
 
   </div>

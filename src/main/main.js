@@ -3117,22 +3117,6 @@ ipcMain.handle('fs:renameNote', async (_, oldPath, newPath) => {
   return true;
 });
 
-// ─── IPC: Export drawing → native .excalidraw ────────────────────────────────
-// The renderer hands us the already-built scene JSON; we just let the user pick
-// where to save it. (Channel name kept for compatibility with the preload.)
-ipcMain.handle('draw:exportTldr', async (_, name, tldrJson) => {
-  const safeName = String(name || 'disegno').replace(/[\/\\:*?"<>|]/g, '_').slice(0, 120) || 'disegno';
-  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow || undefined, {
-    title: 'Esporta disegno (.excalidraw)',
-    defaultPath: path.join(app.getPath('documents') || os.homedir(), `${safeName}.excalidraw`),
-    filters: [{ name: 'Excalidraw', extensions: ['excalidraw'] }],
-  });
-  if (canceled || !filePath) return { canceled: true };
-  try {
-    fs.writeFileSync(filePath, String(tldrJson || ''), 'utf8');
-    return { ok: true, filePath };
-  } catch (e) { return { ok: false, error: e.message }; }
-});
 
 
 // ─── IPC: Export note → PDF ──────────────────────────────────────────────────

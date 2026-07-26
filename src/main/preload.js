@@ -76,7 +76,6 @@ contextBridge.exposeInMainWorld('inkwell', {
   },
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   pickFolder: (title) => ipcRenderer.invoke('dialog:pickFolder', title),
-  exportTldr: (name, tldrJson) => ipcRenderer.invoke('draw:exportTldr', name, tldrJson),
 
   todo: {
     list:   ()                          => ipcRenderer.invoke('todo:list'),
