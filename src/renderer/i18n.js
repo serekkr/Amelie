@@ -447,7 +447,9 @@ const TRANSLATIONS = {
 
     // Sidebar extra
     'sidebar.graph':            'Graph view',
-    'sidebar.draw':             'Disegna (tldraw)',
+    'sidebar.draw':             'Disegna (Excalidraw)',
+    'canvas.legacy_tldraw': 'Questo disegno è stato creato con la lavagna precedente e non può essere aperto.',
+    'canvas.load_failed': 'Impossibile aprire il disegno.',
 
     // Notes / editor
     'note.prev':                'Nota precedente',
@@ -1304,7 +1306,9 @@ const TRANSLATIONS = {
 
     // Sidebar extra
     'sidebar.graph':            'Graph view',
-    'sidebar.draw':             'Draw (tldraw)',
+    'sidebar.draw':             'Draw (Excalidraw)',
+    'canvas.legacy_tldraw': 'This drawing was made with the previous canvas and cannot be opened.',
+    'canvas.load_failed': 'Could not open the drawing.',
 
     // Notes / editor
     'note.prev':                'Previous note',
@@ -2102,7 +2106,9 @@ const TRANSLATIONS = {
     'win.maximize': 'Maximieren',
     'win.close': 'Schließen',
     'sidebar.graph': 'Graphansicht',
-    'sidebar.draw': 'Zeichnen (tldraw)',
+    'sidebar.draw': 'Zeichnen (Excalidraw)',
+    'canvas.legacy_tldraw': 'Diese Zeichnung stammt aus der vorherigen Zeichenfläche und kann nicht geöffnet werden.',
+    'canvas.load_failed': 'Zeichnung konnte nicht geöffnet werden.',
     'note.prev': 'Vorherige Notiz',
     'note.next': 'Nächste Notiz',
     'note.untitled': 'Ohne Titel',
@@ -2848,7 +2854,9 @@ const TRANSLATIONS = {
     'win.maximize': 'Maximizar',
     'win.close': 'Cerrar',
     'sidebar.graph': 'Vista de grafo',
-    'sidebar.draw': 'Dibujar (tldraw)',
+    'sidebar.draw': 'Dibujar (Excalidraw)',
+    'canvas.legacy_tldraw': 'Este dibujo se creó con el lienzo anterior y no puede abrirse.',
+    'canvas.load_failed': 'No se pudo abrir el dibujo.',
     'note.prev': 'Nota anterior',
     'note.next': 'Nota siguiente',
     'note.untitled': 'Sin título',
@@ -3594,7 +3602,9 @@ const TRANSLATIONS = {
     'win.maximize': 'Agrandir',
     'win.close': 'Fermer',
     'sidebar.graph': 'Vue graphe',
-    'sidebar.draw': 'Dessiner (tldraw)',
+    'sidebar.draw': 'Dessiner (Excalidraw)',
+    'canvas.legacy_tldraw': 'Ce dessin a été créé avec l\'ancien canevas et ne peut pas être ouvert.',
+    'canvas.load_failed': 'Impossible d\'ouvrir le dessin.',
     'note.prev': 'Note précédente',
     'note.next': 'Note suivante',
     'note.untitled': 'Sans titre',
@@ -4340,7 +4350,9 @@ const TRANSLATIONS = {
     'win.maximize': 'Maksymalizuj',
     'win.close': 'Zamknij',
     'sidebar.graph': 'Widok grafu',
-    'sidebar.draw': 'Rysuj (tldraw)',
+    'sidebar.draw': 'Rysuj (Excalidraw)',
+    'canvas.legacy_tldraw': 'Ten rysunek powstał w poprzednim edytorze i nie może zostać otwarty.',
+    'canvas.load_failed': 'Nie można otworzyć rysunku.',
     'note.prev': 'Poprzednia notatka',
     'note.next': 'Następna notatka',
     'note.untitled': 'Bez tytułu',
@@ -5086,7 +5098,9 @@ const TRANSLATIONS = {
     'win.maximize': 'Maximizează',
     'win.close': 'Închide',
     'sidebar.graph': 'Vizualizare graf',
-    'sidebar.draw': 'Desenează (tldraw)',
+    'sidebar.draw': 'Desenează (Excalidraw)',
+    'canvas.legacy_tldraw': 'Acest desen a fost creat cu pânza anterioară și nu poate fi deschis.',
+    'canvas.load_failed': 'Desenul nu a putut fi deschis.',
     'note.prev': 'Nota anterioară',
     'note.next': 'Nota următoare',
     'note.untitled': 'Fără titlu',

@@ -265,7 +265,7 @@ async function switchTab(idx) {
   if (tab.type === 'canvas') {
     emptyState.style.display = 'none';
     editorContainer.style.display = 'none';
-    // Lazy-load tldraw: the canvas iframe (canvas.html + tldraw-bundle.js, ~1.7MB)
+    // Lazy-load Excalidraw: the canvas iframe (canvas.html + excalidraw-bundle.js)
     // is NOT loaded at startup — only the first time a drawing is opened. Saves
     // that RAM/parse for users who never draw. CANVAS_READY then auto-sends the draw.
     { const _f = $('canvas-iframe'); if (_f && !_f.getAttribute('src')) _f.setAttribute('src', 'canvas.html'); }
@@ -12015,13 +12015,13 @@ function findNote(nodes, path) {
   return null;
 }
 
-// ─── Canvas (tldraw iframe) ───────────────────────────────────────────────────
+// ─── Canvas (Excalidraw iframe) ───────────────────────────────────────────────
 
 let canvasSaveTimer = null;
 let activeCanvasPath = null;
 // Latest LIVE snapshot of the on-screen drawing (from CANVAS_CHANGE). Export reads
 // this instead of the disk file, which can lag up to the 1.5s autosave debounce
-// (exporting right after drawing would otherwise produce a stale/empty .tldr).
+// (exporting right after drawing would otherwise produce a stale/empty file).
 let _liveCanvasJson = null;
 // Pending PNG/SVG image-export requests (renderer ⇄ canvas iframe round-trip).
 let _exportImgReq = 0;
@@ -12052,7 +12052,7 @@ function setupCanvas() {
   $('btn-draw-png')?.addEventListener('click', () => requestImageExport('png'));
   $('btn-draw-svg')?.addEventListener('click', () => requestImageExport('svg'));
 
-  // Export-background selector — drives tldraw's native "Export as PNG/SVG"
+  // Export-background selector — drives Excalidraw's native "Export image"
   // menu (white / transparent / follow-the-dark-canvas) without changing theme.
   const bgSel = $('draw-export-bg');
   if (bgSel) {
@@ -12111,6 +12111,19 @@ function setupCanvas() {
       _iframeCompositorKicked = false;
       sendExportBgToIframe();   // the iframe just (re)mounted — tell it the chosen export bg
       if (activeCanvasPath) _sendDrawToIframe(activeCanvasPath);
+    }
+    // The canvas refused the file. Say so and STOP tracking it as the active
+    // drawing: otherwise the empty editor would autosave over the real file and
+    // destroy whatever couldn't be read.
+    if (msg?.type === 'CANVAS_LOAD_ERROR') {
+      const why = msg.reason === 'legacy-tldraw'
+        ? window.i18n.t('canvas.legacy_tldraw')
+        : window.i18n.t('canvas.load_failed');
+      showToast('✗ ' + why, 6000);
+      if (canvasSaveTimer) { clearTimeout(canvasSaveTimer); canvasSaveTimer = null; }
+      activeCanvasPath = null;
+      _liveCanvasJson = null;
+      return;
     }
     if (msg?.type === 'CANVAS_CHANGE' && msg.json && activeCanvasPath) {
       _liveCanvasJson = msg.json;   // keep the freshest snapshot for export
@@ -13646,13 +13659,13 @@ function setupDrawContextMenu() {
     renderTabBar();
     await loadTree();
   });
-  // Export the open drawing as a native tldraw .tldr file (openable on
-  // tldraw.com / other tldraw editors), completing the round-trip.
+  // Export the open drawing as a native .excalidraw file (openable on
+  // excalidraw.com / other Excalidraw editors), completing the round-trip.
   $('drawctx-export')?.addEventListener('click', () => {
     menu.style.display = 'none';
     if (activeCanvasPath) exportDrawToTldr(activeCanvasPath);
   });
-  // Import a drawing FILE (an Amelie .draw or a native tldraw .tldr) as a NEW
+  // Import a drawing FILE (an Amelie .draw or a native .excalidraw) as a NEW
   // drawing in the vault — for the round-trip "export → someone edits → re-import".
   $('drawctx-import')?.addEventListener('click', () => {
     menu.style.display = 'none';
@@ -13666,43 +13679,48 @@ function setupDrawContextMenu() {
 function pickDrawFileToImport(destFolder) {
   const inp = document.createElement('input');
   inp.type = 'file';
-  inp.accept = '.draw,.tldr,.json';
+  inp.accept = '.draw,.excalidraw,.json';
   inp.style.display = 'none';
   inp.addEventListener('change', () => { const f = inp.files && inp.files[0]; if (f) importDrawFromFile(f, destFolder); inp.remove(); });
   document.body.appendChild(inp);
   inp.click();
 }
 
-// Turn whatever a drawing file holds into a tldraw store snapshot ({store,schema}).
-// Accepts: Amelie's own .draw (already a getSnapshot snapshot), a native tldraw
-// .tldr file ({tldrawFileFormatVersion, schema, records[]}), or an empty {}.
+// Turn whatever a drawing file holds into an Excalidraw scene.
+// Accepts: Amelie's own .draw (already a scene), a native
+// .excalidraw file ({type,version,elements,appState,files}), or an empty {}.
 function _normalizeDrawSnapshot(text) {
   const data = JSON.parse(text);
-  if (data && Array.isArray(data.records) && data.schema) {
-    const store = {};
-    for (const r of data.records) if (r && r.id) store[r.id] = r;   // records[] → id-keyed map
-    return { store, schema: data.schema };
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    // Excalidraw scene (.excalidraw or one of our .draw files)
+    if (Array.isArray(data.elements)) {
+      return { type: 'excalidraw', version: data.version || 2, source: 'amelie',
+               elements: data.elements, appState: data.appState || {}, files: data.files || {} };
+    }
+    // Empty file — a blank drawing, not an error.
+    if (Object.keys(data).length === 0) return {};
+    // Written by the tldraw-based canvas Amelie used before v1.0.7: that format
+    // can't be rendered here, and importing it would produce a blank drawing.
+    if (data.store && data.schema) throw new Error('formato tldraw non supportato');
+    if (Array.isArray(data.records) && data.schema) throw new Error('formato tldraw non supportato');
   }
-  if (data && data.store && data.schema) return data;               // already a snapshot (.draw)
-  if (data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0) return {};
   throw new Error('unrecognized drawing format');
 }
 
-// Wrap an Amelie .draw snapshot ({store,schema}) into tldraw's native .tldr file
-// shape ({tldrawFileFormatVersion, schema, records[]}) so external tldraw editors
+// Wrap an Amelie .draw scene into a standalone .excalidraw file
+// shape ({type,version,elements,appState,files}) so external Excalidraw editors
 // can open it. Inverse of the records→store map done on import.
-function _snapshotToTldr(snapJson) {
-  const snap = JSON.parse(snapJson || '{}');
-  const store = (snap && snap.store) || {};
-  // A canonical .tldr only carries DOCUMENT-scope records (shapes, pages, assets,
-  // bindings, the document). Session records (camera, instance, pointer, page
-  // state) are per-viewer and would make the file non-standard for tldraw.com.
-  const DOC = ['document:', 'page:', 'shape:', 'asset:', 'binding:'];
-  const records = Object.values(store).filter(r => r && r.id && DOC.some(p => String(r.id).startsWith(p)));
+function _snapshotToExcalidraw(snapJson) {
+  // A .draw IS an Excalidraw scene, so exporting is just a passthrough with the
+  // fields a standalone .excalidraw file is expected to carry.
+  const scene = JSON.parse(snapJson || '{}');
   return JSON.stringify({
-    tldrawFileFormatVersion: 1,
-    schema: (snap && snap.schema) || {},
-    records,
+    type: 'excalidraw',
+    version: scene.version || 2,
+    source: 'amelie',
+    elements: Array.isArray(scene.elements) ? scene.elements : [],
+    appState: scene.appState || {},
+    files: scene.files || {},
   });
 }
 
@@ -13721,9 +13739,9 @@ async function exportDrawToTldr(drawPath) {
       snapJson = await window.inkwell.readNote(drawPath).catch(() => null);
     }
     if (!snapJson) throw new Error('drawing empty');
-    const tldr = _snapshotToTldr(snapJson);
+    const scene = _snapshotToExcalidraw(snapJson);
     const name = drawPath.split('/').pop().replace(/\.draw$/i, '');
-    const r = await window.inkwell.exportTldr(name, tldr);
+    const r = await window.inkwell.exportTldr(name, scene);
     if (r && r.ok) showToast('✓ ' + (window.i18n ? window.i18n.t('canvas.export_ok') : 'Disegno esportato') + ': ' + name);
     else if (r && !r.canceled) throw new Error(r.error || 'save failed');
   } catch (e) {
@@ -13741,7 +13759,7 @@ async function importDrawFromFile(file, destFolder) {
     return;
   }
   // Name the new drawing after the imported file (deduped), like newDraw().
-  const base = (file.name || 'disegno').replace(/\.(draw|tldr|json)$/i, '').replace(FORBIDDEN_NAME_RE_G, '-').trim() || 'disegno';
+  const base = (file.name || 'disegno').replace(/\.(draw|excalidraw|json)$/i, '').replace(FORBIDDEN_NAME_RE_G, '-').trim() || 'disegno';
   // Tree menu passes the right-clicked folder; the title menu passes nothing,
   // so fall back to the drawLocation pref (root|current).
   const folder = (destFolder !== undefined && destFolder !== null)

@@ -4,144 +4,148 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Amelie Canvas</title>
-  <link rel="stylesheet" href="tldraw-bundle.css"/>
+  <link rel="stylesheet" href="excalidraw-bundle.css"/>
   <link rel="stylesheet" href="fonts.css"/>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; }
-    /* Use the same Roboto Mono as the notes for canvas text instead of tldraw's
-       handwritten font. Overrides the default "draw" font plus sans/mono. */
-    .tl-container {
-      --tl-font-draw: "Roboto Mono", monospace;
-      --tl-font-sans: "Roboto Mono", monospace;
-      --tl-font-mono: "Roboto Mono", monospace;
-    }
-    /* hide the ALT (alt text) button on the shape toolbar: it's accessibility
-       metadata, invisible on the canvas, and confused the user. */
-    [title="Alternative text"] { display: none !important; }
     /* tick canvas: keeps compositor layer dirty every frame */
     #__compositor_tick__ {
       position: fixed; top: 0; left: 0; width: 1px; height: 1px;
       opacity: 0.004; pointer-events: none; z-index: -1;
     }
   </style>
+  <script>
+    // MUST run before the bundle: Excalidraw reads this at module init to find
+    // its fonts. Without it the fonts are fetched from a CDN, which the app's
+    // CSP blocks — so the canvas would lose its lettering when offline.
+    window.EXCALIDRAW_ASSET_PATH = './excalidraw-assets/';
+  </script>
 </head>
 <body>
   <canvas id="__compositor_tick__" width="2" height="2"></canvas>
   <div id="root"></div>
-  <script src="tldraw-bundle.js"></script>
+  <script src="excalidraw-bundle.js"></script>
   <script>
-    const { React, ReactDOM, Tldraw, createShapeId, getAssetUrls } = window.__TldrawLib;
+    const {
+      React, ReactDOM, Excalidraw,
+      serializeAsJSON, restore, exportToBlob, exportToSvg, convertToExcalidrawElements,
+    } = window.__ExcalidrawLib;
     const { createElement: h } = React;
-    // Self-hosted tldraw assets (fonts/icons/translations/embed-icons) — served
-    // locally from tldraw-assets/ so the drawing works fully OFFLINE, no
-    // cdn.tldraw.com. Falls back to default if the bundle predates this.
-    const _assetUrls = (typeof getAssetUrls === 'function')
-      ? getAssetUrls({ baseUrl: 'tldraw-assets' }) : undefined;
 
-    let editor = null;
+    let api = null;              // ExcalidrawImperativeAPI
     let pendingLoad = null;
-    // Background mode for image export (PNG/SVG via tldraw's native menu).
-    // The canvas is forced dark for editing; without this the export would
-    // inherit the dark background. We intercept tldraw's SVG generation and
-    // inject background/darkMode per the mode chosen in Amelie's header.
-    //   'white'       → white background, light (dark-on-white) strokes
-    //   'transparent' → no background, light strokes
-    //   'theme'       → "Dark"/"Scuro": force dark background + light strokes
+    let suppressChange = 0;      // >0 while WE are loading a scene, so the
+                                 // resulting onChange isn't reported as a user edit
+    // Background mode for image export, driven by Amelie's header:
+    //   'white'       → white background
+    //   'transparent' → no background
+    //   'theme'       → dark background (matches the canvas)
     let _exportBgMode = 'white';
 
-    // tldraw 5 RENAMED the store snapshot methods: getSnapshot → getStoreSnapshot
-    // and loadSnapshot → loadStoreSnapshot. Both calls used to sit inside a silent
-    // try/catch, so on the old names the upgrade stopped saving drawings with no
-    // error anywhere. Resolve whichever the loaded bundle provides; the on-disk
-    // shape is the same either way, so .draw files written by older versions keep
-    // opening (loadStoreSnapshot still runs the schema migrations).
-    const storeSnapshot = (ed) =>
-      ed.store.getStoreSnapshot ? ed.store.getStoreSnapshot() : ed.store.getSnapshot();
-    const storeLoad = (ed, snap) =>
-      ed.store.loadStoreSnapshot ? ed.store.loadStoreSnapshot(snap) : ed.store.loadSnapshot(snap);
+    const post = (msg) => window.parent.postMessage(msg, '*');
+
+    // ── File format ──────────────────────────────────────────────────────────
+    // .draw now holds an Excalidraw scene: { type: "excalidraw", elements, appState, files }.
+    // Files written by the previous tldraw-based canvas look like { store, schema }
+    // — those can't be read here, and blanking them silently would destroy the
+    // drawing, so they're refused and reported instead.
+    const isTldrawFile = (o) => !!o && typeof o === 'object' && !Array.isArray(o)
+      && ('store' in o) && ('schema' in o);
 
     function loadData(json) {
-      if (!editor || !json) return;
+      if (!api || !json) return;
+      let scene;
       try {
-        const snapshot = JSON.parse(json);
-        if (snapshot && typeof snapshot === 'object' && Object.keys(snapshot).length > 0) {
-          storeLoad(editor, snapshot);
-        } else {
-          // Empty file — clear all shapes from current page
-          const ids = [...editor.getCurrentPageShapeIds()];
-          if (ids.length > 0) editor.deleteShapes(ids);
-        }
-      } catch (e) { console.error('[canvas] load failed', e); }
+        scene = JSON.parse(json);
+      } catch (e) {
+        console.error('[canvas] .draw is not valid JSON', e);
+        post({ type: 'CANVAS_LOAD_ERROR', reason: 'invalid-json' });
+        return;
+      }
+      if (isTldrawFile(scene)) {
+        console.error('[canvas] this .draw was written by the old tldraw canvas and cannot be opened');
+        post({ type: 'CANVAS_LOAD_ERROR', reason: 'legacy-tldraw' });
+        return;
+      }
+      try {
+        // `restore` fills in defaults and migrates older Excalidraw scenes.
+        const data = restore(scene && typeof scene === 'object' ? scene : {}, null, null);
+        suppressChange++;
+        api.updateScene({ elements: data.elements || [] });
+        if (data.files && Object.keys(data.files).length) api.addFiles(Object.values(data.files));
+        // Release the guard after React has flushed the resulting onChange.
+        setTimeout(() => { suppressChange = Math.max(0, suppressChange - 1); }, 0);
+      } catch (e) {
+        suppressChange = Math.max(0, suppressChange - 1);
+        console.error('[canvas] load failed', e);
+        post({ type: 'CANVAS_LOAD_ERROR', reason: 'restore-failed' });
+      }
     }
 
-    // Rasterize the current page to PNG/SVG (honoring _exportBgMode via the
-    // getSvgElement patch) and hand the bytes back to the parent for saving.
+    // Rasterize the scene to PNG/SVG honouring _exportBgMode, and hand the bytes
+    // back to the parent for saving.
     async function exportImage(format, requestId) {
-      const post = (payload) => window.parent.postMessage({ type: 'EXPORT_IMAGE_RESULT', requestId, ...payload }, '*');
+      const reply = (payload) => post({ type: 'EXPORT_IMAGE_RESULT', requestId, ...payload });
       try {
-        if (!editor) return post({ ok: false, error: 'no editor' });
-        const ids = [...editor.getCurrentPageShapeIds()];
-        if (ids.length === 0) return post({ ok: false, empty: true });
+        if (!api) return reply({ ok: false, error: 'no api' });
+        const elements = api.getSceneElements().filter(el => !el.isDeleted);
+        if (!elements.length) return reply({ ok: true, empty: true });
+        const files = api.getFiles();
+        const dark = _exportBgMode === 'theme';
+        const appState = {
+          exportBackground: _exportBgMode !== 'transparent',
+          viewBackgroundColor: dark ? '#1a1a1a' : '#ffffff',
+          exportWithDarkMode: dark,
+        };
         const fmt = format === 'svg' ? 'svg' : 'png';
-        const { blob } = await editor.toImage(ids, { format: fmt });
-        const dataUrl = await new Promise((res, rej) => {
-          const r = new FileReader();
-          r.onload = () => res(r.result); r.onerror = () => rej(r.error);
-          r.readAsDataURL(blob);
-        });
-        post({ ok: true, format: fmt, b64: String(dataUrl).split(',')[1] || '' });
-      } catch (e) { post({ ok: false, error: String((e && e.message) || e) }); }
+        let b64;
+        if (fmt === 'svg') {
+          const svg = await exportToSvg({ elements, appState, files });
+          b64 = btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(svg))));
+        } else {
+          const blob = await exportToBlob({ elements, appState, files, mimeType: 'image/png' });
+          const dataUrl = await new Promise((res, rej) => {
+            const r = new FileReader();
+            r.onload = () => res(r.result); r.onerror = () => rej(r.error);
+            r.readAsDataURL(blob);
+          });
+          b64 = String(dataUrl).split(',')[1] || '';
+        }
+        reply({ ok: true, format: fmt, b64 });
+      } catch (e) { reply({ ok: false, error: String((e && e.message) || e) }); }
     }
 
     function App() {
-      return h(Tldraw, {
-        assetUrls: _assetUrls,
-        inferDarkMode: false,
-        onMount: (ed) => {
-          editor = ed;
-          try { editor.updateInstanceState({ colorScheme: 'dark' }); } catch(_) {}
-
-          // Intercept every image export (toImage/getSvg/copy-as-svg all funnel
-          // through getSvgElement) to apply the chosen export background, so the
-          // native "Export as PNG/SVG" menu honors it without touching the theme.
-          try {
-            const _origGetSvgElement = editor.getSvgElement.bind(editor);
-            editor.getSvgElement = (ids, opts = {}) => {
-              const inj = {};
-              if (_exportBgMode === 'white')       { inj.darkMode = false; inj.background = true; }
-              else if (_exportBgMode === 'transparent') { inj.darkMode = false; inj.background = false; }
-              // 'theme' → the "Dark"/"Scuro" option: force a real dark export
-              // (dark background + light strokes), not just "follow the canvas".
-              else if (_exportBgMode === 'theme') { inj.darkMode = true; inj.background = true; }
-              return _origGetSvgElement(ids, { ...inj, ...opts });
-            };
-          } catch(_) {}
-
-          window.parent.postMessage({ type: 'CANVAS_READY' }, '*');
+      return h(Excalidraw, {
+        theme: 'dark',
+        langCode: 'it',
+        excalidrawAPI: (a) => {
+          api = a;
+          post({ type: 'CANVAS_READY' });
           if (pendingLoad) { loadData(pendingLoad); pendingLoad = null; }
-
-          // Only listen to user-initiated changes (not loadSnapshot).
-          // NOT silent: a throw in here means edits stop reaching the parent and
-          // the drawing never gets saved — that has to be visible in the console.
-          editor.store.listen(() => {
-            try {
-              const json = JSON.stringify(storeSnapshot(editor));
-              window.parent.postMessage({ type: 'CANVAS_CHANGE', json }, '*');
-            } catch (e) { console.error('[canvas] snapshot failed', e); }
-          }, { source: 'user' });
+        },
+        initialData: { appState: { viewBackgroundColor: '#1a1a1a', currentItemFontFamily: 3 } },
+        // Every scene mutation lands here. NOT wrapped in a silent try/catch: a
+        // throw means edits stop reaching the parent and the drawing is not being
+        // saved, which has to be visible.
+        onChange: (elements, appState, files) => {
+          if (suppressChange > 0) return;
+          try {
+            const json = serializeAsJSON(elements, appState, files || {}, 'local');
+            post({ type: 'CANVAS_CHANGE', json });
+          } catch (e) { console.error('[canvas] serialize failed', e); }
         },
       });
     }
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(h(App));
+    ReactDOM.createRoot(document.getElementById('root')).render(h(App));
 
     window.addEventListener('message', (e) => {
       const msg = e.data;
 
       if (msg?.type === 'LOAD_DATA' && msg.json) {
-        if (editor) loadData(msg.json);
+        if (api) loadData(msg.json);
         else pendingLoad = msg.json;
         return;
       }
@@ -156,27 +160,28 @@
         return;
       }
 
-      if (!editor) return;
+      if (!api) return;
 
       if (msg?.type === 'ADD_NOTE') {
         const { label, snippet, tags } = msg;
-        const x = 100 + Math.random() * 300;
-        const y = 100 + Math.random() * 200;
         const titleText = label || 'Nota';
         const bodyText  = snippet ? snippet.slice(0, 120) : '';
-        const tagsText  = tags?.length ? tags.map(t => '#'+t).join('  ') : '';
+        const tagsText  = tags?.length ? tags.map(t => '#' + t).join('  ') : '';
         const text = titleText + (bodyText ? '\n\n' + bodyText : '') + (tagsText ? '\n\n' + tagsText : '');
-
-        editor.createShapes([{
-          id: createShapeId(),
-          type: 'note',
-          x, y,
-          props: { text, color: 'light-blue', size: 'm' },
+        const x = 100 + Math.random() * 300;
+        const y = 100 + Math.random() * 200;
+        // A rectangle with bound text is Excalidraw's sticky note: it keeps the
+        // text inside the box and resizes with it.
+        const added = convertToExcalidrawElements([{
+          type: 'rectangle', x, y, width: 260, height: 160,
+          backgroundColor: '#a5d8ff', fillStyle: 'solid', strokeColor: '#1e1e1e',
+          label: { text, fontSize: 16, textAlign: 'left', verticalAlign: 'top' },
         }]);
+        api.updateScene({ elements: [...api.getSceneElements(), ...added] });
       }
 
       if (msg?.type === 'SAVE_REQUEST') {
-        window.parent.postMessage({ type: 'SAVED' }, '*');
+        post({ type: 'SAVED' });
       }
     });
   </script>
