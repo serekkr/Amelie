@@ -142,7 +142,8 @@ class SyncManager {
   async syncNow() {
     if (this._syncPausedPlaintext()) return { success: false, skipped: true, plaintextOpen: true, error: 'Cifratura a riposo disattivata: sync in pausa per non esporre i file in chiaro sullo share. Riattiva "Cifra i file a riposo" per sincronizzare.' };
     if (this._busy()) return { success: false, error: 'Already syncing' };
-    this._setStatus('syncing');
+    const meta = { op: 'sync', manual: true };
+    this._setStatus('syncing', null, meta);
     console.log('[Sync] Starting full sync (backup + two-way)...');
     const results = {};
     try {
@@ -151,11 +152,11 @@ class SyncManager {
         results.twoway = await this._syncTwoway();
       }
       this.lastSync = new Date().toISOString();
-      this._setStatus('ok');
+      this._setStatus('ok', null, meta);
       return { success: true, results, lastSync: this.lastSync };
     } catch (e) {
       console.error('[Sync] Sync failed:', e);
-      this._setStatus('error', e.message);
+      this._setStatus('error', e.message, meta);
       return { success: false, error: e.message };
     }
   }
@@ -179,7 +180,8 @@ class SyncManager {
       console.log('[Sync] Vault unchanged — automatic backup skipped');
       return { success: true, skipped: true };
     }
-    this._setStatus('syncing');
+    const meta = { op: 'backup', manual: !!force };
+    this._setStatus('syncing', null, meta);
     console.log('[Sync] Backup run...', force ? '(forced)' : '');
     try {
       const results = await this._runBackupInner();
@@ -193,15 +195,15 @@ class SyncManager {
       }
       if (errs.length) {
         const msg = errs.join(' · ');
-        this._setStatus('error', msg);
+        this._setStatus('error', msg, meta);
         return { success: false, error: msg, results, lastSync: this.lastSync };
       }
       this._lastBackupSig = sig;   // remember success → skip next time if unchanged
-      this._setStatus('ok');
+      this._setStatus('ok', null, meta);
       return { success: true, results, lastSync: this.lastSync };
     } catch (e) {
       console.error('[Sync] Backup failed:', e);
-      this._setStatus('error', e.message);
+      this._setStatus('error', e.message, meta);
       return { success: false, error: e.message };
     }
   }
@@ -226,20 +228,23 @@ class SyncManager {
   }
 
   // Scheduled two-way sync (read remote + update local + push).
-  async runTwoway() {
+  // `manual` distinguishes the toolbar Sync button from the scheduled run — only
+  // the label in the notifications bell depends on it.
+  async runTwoway({ manual = false } = {}) {
     if (this._syncPausedPlaintext()) return { success: false, skipped: true, plaintextOpen: true, error: 'Cifratura a riposo disattivata: sync in pausa per non esporre i file in chiaro sullo share. Attiva "Cifra i file a riposo" nelle impostazioni Vault per sincronizzare.' };
     if (this._busy()) return { success: false, error: 'Already syncing' };
     if (!this.config.sync?.twoway?.enabled) return { success: false, error: 'Two-way disabled' };
-    this._setStatus('syncing');
+    const meta = { op: 'twoway', manual: !!manual };
+    this._setStatus('syncing', null, meta);
     console.log('[Sync] Two-way run...');
     try {
       const twoway = await this._syncTwoway();
       this.lastSync = new Date().toISOString();
-      this._setStatus('ok');
+      this._setStatus('ok', null, meta);
       return { success: true, results: { twoway }, lastSync: this.lastSync };
     } catch (e) {
       console.error('[Sync] Two-way failed:', e);
-      this._setStatus('error', e.message);
+      this._setStatus('error', e.message, meta);
       return { success: false, error: e.message };
     }
   }
@@ -1550,7 +1555,11 @@ class SyncManager {
     return true;
   }
 
-  _setStatus(status, error = null) {
+  // `meta` tells the renderer WHAT finished — { op: 'backup' | 'twoway' | 'sync',
+  // manual: true|false } — so it can log the right line in the notifications bell.
+  // Without it every run looked identical and an automatic backup was
+  // indistinguishable from a scheduled two-way sync.
+  _setStatus(status, error = null, meta = null) {
     this.status = status;
     this.lastError = error;
     if (status === 'syncing') this._syncStartedAt = Date.now();
@@ -1561,6 +1570,8 @@ class SyncManager {
       status,
       error,
       lastSync: this.lastSync,
+      op: meta && meta.op ? meta.op : null,
+      manual: !!(meta && meta.manual),
     }));
   }
 

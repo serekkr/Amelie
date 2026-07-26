@@ -4067,7 +4067,7 @@ ipcMain.handle('sync:triggerNow', async () => {
 
 // Force a two-way sync (the toolbar Sync button).
 ipcMain.handle('sync:triggerTwoway', async () => {
-  if (syncManager) return syncManager.runTwoway();
+  if (syncManager) return syncManager.runTwoway({ manual: true });
   return { success: false, error: 'Sync manager not initialized' };
 });
 

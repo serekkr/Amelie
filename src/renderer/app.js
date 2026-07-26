@@ -9847,7 +9847,8 @@ function setupSettings() {
     } else {
       const err = (result && result.error) ? ': ' + result.error : '';
       if (res) { res.textContent = '✗ ' + window.i18n.t('toast.backup_failed') + err; res.className = 'test-result fail'; }
-      addEventNotif(window.i18n.t('toast.backup_failed') + err, false);
+      // The bell entry comes from the sync:statusUpdate event (logSyncEventNotif),
+      // so adding one here too would log the same failure twice.
     }
   }
   $('btn-backup-now-top')?.addEventListener('click', () => runManualBackup('backup-now-top-result'));
@@ -9880,7 +9881,7 @@ function setupSettings() {
       const msg = (result && result.error) ? result.error : window.i18n.t('toast.sync_failed');
       resultEl.textContent = '✗ ' + msg;
       resultEl.className = 'test-result fail';
-      addEventNotif(window.i18n.t('toast.sync_failed') + ': ' + msg, false);   // also in the bell
+      // Bell entry handled centrally by logSyncEventNotif.
     }
   });
   // Inline WireGuard+Samba setup directly in the Sync tab (when no connection
@@ -11653,9 +11654,8 @@ function setupSync() {
       if (dot) dot.className = 'sync-idle';
       showToast(window.i18n.t('toast.no_backup_dest'));
     } else {
-      // No red flash on the icon — the failure is reported in the notifications.
+      // No red flash on the icon — logSyncEventNotif files the failure in the bell.
       if (dot) dot.className = 'sync-idle';
-      addEventNotif(window.i18n.t('toast.backup_failed') + (result && result.error ? ': ' + result.error : ''), false);
     }
     if (dot) setTimeout(() => dot.className = 'sync-idle', 4000);
   });
@@ -11671,9 +11671,8 @@ function setupSync() {
       // Success shows as a toast + the green dot; the bell is reserved for failures.
       showToast(_fmtSyncResult(r2));
     } else {
-      // No error flash on the icon — surface the failure in the notifications bell.
+      // No error flash on the icon — logSyncEventNotif files the failure in the bell.
       syncStatusDot.className = 'sync-idle';
-      addEventNotif(window.i18n.t('toast.sync_failed') + (result && result.error ? ': ' + result.error : ''), false);
     }
     setTimeout(() => syncStatusDot.className = 'sync-idle', 4000);
   });
@@ -11691,6 +11690,7 @@ function setupSync() {
       syncStatusDot.className = 'sync-idle';
       console.error('[Sync error]', data.error);
     }
+    logSyncEventNotif(data);
   });
 
   // Refresh the sidebar tree when notes/folders are added, deleted or renamed on disk
@@ -16507,6 +16507,27 @@ function _fmtNotifTime(ts) {
     return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   } catch (_) { return ''; }
 }
+// Every backup / sync run reports here, from ONE place: the `sync:statusUpdate`
+// event the main process emits. Doing it here rather than in each button handler
+// is what keeps a manual backup from being logged twice (once by the button,
+// once by the event) and is why automatic runs get logged at all — nothing in
+// the renderer knows they happened otherwise.
+//
+// Scheduled backups that find the vault unchanged return early WITHOUT touching
+// the status, so an idle vault never fills the bell with identical lines.
+function logSyncEventNotif(data) {
+  if (!data || !data.op) return;                       // untagged/legacy event
+  if (data.status !== 'ok' && data.status !== 'error') return;   // 'syncing'/'idle' aren't outcomes
+  const key = data.manual ? 'manual' : 'auto';
+  const label = window.i18n.t(`notif.${data.op}_${key}`);
+  if (data.status === 'ok') {
+    const d = new Date(), p2 = n => String(n).padStart(2, '0');
+    addEventNotif(`${label} (${p2(d.getHours())}:${p2(d.getMinutes())})`, true);
+  } else {
+    addEventNotif(`${label}: ${data.error || window.i18n.t('notif.unknown_error')}`, false);
+  }
+}
+
 // Add an event notification (e.g. "Backup completato") to the bell.
 function addEventNotif(text, ok = true) {
   _eventNotifs.unshift({ text, ts: Date.now(), ok: !!ok });
