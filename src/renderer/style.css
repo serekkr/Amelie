@@ -562,8 +562,14 @@ kbd {
 /* Right-side controls (Edit/View · Export · Index): separate, spaced square
    buttons — same look as the left sidebar buttons (#sidebar-views), with a
    green border + green icon on hover. Icon-only (tooltips explain each). */
+/* `margin-left:auto` pins this group to the right on its own. It used to rely
+   on the breadcrumb's `flex:1` to push it there — but renderBreadcrumb sets
+   display:none whenever the tab has no path (an unsaved new note) or is a
+   special view, and with the spacer gone the buttons slid over next to the
+   back/forward arrows. */
 #mode-toggle {
   display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  margin-left: auto;
 }
 .mode-btn {
   display: flex; align-items: center; justify-content: center;
