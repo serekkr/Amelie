@@ -1803,9 +1803,18 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   background: var(--bg-1); overflow: hidden;
   -webkit-app-region: drag;
 }
+/* `flex: 0 1 auto` (not `1`): the list grows with its tabs but stops at the
+   space left over by #tab-drag-space, instead of claiming the whole bar. */
 #tab-list {
   display: flex; align-items: stretch; overflow-x: auto;
-  scrollbar-width: none; flex: 1;
+  scrollbar-width: none; flex: 0 1 auto; min-width: 0;
+  -webkit-app-region: drag;
+}
+/* The window's grab handle. Tabs are all no-drag, so with a full bar there was
+   no draggable pixel left and the window became impossible to move. This takes
+   the slack when tabs are few and never shrinks below 90px when they are many. */
+#tab-drag-space {
+  flex: 1 1 90px; min-width: 90px; align-self: stretch;
   -webkit-app-region: drag;
 }
 #tab-list::-webkit-scrollbar { display: none; }
