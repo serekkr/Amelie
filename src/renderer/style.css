@@ -436,17 +436,17 @@ html.is-mac #titlebar { padding-left: 72px; }
 :root[data-folder-icon="graphene"] .tree-folder-icon .fi-graphene { display: block; transition: fill .12s; }
 :root[data-folder-icon="dot"]      .tree-folder-icon .fi-dot      { display: block; }
 :root[data-folder-icon="star"]     .tree-folder-icon .fi-star     { display: block; transition: fill .12s; }
-/* Open-state highlight: the outline glyphs (folder, graphene, star, dot) FILL
-   with the accent colour when the folder is expanded; closed = outline only.
-   (The chevron rotates instead; a custom image can't be filled.) */
+/* A CLOSED folder is solid; expanding it empties the glyph to an outline —
+   the shape opens up as the folder does. (The chevron rotates instead, and a
+   custom image can't be filled.) */
 :root[data-folder-icon="graphene"] .tree-folder-icon .fi-graphene,
 :root[data-folder-icon="star"]     .tree-folder-icon .fi-star,
 :root[data-folder-icon="dot"]      .tree-folder-icon .fi-dot,
-:root[data-folder-icon="folder"]   .tree-folder-icon .folder-closed { transition: fill .12s; }
+:root[data-folder-icon="folder"]   .tree-folder-icon .folder-closed { transition: fill .12s; fill: currentColor; }
 :root[data-folder-icon="graphene"] .tree-folder.open .tree-folder-icon .fi-graphene,
 :root[data-folder-icon="star"]     .tree-folder.open .tree-folder-icon .fi-star,
 :root[data-folder-icon="dot"]      .tree-folder.open .tree-folder-icon .fi-dot,
-:root[data-folder-icon="folder"]   .tree-folder.open .tree-folder-icon .folder-closed { fill: currentColor; }
+:root[data-folder-icon="folder"]   .tree-folder.open .tree-folder-icon .folder-closed { fill: none; }
 .tree-folder-children {
   /* Vertical guide line centred on the parent folder ICON: row padding 14 +
      icon half-width 8 = x≈22, so the line descends from the middle of the
