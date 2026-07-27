@@ -109,6 +109,29 @@ check('nothing was lost', view.state.doc.toString() === intact, `len=${view.stat
   check('nothing was refused for the deletion', !logs.some((l) => l.startsWith('BLOCKED')), logs.join(' | '));
 }
 
+// ── 4a-ter. the protection must NOT depend on CM having measured the layout yet ───────────
+// Line heights come from CM's measure pass. Between a render and that pass a wrapped line
+// still reports one row, and the height test alone would hand the keystroke to the browser —
+// the exact window that could still collapse the rendering. With the heights stubbed to look
+// unmeasured, the text-based check must catch it anyway.
+{
+  const proto = Object.getPrototypeOf(view);
+  const realBlocks = Object.getOwnPropertyDescriptor(proto, 'viewportLineBlocks');
+  const realLH = Object.getOwnPropertyDescriptor(proto, 'defaultLineHeight');
+  Object.defineProperty(view, 'viewportLineBlocks', { configurable: true, get: () => [{ height: 1 }] });
+  Object.defineProperty(view, 'defaultLineHeight', { configurable: true, get: () => 100 });
+  const before = view.state.doc.length;
+  logs.length = 0;
+  view.dispatch({ selection: { anchor: before } });
+  const evU = new window.InputEvent('beforeinput', { inputType: 'insertText', data: 'M', bubbles: true, cancelable: true });
+  view.contentDOM.dispatchEvent(evU);
+  check('protected even with the layout not yet measured', evU.defaultPrevented && view.state.doc.length === before + 1,
+    `prevented=${evU.defaultPrevented} len=${view.state.doc.length} expected=${before + 1}`);
+  delete view.viewportLineBlocks; delete view.defaultLineHeight;
+  if (realBlocks) Object.defineProperty(view, 'viewportLineBlocks', realBlocks);
+  if (realLH) Object.defineProperty(view, 'defaultLineHeight', realLH);
+}
+
 // ── 4b. FALLBACK: if a keystroke does go to the browser and comes back mis-read, it must be
 // refused AND re-applied. Reaching this needs the native path, which the prevention above
 // now avoids — so force it by making every line look short (jsdom reports no geometry).
@@ -117,6 +140,10 @@ check('nothing was lost', view.state.doc.toString() === intact, `len=${view.stat
   const realLH = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(view), 'defaultLineHeight');
   Object.defineProperty(view, 'viewportLineBlocks', { configurable: true, get: () => [{ height: 1 }] });
   Object.defineProperty(view, 'defaultLineHeight', { configurable: true, get: () => 100 });
+  // …and an editor so wide (with a 1px character) that no line could reach the end of a row.
+  // jsdom reports clientWidth 0, which on its own means "assume it wraps" — the safe default.
+  Object.defineProperty(view, 'defaultCharacterWidth', { configurable: true, get: () => 1 });
+  Object.defineProperty(view.contentDOM, 'clientWidth', { configurable: true, get: () => 1e6 });
   const before = view.state.doc.length;
   logs.length = 0;
   view.dispatch({ selection: { anchor: before } });
@@ -131,7 +158,8 @@ check('nothing was lost', view.state.doc.toString() === intact, `len=${view.stat
   check('the character is re-applied from the state', view.state.doc.length === before + 1 && reapplied.includes('"X"'),
     `len=${view.state.doc.length} expected=${before + 1} log=${reapplied || '(none)'}`);
   check('re-applied exactly once', logs.filter((l) => l.startsWith('REAPPLIED')).length === 1, `${logs.filter((l) => l.startsWith('REAPPLIED')).length} lines`);
-  delete view.viewportLineBlocks; delete view.defaultLineHeight;
+  delete view.viewportLineBlocks; delete view.defaultLineHeight; delete view.defaultCharacterWidth;
+  delete view.contentDOM.clientWidth;
   if (realBlocks) Object.defineProperty(view, 'viewportLineBlocks', realBlocks);
   if (realLH) Object.defineProperty(view, 'defaultLineHeight', realLH);
 }

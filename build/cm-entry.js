@@ -865,6 +865,25 @@ const bigDocTypingFix = EditorView.domEventHandlers({
         const tall = view.defaultLineHeight * 1.4;
         for (const b of view.viewportLineBlocks) if (b.height > tall) { anyLineWraps = true; break; }
       } catch (_) {}
+      // v1.0.14 — close the one hole the height test leaves. Those heights come from CM's
+      // measure pass; in the window between a render and that pass a wrapped line still
+      // reports a single row, so this check would say "nothing wraps" and hand the keystroke
+      // to the browser — exactly the case that collapses the rendering. So ask the TEXT as
+      // well, which needs no measurement: a line longer than what fits on one row must wrap.
+      // Deliberately conservative (0.8 of the estimate): protecting a note that did not need
+      // it costs nothing, missing one costs a collapse. Cheap — a single early-out skips the
+      // scan entirely when the whole note is shorter than one row, and this only runs when
+      // the document is rendered in full.
+      if (!anyLineWraps) {
+        try {
+          const doc = view.state.doc;
+          const cw = view.defaultCharacterWidth || 8;
+          const perRow = Math.max(8, Math.floor((view.contentDOM.clientWidth / cw) * 0.8));
+          if (doc.length - (doc.lines - 1) > perRow) {
+            for (let i = 1; i <= doc.lines; i++) if (doc.line(i).length > perRow) { anyLineWraps = true; break; }
+          }
+        } catch (_) {}
+      }
       // Native handling is safe only when the whole document is rendered, the rendering
       // matches it, and nothing wraps (so the browser has no reason to reflow).
       const safeNative = wholeDocRendered && !desynced && !anyLineWraps;

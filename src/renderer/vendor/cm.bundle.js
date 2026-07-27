@@ -20074,6 +20074,20 @@
           }
         } catch (_) {
         }
+        if (!anyLineWraps) {
+          try {
+            const doc2 = view.state.doc;
+            const cw = view.defaultCharacterWidth || 8;
+            const perRow = Math.max(8, Math.floor(view.contentDOM.clientWidth / cw * 0.8));
+            if (doc2.length - (doc2.lines - 1) > perRow) {
+              for (let i2 = 1; i2 <= doc2.lines; i2++) if (doc2.line(i2).length > perRow) {
+                anyLineWraps = true;
+                break;
+              }
+            }
+          } catch (_) {
+          }
+        }
         const safeNative = wholeDocRendered && !desynced && !anyLineWraps;
         if (_isDelete) {
           if (safeNative) {
