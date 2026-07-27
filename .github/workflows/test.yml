@@ -1,0 +1,34 @@
+# Runs the editor regression suite on every push and pull request.
+#
+# Only `npm test` — the jsdom suite. It drives the SHIPPED bundle
+# (src/renderer/vendor/cm.bundle.js) and needs no Electron, no display and about a second.
+# `npm run test:app` is deliberately not here: it launches the real app and needs Electron
+# plus a virtual X server, which is a local job (`dnf install xorg-x11-server-Xvfb`).
+#
+# `--ignore-scripts` matters: without it `npm ci` runs Electron's postinstall and downloads
+# ~200 MB of binaries this suite never touches.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  editor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: The bundle under test must match its source
+        # cm.bundle.js is generated and committed. If it drifts from build/cm-entry.js the
+        # suite would be testing something other than what ships.
+        run: |
+          npx esbuild build/cm-entry.js --bundle --format=iife --outfile=/tmp/cm.check.js --legal-comments=none
+          cmp src/renderer/vendor/cm.bundle.js /tmp/cm.check.js \
+            || { echo "cm.bundle.js is out of date — run 'npm run build:cm' and commit it"; exit 1; }
+      - run: npm test

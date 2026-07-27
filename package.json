@@ -13,7 +13,9 @@
     "build:win": "electron-builder --win",
     "build:excalidraw": "esbuild build/excalidraw-entry.js --bundle --format=iife --outfile=src/renderer/excalidraw-bundle.js --minify --legal-comments=none --conditions=production --define:process.env.NODE_ENV=\\\"production\\\" --loader:.woff2=empty --loader:.png=empty --loader:.svg=empty && node build/scrub-bundle.js",
     "test": "node test/editor-desync.test.mjs",
-    "test:app": "node test/editor-typing.cdp.mjs"
+    "test:app": "node test/editor-typing.cdp.mjs",
+    "test:sweep": "node test/editor-wrap-sweep.mjs",
+    "test:enc": "node test/editor-encrypted.cdp.mjs"
   },
   "dependencies": {
     "hash-wasm": "^4.12.0",
