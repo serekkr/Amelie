@@ -80,6 +80,11 @@ await send('Runtime.enable');
 await sleep(3500);
 
 const key = async (o, ms = 4000) => { await send('Input.dispatchKeyEvent', o, ms); };
+const pressKey = async (key, code, vk) => {
+  await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key, code, windowsVirtualKeyCode: vk });
+  await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: vk });
+  await sleep(300);
+};
 const typeChar = async (ch) => {
   const code = 'Key' + ch.toUpperCase(), vk = ch.toUpperCase().charCodeAt(0);
   await key({ type: 'keyDown', text: ch, unmodifiedText: ch, key: ch, code, windowsVirtualKeyCode: vk });
@@ -177,6 +182,13 @@ async function typingWorks(file, label, { viaViewMode = false } = {}) {
   await typeChar('z'); await typeChar('z'); await typeChar('z');
   const after = await ev('(() => ({ len:_cmHandle.getValue().length, tail:_cmHandle.getValue().slice(-5) }))()');
   check(`${file}${label ? ` (${label})` : ''}: 3 keystrokes reached the document`, after?.len === st.len + 3, `${st.len} -> ${after?.len}, tail=${JSON.stringify(after?.tail)}`);
+  // Deleting must work through the same path: a Backspace used to reach the browser and
+  // trigger the same reflow, and its deletion was dropped.
+  await pressKey('Backspace', 'Backspace', 8);
+  const afterDel = await ev('_cmHandle.getValue().length');
+  check(`${file}${label ? ` (${label})` : ''}: Backspace removes exactly one character`, afterDel === (after?.len ?? -99) - 1,
+    `${after?.len} -> ${afterDel}`);
+  await typeChar('z');   // put it back, so the saved file still shows the typing
   await sleep(5000);
   const disk = fs.readFileSync(`${VAULT}/notes/${file}`, 'utf8');
   check(`${file}${label ? ` (${label})` : ''}: autosaved to disk`, /zzz/.test(disk), `ends: ${JSON.stringify(disk.slice(-30))}`);

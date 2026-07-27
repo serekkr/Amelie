@@ -20050,8 +20050,11 @@
   var bigDocTypingFix = EditorView.domEventHandlers({
     beforeinput(event, view) {
       try {
-        if (event.inputType !== "insertText" || event.data == null) {
-          _lastInputPath = "not-insertText:" + event.inputType;
+        const _it = event.inputType;
+        const _isInsert = _it === "insertText" && event.data != null;
+        const _isDelete = _it === "deleteContentBackward" || _it === "deleteContentForward";
+        if (!_isInsert && !_isDelete) {
+          _lastInputPath = "not-insertText:" + _it;
           return false;
         }
         if (view.composing) {
@@ -20071,7 +20074,19 @@
           }
         } catch (_) {
         }
-        if (wholeDocRendered && !desynced && !anyLineWraps) {
+        const safeNative = wholeDocRendered && !desynced && !anyLineWraps;
+        if (_isDelete) {
+          if (safeNative) {
+            _lastInputPath = "delete-native:" + _it;
+            return false;
+          }
+          (_it === "deleteContentForward" ? deleteCharForward : deleteCharBackward)(view);
+          event.preventDefault();
+          _lastInputPath = "delete-protected" + (anyLineWraps ? ":wrapped" : desynced ? ":desynced" : "");
+          if (desynced) scheduleViewRecovery(view);
+          return true;
+        }
+        if (safeNative) {
           _lastInputPath = "whole-doc-rendered";
           _pendingCandidate = event.data;
           return false;

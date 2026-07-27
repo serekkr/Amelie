@@ -809,7 +809,18 @@ let _domAtInput = -1;
 const bigDocTypingFix = EditorView.domEventHandlers({
   beforeinput(event, view) {
     try {
-      if (event.inputType !== 'insertText' || event.data == null) { _lastInputPath = 'not-insertText:' + event.inputType; return false; }
+      // v1.0.13: DELETIONS need the same prevention as typing. Reported from a real session:
+      //   BLOCKED input truncation 1040->254 deleted=786 selLen=0
+      //     path=not-insertText:deleteContentBackward domAtInput=1034
+      // i.e. a Backspace reached the browser, its default action reflowed the editor exactly
+      // as a keystroke did, and the firewall had to refuse a 786-character truncation. The
+      // note survived, but that deletion was dropped: nothing re-applies a delete whose
+      // mis-read arrives as `input.type`. Handling the delete ourselves and cancelling the
+      // default action removes the reflow, so there is nothing to refuse.
+      const _it = event.inputType;
+      const _isInsert = _it === 'insertText' && event.data != null;
+      const _isDelete = _it === 'deleteContentBackward' || _it === 'deleteContentForward';
+      if (!_isInsert && !_isDelete) { _lastInputPath = 'not-insertText:' + _it; return false; }
       if (view.composing) { _lastInputPath = 'composing'; return false; }   // let IME composition go through CM
       // v1.0.986: gate on ACTUAL virtualization, not a char count. The applyDOMChange
       // mis-read that vanishes text can only happen when part of the doc is NOT in the
@@ -854,10 +865,23 @@ const bigDocTypingFix = EditorView.domEventHandlers({
         const tall = view.defaultLineHeight * 1.4;
         for (const b of view.viewportLineBlocks) if (b.height > tall) { anyLineWraps = true; break; }
       } catch (_) {}
+      // Native handling is safe only when the whole document is rendered, the rendering
+      // matches it, and nothing wraps (so the browser has no reason to reflow).
+      const safeNative = wholeDocRendered && !desynced && !anyLineWraps;
+      if (_isDelete) {
+        if (safeNative) { _lastInputPath = 'delete-native:' + _it; return false; }
+        // Do the deletion from the STATE — CM's own command handles grapheme clusters and a
+        // selected range correctly — and cancel the browser's default action with it.
+        (_it === 'deleteContentForward' ? deleteCharForward : deleteCharBackward)(view);
+        event.preventDefault();
+        _lastInputPath = 'delete-protected' + (anyLineWraps ? ':wrapped' : desynced ? ':desynced' : '');
+        if (desynced) scheduleViewRecovery(view);
+        return true;
+      }
       // Handing this keystroke to CM's native path: remember its text, so that if the
       // resulting transaction turns out to be a mis-read and gets blocked, the character
       // can still be applied instead of vanishing.
-      if (wholeDocRendered && !desynced && !anyLineWraps) { _lastInputPath = 'whole-doc-rendered'; _pendingCandidate = event.data; return false; }  // DOM matches, nothing wraps → native is safe
+      if (safeNative) { _lastInputPath = 'whole-doc-rendered'; _pendingCandidate = event.data; return false; }  // DOM matches, nothing wraps → native is safe
       if (view.state.selection.ranges.length > 1) { _lastInputPath = 'multi-range'; _pendingCandidate = event.data; return false; }
       _pendingCandidate = '';   // we handle it ourselves below; nothing to recover
       _lastInputPath = desynced ? 'desynced-dom' : anyLineWraps ? 'wrapped-line' : 'intercepted';

@@ -94,6 +94,21 @@ check('nothing was lost', view.state.doc.toString() === intact, `len=${view.stat
   check('nothing was refused (no mis-read to catch)', !logs.some((l) => l.startsWith('BLOCKED')), logs.join(' | '));
 }
 
+// ── 4a-bis. PREVENTION covers DELETIONS too ─────────────────────────────────────────────
+// From a real session: a Backspace reached the browser, its default action reflowed the
+// editor exactly as a keystroke did, and the firewall had to refuse a 786-character
+// truncation — the note survived but that deletion was silently dropped.
+{
+  const before = view.state.doc.length;
+  logs.length = 0;
+  view.dispatch({ selection: { anchor: before } });
+  const evDel = new window.InputEvent('beforeinput', { inputType: 'deleteContentBackward', bubbles: true, cancelable: true });
+  view.contentDOM.dispatchEvent(evDel);
+  check('a Backspace is not left to the browser', evDel.defaultPrevented, 'the default action was allowed to run');
+  check('the deletion is applied from the state', view.state.doc.length === before - 1, `len=${view.state.doc.length} expected=${before - 1}`);
+  check('nothing was refused for the deletion', !logs.some((l) => l.startsWith('BLOCKED')), logs.join(' | '));
+}
+
 // ── 4b. FALLBACK: if a keystroke does go to the browser and comes back mis-read, it must be
 // refused AND re-applied. Reaching this needs the native path, which the prevention above
 // now avoids — so force it by making every line look short (jsdom reports no geometry).
