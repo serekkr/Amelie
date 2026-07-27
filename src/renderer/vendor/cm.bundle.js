@@ -19856,8 +19856,19 @@
         view.requestMeasure();
       } catch (_) {
       }
+      const now = view.contentDOM.textContent.length;
       try {
-        window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("RESYNC view rebuilt (" + why + ") len=" + view.state.doc.length);
+        window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("RESYNC view rebuilt (" + why + ") len=" + view.state.doc.length + " domAfter=" + now);
+      } catch (_) {
+      }
+      try {
+        requestAnimationFrame(() => {
+          try {
+            const later = view.contentDOM.textContent.length;
+            if (later !== now) window.inkwell.debugLog("RESYNC settled domAfter=" + later);
+          } catch (_) {
+          }
+        });
       } catch (_) {
       }
       return true;
@@ -19870,12 +19881,45 @@
     return resyncView(view, why);
   }
   var _resyncPending = false;
-  function scheduleViewResync(view) {
+  var _pendingText = "";
+  var _pendingCandidate = "";
+  var _pendingDelete = "";
+  function scheduleViewRecovery(view) {
     if (!view || _resyncPending) return;
     _resyncPending = true;
     setTimeout(() => {
       _resyncPending = false;
       resyncView(view, "blocked-keystroke");
+      const del = _pendingDelete;
+      _pendingDelete = "";
+      if (del) {
+        try {
+          const lenBefore = view.state.doc.length;
+          (del === "forward" ? deleteCharForward : deleteCharBackward)(view);
+          try {
+            window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("REDELETED " + del + " " + lenBefore + "->" + view.state.doc.length);
+          } catch (_) {
+          }
+        } catch (_) {
+        }
+      }
+      const text = _pendingText;
+      _pendingText = "";
+      if (!text) return;
+      try {
+        const sel = view.state.selection.main;
+        view.dispatch({
+          changes: { from: sel.from, to: sel.to, insert: text },
+          selection: { anchor: sel.from + text.length },
+          userEvent: "input.type",
+          scrollIntoView: true
+        });
+        try {
+          window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("REAPPLIED " + JSON.stringify(text) + " at " + sel.from + " len=" + view.state.doc.length);
+        } catch (_) {
+        }
+      } catch (_) {
+      }
     }, 0);
   }
   var contentLossGuard = (getView) => EditorState.transactionFilter.of((tr) => {
@@ -19889,12 +19933,43 @@
         const sel = tr.startState.selection.main;
         const selLen = sel.to - sel.from;
         if (before > 300 && deleted > 150 && deleted > selLen + 150) {
+          let diag = "";
           try {
-            window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("BLOCKED input truncation " + before + "->" + after + " deleted=" + deleted + " selLen=" + selLen + " ue=" + ue);
+            const v = getView && getView();
+            if (v) {
+              const vp = v.viewport;
+              diag = " vp=[" + vp.from + "," + vp.to + "] dom=" + v.contentDOM.textContent.length + " lines=" + v.state.doc.lines + " composing=" + !!v.composing + " ranges=" + v.state.selection.ranges.length + " path=" + _lastInputPath + " domAtInput=" + _domAtInput;
+            }
           } catch (_) {
           }
           try {
-            scheduleViewResync(getView && getView());
+            window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("BLOCKED input truncation " + before + "->" + after + " deleted=" + deleted + " selLen=" + selLen + " ue=" + ue + diag);
+          } catch (_) {
+          }
+          try {
+            if (_pendingCandidate) {
+              _pendingText += _pendingCandidate;
+              _pendingCandidate = "";
+            }
+            scheduleViewRecovery(getView && getView());
+          } catch (_) {
+          }
+          return [];
+        }
+      }
+      if (ue && /^delete\.(backward|forward)$/.test(ue)) {
+        const before = tr.startState.doc.length;
+        const deleted = before - tr.newDoc.length;
+        const sel = tr.startState.selection.main;
+        const selLen = sel.to - sel.from;
+        if (before > 300 && deleted > selLen + 8) {
+          try {
+            window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("BLOCKED delete truncation " + before + "->" + tr.newDoc.length + " deleted=" + deleted + " selLen=" + selLen + " ue=" + ue);
+          } catch (_) {
+          }
+          try {
+            _pendingDelete = ue === "delete.forward" ? "forward" : "backward";
+            scheduleViewRecovery(getView && getView());
           } catch (_) {
           }
           return [];
@@ -19904,14 +19979,35 @@
     }
     return tr;
   });
+  var _lastInputPath = "none";
+  var _domAtInput = -1;
   var bigDocTypingFix = EditorView.domEventHandlers({
     beforeinput(event, view) {
       try {
-        if (event.inputType !== "insertText" || event.data == null) return false;
-        if (view.composing) return false;
+        if (event.inputType !== "insertText" || event.data == null) {
+          _lastInputPath = "not-insertText:" + event.inputType;
+          return false;
+        }
+        if (view.composing) {
+          _lastInputPath = "composing";
+          return false;
+        }
         const vp = view.viewport;
-        if (vp.from <= 0 && vp.to >= view.state.doc.length) return false;
-        if (view.state.selection.ranges.length > 1) return false;
+        _domAtInput = view.contentDOM.textContent.length;
+        const wholeDocRendered = vp.from <= 0 && vp.to >= view.state.doc.length;
+        const desynced = wholeDocRendered && domOutOfSync(view);
+        if (wholeDocRendered && !desynced) {
+          _lastInputPath = "whole-doc-rendered";
+          _pendingCandidate = event.data;
+          return false;
+        }
+        if (view.state.selection.ranges.length > 1) {
+          _lastInputPath = "multi-range";
+          _pendingCandidate = event.data;
+          return false;
+        }
+        _pendingCandidate = "";
+        _lastInputPath = desynced ? "desynced-dom" : "intercepted";
         const sel = view.state.selection.main;
         if (tryFenceAutoClose(view, sel.from, sel.to, event.data)) {
           event.preventDefault();
@@ -19924,6 +20020,13 @@
           scrollIntoView: true
         }));
         event.preventDefault();
+        if (desynced) {
+          try {
+            window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("PROTECTED insert on desynced dom: dom=" + _domAtInput + " docLen=" + view.state.doc.length + " vp=[" + vp.from + "," + vp.to + "]");
+          } catch (_) {
+          }
+          scheduleViewRecovery(view);
+        }
         return true;
       } catch (_) {
         return false;
@@ -19935,9 +20038,10 @@
       const lineNumbersComp = new Compartment();
       const initialDoc = dedentCodeBlocks(doc2 || "");
       const updateListener2 = EditorView.updateListener.of((u) => {
-        if (!u.docChanged || !onChange) return;
+        if (!u.docChanged) return;
         const userEdit = u.transactions.some((tr) => tr.annotation(Transaction.userEvent) != null);
-        if (userEdit) onChange(u.state.doc.toString());
+        if (userEdit) _pendingCandidate = "";
+        if (userEdit && onChange) onChange(u.state.doc.toString());
       });
       const desyncWatch = EditorView.domEventHandlers({
         focus() {

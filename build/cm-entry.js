@@ -3,7 +3,7 @@
 // so app.js can drive CodeMirror without importing ESM modules directly.
 import { EditorView, keymap, lineNumbers, drawSelection, highlightActiveLine, Decoration, ViewPlugin } from '@codemirror/view';
 import { EditorState, Compartment, Transaction, RangeSetBuilder, StateField, StateEffect } from '@codemirror/state';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab, deleteCharBackward, deleteCharForward } from '@codemirror/commands';
 import { StringStream } from '@codemirror/language';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { python } from '@codemirror/legacy-modes/mode/python';
@@ -542,7 +542,18 @@ function resyncView(view, why) {
     view.setState(view.state);
     view.scrollDOM.scrollTop = top;
     try { view.requestMeasure(); } catch (_) {}
-    try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('RESYNC view rebuilt (' + why + ') len=' + view.state.doc.length); } catch (_) {}
+    // Did the rebuild actually put the whole note back in the DOM? Logged right away and
+    // again after a frame, because the measure pass that finishes the render is async.
+    const now = view.contentDOM.textContent.length;
+    try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('RESYNC view rebuilt (' + why + ') len=' + view.state.doc.length + ' domAfter=' + now); } catch (_) {}
+    try {
+      requestAnimationFrame(() => {
+        try {
+          const later = view.contentDOM.textContent.length;
+          if (later !== now) window.inkwell.debugLog('RESYNC settled domAfter=' + later);
+        } catch (_) {}
+      });
+    } catch (_) {}
     return true;
   } catch (_) { return false; }
 }
@@ -554,15 +565,50 @@ function resyncIfNeeded(view, why) {
   return resyncView(view, why);
 }
 
-// Deferred variant for the firewall: that runs inside a transactionFilter, and the view
+// Deferred recovery for the firewall: that runs inside a transactionFilter, and the view
 // must not be touched while a dispatch is in flight.
+//
+// It also RE-APPLIES the keystroke. Blocking alone loses it, and on a note where the DOM
+// collapses on every native input that means the note cannot be typed in at all: the
+// browser mangles the rendering, CM reads the mangled DOM, the resulting transaction is
+// garbage and gets dropped — but the character the user actually pressed is known exactly
+// (beforeinput carries it, see _pendingText). So: drop CM's misreading, rebuild the view,
+// then insert the real text from the STATE, which never consults the DOM. Text typed while
+// the rendering is broken still lands, in the right place, once.
 let _resyncPending = false;
-function scheduleViewResync(view) {
+let _pendingText = '';        // characters whose transaction was blocked, awaiting re-apply
+let _pendingCandidate = '';   // the text of the keystroke currently being handled natively
+let _pendingDelete = '';      // 'backward' | 'forward': a single-char delete to redo
+function scheduleViewRecovery(view) {
   if (!view || _resyncPending) return;
   _resyncPending = true;
   setTimeout(() => {
     _resyncPending = false;
     resyncView(view, 'blocked-keystroke');
+    // A single-character delete that was blocked: redo it from the STATE, where CM's own
+    // command handles grapheme clusters and selections correctly.
+    const del = _pendingDelete;
+    _pendingDelete = '';
+    if (del) {
+      try {
+        const lenBefore = view.state.doc.length;
+        (del === 'forward' ? deleteCharForward : deleteCharBackward)(view);
+        try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('REDELETED ' + del + ' ' + lenBefore + '->' + view.state.doc.length); } catch (_) {}
+      } catch (_) {}
+    }
+    const text = _pendingText;
+    _pendingText = '';
+    if (!text) return;
+    try {
+      const sel = view.state.selection.main;
+      view.dispatch({
+        changes: { from: sel.from, to: sel.to, insert: text },
+        selection: { anchor: sel.from + text.length },
+        userEvent: 'input.type',
+        scrollIntoView: true,
+      });
+      try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('REAPPLIED ' + JSON.stringify(text) + ' at ' + sel.from + ' len=' + view.state.doc.length); } catch (_) {}
+    } catch (_) {}
   }, 0);
 }
 
@@ -610,10 +656,55 @@ const contentLossGuard = (getView) => EditorState.transactionFilter.of((tr) => {
       // scrutinising trivially small edits — they can be small without risking false
       // positives, because the selLen margin is what actually gates the block.
       if (before > 300 && deleted > 150 && deleted > selLen + 150) {
-        try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('BLOCKED input truncation ' + before + '->' + after + ' deleted=' + deleted + ' selLen=' + selLen + ' ue=' + ue); } catch (_) {}
-        // The DOM CM just read does not match the doc → rebuild it, so the next
-        // keystroke is read from a correct DOM instead of being blocked forever.
-        try { scheduleViewResync(getView && getView()); } catch (_) {}
+        // Log the view's actual state alongside the block. A block means our model of
+        // what CM is doing is wrong somewhere, and these five fields say where: whether
+        // the viewport claims to cover the doc, how much text is really rendered, and
+        // which branch the keystroke took through bigDocTypingFix. Costs nothing until
+        // something is already broken.
+        let diag = '';
+        try {
+          const v = getView && getView();
+          if (v) {
+            const vp = v.viewport;
+            diag = ' vp=[' + vp.from + ',' + vp.to + ']'
+              + ' dom=' + v.contentDOM.textContent.length
+              + ' lines=' + v.state.doc.lines
+              + ' composing=' + !!v.composing
+              + ' ranges=' + v.state.selection.ranges.length
+              + ' path=' + _lastInputPath
+              + ' domAtInput=' + _domAtInput;
+          }
+        } catch (_) {}
+        try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('BLOCKED input truncation ' + before + '->' + after + ' deleted=' + deleted + ' selLen=' + selLen + ' ue=' + ue + diag); } catch (_) {}
+        // CM read a DOM that does not match the doc. Rebuild it, and re-apply the
+        // keystroke this transaction was supposed to carry (its text is known from
+        // beforeinput) so the character is not simply swallowed.
+        try {
+          if (_pendingCandidate) { _pendingText += _pendingCandidate; _pendingCandidate = ''; }
+          scheduleViewRecovery(getView && getView());
+        } catch (_) {}
+        return [];
+      }
+    }
+    // DELETIONS. Same mis-read, different event: on a collapsed DOM a plain Backspace can
+    // come back as "remove hundreds of characters", and unlike typing it was never
+    // scrutinised — it would apply AND be autosaved, which is the one way this bug can
+    // actually lose text rather than just block you.
+    // Deliberately narrow: ONLY the single-character gestures (delete.backward /
+    // delete.forward), which can never legitimately remove more than a grapheme cluster
+    // beyond the selection. Word deletes, line kills, cut and delete-selection carry other
+    // userEvents and are left completely alone — no risk of blocking a real bulk delete.
+    if (ue && /^delete\.(backward|forward)$/.test(ue)) {
+      const before = tr.startState.doc.length;
+      const deleted = before - tr.newDoc.length;
+      const sel = tr.startState.selection.main;
+      const selLen = sel.to - sel.from;
+      if (before > 300 && deleted > selLen + 8) {
+        try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('BLOCKED delete truncation ' + before + '->' + tr.newDoc.length + ' deleted=' + deleted + ' selLen=' + selLen + ' ue=' + ue); } catch (_) {}
+        try {
+          _pendingDelete = ue === 'delete.forward' ? 'forward' : 'backward';
+          scheduleViewRecovery(getView && getView());
+        } catch (_) {}
         return [];
       }
     }
@@ -630,11 +721,19 @@ const contentLossGuard = (getView) => EditorState.transactionFilter.of((tr) => {
 // browser never mutates the contentEditable (hence CM never mis-reads it). Only for
 // simple `insertText` (not IME composition, not delete/paste) and only on big docs,
 // so normal editing is completely unaffected.
+// Which branch the last insertText took through the handler below. Recorded so a block
+// can say WHY the keystroke was left to CM's native path instead of the protected one —
+// a bare assignment per keystroke, no measuring, no cost.
+let _lastInputPath = 'none';
+// Rendered text length at the instant the last keystroke arrived, i.e. BEFORE the browser
+// could mutate the contentEditable. Compared against the length seen when a block happens,
+// it separates "the DOM was already wrong" from "this keystroke broke it".
+let _domAtInput = -1;
 const bigDocTypingFix = EditorView.domEventHandlers({
   beforeinput(event, view) {
     try {
-      if (event.inputType !== 'insertText' || event.data == null) return false;
-      if (view.composing) return false;                 // let IME composition go through CM
+      if (event.inputType !== 'insertText' || event.data == null) { _lastInputPath = 'not-insertText:' + event.inputType; return false; }
+      if (view.composing) { _lastInputPath = 'composing'; return false; }   // let IME composition go through CM
       // v1.0.986: gate on ACTUAL virtualization, not a char count. The applyDOMChange
       // mis-read that vanishes text can only happen when part of the doc is NOT in the
       // DOM (virtualized away) — CM reads the partial contentDOM and mistakes it for the
@@ -646,8 +745,25 @@ const bigDocTypingFix = EditorView.domEventHandlers({
       // said nothing about whether the doc is actually virtualized. Detect it directly:
       // only intercept when the viewport does NOT cover the whole document.
       const vp = view.viewport;
-      if (vp.from <= 0 && vp.to >= view.state.doc.length) return false;  // whole doc rendered → native is safe
-      if (view.state.selection.ranges.length > 1) return false;
+      // How much text is really rendered when this keystroke arrives — the one fact that
+      // says whether the DOM was already broken BEFORE the key or got broken BY it.
+      _domAtInput = view.contentDOM.textContent.length;
+      // v1.0.10: "the whole doc is rendered" is only a reason to trust CM's native input
+      // path if the DOM it will read actually MATCHES the document. A note was found
+      // where the viewport claimed [0,708] while the DOM held 254 chars: CM read that,
+      // concluded the note had shrunk, and every keystroke was rejected by the firewall
+      // below — the editor could not be typed in at all. When the DOM disagrees, take the
+      // protected path instead: inserting from the state never consults the DOM, so the
+      // keystroke lands correctly no matter how mangled the rendering is.
+      const wholeDocRendered = vp.from <= 0 && vp.to >= view.state.doc.length;
+      const desynced = wholeDocRendered && domOutOfSync(view);
+      // Handing this keystroke to CM's native path: remember its text, so that if the
+      // resulting transaction turns out to be a mis-read and gets blocked, the character
+      // can still be applied instead of vanishing.
+      if (wholeDocRendered && !desynced) { _lastInputPath = 'whole-doc-rendered'; _pendingCandidate = event.data; return false; }  // DOM matches → native is safe
+      if (view.state.selection.ranges.length > 1) { _lastInputPath = 'multi-range'; _pendingCandidate = event.data; return false; }
+      _pendingCandidate = '';   // we handle it ourselves below; nothing to recover
+      _lastInputPath = desynced ? 'desynced-dom' : 'intercepted';
       const sel = view.state.selection.main;
       // We bypass CM's input path, so replicate the features that live in its
       // inputHandlers — here the ``` fence auto-close (3rd backtick → full block).
@@ -659,6 +775,12 @@ const bigDocTypingFix = EditorView.domEventHandlers({
         scrollIntoView: true,
       }));
       event.preventDefault();
+      // The text is in now, but the rendering that lied is still on screen: rebuild it so
+      // what the user sees matches what the note contains.
+      if (desynced) {
+        try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('PROTECTED insert on desynced dom: dom=' + _domAtInput + ' docLen=' + view.state.doc.length + ' vp=[' + vp.from + ',' + vp.to + ']'); } catch (_) {}
+        scheduleViewRecovery(view);
+      }
       return true;
     } catch (_) { return false; }
   },
@@ -680,9 +802,12 @@ window.AmelieCM = {
     const lineNumbersComp = new Compartment();
     const initialDoc = dedentCodeBlocks(doc || '');
     const updateListener = EditorView.updateListener.of((u) => {
-      if (!u.docChanged || !onChange) return;
+      if (!u.docChanged) return;
       const userEdit = u.transactions.some((tr) => tr.annotation(Transaction.userEvent) != null);
-      if (userEdit) onChange(u.state.doc.toString());
+      // An edit landed, so the last keystroke needs no recovery — drop it, or a later
+      // block from an unrelated cause could re-apply a character typed long ago.
+      if (userEdit) _pendingCandidate = '';
+      if (userEdit && onChange) onChange(u.state.doc.toString());
     });
     // Repair a desynced DOM the moment the editor is focused — i.e. BEFORE the user can
     // type into it and lose a keystroke to the firewall. Deferred so CM finishes its own
