@@ -75,27 +75,50 @@ await new Promise((r) => setTimeout(r, 30));
 check('the view is rebuilt afterwards', domLen() === expected(), `dom=${domLen()} expected=${expected()}`);
 check('nothing was lost', view.state.doc.toString() === intact, `len=${view.state.doc.length}`);
 
-// ── 4. the keystroke is not swallowed — THE actual fix ──────────────────────────────────
-// Order matters: this is the real sequence from the instrumented app. The DOM is still
-// healthy when the key arrives, so the handler leaves it to CodeMirror and only remembers
-// the character; the collapse happens immediately after, and the transaction CodeMirror
-// then builds from the wreckage is the mis-read.
+// ── 4a. PREVENTION: on a note with a wrapped line the keystroke never reaches the browser
+// This is what v1.0.12 changed. Forensics in a real browser showed the collapse IS the
+// browser's default action for the input event (between beforeinput and input Chromium
+// replaced all five line elements with one). So when any rendered line wraps, the insert is
+// done from the state and the default action is cancelled — the rendering is never
+// collapsed, and there is nothing to detect or repair.
+// jsdom has no layout, so every line looks tall and this path is always taken here.
 {
   const before = view.state.doc.length;
   logs.length = 0;
-  view.dispatch({ selection: { anchor: before } });      // caret at the end, as observed
-  typeKey('X');
-  collapse();
+  view.dispatch({ selection: { anchor: before } });
+  const ev4 = new window.InputEvent('beforeinput', { inputType: 'insertText', data: 'W', bubbles: true, cancelable: true });
+  view.contentDOM.dispatchEvent(ev4);
+  check('the browser default action is cancelled', ev4.defaultPrevented, 'beforeinput was left to the browser');
+  check('the character is inserted from the state', view.state.doc.length === before + 1 && view.state.doc.sliceString(before, before + 1) === 'W',
+    `len=${view.state.doc.length} tail=${JSON.stringify(view.state.doc.sliceString(before - 2, before + 1))}`);
+  check('nothing was refused (no mis-read to catch)', !logs.some((l) => l.startsWith('BLOCKED')), logs.join(' | '));
+}
+
+// ── 4b. FALLBACK: if a keystroke does go to the browser and comes back mis-read, it must be
+// refused AND re-applied. Reaching this needs the native path, which the prevention above
+// now avoids — so force it by making every line look short (jsdom reports no geometry).
+{
+  const realBlocks = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(view), 'viewportLineBlocks');
+  const realLH = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(view), 'defaultLineHeight');
+  Object.defineProperty(view, 'viewportLineBlocks', { configurable: true, get: () => [{ height: 1 }] });
+  Object.defineProperty(view, 'defaultLineHeight', { configurable: true, get: () => 100 });
+  const before = view.state.doc.length;
+  logs.length = 0;
+  view.dispatch({ selection: { anchor: before } });
+  const ev4 = new window.InputEvent('beforeinput', { inputType: 'insertText', data: 'X', bubbles: true, cancelable: true });
+  view.contentDOM.dispatchEvent(ev4);
+  check('with nothing wrapping, the keystroke is left to the browser', !ev4.defaultPrevented, 'it was intercepted anyway');
+  collapse();                                    // the browser mangles the rendering
   view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: view.contentDOM.textContent }, userEvent: 'input.type' });
   check('the mis-read is refused', view.state.doc.length === before, `len=${view.state.doc.length} of ${before}`);
   await new Promise((r) => setTimeout(r, 30));
   const reapplied = logs.find((l) => l.startsWith('REAPPLIED')) || '';
   check('the character is re-applied from the state', view.state.doc.length === before + 1 && reapplied.includes('"X"'),
     `len=${view.state.doc.length} expected=${before + 1} log=${reapplied || '(none)'}`);
-  check('re-applied exactly once', logs.filter((l) => l.startsWith('REAPPLIED')).length === 1,
-    `${logs.filter((l) => l.startsWith('REAPPLIED')).length} REAPPLIED lines`);
-  check('the character landed at the caret', view.state.doc.sliceString(before, before + 1) === 'X',
-    JSON.stringify(view.state.doc.sliceString(before - 3, before + 1)));
+  check('re-applied exactly once', logs.filter((l) => l.startsWith('REAPPLIED')).length === 1, `${logs.filter((l) => l.startsWith('REAPPLIED')).length} lines`);
+  delete view.viewportLineBlocks; delete view.defaultLineHeight;
+  if (realBlocks) Object.defineProperty(view, 'viewportLineBlocks', realBlocks);
+  if (realLH) Object.defineProperty(view, 'defaultLineHeight', realLH);
 }
 
 // ── 5. a mis-read Backspace must not shorten the note ───────────────────────────────────

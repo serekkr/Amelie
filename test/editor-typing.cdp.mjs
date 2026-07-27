@@ -167,9 +167,11 @@ async function typingWorks(file, label, { viaViewMode = false } = {}) {
   if (!ok) return 0;
   const st = await ev(`(() => { const len=_cmHandle.getValue().length; _cmHandle.setSelection(len,len); _cmHandle.focus();
     const vp=_cmHandle.view.viewport; return { len, dom:_cmHandle.view.contentDOM.textContent.length, lines:_cmHandle.view.state.doc.lines,
-    vp:[vp.from,vp.to], focus:_cmHandle.hasFocus(), loaded:state.currentPath, cmLoaded:_cmLoadedPath, w:Math.round(_cmHandle.view.contentDOM.clientWidth) }; })()`);
+    vp:[vp.from,vp.to], focus:_cmHandle.hasFocus(), loaded:state.currentPath, cmLoaded:_cmLoadedPath, w:Math.round(_cmHandle.view.contentDOM.clientWidth),
+    rows: (() => { try { const b=_cmHandle.view.viewportLineBlocks, lh=_cmHandle.view.defaultLineHeight;
+      return Math.max(...b.map(x => Math.round(x.height / lh))); } catch (_) { return -1; } })() }; })()`);
   if (!st || typeof st !== 'object') { check(`${file}: editor reachable`, false, String(st)); return; }
-  console.log(`   doc=${st.len} dom=${st.dom} lines=${st.lines} vp=[${st.vp}] width=${st.w}px focus=${st.focus}`);
+  console.log(`   doc=${st.len} dom=${st.dom} lines=${st.lines} righeVisive(max)=${st.rows} vp=[${st.vp}] width=${st.w}px`);
   check(`${file}${label ? ` (${label})` : ''}: editor holds the note, focused`, st.loaded === file && st.focus, JSON.stringify(st));
 
   await typeChar('z'); await typeChar('z'); await typeChar('z');
@@ -180,21 +182,25 @@ async function typingWorks(file, label, { viaViewMode = false } = {}) {
   check(`${file}${label ? ` (${label})` : ''}: autosaved to disk`, /zzz/.test(disk), `ends: ${JSON.stringify(disk.slice(-30))}`);
   const fresh = logLines().slice(before);
   const b = fresh.filter((l) => l.startsWith('BLOCKED')).length, r = fresh.filter((l) => l.startsWith('REAPPLIED')).length;
-  console.log(`   fault fired: ${b ? `YES — ${b} BLOCKED / ${r} REAPPLIED` : 'no'}`);
+  console.log(`   keystrokes refused: ${b}${b ? ` (re-applied ${r})` : ''}`);
   if (b) check(`${file}: every refused keystroke was re-applied`, b === r, `${b} vs ${r}`);
   console.log();
-  return b;
+  return { blocked: b, rows: st.rows };
 }
 
-const wrapped = (await typingWorks('wrapped.md', 'long wrapped line')) || 0;
-const control = (await typingWorks('plain.md', 'control, no long line')) || 0;
-const wrappedView = (await typingWorks('wrapped.md', 'opened in view mode first', { viaViewMode: true })) || 0;
+const wrapped = (await typingWorks('wrapped.md', 'long wrapped line')) || {};
+const control = (await typingWorks('plain.md', 'control, no long line')) || {};
+const wrappedView = (await typingWorks('wrapped.md', 'opened in view mode first', { viaViewMode: true })) || {};
 
-// The whole point: the fault must still be PROVOKED here (otherwise this test proves
-// nothing about the fix) and typing must work through it anyway.
-check('the fault is still reproducible on a wrapped long line', wrapped + wrappedView > 0,
-  'no keystroke was refused — either the trigger changed or the browser no longer collapses the rendering');
-check('a note without a long wrapped line is unaffected', control === 0, `${control} keystrokes refused on the control note`);
+// PRECONDITION — without a line that actually wraps, this test cannot exercise the fault at
+// all and its green ticks would mean nothing.
+check('the wrapped note really does wrap on screen', wrapped.rows > 1, `tallest line = ${wrapped.rows} visual rows`);
+check('the control note does not wrap', control.rows === 1, `tallest line = ${control.rows} visual rows`);
+// v1.0.12 — the browser's reflow is now PREVENTED on such a note, so no keystroke should
+// ever reach the firewall. Before the fix this same note refused 3 of 3.
+check('no keystroke is refused on the wrapped note', (wrapped.blocked || 0) + (wrappedView.blocked || 0) === 0,
+  `${(wrapped.blocked || 0) + (wrappedView.blocked || 0)} refused — the prevention did not hold`);
+check('nor on the control note', (control.blocked || 0) === 0, `${control.blocked} refused`);
 const failed = results.filter((r) => !r.pass).length;
 console.log(failed ? `\n${failed} of ${results.length} FAILED` : `\nall ${results.length} checks passed`);
 ws.close();

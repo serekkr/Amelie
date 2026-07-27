@@ -692,7 +692,17 @@ const contentLossGuard = (getView) => EditorState.transactionFilter.of((tr) => {
       // selection deletes ≈ selLen). So the before/deleted floors only exist to skip
       // scrutinising trivially small edits — they can be small without risking false
       // positives, because the selLen margin is what actually gates the block.
-      if (before > 300 && deleted > 150 && deleted > selLen + 150) {
+      // v1.0.12: the floors above left the SMALL notes unprotected, and a sweep in the real
+      // browser measured the cost — a 293-char note with a wrapped 254-char line lost 39
+      // characters silently (the rendering collapsed, `before` was under 300, no guard ran,
+      // and the keystroke did not even land). Rather than lower magic numbers, use the fact
+      // that actually distinguishes a mis-read: AT THIS MOMENT THE RENDERING DISAGREES WITH
+      // THE DOCUMENT. On a legitimate keystroke the DOM holds the new text (one char more
+      // than the doc) and matches; on a mis-read it holds far less, because the browser has
+      // just collapsed it. That signal needs no size threshold, so small notes are covered
+      // too — while the original size rule stays as a second, independent net.
+      const mismatched = (() => { try { const v = getView && getView(); return v ? domOutOfSync(v) : false; } catch (_) { return false; } })();
+      if ((before > 300 && deleted > 150 && deleted > selLen + 150) || (mismatched && deleted > selLen + 4)) {
         // Log the view's actual state alongside the block. A block means our model of
         // what CM is doing is wrong somewhere, and these five fields say where: whether
         // the viewport claims to cover the doc, how much text is really rendered, and
@@ -736,7 +746,8 @@ const contentLossGuard = (getView) => EditorState.transactionFilter.of((tr) => {
       const deleted = before - tr.newDoc.length;
       const sel = tr.startState.selection.main;
       const selLen = _selectedLength(tr.startState);
-      if (before > 300 && deleted > selLen + 8) {
+      const mismatchedDel = (() => { try { const v = getView && getView(); return v ? domOutOfSync(v) : false; } catch (_) { return false; } })();
+      if ((before > 300 || mismatchedDel) && deleted > selLen + 8) {
         try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('BLOCKED delete truncation ' + before + '->' + tr.newDoc.length + ' deleted=' + deleted + ' selLen=' + selLen + ' ue=' + ue); } catch (_) {}
         try {
           _pendingDelete = ue === 'delete.forward' ? 'forward' : 'backward';
@@ -823,13 +834,33 @@ const bigDocTypingFix = EditorView.domEventHandlers({
       // keystroke lands correctly no matter how mangled the rendering is.
       const wholeDocRendered = vp.from <= 0 && vp.to >= view.state.doc.length;
       const desynced = wholeDocRendered && domOutOfSync(view);
+      // v1.0.12 — PREVENT the fault instead of recovering from it. Forensics (a
+      // MutationObserver on contentDOM, driven over CDP) showed the collapse is the
+      // BROWSER'S OWN default action for the input event: between `beforeinput` and
+      // `input`, Chromium removed all five line elements and replaced them with one —
+      // `-5 +1 on cm-content cm-lineWrapping` — leaving the line holding the caret and
+      // nothing else. It does that when the caret sits on a line that WRAPS. Since
+      // preventDefault stops that default action, taking the protected path on a wrapped
+      // line means the rendering is never collapsed in the first place, so there is no
+      // mis-read to catch and no keystroke to re-apply. Cheap to ask: CM already knows the
+      // line's rendered height, no layout is forced.
+      // It is not the caret's line that matters: in the forensics the caret sat on the empty
+      // last line and Chromium still reformatted, keeping the long FIRST line. It reflows the
+      // whole contenteditable, so the question is whether ANY rendered line wraps.
+      // `viewportLineBlocks` heights are already measured and cached by CM — no layout is
+      // forced — and this only runs when the whole document is rendered, i.e. on small notes.
+      let anyLineWraps = false;
+      try {
+        const tall = view.defaultLineHeight * 1.4;
+        for (const b of view.viewportLineBlocks) if (b.height > tall) { anyLineWraps = true; break; }
+      } catch (_) {}
       // Handing this keystroke to CM's native path: remember its text, so that if the
       // resulting transaction turns out to be a mis-read and gets blocked, the character
       // can still be applied instead of vanishing.
-      if (wholeDocRendered && !desynced) { _lastInputPath = 'whole-doc-rendered'; _pendingCandidate = event.data; return false; }  // DOM matches → native is safe
+      if (wholeDocRendered && !desynced && !anyLineWraps) { _lastInputPath = 'whole-doc-rendered'; _pendingCandidate = event.data; return false; }  // DOM matches, nothing wraps → native is safe
       if (view.state.selection.ranges.length > 1) { _lastInputPath = 'multi-range'; _pendingCandidate = event.data; return false; }
       _pendingCandidate = '';   // we handle it ourselves below; nothing to recover
-      _lastInputPath = desynced ? 'desynced-dom' : 'intercepted';
+      _lastInputPath = desynced ? 'desynced-dom' : anyLineWraps ? 'wrapped-line' : 'intercepted';
       const sel = view.state.selection.main;
       // We bypass CM's input path, so replicate the features that live in its
       // inputHandlers — here the ``` fence auto-close (3rd backtick → full block).

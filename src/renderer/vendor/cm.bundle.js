@@ -19964,7 +19964,15 @@
         const deleted = before - after;
         const sel = tr.startState.selection.main;
         const selLen = _selectedLength(tr.startState);
-        if (before > 300 && deleted > 150 && deleted > selLen + 150) {
+        const mismatched = (() => {
+          try {
+            const v = getView && getView();
+            return v ? domOutOfSync(v) : false;
+          } catch (_) {
+            return false;
+          }
+        })();
+        if (before > 300 && deleted > 150 && deleted > selLen + 150 || mismatched && deleted > selLen + 4) {
           let diag = "";
           try {
             const v = getView && getView();
@@ -19994,7 +20002,15 @@
         const deleted = before - tr.newDoc.length;
         const sel = tr.startState.selection.main;
         const selLen = _selectedLength(tr.startState);
-        if (before > 300 && deleted > selLen + 8) {
+        const mismatchedDel = (() => {
+          try {
+            const v = getView && getView();
+            return v ? domOutOfSync(v) : false;
+          } catch (_) {
+            return false;
+          }
+        })();
+        if ((before > 300 || mismatchedDel) && deleted > selLen + 8) {
           try {
             window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("BLOCKED delete truncation " + before + "->" + tr.newDoc.length + " deleted=" + deleted + " selLen=" + selLen + " ue=" + ue);
           } catch (_) {
@@ -20046,7 +20062,16 @@
         _domAtInput = view.contentDOM.textContent.length;
         const wholeDocRendered = vp.from <= 0 && vp.to >= view.state.doc.length;
         const desynced = wholeDocRendered && domOutOfSync(view);
-        if (wholeDocRendered && !desynced) {
+        let anyLineWraps = false;
+        try {
+          const tall = view.defaultLineHeight * 1.4;
+          for (const b of view.viewportLineBlocks) if (b.height > tall) {
+            anyLineWraps = true;
+            break;
+          }
+        } catch (_) {
+        }
+        if (wholeDocRendered && !desynced && !anyLineWraps) {
           _lastInputPath = "whole-doc-rendered";
           _pendingCandidate = event.data;
           return false;
@@ -20057,7 +20082,7 @@
           return false;
         }
         _pendingCandidate = "";
-        _lastInputPath = desynced ? "desynced-dom" : "intercepted";
+        _lastInputPath = desynced ? "desynced-dom" : anyLineWraps ? "wrapped-line" : "intercepted";
         const sel = view.state.selection.main;
         if (tryFenceAutoClose(view, sel.from, sel.to, event.data)) {
           event.preventDefault();
