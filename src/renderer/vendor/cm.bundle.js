@@ -19834,7 +19834,51 @@
       return builder.finish();
     }
   }, { decorations: (v) => v.decorations });
-  var contentLossGuard = EditorState.transactionFilter.of((tr) => {
+  function domOutOfSync(view) {
+    try {
+      const len = view.state.doc.length;
+      const vp = view.viewport;
+      if (vp.from > 0 || vp.to < len) return false;
+      const expected = len - (view.state.doc.lines - 1);
+      const actual = view.contentDOM.textContent.length;
+      return expected - actual > 8;
+    } catch (_) {
+      return false;
+    }
+  }
+  function resyncView(view, why) {
+    if (!view) return false;
+    try {
+      const top3 = view.scrollDOM.scrollTop;
+      view.setState(view.state);
+      view.scrollDOM.scrollTop = top3;
+      try {
+        view.requestMeasure();
+      } catch (_) {
+      }
+      try {
+        window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("RESYNC view rebuilt (" + why + ") len=" + view.state.doc.length);
+      } catch (_) {
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+  function resyncIfNeeded(view, why) {
+    if (!view || !domOutOfSync(view)) return false;
+    return resyncView(view, why);
+  }
+  var _resyncPending = false;
+  function scheduleViewResync(view) {
+    if (!view || _resyncPending) return;
+    _resyncPending = true;
+    setTimeout(() => {
+      _resyncPending = false;
+      resyncView(view, "blocked-keystroke");
+    }, 0);
+  }
+  var contentLossGuard = (getView) => EditorState.transactionFilter.of((tr) => {
     try {
       if (!tr.docChanged) return tr;
       const ue = tr.annotation(Transaction.userEvent);
@@ -19847,6 +19891,10 @@
         if (before > 300 && deleted > 150 && deleted > selLen + 150) {
           try {
             window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("BLOCKED input truncation " + before + "->" + after + " deleted=" + deleted + " selLen=" + selLen + " ue=" + ue);
+          } catch (_) {
+          }
+          try {
+            scheduleViewResync(getView && getView());
           } catch (_) {
           }
           return [];
@@ -19891,12 +19939,19 @@
         const userEdit = u.transactions.some((tr) => tr.annotation(Transaction.userEvent) != null);
         if (userEdit) onChange(u.state.doc.toString());
       });
-      const view = new EditorView({
+      const desyncWatch = EditorView.domEventHandlers({
+        focus() {
+          setTimeout(() => resyncIfNeeded(view, "focus"), 0);
+          return false;
+        }
+      });
+      let view = new EditorView({
         state: EditorState.create({
           doc: initialDoc,
           extensions: [
             bigDocTypingFix,
-            contentLossGuard,
+            desyncWatch,
+            contentLossGuard(() => view),
             lineNumbersComp.of([]),
             history(),
             drawSelection(),
@@ -19928,6 +19983,12 @@
           }
         },
         focus: () => view.focus(),
+        // Check the rendered DOM still matches the document, and rebuild the view if it
+        // does not. Call it whenever the editor BECOMES VISIBLE again (leaving preview,
+        // switching to a note tab, closing the split): CM cannot render or measure while
+        // its container is display:none, which is how the DOM ends up stale. Returns true
+        // if a rebuild was needed.
+        checkSync: (why) => resyncIfNeeded(view, why || "visible"),
         getSelection: () => ({ from: view.state.selection.main.from, to: view.state.selection.main.to }),
         // Move the caret AND scroll it into view, so cursor + viewport stay
         // consistent (the app restores caret and scroll separately; without this the

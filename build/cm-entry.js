@@ -505,16 +505,87 @@ const tagColorPlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: (v) => v.decorations });
 
+// ── View/DOM desync: detection + recovery ────────────────────────────────────
+// DETECTION. CM renders the doc as one <div class="cm-line"> per line, and this editor
+// uses ONLY line/mark decorations (no `replace`, no widgets — see cbLine/mdLinkMark/…),
+// so the rendered text is always the doc text minus its line breaks. When those two
+// lengths stop agreeing, the view is DESYNCED: CM re-reads that stale DOM on every
+// keystroke, concludes the note is far shorter than it really is, and tries to delete
+// the difference (which the content-loss firewall below then blocks, key after key,
+// leaving the editor apparently frozen — caret blinking, nothing typing).
+// The comparison is only meaningful when the WHOLE doc is rendered: on a virtualized
+// doc the DOM is legitimately partial, so bail out on the same viewport test
+// bigDocTypingFix uses. That test also keeps this cheap — big docs never read
+// textContent at all.
+function domOutOfSync(view) {
+  try {
+    const len = view.state.doc.length;
+    const vp = view.viewport;
+    if (vp.from > 0 || vp.to < len) return false;        // virtualized → partial DOM is correct
+    const expected = len - (view.state.doc.lines - 1);   // line breaks are not in textContent
+    const actual = view.contentDOM.textContent.length;
+    return expected - actual > 8;                        // only a SHORTFALL matters; slack for placeholders
+  } catch (_) { return false; }
+}
+
+// RECOVERY. Rebuild the document view from the CURRENT state so the DOM matches the doc
+// again: `setState` reconstructs the DOM while keeping doc, selection and undo history
+// (they all live IN the state). Scroll position does not, so carry it over by hand or
+// the note jumps to the top.
+// `requestMeasure()` is NOT sufficient — app.js has always called it from a
+// ResizeObserver on the mount, and a desynced note stayed broken through it. Only a
+// rebuild restores the DOM.
+function resyncView(view, why) {
+  if (!view) return false;
+  try {
+    const top = view.scrollDOM.scrollTop;
+    view.setState(view.state);
+    view.scrollDOM.scrollTop = top;
+    try { view.requestMeasure(); } catch (_) {}
+    try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('RESYNC view rebuilt (' + why + ') len=' + view.state.doc.length); } catch (_) {}
+    return true;
+  } catch (_) { return false; }
+}
+
+// Check + repair. Returns true if it had to rebuild. Safe to call often: on a synced
+// view it costs one textContent length read, and nothing at all on a virtualized doc.
+function resyncIfNeeded(view, why) {
+  if (!view || !domOutOfSync(view)) return false;
+  return resyncView(view, why);
+}
+
+// Deferred variant for the firewall: that runs inside a transactionFilter, and the view
+// must not be touched while a dispatch is in flight.
+let _resyncPending = false;
+function scheduleViewResync(view) {
+  if (!view || _resyncPending) return;
+  _resyncPending = true;
+  setTimeout(() => {
+    _resyncPending = false;
+    resyncView(view, 'blocked-keystroke');
+  }, 0);
+}
+
 // CONTENT-LOSS FIREWALL. On a large virtualized doc, CM's applyDOMChange can misread
 // the partial (viewport-only) DOM after a keystroke and emit an `input.type` (or
 // input.*) transaction that REPLACES THE WHOLE DOCUMENT with just the visible lines
 // — the user types one char and the whole note vanishes down to ~a few hundred chars.
 // A single typing/IME/deleteContent step can never legitimately remove thousands of
-// characters, so reject any such transaction. Dropping it (return []) makes CM
-// re-render the DOM back to the real state, so the content is preserved (at worst one
-// keystroke is dropped). Real large deletions (select-all+delete, cut, paste-replace)
-// carry different userEvents (delete.selection / delete.cut / input.paste) and pass.
-const contentLossGuard = EditorState.transactionFilter.of((tr) => {
+// characters, so reject any such transaction. Real large deletions (select-all+delete,
+// cut, paste-replace) carry different userEvents (delete.selection / delete.cut /
+// input.paste) and pass.
+//
+// v1.0.9: blocking ALONE was not enough, and the old comment here was wrong. It claimed
+// dropping the transaction makes CM "re-render the DOM back to the real state, at worst
+// one keystroke is dropped". It does not: when the view's DOM is PERSISTENTLY out of
+// sync with the doc, CM keeps re-reading the same stale DOM and every single keystroke
+// is blocked — the editor looks frozen (caret blinks, nothing types, nothing deletes)
+// and the only way out was closing the note. Seen on a 708-char note whose DOM held only
+// its first 254 chars: `BLOCKED input truncation 708->254 deleted=454 selLen=0` repeated
+// identically for every key, and even a transaction that DID pass never repainted.
+// So: block the destructive change (data safety first) AND resync the view, which
+// restores the "one dropped keystroke" behaviour the guard was always meant to have.
+const contentLossGuard = (getView) => EditorState.transactionFilter.of((tr) => {
   try {
     if (!tr.docChanged) return tr;
     const ue = tr.annotation(Transaction.userEvent);
@@ -540,6 +611,9 @@ const contentLossGuard = EditorState.transactionFilter.of((tr) => {
       // positives, because the selLen margin is what actually gates the block.
       if (before > 300 && deleted > 150 && deleted > selLen + 150) {
         try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('BLOCKED input truncation ' + before + '->' + after + ' deleted=' + deleted + ' selLen=' + selLen + ' ue=' + ue); } catch (_) {}
+        // The DOM CM just read does not match the doc → rebuild it, so the next
+        // keystroke is read from a correct DOM instead of being blocked forever.
+        try { scheduleViewResync(getView && getView()); } catch (_) {}
         return [];
       }
     }
@@ -610,12 +684,22 @@ window.AmelieCM = {
       const userEdit = u.transactions.some((tr) => tr.annotation(Transaction.userEvent) != null);
       if (userEdit) onChange(u.state.doc.toString());
     });
-    const view = new EditorView({
+    // Repair a desynced DOM the moment the editor is focused — i.e. BEFORE the user can
+    // type into it and lose a keystroke to the firewall. Deferred so CM finishes its own
+    // focus handling first; never consumes the event.
+    const desyncWatch = EditorView.domEventHandlers({
+      focus() { setTimeout(() => resyncIfNeeded(view, 'focus'), 0); return false; },
+    });
+    // `let`, and the guard takes a getter rather than the view itself: the firewall is
+    // built as part of this very expression, so it can only reach the view lazily (by
+    // the time it calls back, the assignment has long since happened).
+    let view = new EditorView({
       state: EditorState.create({
         doc: initialDoc,
         extensions: [
           bigDocTypingFix,
-          contentLossGuard,
+          desyncWatch,
+          contentLossGuard(() => view),
           lineNumbersComp.of([]),
           history(), drawSelection(), highlightActiveLine(),
           EditorView.lineWrapping,
@@ -639,6 +723,12 @@ window.AmelieCM = {
       getValue: () => view.state.doc.toString(),
       setValue: (s) => { view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: dedentCodeBlocks(s || '') } }); try { view.requestMeasure(); } catch (_) {} },
       focus: () => view.focus(),
+      // Check the rendered DOM still matches the document, and rebuild the view if it
+      // does not. Call it whenever the editor BECOMES VISIBLE again (leaving preview,
+      // switching to a note tab, closing the split): CM cannot render or measure while
+      // its container is display:none, which is how the DOM ends up stale. Returns true
+      // if a rebuild was needed.
+      checkSync: (why) => resyncIfNeeded(view, why || 'visible'),
       getSelection: () => ({ from: view.state.selection.main.from, to: view.state.selection.main.to }),
       // Move the caret AND scroll it into view, so cursor + viewport stay
       // consistent (the app restores caret and scroll separately; without this the

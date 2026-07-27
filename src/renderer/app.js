@@ -4578,6 +4578,14 @@ function setViewMode(mode, opts) {
     requestAnimationFrame(() => {
       try { decorateEditorCodeBlocks(); } catch (_) {}
       try { renderEditorGutter(); } catch (_) {}
+      // Same reason as the two calls above, for CodeMirror's OWN document view: it
+      // cannot render or measure while the pane is display:none, which is how the DOM
+      // ends up holding only part of the note. A stale DOM here is not cosmetic — CM
+      // re-reads it on every keystroke, thinks the note shrank, and tries to delete the
+      // rest; the content-loss firewall then blocks key after key and the editor looks
+      // frozen. Verify and rebuild BEFORE the user can type. Cheap: one length compare,
+      // and it skips out immediately on a virtualized (big) note.
+      try { if (_cmActive && _cmHandle && _cmHandle.checkSync) _cmHandle.checkSync('view->edit'); } catch (_) {}
       _applyScrollFrac(_cmScrollEl(), _frac);
     });
   } else {
