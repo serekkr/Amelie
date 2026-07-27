@@ -98,20 +98,43 @@ const clearModals = async () => {
   }
   return '';
 };
+// Wait until the vault listing is actually in memory: the first openNote otherwise races
+// the initial tree load and silently does nothing (_cmLoadedPath stays null).
+// ALSO wait for the CodeMirror engine to be live: `_cmLoadedPath` is only set while
+// `_cmActive`, so an open that happens before the editor exists reports null even though
+// the note loaded — which looked like a race and is really an ordering requirement.
+const waitForTree = async () => {
+  let n = 0;
+  for (let i = 0; i < 30; i++) {
+    n = await ev('typeof state !== "undefined" && state.notes ? state.notes.length : 0');
+    const cm = await ev('typeof _cmActive !== "undefined" && _cmActive && typeof _cmHandle !== "undefined" && !!_cmHandle');
+    if (typeof n === 'number' && n > 0 && cm === true) return n;
+    await sleep(400);
+  }
+  return n || 0;
+};
 // Open a note the way the app does: find its node in state.notes and hand THAT to openNote.
-const openByPath = (file, mode) => ev(`(async () => {
+const openOnce = (file, mode) => ev(`(async () => {
   const walk = (a) => { for (const n of a || []) { if (n.path === ${JSON.stringify(file)}) return n; const r = n.children && walk(n.children); if (r) return r; } return null; };
   const node = walk(state.notes);
   if (!node) return 'NOT-FOUND';
   await openNote(node);
   setViewMode(${JSON.stringify(mode)});
-  return _cmLoadedPath;
+  return { cmLoaded: _cmLoadedPath, current: state.currentPath, active: (typeof getActiveTab === 'function' && getActiveTab()) ? getActiveTab().path : null,
+           len: (typeof _cmHandle !== 'undefined' && _cmHandle) ? _cmHandle.getValue().length : -1, cmActive: _cmActive, tabs: tabs.length };
 })()`, 15000);
+// One retry: the first attempt right after startup can land before the app is settled.
+const openByPath = async (file, mode) => {
+  let r = await openOnce(file, mode);
+  if (!r || r.cmLoaded !== file) { await sleep(1200); await clearModals(); r = await openOnce(file, mode); }
+  return r;
+};
 // The blank unnamed tab the app opens on a fresh profile is what triggers the "note name?"
 // prompt as soon as autosave fires.
 await ev('(() => { try { for (let i = tabs.length - 1; i >= 0; i--) if (!tabs[i].path) closeTab(i); } catch (_) {} })()');
 const dismissed = await clearModals();
-console.log(`app up${dismissed ? `, dismissed: ${dismissed}` : ''}\n`);
+const noteCount = await waitForTree();
+console.log(`app up, ${noteCount} notes listed${dismissed ? `, dismissed: ${dismissed}` : ''}\n`);
 
 const logLines = () => { try { return fs.readFileSync(LOG, 'utf8').split('\n').filter(Boolean); } catch (_) { return []; } };
 const results = [];
@@ -133,13 +156,18 @@ async function typingWorks(file, label, { viaViewMode = false } = {}) {
   }
   await sleep(1200);
   await clearModals();
-  // Assert the RIGHT note is loaded before typing a single character — otherwise the
+  // Assert the RIGHT note is open before typing a single character — otherwise the
   // keystrokes land in some other document and every later check is meaningless.
-  if (loaded !== file) { check(`${file}${label ? ` (${label})` : ''}: note actually opened`, false, `openNote left _cmLoadedPath = ${JSON.stringify(loaded)}`); return 0; }
-  check(`${file}${label ? ` (${label})` : ''}: note actually opened`, true, '');
+  // Checked against the app's own notion (state.currentPath + the loaded length), NOT
+  // `_cmLoadedPath`: that one is only assigned in switchTab and lags on the FIRST note
+  // opened in a session (the note is open and loaded correctly meanwhile — observed
+  // {cmLoaded:null, current:'wrapped.md', active:'wrapped.md', len:440}).
+  const ok = loaded && loaded.current === file && loaded.len > 0;
+  check(`${file}${label ? ` (${label})` : ''}: note actually opened`, !!ok, `open state: ${JSON.stringify(loaded)}`);
+  if (!ok) return 0;
   const st = await ev(`(() => { const len=_cmHandle.getValue().length; _cmHandle.setSelection(len,len); _cmHandle.focus();
     const vp=_cmHandle.view.viewport; return { len, dom:_cmHandle.view.contentDOM.textContent.length, lines:_cmHandle.view.state.doc.lines,
-    vp:[vp.from,vp.to], focus:_cmHandle.hasFocus(), loaded:_cmLoadedPath, w:Math.round(_cmHandle.view.contentDOM.clientWidth) }; })()`);
+    vp:[vp.from,vp.to], focus:_cmHandle.hasFocus(), loaded:state.currentPath, cmLoaded:_cmLoadedPath, w:Math.round(_cmHandle.view.contentDOM.clientWidth) }; })()`);
   if (!st || typeof st !== 'object') { check(`${file}: editor reachable`, false, String(st)); return; }
   console.log(`   doc=${st.len} dom=${st.dom} lines=${st.lines} vp=[${st.vp}] width=${st.w}px focus=${st.focus}`);
   check(`${file}${label ? ` (${label})` : ''}: editor holds the note, focused`, st.loaded === file && st.focus, JSON.stringify(st));

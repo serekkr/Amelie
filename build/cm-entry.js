@@ -216,6 +216,10 @@ const pasteNormalize = EditorView.domEventHandlers({
     if (!cd) return false;
     const text = cd.getData('text/plain') || '';
     const html = cd.getData('text/html') || '';
+    // Keep the plain text even when this handler declines and lets the browser paste: if
+    // that native paste comes back as a mis-read and the firewall refuses it, this is the
+    // only copy left to put back. Capped so a giant clipboard is not held onto.
+    _lastClipboardText = text.length <= 2000000 ? text : '';
     let insert = null;
     // Rebuild markdown from the structured HTML when the plain text is flattened.
     // Cap is generous (4 MB): the walk is O(n) since the cloneNode O(n²) was removed,
@@ -505,6 +509,16 @@ const tagColorPlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: (v) => v.decorations });
 
+// Total length selected across every range. The guards below compare a deletion against
+// what the user had selected; measuring only `selection.main` would understate it if the
+// selection ever had several ranges. It cannot today — this editor does not enable
+// CodeMirror's `allowMultipleSelections`, so a selection always collapses to one range
+// (checked by probe) — so this is correctness that does not depend on that setting, NOT a
+// fix for anything users could hit.
+function _selectedLength(state) {
+  try { let n = 0; for (const r of state.selection.ranges) n += r.to - r.from; return n; } catch (_) { return 0; }
+}
+
 // ── View/DOM desync: detection + recovery ────────────────────────────────────
 // DETECTION. CM renders the doc as one <div class="cm-line"> per line, and this editor
 // uses ONLY line/mark decorations (no `replace`, no widgets — see cbLine/mdLinkMark/…),
@@ -579,12 +593,35 @@ let _resyncPending = false;
 let _pendingText = '';        // characters whose transaction was blocked, awaiting re-apply
 let _pendingCandidate = '';   // the text of the keystroke currently being handled natively
 let _pendingDelete = '';      // 'backward' | 'forward': a single-char delete to redo
+// A blocked paste / cut / delete-selection, to redo from the state: the range the user had
+// selected BEFORE the mis-read (still valid — the transaction was dropped) and what should
+// replace it (the pasted text, or nothing for a cut or a delete).
+let _pendingRange = null;     // { from, to, insert, what }
+let _lastClipboardText = '';  // plain text of the last paste, so a blocked one can be redone
 function scheduleViewRecovery(view) {
   if (!view || _resyncPending) return;
   _resyncPending = true;
   setTimeout(() => {
     _resyncPending = false;
     resyncView(view, 'blocked-keystroke');
+    // A blocked paste / cut / delete-selection: redo exactly what the user asked for,
+    // computed from the state instead of from the rendering.
+    const rng = _pendingRange;
+    _pendingRange = null;
+    if (rng) {
+      try {
+        const max = view.state.doc.length;
+        const from = Math.min(rng.from, max), to = Math.min(Math.max(rng.to, from), max);
+        const lenBefore = max;
+        view.dispatch({
+          changes: { from, to, insert: rng.insert || '' },
+          selection: { anchor: from + (rng.insert || '').length },
+          userEvent: rng.insert ? 'input.paste' : 'delete.selection',
+          scrollIntoView: true,
+        });
+        try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('REDONE ' + rng.what + ' [' + from + ',' + to + '] insert=' + (rng.insert || '').length + ' ' + lenBefore + '->' + view.state.doc.length); } catch (_) {}
+      } catch (_) {}
+    }
     // A single-character delete that was blocked: redo it from the STATE, where CM's own
     // command handles grapheme clusters and selections correctly.
     const del = _pendingDelete;
@@ -642,7 +679,7 @@ const contentLossGuard = (getView) => EditorState.transactionFilter.of((tr) => {
       const after = tr.newDoc.length;
       const deleted = before - after;
       const sel = tr.startState.selection.main;
-      const selLen = sel.to - sel.from;
+      const selLen = _selectedLength(tr.startState);
       // Bug signature: a keystroke removes FAR more than the user had selected. A
       // legit "select-all then type" deletes ≈ selLen, so deleted won't exceed it by
       // much. The applyDOMChange mis-read deletes thousands of chars with only a caret
@@ -698,11 +735,40 @@ const contentLossGuard = (getView) => EditorState.transactionFilter.of((tr) => {
       const before = tr.startState.doc.length;
       const deleted = before - tr.newDoc.length;
       const sel = tr.startState.selection.main;
-      const selLen = sel.to - sel.from;
+      const selLen = _selectedLength(tr.startState);
       if (before > 300 && deleted > selLen + 8) {
         try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('BLOCKED delete truncation ' + before + '->' + tr.newDoc.length + ' deleted=' + deleted + ' selLen=' + selLen + ' ue=' + ue); } catch (_) {}
         try {
           _pendingDelete = ue === 'delete.forward' ? 'forward' : 'backward';
+          scheduleViewRecovery(getView && getView());
+        } catch (_) {}
+        return [];
+      }
+    }
+    // PASTE / DROP / CUT / DELETE-SELECTION. These were left unscrutinised, and a probe
+    // showed what that costs: on a collapsed rendering each one APPLIED a truncation
+    // (440 -> 254 chars) and would then have been autosaved. The exclusion was
+    // over-cautious — the invariant that catches a mis-read holds for all of them:
+    //   • a paste replaces the selection      → it removes ≈ selLen
+    //   • a cut removes the selection         → it removes ≈ selLen
+    //   • delete-selection removes it too     → it removes ≈ selLen
+    // Only a mis-read removes hundreds MORE than was selected. Pasting a short text over a
+    // huge selection is therefore safe (deleted ≈ selLen - insertLen, well under the bar),
+    // and word/line kills carry other userEvents and never reach here.
+    if (ue && /^(input\.paste|input\.drop|delete\.cut|delete\.selection)$/.test(ue)) {
+      const before = tr.startState.doc.length;
+      const deleted = before - tr.newDoc.length;
+      const sel = tr.startState.selection.main;
+      const selLen = _selectedLength(tr.startState);
+      if (before > 300 && deleted > selLen + 150) {
+        try { window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog('BLOCKED ' + ue + ' truncation ' + before + '->' + tr.newDoc.length + ' deleted=' + deleted + ' selLen=' + selLen); } catch (_) {}
+        try {
+          // Redo it from the state. A paste puts the clipboard text back in; a cut or a
+          // delete just removes what was selected. A text DROP is only refused — its text
+          // is not recoverable here — so the note survives and nothing lands.
+          _pendingRange = ue === 'input.drop'
+            ? { from: sel.from, to: sel.from, insert: '', what: 'drop-refused' }
+            : { from: sel.from, to: sel.to, insert: ue === 'input.paste' ? _lastClipboardText : '', what: ue };
           scheduleViewRecovery(getView && getView());
         } catch (_) {}
         return [];

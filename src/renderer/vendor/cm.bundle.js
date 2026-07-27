@@ -19524,6 +19524,7 @@
       if (!cd) return false;
       const text = cd.getData("text/plain") || "";
       const html = cd.getData("text/html") || "";
+      _lastClipboardText = text.length <= 2e6 ? text : "";
       let insert2 = null;
       if (html && html.length < 4e6 && looksFlattened(text, html)) {
         try {
@@ -19834,6 +19835,15 @@
       return builder.finish();
     }
   }, { decorations: (v) => v.decorations });
+  function _selectedLength(state) {
+    try {
+      let n = 0;
+      for (const r of state.selection.ranges) n += r.to - r.from;
+      return n;
+    } catch (_) {
+      return 0;
+    }
+  }
   function domOutOfSync(view) {
     try {
       const len = view.state.doc.length;
@@ -19884,12 +19894,34 @@
   var _pendingText = "";
   var _pendingCandidate = "";
   var _pendingDelete = "";
+  var _pendingRange = null;
+  var _lastClipboardText = "";
   function scheduleViewRecovery(view) {
     if (!view || _resyncPending) return;
     _resyncPending = true;
     setTimeout(() => {
       _resyncPending = false;
       resyncView(view, "blocked-keystroke");
+      const rng = _pendingRange;
+      _pendingRange = null;
+      if (rng) {
+        try {
+          const max = view.state.doc.length;
+          const from = Math.min(rng.from, max), to = Math.min(Math.max(rng.to, from), max);
+          const lenBefore = max;
+          view.dispatch({
+            changes: { from, to, insert: rng.insert || "" },
+            selection: { anchor: from + (rng.insert || "").length },
+            userEvent: rng.insert ? "input.paste" : "delete.selection",
+            scrollIntoView: true
+          });
+          try {
+            window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("REDONE " + rng.what + " [" + from + "," + to + "] insert=" + (rng.insert || "").length + " " + lenBefore + "->" + view.state.doc.length);
+          } catch (_) {
+          }
+        } catch (_) {
+        }
+      }
       const del = _pendingDelete;
       _pendingDelete = "";
       if (del) {
@@ -19931,7 +19963,7 @@
         const after = tr.newDoc.length;
         const deleted = before - after;
         const sel = tr.startState.selection.main;
-        const selLen = sel.to - sel.from;
+        const selLen = _selectedLength(tr.startState);
         if (before > 300 && deleted > 150 && deleted > selLen + 150) {
           let diag = "";
           try {
@@ -19961,7 +19993,7 @@
         const before = tr.startState.doc.length;
         const deleted = before - tr.newDoc.length;
         const sel = tr.startState.selection.main;
-        const selLen = sel.to - sel.from;
+        const selLen = _selectedLength(tr.startState);
         if (before > 300 && deleted > selLen + 8) {
           try {
             window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("BLOCKED delete truncation " + before + "->" + tr.newDoc.length + " deleted=" + deleted + " selLen=" + selLen + " ue=" + ue);
@@ -19969,6 +20001,24 @@
           }
           try {
             _pendingDelete = ue === "delete.forward" ? "forward" : "backward";
+            scheduleViewRecovery(getView && getView());
+          } catch (_) {
+          }
+          return [];
+        }
+      }
+      if (ue && /^(input\.paste|input\.drop|delete\.cut|delete\.selection)$/.test(ue)) {
+        const before = tr.startState.doc.length;
+        const deleted = before - tr.newDoc.length;
+        const sel = tr.startState.selection.main;
+        const selLen = _selectedLength(tr.startState);
+        if (before > 300 && deleted > selLen + 150) {
+          try {
+            window.inkwell && window.inkwell.debugLog && window.inkwell.debugLog("BLOCKED " + ue + " truncation " + before + "->" + tr.newDoc.length + " deleted=" + deleted + " selLen=" + selLen);
+          } catch (_) {
+          }
+          try {
+            _pendingRange = ue === "input.drop" ? { from: sel.from, to: sel.from, insert: "", what: "drop-refused" } : { from: sel.from, to: sel.to, insert: ue === "input.paste" ? _lastClipboardText : "", what: ue };
             scheduleViewRecovery(getView && getView());
           } catch (_) {
           }
