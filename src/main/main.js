@@ -2937,7 +2937,13 @@ function _attachmentStats() {
       const fp = path.join(dir, e.name);
       if (e.isDirectory()) { walk(fp); continue; }
       stats.total++;
-      const ext = path.extname(e.name).toLowerCase();
+      // On an encrypted vault the file on disk is "<name>.<realext>.enc", so the
+      // type has to be read from the LOGICAL name — otherwise every attachment
+      // counts as ".enc" → "other" and each row reads 0.
+      let name = e.name;
+      if (name.endsWith(ENC_EXT))             name = name.slice(0, -ENC_EXT.length);
+      else if (name.endsWith(LEGACY_ENC_EXT)) name = name.slice(0, -LEGACY_ENC_EXT.length);
+      const ext = path.extname(name).toLowerCase();
       if (ext === '.pdf')             stats.pdf++;
       else if (VIDEO.includes(ext))   stats.video++;
       else if (AUDIO.includes(ext))   stats.audio++;

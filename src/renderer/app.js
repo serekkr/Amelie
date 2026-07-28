@@ -13766,13 +13766,15 @@ async function openSecurityTab() {
       [window.i18n.t('vault_settings.card_notes'), info.noteCount ?? '—'],
       ['PDF',    a.pdf    ?? 0],
       ['Video',  a.video  ?? 0],
+      ['Audio',  a.audio  ?? 0],
       [cap(window.i18n.t('vault_settings.att_images')), a.image ?? 0],
     ];
-    // Two voices per row → 3 zebra-striped full-width rows (alternating shades).
+    // Two voices per row → zebra-striped full-width rows (alternating shades).
+    // An odd count gets an empty cell so the last row keeps the two-column look.
     const cells = rows.map(([label, n]) =>
       `<div class="vc-cell"><span>${escHtml(String(label))}</span><span class="vc-num">${escHtml(String(n))}</span></div>`);
     let html = '<div class="vc-table">';
-    for (let i = 0; i < cells.length; i += 2) html += '<div class="vc-row">' + cells[i] + (cells[i + 1] || '') + '</div>';
+    for (let i = 0; i < cells.length; i += 2) html += '<div class="vc-row">' + cells[i] + (cells[i + 1] || '<div class="vc-cell"></div>') + '</div>';
     contentEl.innerHTML = html + '</div>';
   }
 
