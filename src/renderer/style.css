@@ -3815,6 +3815,14 @@ html:not([data-theme]) .notif-row:hover .simple-name {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #app-tooltip.show { display: block; }
+/* Long text (a source URL, a deep path) does not fit one 280px line, and with
+   nowrap+ellipsis the bubble showed LESS than the field it came from. Such a
+   tooltip wraps over several lines instead — `anywhere` because a URL has no
+   spaces to break at, so without it the line just overflows and gets clipped. */
+#app-tooltip.wide {
+  max-width: min(70vw, 560px);
+  white-space: normal; overflow-wrap: anywhere; text-overflow: clip;
+}
 
 /* ─── Export-to-PDF modal controls ──────────────────────────────────────────── */
 .export-seg-btn {

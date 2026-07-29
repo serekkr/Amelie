@@ -2869,13 +2869,24 @@ function serializeFrontmatter(fm, body) {
   return '---\n' + lines.join('\n') + '\n---\n' + body;
 }
 
+// `source` holds URLs far longer than the field, so hovering it shows the whole
+// value. BOTH attributes are written: the tooltip layer moves `title` → `data-tip`
+// on first hover and drops the title, so refreshing only `title` would leave a
+// stale bubble on an element already hovered (same reason as the mode-toggle
+// button). An empty value clears both, or switching to a note without a source
+// would keep showing the previous note's URL.
+function setSourceTip(value) {
+  const el = $('fm-source');
+  if (!el) return;
+  if (value) { el.title = value; el.setAttribute('data-tip', value); }
+  else       { el.removeAttribute('title'); el.removeAttribute('data-tip'); }
+}
+
 function loadFrontmatterPanel(tab) {
   const { fm } = parseFrontmatter(tab.content || '');
   const titleEl = $('fm-title'); if (titleEl) titleEl.value = fm.title || '';
   const tagsEl  = $('fm-tags');  if (tagsEl)  tagsEl.value  = fm.tags  || '';
-  // `source` holds URLs that can be far longer than the field: mirror the value
-  // into the tooltip so hovering shows all of it without scrolling the input.
-  const srcEl   = $('fm-source');if (srcEl) { srcEl.value = fm.source || ''; srcEl.title = fm.source || ''; }
+  const srcEl   = $('fm-source');if (srcEl) { srcEl.value = fm.source || ''; setSourceTip(fm.source || ''); }
   updateNoteMeta(tab);
   // Show rows only if in edit mode AND field has content (or is focused)
   updateMetaRows(state.viewMode === 'edit');
@@ -2914,8 +2925,7 @@ function setupFrontmatter() {
         tags:   $('fm-tags').value.trim(),
         source: $('fm-source').value.trim(),
       };
-      const srcInput = $('fm-source');
-      if (srcInput) srcInput.title = fm.source;   // keep the hover text in step
+      setSourceTip(fm.source);   // keep the hover text in step as you type
       const newContent = serializeFrontmatter(fm, body);
       editor.value = newContent;
       tab.content = newContent;
@@ -6495,6 +6505,8 @@ function setupTooltips() {
     const text = el.getAttribute('data-tip');
     if (!text) return;
     tip.textContent = text;
+    // Wrap mode BEFORE measuring — the size below depends on it.
+    tip.classList.toggle('wide', text.length > 60);
     tip.classList.add('show');
     const r = el.getBoundingClientRect();
     const tw = tip.offsetWidth, th = tip.offsetHeight;
