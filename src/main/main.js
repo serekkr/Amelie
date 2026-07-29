@@ -1779,10 +1779,6 @@ ipcMain.on('window:startMove', () => { try { if (mainWindow && !mainWindow.isMax
 
 // ─── IPC: Vault Setup ────────────────────────────────────────────────────────
 
-ipcMain.handle('vault:getConfig', async () => {
-  return readAppConfig();
-});
-
 ipcMain.handle('vault:setup', async (_, opts) => {
   const { vaultPath: rawVaultPath, encryptionEnabled, passphrase } = opts;
   // Expand ~ and $HOME to the user's home directory.
@@ -1907,17 +1903,6 @@ ipcMain.handle('vault:changePath', async (_, rawPath) => {
   return { ok: true, vaultPath };
 });
 
-// Let the user pick a .tar.gz backup to restore from.
-ipcMain.handle('vault:pickRestoreFile', async () => {
-  const result = await dialog.showOpenDialog(mainWindow || undefined, {
-    title: 'Seleziona un backup .tar.gz da ripristinare',
-    properties: ['openFile'],
-    filters: [{ name: 'Backup Amelie', extensions: ['tar.gz', 'tgz', 'gz'] }, { name: 'Tutti i file', extensions: ['*'] }],
-  });
-  if (result.canceled || !result.filePaths?.length) return { canceled: true };
-  return { canceled: false, filePath: result.filePaths[0] };
-});
-
 // Restore the vault from a .tar.gz backup produced by Amelie (the archive holds
 // `notes/`, `attachments/` and optionally the envelope header `.amelie-vault.json`).
 // SAFE: the current notes/ and attachments/ are MOVED ASIDE to *.bak-restore-<ts>
@@ -2028,16 +2013,6 @@ ipcMain.handle('vault:restoreFolder', async (_, rawDir, passphrase) => {
   // Allow picking either the snapshot root (has notes/) or a wrapper that contains
   // a single vault folder — but keep it simple: require notes/ directly inside.
   return await _finalizeRestore(dir, passphrase, { move: false, restoredFrom: path.basename(dir) });
-});
-
-// Folder picker for the "restore from folder" option.
-ipcMain.handle('vault:pickRestoreFolder', async () => {
-  const result = await dialog.showOpenDialog(mainWindow || undefined, {
-    title: 'Seleziona una cartella di backup da ripristinare',
-    properties: ['openDirectory'],
-  });
-  if (result.canceled || !result.filePaths?.length) return { canceled: true };
-  return { canceled: false, dirPath: result.filePaths[0] };
 });
 
 // ONE picker for the single "Restore" button: pick a .tar.gz FILE *or* a backup
@@ -2870,42 +2845,9 @@ async function unlockWithPassphrase(passphrase) {
 
 ipcMain.handle('vault:unlock', async (_, passphrase) => await unlockWithPassphrase(passphrase));
 
-// AES-256-GCM is the only offered cipher (ChaCha20 removed — absent from Electron's
-// BoringSSL). `chacha: false` is kept in the shape so any older UI check stays happy.
-ipcMain.handle('vault:cipherSupport', async () => ({
-  aes: cipherAvailable('aes'),
-  chacha: false,
-}));
-
-// ─── Remember password (OS keyring via safeStorage) ──────────────────────────
-ipcMain.handle('vault:storageBackend', async () => storageBackendInfo());
-
-ipcMain.handle('vault:isRemembered', async () => {
-  try { return fs.existsSync(PASSKEY_FILE); } catch (_) { return false; }
-});
-
-// Store the passphrase encrypted by the OS keyring so the next launch can
-// auto-unlock. The plaintext passphrase never leaves the main process.
-ipcMain.handle('vault:rememberPassphrase', async (_, passphrase) => {
-  const info = storageBackendInfo();
-  // Only persist under a REAL OS keyring. The app forces safeStorage's `basic`
-  // backend (see ~line 58), whose key is public on Linux → encryptString would
-  // merely OBFUSCATE, leaving the vault passphrase recoverable from `.passkey`.
-  // Refuse otherwise, matching the "passphrase is never stored" security model.
-  if (!info.secure) return { ok: false, error: 'Backend sicuro non disponibile — passphrase non memorizzata', ...info };
-  try {
-    const { safeStorage } = require('electron');
-    const enc = safeStorage.encryptString(String(passphrase || ''));
-    fs.writeFileSync(PASSKEY_FILE, enc, { mode: 0o600 });
-    try { fs.chmodSync(PASSKEY_FILE, 0o600); } catch (_) {}
-    return { ok: true, ...info };
-  } catch (e) { return { ok: false, error: e.message, ...info }; }
-});
-
-ipcMain.handle('vault:forgetPassphrase', async () => {
-  try { if (fs.existsSync(PASSKEY_FILE)) fs.unlinkSync(PASSKEY_FILE); } catch (_) {}
-  return { ok: true };
-});
+// NOTE: "remember password" is gone by design — the passphrase is never stored,
+// so there are no remember/forget/isRemembered handlers. PASSKEY_FILE only
+// survives as something to SCRUB if an older version left one behind (below).
 
 // Try to unlock from the stored passphrase. Returns {ok:false, noKey:true}
 // when there is nothing stored (renderer then shows the manual overlay).
@@ -3859,22 +3801,6 @@ ipcMain.handle('attachment:openDialog', async () => {
   return finalName;   // LOGICAL name (no .enc)
 });
 
-// List all images
-ipcMain.handle('attachment:list', async () => {
-  return fs.readdirSync(ATTACHMENTS_DIR)
-    .filter(f => !f.startsWith('.'))
-    .map(f => {
-      const full = path.join(ATTACHMENTS_DIR, f);
-      const stat = fs.statSync(full);
-      // PLAINTEXT size: GCM computes it from the chunk framing, legacy CTR is
-      // file size minus the 24-byte header (see attachmentPlainSize).
-      const enc  = ENCRYPTION_KEY && isEncryptedAttachment(full);
-      const size = enc ? attachmentPlainSize(full) : stat.size;
-      return { name: stripEnc(f), size, modified: stat.mtime.toISOString() };   // LOGICAL name + size
-    })
-    .sort((a, b) => new Date(b.modified) - new Date(a.modified));
-});
-
 // ── Remove unused media ──────────────────────────────────────────────────────
 // Delete images/videos in attachments/ that NO note links to. `apply=false` only
 // reports what WOULD be deleted (for a confirm dialog); `apply=true` deletes.
@@ -4032,11 +3958,6 @@ ipcMain.handle('tree-order:write', async (_, order) => {
     if (syncManager) syncManager.scheduleSync();   // sync the order with the notes
     return true;
   } catch (e) { console.error('[tree-order] write failed:', e.message); return false; }
-});
-
-ipcMain.handle('sync:triggerNow', async () => {
-  if (syncManager) return syncManager.syncNow();
-  return { success: false, error: 'Sync manager not initialized' };
 });
 
 // Force a two-way sync (the toolbar Sync button).
@@ -4211,14 +4132,6 @@ ipcMain.handle('themes:list', async () => {
         });
       });
   } catch (_) { return []; }
-});
-
-ipcMain.handle('themes:openFolder', async () => {
-  try {
-    ensureThemesDir();
-    await shell.openPath(THEMES_DIR);   // default file manager
-    return true;
-  } catch (_) { return false; }
 });
 
 // "Add theme": create a ready-to-use my-theme-N.css (active block + commented
@@ -4594,12 +4507,6 @@ ipcMain.handle('wg:testTunnel', async (_, { host } = {}) => {
   return await wgManager.testTunnel({ host, keepUp: vpnFlagWantsTunnelUp() });
 });
 
-/** Step 4: full test — tunnel + mount + folder access + write. keepUp: don't
- * tear the tunnel down afterwards (it must stay up while the option is on). */
-ipcMain.handle('wg:testFull', async (_, smbConfig) => {
-  return await wgManager.testFullConnection(smbConfig, { keepUp: true });
-});
-
 /** Latest WireGuard handshake (passive read, no ping). */
 ipcMain.handle('wg:handshake', async () => {
   return await wgManager.latestHandshake();
@@ -4627,38 +4534,6 @@ ipcMain.handle('wg:testSmbWrite', async (_, smbConfig, purpose) => {
     }
   } catch (_) {}
   return await wgManager.testSmbWrite(smbConfig, { keepUp: vpnFlagWantsTunnelUp(), purpose, avoid });
-});
-
-/**
- * Save Samba config to vault settings so SyncManager can use it.
- * Config: { ip, share, path, username, password }
- */
-ipcMain.handle('wg:saveSambaConfig', async (_, smbConfig) => {
-  try {
-    let vaultCfg = {};
-    if (fs.existsSync(CONFIG_FILE)) {
-      vaultCfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-    }
-    vaultCfg.sync = vaultCfg.sync || {};
-    // The TEST saves the connection but must NEVER switch the backup on by
-    // itself: only the "VPN with Samba share" flag enables it (the flag
-    // commands backup AND tunnel). Preserve whatever enabled state it had.
-    vaultCfg.sync.samba = {
-      enabled:       !!vaultCfg.sync.samba?.enabled,
-      host:          smbConfig.ip,
-      share:         smbConfig.share,
-      remoteSubPath: smbConfig.path || '',
-      username:      smbConfig.username,
-      password:      smbConfig.password,
-      useWireGuard:  true,
-    };
-    writeConfig(vaultCfg);
-    // Reload syncManager with new config
-    if (syncManager) syncManager.reloadConfig(vaultCfg);
-    return { ok: true };
-  } catch(e) {
-    return { ok: false, error: e.message };
-  }
 });
 
 /**
@@ -4867,11 +4742,6 @@ ipcMain.handle('sync:testWebdav', async (_, cfg = {}) => {
     });
     req.end('<?xml version="1.0"?><propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>');
   });
-});
-
-ipcMain.handle('sync:getStatus', async () => {
-  if (syncManager) return syncManager.getStatus();
-  return { status: 'idle' };
 });
 
 // ─── IPC: Window Controls ───────────────────────────────────────────────────

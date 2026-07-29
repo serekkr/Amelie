@@ -9149,7 +9149,6 @@ const wizardState = {
   totalSteps: 4,
   wgConfig: null,
   wgPeerIp: null,
-  protocol: 'smb',
   testResults: {},
 };
 
@@ -10034,9 +10033,9 @@ function setupSettings() {
 }
 
 // Compact WG+Samba setup embedded in the two-way Sync tab. Imports the .conf,
-// then on "Configura e verifica" saves it, runs the full connection test, and
-// (on success) persists the Samba config — exactly like the Backup wizard, just
-// inline. Reuses wg.saveConf / wg.testFull / wg.saveSambaConfig.
+// then on "Configura e verifica" saves it, verifies the connection, and (on
+// success) persists the connection — exactly like the Backup wizard, just
+// inline. Reuses wg.saveConf / wg.testSmbWrite / wg.saveSyncConnection.
 function setupTwowaySetup() {
   let twWgConf = null;
   const drop = $('tw-wg-drop-zone'), file = $('tw-wg-file-input'), label = $('tw-wg-drop-label');
@@ -10211,8 +10210,6 @@ function setupTwowaySetup() {
 function wizardGo(step) {
   if (step < 1 || step > wizardState.totalSteps) return;
   wizardState.step = step;
-  const protoEl = $('tc-mount-proto');
-  if (protoEl) protoEl.textContent = (wizardState.protocol || 'smb').toUpperCase();
   updatePathPreview();
   updatePathPrefixLabel();
   if (step >= 3) {
@@ -11105,17 +11102,15 @@ function buildVpnConfig() {
   return {
     wgConfig: wizardState.wgConfig,
     peerIp: val('cfg-smb-ip'),
-    protocol: wizardState.protocol,
     smb: {
       ip: val('cfg-smb-ip'),
       share: val('cfg-smb-share'),
       path: val('cfg-smb-path'),
       username: raw('cfg-smb-user'),
       password: raw('cfg-smb-pass'),
-      // No mount point: WireGuard+Samba always pushes over smbclient. The
-      // "share already mounted by the OS" case is handled by the Local backup
-      // destination instead, so this field was removed from the UI.
-      mountPoint: '',
+      // No mount point: WireGuard+Samba always pushes over the amelie-smb
+      // helper. The "share already mounted by the OS" case is configured as a
+      // Local backup destination instead.
     },
     remotePath: val('cfg-smb-path'),
     // Two positive toggles: dated folder snapshot and/or .tar.gz archive.
@@ -11147,15 +11142,10 @@ async function openSettings() {
     // Null-safe: some legacy inputs may no longer exist in the simplified UI.
     const setVal = (id, v) => { const el = $(id); if (el) el.value = v; };
     setVal('cfg-smb-ip', vpn.smb?.ip || vpn.peerIp || '');
-    wizardState.protocol = vpn.protocol || 'smb';
-    document.querySelectorAll('.proto-card').forEach(c => c.classList.toggle('selected', c.dataset.proto === wizardState.protocol));
-    const smbFields = $('smb-fields'); if (smbFields) smbFields.style.cssText = wizardState.protocol === 'smb' ? 'display:flex;flex-direction:column;gap:12px' : 'display:none';
-    const nfsFields = $('nfs-fields'); if (nfsFields) nfsFields.style.cssText  = wizardState.protocol === 'nfs' ? 'display:flex;flex-direction:column;gap:12px' : 'display:none';
     setVal('cfg-smb-share', vpn.smb?.share    || '');
     setVal('cfg-smb-path',  vpn.smb?.path     || vpn.remotePath || cfg.sync?.samba?.remoteSubPath || 'amelie/backup');
     setVal('cfg-smb-user',  vpn.smb?.username || '');
     setVal('cfg-smb-pass',  vpn.smb?.password || '');
-    setVal('cfg-smb-mountpoint', vpn.smb?.mountPoint || '');
   }
   // Backup server fields empty but a Sync connection exists → prefill the
   // SERVER part from it (same shared connection); the folder stays empty

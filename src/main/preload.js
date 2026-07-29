@@ -9,26 +9,18 @@ contextBridge.exposeInMainWorld('inkwell', {
   getPathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch (_) { return ''; } },
   // Vault
   vault: {
-    getConfig:        ()           => ipcRenderer.invoke('vault:getConfig'),
     setup:            (opts)       => ipcRenderer.invoke('vault:setup', opts),
     browseFolder:     ()           => ipcRenderer.invoke('vault:browseFolder'),
     changePath:       (p)          => ipcRenderer.invoke('vault:changePath', p),
     importFolder:     (p)          => ipcRenderer.invoke('vault:importFolder', p),
     filterDirs:       (paths)      => ipcRenderer.invoke('vault:filterDirs', paths),
     importObsidian:   (p, dest)    => ipcRenderer.invoke('vault:importObsidian', p, dest),
-    pickRestoreFile:  ()           => ipcRenderer.invoke('vault:pickRestoreFile'),
     restoreArchive:   (p, pass)    => ipcRenderer.invoke('vault:restoreArchive', p, pass),
-    pickRestoreFolder:()           => ipcRenderer.invoke('vault:pickRestoreFolder'),
     restoreFolder:    (p, pass)    => ipcRenderer.invoke('vault:restoreFolder', p, pass),
     pickRestore:      ()           => ipcRenderer.invoke('vault:pickRestore'),
     getInfo:          ()           => ipcRenderer.invoke('vault:getInfo'),
     unlock:           (pass)       => ipcRenderer.invoke('vault:unlock', pass),
     autoUnlock:        ()           => ipcRenderer.invoke('vault:autoUnlock'),
-    storageBackend:    ()           => ipcRenderer.invoke('vault:storageBackend'),
-    cipherSupport:     ()           => ipcRenderer.invoke('vault:cipherSupport'),
-    isRemembered:      ()           => ipcRenderer.invoke('vault:isRemembered'),
-    rememberPassphrase:(pass)       => ipcRenderer.invoke('vault:rememberPassphrase', pass),
-    forgetPassphrase:  ()           => ipcRenderer.invoke('vault:forgetPassphrase'),
     enableEncryption: (pass, algo, openPlaintext) => ipcRenderer.invoke('vault:enableEncryption', pass, algo, openPlaintext),
     disableEncryption:(pass)       => ipcRenderer.invoke('vault:disableEncryption', pass),
     setRestMode:      (openPlaintext) => ipcRenderer.invoke('vault:setRestMode', openPlaintext),
@@ -49,10 +41,8 @@ contextBridge.exposeInMainWorld('inkwell', {
     getRawConf:           ()            => ipcRenderer.invoke('wg:getRawConf'),
     status:               ()            => ipcRenderer.invoke('wg:status'),
     testTunnel:           (host)        => ipcRenderer.invoke('wg:testTunnel', { host }),
-    testFull:             (cfg)         => ipcRenderer.invoke('wg:testFull', cfg),
     testSmbWrite:         (cfg, purpose) => ipcRenderer.invoke('wg:testSmbWrite', cfg, purpose),
     handshake:            ()            => ipcRenderer.invoke('wg:handshake'),
-    saveSambaConfig:      (cfg)         => ipcRenderer.invoke('wg:saveSambaConfig', cfg),
     saveSyncConnection:   (cfg)         => ipcRenderer.invoke('wg:saveSyncConnection', cfg),
     removeSyncConnection: ()            => ipcRenderer.invoke('wg:removeSyncConnection'),
     removeVpnKeepSamba:   ()            => ipcRenderer.invoke('wg:removeVpnKeepSamba'),
@@ -64,7 +54,6 @@ contextBridge.exposeInMainWorld('inkwell', {
   // Custom themes (<app-data>/themes): list CSS, create/delete a theme file
   themes: {
     list:       () => ipcRenderer.invoke('themes:list'),
-    openFolder: () => ipcRenderer.invoke('themes:openFolder'),
     create:     () => ipcRenderer.invoke('themes:create'),
     edit:       (id) => ipcRenderer.invoke('themes:edit', id),
     delete:     (id) => ipcRenderer.invoke('themes:delete', id),
@@ -113,7 +102,6 @@ contextBridge.exposeInMainWorld('inkwell', {
   applyPdfPageOps: (name, plan, sources, opts) => ipcRenderer.invoke('pdf:applyPageOps', name, plan, sources, opts),
   compressPdf: (name, level, label) => ipcRenderer.invoke('pdf:compress', name, level, label),
   openAttachmentDialog: () => ipcRenderer.invoke('attachment:openDialog'),
-  listAttachments: () => ipcRenderer.invoke('attachment:list'),
   renameAttachment: (oldName, newName) => ipcRenderer.invoke('attachment:rename', oldName, newName),
   deleteAttachment: (name) => ipcRenderer.invoke('attachment:delete', name),
   removeUnusedMedia: (apply) => ipcRenderer.invoke('attachment:removeUnusedMedia', apply),
@@ -123,12 +111,10 @@ contextBridge.exposeInMainWorld('inkwell', {
   writeConfig: (c) => ipcRenderer.invoke('config:write', c),
   readTreeOrder: () => ipcRenderer.invoke('tree-order:read'),
   writeTreeOrder: (o) => ipcRenderer.invoke('tree-order:write', o),
-  triggerSync: () => ipcRenderer.invoke('sync:triggerNow'),
   triggerTwoway: () => ipcRenderer.invoke('sync:triggerTwoway'),
   triggerBackup: () => ipcRenderer.invoke('sync:triggerBackup'),
   testLocalPath: (p) => ipcRenderer.invoke('sync:testLocalPath', p),
   testWebdav: (cfg) => ipcRenderer.invoke('sync:testWebdav', cfg),
-  getSyncStatus: () => ipcRenderer.invoke('sync:getStatus'),
 
   // Window controls
   minimize: () => ipcRenderer.send('window:minimize'),
@@ -149,7 +135,6 @@ contextBridge.exposeInMainWorld('inkwell', {
 
   // Events from main process
   onSyncStatus: (cb) => ipcRenderer.on('sync:statusUpdate', (_, data) => cb(data)),
-  offSyncStatus: () => ipcRenderer.removeAllListeners('sync:statusUpdate'),
   onEditorCmd:  (cb) => ipcRenderer.on('editor:cmd', (_, cmd) => cb(cmd)),
   // Fired when notes/folders change on disk from OUTSIDE the app (file manager, sync).
   onVaultChanged: (cb) => ipcRenderer.on('vault:treeChanged', () => cb()),

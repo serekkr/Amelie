@@ -713,56 +713,6 @@ class WireGuardManager {
   }
 
   /**
-   * Full connection test — entirely via the `amelie-smb` helper (NO mount, NO
-   * root, NO password prompt). 4 steps: reachable → connect → folder → write.
-   */
-  async testFullConnection(smbConfig, { keepUp = false } = {}) {
-    const steps = [];
-    const wasActive = !!(await this.nmActiveAmelie());
-    let broughtUp = false;
-    try {
-      // 1. Reachability. If not reachable, bring the tunnel up via
-      // NetworkManager (no password).
-      let reachable = await this._hostReachable(smbConfig.ip, 445);
-      if (!reachable && !wasActive) broughtUp = true;
-      if (!reachable) {
-        if (await this._nmUp()) reachable = await this._hostReachable(smbConfig.ip, 445);
-      }
-      steps.push({ label: 'Share raggiungibile (:445)', ok: reachable,
-        detail: reachable ? undefined : 'host non raggiungibile (tunnel/LAN?)' });
-      if (!reachable) return { ok: false, steps };
-
-      // 2. Connect (mount the share root).
-      const conn = await this._smb(smbConfig, ['test']);
-      steps.push({ label: 'Connessione SMB', ok: conn.ok, detail: conn.ok ? undefined : conn.err });
-      if (!conn.ok) return { ok: false, steps };
-
-      // 3. Remote folder access (create + open the subfolder). Forward-slash for the helper.
-      const subFwd = String(smbConfig.path || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-      const acc = subFwd
-        ? await this._smb(smbConfig, ['mkdirp', subFwd])
-        : await this._smb(smbConfig, ['list', '']);
-      steps.push({ label: 'Accesso cartella remota', ok: acc.ok, detail: acc.ok ? undefined : acc.err });
-      if (!acc.ok) return { ok: false, steps };
-
-      // 4. Write test (put a tiny file, then delete it).
-      const tmp = path.join(APP_HOME, '.amelie-smbtest');
-      try { fs.writeFileSync(tmp, 'amelie-test'); } catch(_) {}
-      const t0 = Date.now();
-      const remoteTest = (subFwd ? subFwd + '/' : '') + '.amelie-test';
-      const wr = await this._smb(smbConfig, ['put', tmp, remoteTest]);
-      if (wr.ok) await this._smb(smbConfig, ['del', remoteTest]);
-      try { fs.unlinkSync(tmp); } catch(_) {}
-      steps.push({ label: 'Scrittura file di test', ok: wr.ok, detail: wr.ok ? (Date.now() - t0) + 'ms' : wr.err });
-      if (!wr.ok) return { ok: false, steps };
-
-      return { ok: true, steps };
-    } finally {
-      if (broughtUp && !keepUp) { try { await this._nmDown(); } catch(_) {} }
-    }
-  }
-
-  /**
    * Minimal connection test: just "can I WRITE to the Samba share?". Brings the
    * tunnel up if needed (no password), ensures the target folder, writes a tiny
    * file and deletes it. Reports a SINGLE step — if anything upstream fails

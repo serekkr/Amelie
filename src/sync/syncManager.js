@@ -19,9 +19,7 @@ class SyncManager {
     this.config = {};
     this.status = 'idle'; // idle | syncing | error | ok
     this.lastSync = null;
-    this.syncTimer = null;
     this.webdavClient = null;
-    this.mountPoint = null;
   }
 
   async init() {
@@ -112,10 +110,6 @@ class SyncManager {
 
   _stopAutoSync() {
     this._stopTimers();
-    if (this.syncTimer) {
-      clearInterval(this.syncTimer);
-      this.syncTimer = null;
-    }
   }
 
   // True when encryption-at-rest is OFF and the vault is currently DECRYPTED on
@@ -136,29 +130,6 @@ class SyncManager {
     if (!tw?.enabled || !tw?.realtime) return;
     if (this._debounceTimer) clearTimeout(this._debounceTimer);
     this._debounceTimer = setTimeout(() => this.runTwoway(), 8000);
-  }
-
-  // Manual "Sync now" (the toolbar button): run both backup and two-way sync.
-  async syncNow() {
-    if (this._syncPausedPlaintext()) return { success: false, skipped: true, plaintextOpen: true, error: 'Cifratura a riposo disattivata: sync in pausa per non esporre i file in chiaro sullo share. Riattiva "Cifra i file a riposo" per sincronizzare.' };
-    if (this._busy()) return { success: false, error: 'Already syncing' };
-    const meta = { op: 'sync', manual: true };
-    this._setStatus('syncing', null, meta);
-    console.log('[Sync] Starting full sync (backup + two-way)...');
-    const results = {};
-    try {
-      Object.assign(results, await this._runBackupInner());
-      if (this.config.sync?.twoway?.enabled) {
-        results.twoway = await this._syncTwoway();
-      }
-      this.lastSync = new Date().toISOString();
-      this._setStatus('ok', null, meta);
-      return { success: true, results, lastSync: this.lastSync };
-    } catch (e) {
-      console.error('[Sync] Sync failed:', e);
-      this._setStatus('error', e.message, meta);
-      return { success: false, error: e.message };
-    }
   }
 
   // Scheduled backup (one-way: local → remote, plus WireGuard/WebDAV).
@@ -324,7 +295,6 @@ class SyncManager {
         remoteSubPath: smb.path || v.remotePath || 'amelie/backup',
         username:     smb.username,
         password:     this._decSecret(smb.password),
-        mountPoint:   smb.mountPoint || null,
         folder:       v.folder,            // false = folder snapshot OFF
         archive:      !!v.archive,
         archiveOnly:  !!v.archiveOnly,
@@ -755,16 +725,13 @@ class SyncManager {
     if (!cfg) throw new Error('Samba: destinazione non configurata');
 
     const archOpts = { archive: !!cfg.archive, archiveOnly: !!cfg.archiveOnly };
-    // 1. If the user pre-mounted the share (fstab/automount), write there — no root.
-    if (cfg.mountPoint) {
-      return this._syncToMountPoint(cfg.mountPoint, cfg.remoteSubPath || 'inkwell', archOpts);
-    }
-    // 2. Otherwise push over SMB directly with `smbclient` (the Samba project's
-    //    own client): userspace, NO root, NO mount, nothing left on the host.
+    // Push over SMB with the bundled `amelie-smb` helper: userspace, NO root,
+    // NO mount, nothing left behind on the host. (A share the user pre-mounted
+    // themselves is configured as a Local destination instead.)
     if (cfg.host && cfg.share) {
       return this._syncSambaDirect(cfg, archOpts);
     }
-    throw new Error('Samba: no mountPoint or host/share configured');
+    throw new Error('Samba: no host/share configured');
   }
 
   /**
@@ -1575,15 +1542,6 @@ class SyncManager {
     }));
   }
 
-  getStatus() {
-    return {
-      status: this.status,
-      lastSync: this.lastSync,
-      lastError: this.lastError,
-      webdavEnabled: !!this.config.sync?.webdav?.enabled,
-      sambaEnabled: !!this.config.sync?.samba?.enabled,
-    };
-  }
 }
 
 module.exports = { SyncManager };
