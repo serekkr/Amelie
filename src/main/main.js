@@ -3802,10 +3802,11 @@ ipcMain.handle('attachment:openDialog', async () => {
 });
 
 // ── Remove unused media ──────────────────────────────────────────────────────
-// Delete images/videos in attachments/ that NO note links to. `apply=false` only
-// reports what WOULD be deleted (for a confirm dialog); `apply=true` deletes.
+// Delete images/videos/audio in attachments/ that NO note links to. `apply=false`
+// only reports what WOULD be deleted (for a confirm dialog); `apply=true` deletes.
 // SAFETY: if any note can't be read/decrypted we ABORT (throw) rather than risk
 // deleting media referenced by a note we couldn't inspect.
+// PDFs are NEVER swept — see the media matcher below for why.
 const UNUSED_IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif|tiff?)$/i;
 ipcMain.handle('attachment:removeUnusedMedia', async (_, apply) => {
   if (!ATTACHMENTS_DIR || !fs.existsSync(ATTACHMENTS_DIR)) return { files: [], count: 0, bytes: 0 };
@@ -3846,8 +3847,14 @@ ipcMain.handle('attachment:removeUnusedMedia', async (_, apply) => {
   };
   walkNotes(NOTES_DIR);
 
-  // 2) Image + video + PDF media in attachments/ (recursive — includes the pdf/ and
-  //    media/ subfolders). PDFs not linked in any note are unused too and can be removed.
+  // 2) Image + video + audio media in attachments/ (recursive — includes the
+  //    media/ subfolders).
+  //    PDFs are DELIBERATELY EXCLUDED. In Amelie a PDF is a document in its own
+  //    right: you drop it in the vault, it shows up in the tree and you open it
+  //    from there — it does not have to be embedded in a note to be in use. So
+  //    "no note links to it" does NOT mean "unused", and sweeping PDFs deleted
+  //    documents people were actively keeping. Only true note media (images,
+  //    video, audio) is swept.
   const media = [];
   const walkMedia = (dir, rel) => {
     let items;
@@ -3857,7 +3864,7 @@ ipcMain.handle('attachment:removeUnusedMedia', async (_, apply) => {
       const relPath = rel ? `${rel}/${it.name}` : it.name;
       if (it.isDirectory()) { walkMedia(path.join(dir, it.name), relPath); continue; }
       const logical = stripEnc(relPath); // logical rel path (strip .enc marker)
-      if (!(UNUSED_IMG_RE.test(logical) || VIDEO_EXT_RE.test(logical) || AUDIO_EXT_RE.test(logical) || /\.pdf$/i.test(logical))) continue;
+      if (!(UNUSED_IMG_RE.test(logical) || VIDEO_EXT_RE.test(logical) || AUDIO_EXT_RE.test(logical))) continue;
       media.push({ logical, abs: path.join(dir, it.name) });
     }
   };
