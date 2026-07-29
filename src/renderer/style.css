@@ -668,7 +668,10 @@ kbd {
 .meta-field-input {
   flex: 1; background: transparent; border: none; outline: none;
   color: var(--text-1); font-family: var(--editor-font); font-size: 12px;
-  padding: 1px 0; max-width: 500px;
+  /* Relative, not a fixed 500px: that cap was about half the header on a normal
+     window, so a long source URL was cut in the middle. 70% follows the window
+     instead of a magic pixel count. */
+  padding: 1px 0; max-width: 70%;
   border-bottom: 1px solid transparent; transition: border-color .15s, color .15s;
 }
 .meta-field-input:focus { border-bottom-color: var(--border-light); color: var(--text-0); }
