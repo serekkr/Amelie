@@ -1,16 +1,18 @@
 /**
- * WireGuard Manager for Amelie
+ * WireGuard / OpenVPN Manager for Amelie
  * ─────────────────────────────────────────────────────────────────────────────
- * Manages a real WireGuard tunnel on Linux using wg-quick.
+ * Manages Amelie's VPN tunnel through NetworkManager (`nmcli`) — the config is
+ * imported as an NM connection and brought up/down from there.
  *
  * Security model:
- *   - The .conf file is saved to ~/.amelie/wg-tunnel.conf (chmod 600)
- *   - wg-quick requires root; we use pkexec (GUI sudo) or sudoers rule
- *   - We never log or expose the private key
+ *   - The .conf/.ovpn files live in <app-data>/vpn/ (chmod 600)
+ *   - NO root anywhere: NM authorizes the active session, so nothing here ever
+ *     needs sudo/pkexec and the app never pops a password dialog
+ *   - Secrets never travel on argv (see _nmSetVpnSecret) and are never logged
  *
- * Requirements on Fedora:
- *   sudo dnf install wireguard-tools
- *   # Optional: passwordless sudo for wg-quick (see sudoers section below)
+ * Requirements: NetworkManager (+ the NetworkManager-openvpn plugin for .ovpn —
+ * the app offers to install it). The Samba side needs no kernel mount either:
+ * it goes through the bundled `amelie-smb` helper (see _smb).
  */
 
 const fs     = require('fs');
@@ -26,9 +28,9 @@ const APP_HOME    = path.join(os.homedir(), '.local', 'share', 'amelie');
 const VPN_DIR     = path.join(APP_HOME, 'vpn');
 // Distinctive interface name so Amelie is SURE an `amelie-wg` interface is its
 // own and can clean it up safely, without ever touching other WireGuard tunnels
-// the user may have. wg-quick derives the interface name from the .conf
-// filename, so amelie-wg.conf → interface "amelie-wg". The matching NM
-// connection is named "amelie-wg" too (interface-name = amelie-wg).
+// the user may have. NM derives the interface name from the .conf filename, so
+// amelie-wg.conf → interface "amelie-wg". The matching NM connection is named
+// "amelie-wg" too (interface-name = amelie-wg).
 const WG_CONF     = path.join(VPN_DIR, 'amelie-wg.conf');
 const OLD_WG_CONF = path.join(APP_HOME, 'wg-tunnel.conf');   // legacy name (auto-migrated)
 const OVPN_CONF   = path.join(VPN_DIR, 'amelie.ovpn');       // OpenVPN alternative (one VPN at a time)
@@ -36,17 +38,11 @@ const OVPN_NAME   = 'amelie-ovpn';                           // NM connection id
 // Non-secret credential META (username + whether a password is stored in NM —
 // NEVER the password itself) so the UI can show "user + ***" on reopen.
 const OVPN_META   = path.join(VPN_DIR, 'amelie-ovpn-meta.json');
-const MOUNT_BASE  = path.join(os.homedir(), '.local', 'share', 'amelie', 'mounts');
 
 class WireGuardManager {
   constructor() {
     this.tunnelActive  = false;
-    this.mountPoint    = null;
     this.parsedConf    = null;
-    // True only when THIS process just migrated Amelie's own legacy
-    // wg-tunnel.conf → amelie-wg.conf. Gates the one-time legacy interface
-    // cleanup so we never delete a `wg-tunnel` the user later makes themselves.
-    this.didMigrateLegacy = false;
     this._migrateLegacyConf();
   }
 
@@ -70,7 +66,6 @@ class WireGuardManager {
       if (fs.existsSync(OLD_WG_CONF) && !fs.existsSync(WG_CONF)) {
         if (!fs.existsSync(VPN_DIR)) fs.mkdirSync(VPN_DIR, { recursive: true });
         fs.renameSync(OLD_WG_CONF, WG_CONF);
-        this.didMigrateLegacy = true;   // the old `wg-tunnel` was definitely ours
       }
     } catch(_) { /* best-effort */ }
   }
@@ -487,9 +482,9 @@ class WireGuardManager {
   }
 
   /**
-   * Ensure the tunnel is up — via NetworkManager only (NO wg-quick, so NO
-   * password prompt). If there's no Amelie NM connection, we rely on NM
-   * autoconnect / the user to bring the VPN up.
+   * Ensure the tunnel is up — via NetworkManager only, so NO password prompt.
+   * If there's no Amelie NM connection, we rely on NM autoconnect / the user to
+   * bring the VPN up.
    */
   async bringUp() {
     if (await this._isTunnelUp()) return { ok: true, alreadyUp: true };
@@ -498,67 +493,9 @@ class WireGuardManager {
   }
 
   /**
-   * Bring up the tunnel.
-   * Tries: wg-quick (if sudoers rule exists) → pkexec → error with instructions.
-   */
-  async tunnelUp() {
-    if (!fs.existsSync(WG_CONF)) {
-      return { ok: false, error: 'File .conf non trovato. Importalo prima nelle impostazioni.' };
-    }
-
-    // Check if wg-quick is installed
-    const wgPath = this._which('wg-quick');
-    if (!wgPath) {
-      return { ok: false, error: 'wg-quick non trovato. Installa wireguard-tools:\n  sudo dnf install wireguard-tools' };
-    }
-
-    // Check if already up
-    if (await this._isTunnelUp()) {
-      this.tunnelActive = true;
-      return { ok: true, alreadyUp: true };
-    }
-
-    // If a leftover/half-created interface exists (present but DOWN, e.g. from a
-    // previous crash), `wg-quick up` would fail with "wg-tunnel already exists".
-    // Remove the stale stub first so we can bring up a clean tunnel.
-    if (await this._ifaceExists()) {
-      await this.tunnelDown();
-    }
-
-    // Try with sudo (passwordless rule) first, then pkexec
-    const result = await this._runPrivileged('wg-quick', ['up', WG_CONF]);
-    if (result.ok) {
-      this.tunnelActive = true;
-      // Give tunnel a moment to establish
-      await this._sleep(1500);
-    }
-    return result;
-  }
-
-  /**
-   * Bring down the tunnel and remove the interface.
-   * Cleans up even a *leftover* interface (present but DOWN, e.g. a half-created
-   * stub from a previous crash) so nothing dangling is left behind on exit.
-   */
-  async tunnelDown() {
-    if (!await this._ifaceExists()) {   // nothing to remove
-      this.tunnelActive = false;
-      return { ok: true };
-    }
-    let result;
-    if (fs.existsSync(WG_CONF)) {
-      result = await this._runPrivileged('wg-quick', ['down', WG_CONF]);
-    } else {
-      // Interface exists but the .conf is gone — remove the netdev directly.
-      result = await this._runPrivileged('ip', ['link', 'delete', 'dev', this._ifaceName()]);
-    }
-    if (result.ok) this.tunnelActive = false;
-    return result;
-  }
-
-  /**
-   * Name of the WireGuard interface Amelie manages. wg-quick derives it from the
-   * .conf filename, so amelie-wg.conf → interface "amelie-wg".
+   * Name of the WireGuard interface Amelie manages. It's derived from the .conf
+   * filename (NM imports it with interface-name = the file's base name), so
+   * amelie-wg.conf → interface "amelie-wg".
    */
   _ifaceName() {
     return path.basename(WG_CONF).replace(/\.conf$/i, '');
@@ -567,25 +504,22 @@ class WireGuardManager {
   /**
    * Latest WireGuard handshake time for our interface. This is a PASSIVE read of
    * kernel state — it does NOT generate any traffic (no ping), so it's the ideal
-   * one-shot tunnel-health signal. `wg show` normally needs root, so we try it
-   * plainly first, then `sudo -n` (works only with the NOPASSWD sudoers rule).
+   * one-shot tunnel-health signal. `wg show` normally needs CAP_NET_ADMIN, so on
+   * a plain user session this simply reports { ok:false, reason:'no-perm' } and
+   * the UI falls back to showing no handshake age (we never escalate for it).
    * Returns { ok, ts } where ts is the Unix time of the last handshake (0 = none
-   * yet), or { ok:false } if it couldn't be read (e.g. no root).
+   * yet).
    */
   async latestHandshake() {
     const iface = this._ifaceName();
     if (!this._which('wg')) return { ok: false, reason: 'no-wg' };
-    const attempts = [['wg', ['show', iface, 'latest-handshakes']]];
-    if (this._which('sudo')) attempts.push(['sudo', ['-n', 'wg', 'show', iface, 'latest-handshakes']]);
-    for (const [cmd, args] of attempts) {
-      try {
-        const { stdout } = await execFileAsync(cmd, args, { timeout: 5000 });
-        const line = (stdout || '').trim().split('\n').filter(Boolean)[0];
-        if (!line) return { ok: true, ts: 0 };
-        const ts = parseInt(line.split(/\s+/).pop(), 10);
-        if (Number.isFinite(ts)) return { ok: true, ts };
-      } catch (_) { /* try next */ }
-    }
+    try {
+      const { stdout } = await execFileAsync('wg', ['show', iface, 'latest-handshakes'], { timeout: 5000 });
+      const line = (stdout || '').trim().split('\n').filter(Boolean)[0];
+      if (!line) return { ok: true, ts: 0 };
+      const ts = parseInt(line.split(/\s+/).pop(), 10);
+      if (Number.isFinite(ts)) return { ok: true, ts };
+    } catch (_) { /* no permission / no interface */ }
     return { ok: false, reason: 'no-perm' };
   }
 
@@ -604,37 +538,26 @@ class WireGuardManager {
   }
 
   /**
-   * Remove a leftover Amelie WireGuard interface from a previous run that
-   * skipped the normal teardown (crash, kill -9, power loss).
+   * Bring down a leftover Amelie tunnel from a previous run that skipped the
+   * normal teardown (crash, kill -9, power loss). Done through NetworkManager —
+   * taking the NM connection down also removes the `amelie-wg` netdev — so this
+   * NEVER needs root and never pops a password dialog at startup.
    * Best-effort and non-blocking: never throws. Call once on app startup.
    *
-   * SAFETY: we only ever remove our own distinctive `amelie-wg` interface.
-   * The legacy `wg-tunnel` is removed ONLY as part of the one-time migration of
-   * Amelie's own config (didMigrateLegacy) — so a `wg-tunnel` the user creates
-   * later for their personal use is NEVER deleted.
+   * SAFETY: only Amelie-named NM connections are touched (see _nmAmelieConns),
+   * never the user's own tunnels. A stale interface NOT managed by NM (e.g. left
+   * behind by an old wg-quick-era version) is only reported — removing it would
+   * require root, and Amelie no longer escalates for anything.
    */
   async cleanupStaleTunnels({ keepOwn = false } = {}) {
-    // 1. Our own interface — always safe to reclaim (the name is unmistakably
-    // ours). Skipped when keepOwn is set (WireGuard option enabled → the tunnel
-    // is meant to stay up, so don't tear it down at startup).
+    // keepOwn = the WireGuard option is enabled → the tunnel is meant to stay
+    // up, so don't tear it down at startup.
     if (!keepOwn) {
+      try { await this._nmDown(); } catch(_) { /* best-effort */ }
       try {
         if (await this._ifaceExists(this._ifaceName())) {
-          console.log('[WG] Removing leftover interface:', this._ifaceName());
-          if (fs.existsSync(WG_CONF)) await this._runPrivileged('wg-quick', ['down', WG_CONF]);
-          else                        await this._runPrivileged('ip', ['link', 'delete', 'dev', this._ifaceName()]);
-        }
-      } catch(_) { /* best-effort */ }
-    }
-
-    // 2. Legacy `wg-tunnel` — ONLY during the one-time migration of OUR old
-    // config. After that we never touch `wg-tunnel` again (could be the user's).
-    if (this.didMigrateLegacy) {
-      try {
-        if (await this._ifaceExists('wg-tunnel')) {
-          console.log('[WG] Removing old wg-tunnel interface (one-time migration)');
-          // The old .conf has already been renamed away, so delete the netdev directly.
-          await this._runPrivileged('ip', ['link', 'delete', 'dev', 'wg-tunnel']);
+          console.warn('[WG] Leftover interface not managed by NetworkManager:', this._ifaceName(),
+                       '— remove it manually with: sudo ip link delete dev ' + this._ifaceName());
         }
       } catch(_) { /* best-effort */ }
     }
@@ -647,8 +570,8 @@ class WireGuardManager {
    * We check the specific interface (not "any wg interface") so we never:
    *   - think our tunnel is up just because some other wg tunnel exists, and
    *   - tear down a tunnel that isn't ours.
-   * A leftover DOWN stub counts as NOT up (so tunnelUp re-establishes it
-   * properly), but _ifaceExists() still sees it for cleanup.
+   * A leftover DOWN stub counts as NOT up, but _ifaceExists() still sees it for
+   * cleanup.
    */
   async _isTunnelUp() {
     try {
@@ -660,18 +583,15 @@ class WireGuardManager {
   }
 
   /**
-   * Clean teardown for app shutdown: unmount any Samba share and bring our
-   * tunnel down. Safe to call unconditionally — it's a no-op if nothing is up,
-   * so it won't trigger a privilege prompt when there's nothing to remove.
+   * Clean teardown for app shutdown: bring our tunnel down. Safe to call
+   * unconditionally — it's a no-op if nothing is up.
    */
   async shutdown() {
     // Teardown on app close with NO password prompt: bring the tunnel down via
-    // NetworkManager only (the active session is already authorized). We must
-    // NEVER call wg-quick/pkexec here — that would pop a polkit password dialog
-    // on every single app close. With NM autoconnect off, _nmDown() sticks (the
-    // tunnel won't be auto-re-upped), so the share/network is freed on exit.
-    try { await this.unmountSamba(); } catch(_) {}   // no-op unless a CIFS mount exists
-    try { await this._nmDown(); } catch(_) {}        // bring the Amelie NM tunnel down (no password)
+    // NetworkManager only (the active session is already authorized). With NM
+    // autoconnect off, _nmDown() sticks (the tunnel won't be auto-re-upped), so
+    // the share/network is freed on exit.
+    try { await this._nmDown(); } catch(_) {}
   }
 
   // ── Connectivity tests ─────────────────────────────────────────────────────
@@ -683,9 +603,9 @@ class WireGuardManager {
    * keepUp:true only when the caller will keep using the tunnel right after).
    */
   async testTunnel({ host = null, keepUp = false } = {}) {
-    // NetworkManager-only test: NO wg-quick, NO pkexec → NO password prompt,
-    // consistent with how the tunnel is managed everywhere else. Brings the
-    // tunnel up via NM (no-op if already up) and checks reachability THROUGH it.
+    // NetworkManager-only test → NO password prompt, consistent with how the
+    // tunnel is managed everywhere else. Brings the tunnel up via NM (no-op if
+    // already up) and checks reachability THROUGH it.
     const steps = [];
     // Remember whether the tunnel was already active, so a test that brings it
     // up only for the check tears it back down afterwards (the flag, not the
@@ -738,85 +658,8 @@ class WireGuardManager {
     }
   }
 
-  // ── Samba mount ───────────────────────────────────────────────────────────
+  // ── Samba reachability ────────────────────────────────────────────────────
 
-  /** Write CIFS credentials to a private 0600 file (passed to mount via
-   * `credentials=`), so the password NEVER lands on the (root) mount command
-   * line — where `ps`/`/proc/<pid>/cmdline` would expose it to ANY local user —
-   * and so a comma in the username/password can't inject extra `-o` mount
-   * options into a command that runs as root. Returns {dir,file} (delete `dir`
-   * after the mount) or null for a guest mount. */
-  _cifsCredFile(username, password, domain) {
-    if (!username) return null;
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amelie-creds-'));
-    const file = path.join(dir, 'cifs');
-    let body = `username=${username}\npassword=${password || ''}\n`;
-    if (domain) body += `domain=${domain}\n`;
-    fs.writeFileSync(file, body, { mode: 0o600 });
-    return { dir, file };
-  }
-
-  /**
-   * Mount a CIFS/Samba share.
-   * Returns the mount point path or throws.
-   */
-  async mountSamba({ ip, share, path: remotePath, username, password }) {
-    // cifs-utils check
-    if (!this._which('mount.cifs')) {
-      return {
-        ok: false,
-        error: 'cifs-utils non installato. Installa con:\n  sudo dnf install cifs-utils'
-      };
-    }
-
-    const mountDir = path.join(MOUNT_BASE, `${Date.now()}`);
-    fs.mkdirSync(mountDir, { recursive: true });
-
-    const unc = `//${ip}/${share}`;
-
-    // Build mount options. Credentials go through a private 0600 file (never on
-    // the root command line / never in the -o list) — see _cifsCredFile.
-    const opts = [
-      `uid=${process.getuid()}`,
-      `gid=${process.getgid()}`,
-      'vers=3.0',
-      'iocharset=utf8',
-    ];
-    const cred = this._cifsCredFile(username, password);
-    if (cred) opts.push(`credentials=${cred.file}`);
-    else opts.push('guest');
-
-    let result;
-    try {
-      result = await this._runPrivileged('mount', ['-t', 'cifs', unc, mountDir, '-o', opts.join(',')]);
-    } finally {
-      if (cred) { try { fs.rmSync(cred.dir, { recursive: true, force: true }); } catch (_) {} }
-    }
-    if (!result.ok) {
-      fs.rmdirSync(mountDir, { recursive: true });
-      return result;
-    }
-
-    this.mountPoint = mountDir;
-    return { ok: true, mountPoint: mountDir, remotePath: remotePath || '' };
-  }
-
-  /** Unmount and clean up. */
-  async unmountSamba() {
-    if (!this.mountPoint) return;
-    try {
-      await this._runPrivileged('umount', [this.mountPoint]);
-      fs.rmdirSync(this.mountPoint, { recursive: true });
-    } catch(e) {
-      console.warn('[WG] umount failed:', e.message);
-    }
-    this.mountPoint = null;
-  }
-
-  /**
-   * Full connection test (step 4):
-   * tunnel up → mount → access folder → write test file → unmount
-   */
   // TCP reachability check (Samba is on port 445). Used to allow skipping the
   // WireGuard step when the host is already reachable directly (same LAN, or a
   // VPN already up at the OS level).
@@ -870,16 +713,16 @@ class WireGuardManager {
   }
 
   /**
-   * Full connection test — entirely via `smbclient` (NO mount, NO root, NO
-   * password prompt). 4 steps: reachable → connect → folder → write test.
+   * Full connection test — entirely via the `amelie-smb` helper (NO mount, NO
+   * root, NO password prompt). 4 steps: reachable → connect → folder → write.
    */
   async testFullConnection(smbConfig, { keepUp = false } = {}) {
     const steps = [];
     const wasActive = !!(await this.nmActiveAmelie());
     let broughtUp = false;
     try {
-      // 1. Reachability. If not reachable, try NetworkManager (no password);
-      // never wg-quick.
+      // 1. Reachability. If not reachable, bring the tunnel up via
+      // NetworkManager (no password).
       let reachable = await this._hostReachable(smbConfig.ip, 445);
       if (!reachable && !wasActive) broughtUp = true;
       if (!reachable) {
@@ -1059,78 +902,6 @@ class WireGuardManager {
       // as a side effect of testing.
       if (broughtUp && !keepUp) { try { await this._nmDown(); } catch (_) {} }
     }
-  }
-
-  // ── Privilege escalation ──────────────────────────────────────────────────
-
-  /**
-   * Run a command that needs root.
-   * Order of preference:
-   *   1. sudo (if NOPASSWD rule exists in /etc/sudoers.d/amelie)
-   *   2. pkexec (GUI password prompt — GNOME/KDE polkit)
-   *   3. Return helpful error message
-   */
-  async _runPrivileged(cmd, args) {
-    // Check for sudoers rule
-    const sudoersFile = '/etc/sudoers.d/amelie';
-    const hasSudoersRule = fs.existsSync(sudoersFile);
-
-    if (hasSudoersRule) {
-      try {
-        const { stdout, stderr } = await execFileAsync('sudo', [cmd, ...args], { timeout: 30000 });
-        return { ok: true, stdout, stderr };
-      } catch(e) {
-        // Fall through to pkexec
-      }
-    }
-
-    // Try pkexec (polkit GUI prompt)
-    if (this._which('pkexec')) {
-      try {
-        const { stdout, stderr } = await execFileAsync('pkexec', [cmd, ...args], { timeout: 60000 });
-        return { ok: true, stdout, stderr };
-      } catch(e) {
-        const errMsg = e.stderr || e.message || '';
-        if (errMsg.includes('dismissed') || errMsg.includes('canceled')) {
-          return { ok: false, error: 'Autenticazione annullata dall\'utente.' };
-        }
-        return { ok: false, error: this._formatPrivilegeError(cmd, e) };
-      }
-    }
-
-    // Neither available — give setup instructions
-    return {
-      ok: false,
-      error: this._sudoersSetupMessage(cmd)
-    };
-  }
-
-  _formatPrivilegeError(cmd, e) {
-    return `Errore esecuzione ${cmd}: ${e.message || e.stderr || 'sconosciuto'}`;
-  }
-
-  /**
-   * Returns a helpful message with the sudoers rule to add.
-   * User runs this once, then Amelie never asks for password again.
-   */
-  _sudoersSetupMessage(cmd) {
-    const user = os.userInfo().username;
-    const wgPath = this._which('wg-quick') || '/usr/bin/wg-quick';
-    const mountPath = this._which('mount') || '/usr/bin/mount';
-    const umountPath = this._which('umount') || '/usr/bin/umount';
-
-    return `Per usare WireGuard e Samba, Amelie ha bisogno di permessi root.
-
-Esegui questo comando una sola volta nel terminale:
-
-  sudo tee /etc/sudoers.d/amelie << EOF
-${user} ALL=(ALL) NOPASSWD: ${wgPath}
-${user} ALL=(ALL) NOPASSWD: ${mountPath} -t cifs * /home/${user}/.local/share/amelie/mounts/* -o *
-${user} ALL=(ALL) NOPASSWD: ${umountPath} /home/${user}/.local/share/amelie/mounts/*
-EOF
-  sudo chmod 440 /etc/sudoers.d/amelie
-
-Poi riprova.`;
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

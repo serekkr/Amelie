@@ -1,13 +1,15 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-#  Amelie — Install into the system + configure sudo permissions
+#  Amelie — Install into the system (AppImage, icons, launcher entry)
 #  Usage: bash setup-system.sh
 #         bash setup-system.sh /path/to/amelie.AppImage
 #
-#  Requires sudo ONCE to:
-#    • install dependencies (wireguard-tools, cifs-utils, fuse, imagemagick, ghostscript)
-#    • create the /etc/sudoers.d/amelie rule  (so it won't ask for a password afterwards)
-#    • install the AppImage and the icons
+#  Requires sudo ONCE, only to install the runtime dependencies
+#  (fuse, imagemagick, ghostscript). Everything else is installed under $HOME.
+#
+#  Amelie itself never needs root: the VPN goes through NetworkManager and the
+#  Samba sync through the bundled `amelie-smb` helper — no wg-quick, no
+#  mount.cifs, so no sudoers rule.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Colors ────────────────────────────────────────────────────────────────────
@@ -38,7 +40,7 @@ fail() { echo -e "  ${R}✗${N}  ${1}"; }
 run()  { echo -e "  ${D}\$ ${*}${N}"; "$@"; }
 info() { echo -e "  ${D}${1}${N}"; }
 
-TOTAL_STEPS=6
+TOTAL_STEPS=5
 banner
 
 # ── Find AppImage ─────────────────────────────────────────────────────────────
@@ -60,16 +62,21 @@ info "System   : $(grep ^NAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d 
 echo ""
 
 # ── Check sudo ────────────────────────────────────────────────────────────────
-echo -e "${Y}This installation requires sudo to:${N}"
-echo -e "  • Install wireguard-tools, cifs-utils, fuse"
-echo -e "  • Create /etc/sudoers.d/amelie (wg-quick and mount permissions)"
+echo -e "${Y}This installation requires sudo only to:${N}"
+echo -e "  • Install the runtime dependencies (fuse, imagemagick, ghostscript)"
 echo ""
 echo -e "${D}Enter your sudo password when prompted.${N}"
-echo -e "${D}After this setup, Amelie will no longer ask for the password.${N}"
+echo -e "${D}Amelie itself never asks for root — not now, not at runtime.${N}"
 echo ""
 sudo -v || { fail "sudo not available"; exit 1; }
 
-# ── [1/6] System dependencies ─────────────────────────────────────────────────
+# ── [1/5] System dependencies ─────────────────────────────────────────────────
+# fuse   → required to run the AppImage
+# convert (ImageMagick) → resizes the launcher icons in step 4
+# gs (ghostscript)      → PDF compression inside the app
+# NOTE: no wireguard-tools / cifs-utils — the VPN is handled by NetworkManager
+# and Samba by the bundled `amelie-smb` helper. The NetworkManager-openvpn
+# plugin (only needed for .ovpn configs) is offered by the app itself.
 step 1 "System dependencies"
 
 if command -v dnf &>/dev/null; then
@@ -77,7 +84,7 @@ if command -v dnf &>/dev/null; then
   echo -e "  ${D}Detected: Fedora / RHEL${N}"
 
   PKGS_NEEDED=()
-  for pkg in wireguard-tools cifs-utils fuse fuse-libs imagemagick ghostscript; do
+  for pkg in fuse fuse-libs ImageMagick ghostscript; do
     if ! rpm -q "$pkg" &>/dev/null; then
       PKGS_NEEDED+=("$pkg")
     else
@@ -95,7 +102,7 @@ elif command -v apt-get &>/dev/null; then
   echo -e "  ${D}Detected: Ubuntu / Debian${N}"
 
   PKGS_NEEDED=()
-  for pkg in wireguard wireguard-tools cifs-utils libfuse2 fuse imagemagick ghostscript; do
+  for pkg in libfuse2 fuse imagemagick ghostscript; do
     if ! dpkg -l "$pkg" &>/dev/null; then
       PKGS_NEEDED+=("$pkg")
     else
@@ -111,69 +118,17 @@ elif command -v apt-get &>/dev/null; then
 elif command -v pacman &>/dev/null; then
   DISTRO="arch"
   echo -e "  ${D}Detected: Arch Linux${N}"
-  run sudo pacman -Sy --noconfirm wireguard-tools cifs-utils fuse2 imagemagick ghostscript
+  run sudo pacman -Sy --noconfirm fuse2 imagemagick ghostscript
 fi
 
 ok "Dependencies installed"
 
-# ── [2/6] sudoers rule for Amelie ─────────────────────────────────────────────
-step 2 "Configuring sudo permissions"
-
-echo -e "  ${D}Amelie uses sudo for:${N}"
-
-WG_QUICK=$(which wg-quick 2>/dev/null || echo "/usr/bin/wg-quick")
-MOUNT_BIN=$(which mount 2>/dev/null || echo "/usr/bin/mount")
-UMOUNT_BIN=$(which umount 2>/dev/null || echo "/usr/bin/umount")
-MOUNT_DIR="$HOME/.local/share/amelie/mounts"
-
-echo ""
-echo -e "  ${C}wg-quick${N}     — bring the WireGuard tunnel up/down"
-echo -e "  ${D}  \$ sudo wg-quick up ~/.amelie/wg-tunnel.conf${N}"
-echo -e "  ${D}  \$ sudo wg-quick down ~/.amelie/wg-tunnel.conf${N}"
-echo ""
-echo -e "  ${C}mount.cifs${N}   — mount the remote Samba share"
-echo -e "  ${D}  \$ sudo mount -t cifs //10.8.0.1/vault ~/.local/share/amelie/mounts/xxx${N}"
-echo -e "  ${D}    -o username=user,password=•••,uid=$(id -u),vers=3.0${N}"
-echo ""
-echo -e "  ${C}umount${N}       — unmount after the sync"
-echo -e "  ${D}  \$ sudo umount ~/.local/share/amelie/mounts/xxx${N}"
-echo ""
-
-SUDOERS_FILE="/etc/sudoers.d/amelie"
-SUDOERS_CONTENT="# Amelie — permissions for WireGuard and Samba mount
-# Generated by setup-system.sh on $(date '+%Y-%m-%d %H:%M')
-$USER_NAME ALL=(ALL) NOPASSWD: $WG_QUICK
-$USER_NAME ALL=(ALL) NOPASSWD: $MOUNT_BIN -t cifs *
-$USER_NAME ALL=(ALL) NOPASSWD: $UMOUNT_BIN $MOUNT_DIR/*"
-
-echo -e "  ${D}Writing $SUDOERS_FILE :${N}"
-echo ""
-echo -e "${D}┌─────────────────────────────────────────────────────────────┐${N}"
-while IFS= read -r line; do
-  printf "${D}│${N} %-61s ${D}│${N}\n" "$line"
-done <<< "$SUDOERS_CONTENT"
-echo -e "${D}└─────────────────────────────────────────────────────────────┘${N}"
-echo ""
-
-echo "$SUDOERS_CONTENT" | run sudo tee "$SUDOERS_FILE" > /dev/null
-run sudo chmod 440 "$SUDOERS_FILE"
-
-# Validate
-if sudo visudo -c -f "$SUDOERS_FILE" &>/dev/null; then
-  ok "sudoers rule valid → $SUDOERS_FILE"
-else
-  fail "Error in the sudoers rule — removing it for safety"
-  sudo rm -f "$SUDOERS_FILE"
-  exit 1
-fi
-
-# ── [3/6] Create Amelie folders ───────────────────────────────────────────────
-step 3 "Amelie data folders"
+# ── [2/5] Create Amelie folders ───────────────────────────────────────────────
+step 2 "Amelie data folders"
 
 for dir in \
-  "$HOME/.amelie" \
   "$HOME/.local/bin" \
-  "$HOME/.local/share/amelie/mounts" \
+  "$HOME/.local/share/amelie" \
   "$HOME/.local/share/applications" \
   "$HOME/.local/share/icons/hicolor/256x256/apps" \
   "$HOME/.local/share/icons/hicolor/128x128/apps" \
@@ -183,16 +138,16 @@ for dir in \
   ok "$dir"
 done
 
-# ── [4/6] Install AppImage ────────────────────────────────────────────────────
-step 4 "Install AppImage"
+# ── [3/5] Install AppImage ────────────────────────────────────────────────────
+step 3 "Install AppImage"
 
 DEST="$HOME/.local/bin/amelie.AppImage"
 run cp "$APPIMAGE" "$DEST"
 run chmod +x "$DEST"
 ok "Installed to $DEST"
 
-# ── [5/6] Icons ───────────────────────────────────────────────────────────────
-step 5 "Icons"
+# ── [4/5] Icons ───────────────────────────────────────────────────────────────
+step 4 "Icons"
 
 ICON_SRC="$(dirname "$0")/../assets/icon.png"
 ICON_DIR="$HOME/.local/share/icons/hicolor"
@@ -218,8 +173,8 @@ else
   warn "assets/icon.png not found — add your icon and re-run"
 fi
 
-# ── [6/6] .desktop file ───────────────────────────────────────────────────────
-step 6 "Application shortcut (.desktop)"
+# ── [5/5] .desktop file ───────────────────────────────────────────────────────
+step 5 "Application shortcut (.desktop)"
 
 DESKTOP_FILE="$HOME/.local/share/applications/amelie.desktop"
 
@@ -264,14 +219,11 @@ echo -e "${W}  Launch:${N}"
 echo -e "  ${C}amelie.AppImage${N}           — from the terminal"
 echo -e "  ${C}search 'Amelie' in the launcher${N} — GNOME / KDE"
 echo ""
-echo -e "${W}  Configured permissions:${N}"
-echo -e "  ${D}sudo wg-quick up/down${N}      — no password"
-echo -e "  ${D}sudo mount -t cifs${N}         — no password"
-echo -e "  ${D}sudo umount${N}                — no password"
+echo -e "${W}  Permissions:${N}"
+echo -e "  ${D}none${N}                       — Amelie never runs anything as root"
 echo ""
 echo -e "${W}  Data:${N}"
-echo -e "  ${D}~/.amelie/${N}                 — config, salt, wg-tunnel.conf"
-echo -e "  ${D}~/.local/share/amelie/${N}     — temporary sync mounts"
+echo -e "  ${D}~/.local/share/amelie/${N}     — config, salt, VPN configs (vpn/)"
 echo -e "  ${D}Your vault${N}                 — chosen on first launch"
 echo ""
 echo -e "${W}  Uninstall:${N}"

@@ -9606,7 +9606,7 @@ function setupSettings() {
     updateVpnConfiguredBadge();
   });
 
-  // Step 2: REAL WireGuard test via wg-quick
+  // Step 2: REAL VPN test — brings the tunnel up via NetworkManager, no root
   $('btn-run-wg-test')?.addEventListener('click', async () => {
     const btn = $('btn-run-wg-test');
     const resEl = $('wg-test-result');
@@ -9640,19 +9640,8 @@ function setupSettings() {
       resEl.className = 'test-result ok';
       setTimeout(() => wizardGo(3), 1200);
     } else {
-      // Check if it's a missing sudoers rule
-      const isSudoErr = result.steps?.some(s => !s.ok && s.detail?.includes('sudoers'));
-      if (isSudoErr || (!result.steps && result.error?.includes('sudoers'))) {
-        const { instructions } = await window.inkwell.wg.getSudoersInstructions();
-        resEl.textContent = instructions;
-        resEl.className = 'test-result fail';
-        resEl.style.whiteSpace = 'pre-wrap';
-        resEl.style.fontFamily = 'var(--editor-font)';
-        resEl.style.fontSize = '11px';
-      } else {
-        resEl.textContent = '✗ ' + (result.error || result.steps?.find(s => !s.ok)?.detail || window.i18n.t('sync.connection_failed'));
-        resEl.className = 'test-result fail';
-      }
+      resEl.textContent = '✗ ' + (result.error || result.steps?.find(s => !s.ok)?.detail || window.i18n.t('sync.connection_failed'));
+      resEl.className = 'test-result fail';
     }
     btn.disabled = false;
   });

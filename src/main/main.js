@@ -4051,12 +4051,6 @@ ipcMain.handle('sync:triggerBackup', async () => {
   return { success: false, error: 'Sync manager not initialized' };
 });
 
-ipcMain.handle('sync:testVpn', async (_, cfg) => {
-  const { VpnTester } = require('../sync/vpnTester');
-  const tester = new VpnTester();
-  return tester.test(cfg);
-});
-
 ipcMain.handle('shell:showItemInFolder', async (_, relPath) => {
   // Attachments (PDFs/images) live at the VAULT ROOT (<vault>/attachments/…),
   // while notes/draws/folders live under <vault>/notes/. The tree gives an
@@ -4579,16 +4573,6 @@ ipcMain.handle('wg:status', async () => {
   return { exists: ifaceUp, up, via, target, reachable, latency, direct };
 });
 
-/** Bring up the WireGuard tunnel. */
-ipcMain.handle('wg:up', async () => {
-  return await wgManager.tunnelUp();
-});
-
-/** Bring down the WireGuard tunnel. */
-ipcMain.handle('wg:down', async () => {
-  return await wgManager.tunnelDown();
-});
-
 /**
  * Should the VPN tunnel stay up after a test? Yes whenever the backup VPN flag
  * or the two-way-sync WG flag is ON (same logic as SyncManager.ensureVpnTunnel:
@@ -4643,17 +4627,6 @@ ipcMain.handle('wg:testSmbWrite', async (_, smbConfig, purpose) => {
     }
   } catch (_) {}
   return await wgManager.testSmbWrite(smbConfig, { keepUp: vpnFlagWantsTunnelUp(), purpose, avoid });
-});
-
-/** Mount Samba share and return mountPoint path. */
-ipcMain.handle('wg:mountSamba', async (_, smbConfig) => {
-  return await wgManager.mountSamba(smbConfig);
-});
-
-/** Unmount current Samba share. */
-ipcMain.handle('wg:unmountSamba', async () => {
-  await wgManager.unmountSamba();
-  return { ok: true };
 });
 
 /**
@@ -4744,11 +4717,6 @@ ipcMain.handle('wg:removeSyncConnection', async () => {
   } catch (e) {
     return { ok: false, error: e.message };
   }
-});
-
-/** Get sudoers setup instructions for the current user. */
-ipcMain.handle('wg:getSudoersInstructions', async () => {
-  return { instructions: wgManager._sudoersSetupMessage('wg-quick') };
 });
 
 // Load saved WireGuard conf on startup

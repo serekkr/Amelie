@@ -31,12 +31,12 @@ echo -e "  ${D}Removing app state (recent, bookmarks, settings)...${N}"
 rm -rf "$HOME/.config/amelie"
 rm -rf "$HOME/.cache/amelie" 2>/dev/null || true
 
-echo -e "  ${D}Removing sudoers rule...${N}"
+# Legacy: old versions used to install a NOPASSWD rule for wg-quick/mount.cifs.
+# Amelie no longer needs root at all, so clean the leftover rule up if it exists.
 if [ -f /etc/sudoers.d/amelie ]; then
+  echo -e "  ${D}Removing the legacy sudoers rule (no longer used)...${N}"
   sudo rm -f /etc/sudoers.d/amelie
   echo -e "  ${G}✓${N}  /etc/sudoers.d/amelie removed"
-else
-  echo -e "  ${D}(sudoers rule not present)${N}"
 fi
 
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
@@ -44,6 +44,6 @@ gtk-update-icon-cache -f "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
 
 echo ""
 echo -e "${G}✓ Amelie removed from the system (app, shortcut, icons, recent, bookmarks, settings).${N}"
-echo -e "${D}  Your NOTES in the vault ~/.amelie were NOT touched.${N}"
-echo -e "${D}  To delete those too: rm -rf ~/.amelie${N}"
+echo -e "${D}  Your NOTES were NOT touched — the vault folder you chose is left as is.${N}"
+echo -e "${D}  To delete those too, remove that folder yourself.${N}"
 echo ""
