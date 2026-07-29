@@ -19,3 +19,7 @@ docs/
 # OS / editor cruft
 .DS_Store
 *.log
+
+# Stray screenshots dropped in the project root
+/*.png
+/*.jpg
