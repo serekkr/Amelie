@@ -31,10 +31,10 @@ echo -e "  ${D}Removing app state (recent, bookmarks, settings)...${N}"
 rm -rf "$HOME/.config/amelie"
 rm -rf "$HOME/.cache/amelie" 2>/dev/null || true
 
-# Legacy: old versions used to install a NOPASSWD rule for wg-quick/mount.cifs.
-# Amelie no longer needs root at all, so clean the leftover rule up if it exists.
+# Older setups could leave this file behind; Amelie does not use it. Remove it
+# if present (needs sudo, since it lives under /etc).
 if [ -f /etc/sudoers.d/amelie ]; then
-  echo -e "  ${D}Removing the legacy sudoers rule (no longer used)...${N}"
+  echo -e "  ${D}Removing /etc/sudoers.d/amelie ...${N}"
   sudo rm -f /etc/sudoers.d/amelie
   echo -e "  ${G}✓${N}  /etc/sudoers.d/amelie removed"
 fi

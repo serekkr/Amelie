@@ -229,7 +229,7 @@ class SyncManager {
    */
   /**
    * Make the WireGuard tunnel follow the backup WireGuard flag — entirely via
-   * NetworkManager (NO wg-quick → NO password prompt):
+   * NetworkManager:
    *   - option ON  → if the share isn't reachable, bring up the Amelie NM
    *                  connection (NM autoconnect usually already did it).
    *   - option OFF → bring the Amelie NM connection down.
@@ -725,9 +725,9 @@ class SyncManager {
     if (!cfg) throw new Error('Samba: destinazione non configurata');
 
     const archOpts = { archive: !!cfg.archive, archiveOnly: !!cfg.archiveOnly };
-    // Push over SMB with the bundled `amelie-smb` helper: userspace, NO root,
-    // NO mount, nothing left behind on the host. (A share the user pre-mounted
-    // themselves is configured as a Local destination instead.)
+    // Push over SMB with the bundled `amelie-smb` helper: userspace, no mount,
+    // nothing left behind on the host. (A share the user pre-mounted themselves
+    // is configured as a Local destination instead.)
     if (cfg.host && cfg.share) {
       return this._syncSambaDirect(cfg, archOpts);
     }
@@ -736,7 +736,7 @@ class SyncManager {
 
   /**
    * Push the vault to a Samba share using the system `smbclient` binary.
-   * No mount, no root, no extra npm dependency. Requires the share to be
+   * No mount, no extra npm dependency. Requires the share to be
    * reachable (same LAN, or a WireGuard/VPN tunnel up — e.g. via NetworkManager).
    */
   async _syncSambaDirect(cfg, archOpts = {}) {

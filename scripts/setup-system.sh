@@ -6,10 +6,6 @@
 #
 #  Requires sudo ONCE, only to install the runtime dependencies
 #  (fuse, imagemagick, ghostscript). Everything else is installed under $HOME.
-#
-#  Amelie itself never needs root: the VPN goes through NetworkManager and the
-#  Samba sync through the bundled `amelie-smb` helper — no wg-quick, no
-#  mount.cifs, so no sudoers rule.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Colors ────────────────────────────────────────────────────────────────────
@@ -66,7 +62,6 @@ echo -e "${Y}This installation requires sudo only to:${N}"
 echo -e "  • Install the runtime dependencies (fuse, imagemagick, ghostscript)"
 echo ""
 echo -e "${D}Enter your sudo password when prompted.${N}"
-echo -e "${D}Amelie itself never asks for root — not now, not at runtime.${N}"
 echo ""
 sudo -v || { fail "sudo not available"; exit 1; }
 
@@ -74,9 +69,9 @@ sudo -v || { fail "sudo not available"; exit 1; }
 # fuse   → required to run the AppImage
 # convert (ImageMagick) → resizes the launcher icons in step 4
 # gs (ghostscript)      → PDF compression inside the app
-# NOTE: no wireguard-tools / cifs-utils — the VPN is handled by NetworkManager
-# and Samba by the bundled `amelie-smb` helper. The NetworkManager-openvpn
-# plugin (only needed for .ovpn configs) is offered by the app itself.
+# The VPN uses NetworkManager and Samba uses the bundled `amelie-smb` helper,
+# so neither needs a package here. The NetworkManager-openvpn plugin (only for
+# .ovpn configs) is offered by the app itself.
 step 1 "System dependencies"
 
 if command -v dnf &>/dev/null; then
@@ -218,9 +213,6 @@ echo ""
 echo -e "${W}  Launch:${N}"
 echo -e "  ${C}amelie.AppImage${N}           — from the terminal"
 echo -e "  ${C}search 'Amelie' in the launcher${N} — GNOME / KDE"
-echo ""
-echo -e "${W}  Permissions:${N}"
-echo -e "  ${D}none${N}                       — Amelie never runs anything as root"
 echo ""
 echo -e "${W}  Data:${N}"
 echo -e "  ${D}~/.local/share/amelie/${N}     — config, salt, VPN configs (vpn/)"

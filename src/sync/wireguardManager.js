@@ -6,13 +6,12 @@
  *
  * Security model:
  *   - The .conf/.ovpn files live in <app-data>/vpn/ (chmod 600)
- *   - NO root anywhere: NM authorizes the active session, so nothing here ever
- *     needs sudo/pkexec and the app never pops a password dialog
+ *   - NM authorizes the active session, so tunnel management runs as the user
  *   - Secrets never travel on argv (see _nmSetVpnSecret) and are never logged
  *
  * Requirements: NetworkManager (+ the NetworkManager-openvpn plugin for .ovpn —
- * the app offers to install it). The Samba side needs no kernel mount either:
- * it goes through the bundled `amelie-smb` helper (see _smb).
+ * the app offers to install it). The Samba side goes through the bundled
+ * `amelie-smb` helper (see _smb).
  */
 
 const fs     = require('fs');
@@ -355,9 +354,9 @@ class WireGuardManager {
   }
 
   /**
-   * Bring the tunnel up via NetworkManager (NO root/password — NM authorizes the
-   * active session). Activates an Amelie-named NM WireGuard connection. Returns
-   * true if one was activated.
+   * Bring the tunnel up via NetworkManager (it authorizes the active session).
+   * Activates an Amelie-named NM WireGuard connection. Returns true if one was
+   * activated.
    */
   /**
    * Decide the FASTEST path to the share and act on it. Returns:
@@ -540,14 +539,13 @@ class WireGuardManager {
   /**
    * Bring down a leftover Amelie tunnel from a previous run that skipped the
    * normal teardown (crash, kill -9, power loss). Done through NetworkManager —
-   * taking the NM connection down also removes the `amelie-wg` netdev — so this
-   * NEVER needs root and never pops a password dialog at startup.
+   * taking the NM connection down also removes the `amelie-wg` netdev, so this
+   * runs silently as the user at startup.
    * Best-effort and non-blocking: never throws. Call once on app startup.
    *
    * SAFETY: only Amelie-named NM connections are touched (see _nmAmelieConns),
-   * never the user's own tunnels. A stale interface NOT managed by NM (e.g. left
-   * behind by an old wg-quick-era version) is only reported — removing it would
-   * require root, and Amelie no longer escalates for anything.
+   * never the user's own tunnels. An interface that NM does not manage is only
+   * reported, never removed.
    */
   async cleanupStaleTunnels({ keepOwn = false } = {}) {
     // keepOwn = the WireGuard option is enabled → the tunnel is meant to stay

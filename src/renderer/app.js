@@ -9605,7 +9605,7 @@ function setupSettings() {
     updateVpnConfiguredBadge();
   });
 
-  // Step 2: REAL VPN test — brings the tunnel up via NetworkManager, no root
+  // Step 2: REAL VPN test — brings the tunnel up via NetworkManager
   $('btn-run-wg-test')?.addEventListener('click', async () => {
     const btn = $('btn-run-wg-test');
     const resEl = $('wg-test-result');
