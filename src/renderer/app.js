@@ -2873,7 +2873,9 @@ function loadFrontmatterPanel(tab) {
   const { fm } = parseFrontmatter(tab.content || '');
   const titleEl = $('fm-title'); if (titleEl) titleEl.value = fm.title || '';
   const tagsEl  = $('fm-tags');  if (tagsEl)  tagsEl.value  = fm.tags  || '';
-  const srcEl   = $('fm-source');if (srcEl)   srcEl.value   = fm.source|| '';
+  // `source` holds URLs that can be far longer than the field: mirror the value
+  // into the tooltip so hovering shows all of it without scrolling the input.
+  const srcEl   = $('fm-source');if (srcEl) { srcEl.value = fm.source || ''; srcEl.title = fm.source || ''; }
   updateNoteMeta(tab);
   // Show rows only if in edit mode AND field has content (or is focused)
   updateMetaRows(state.viewMode === 'edit');
@@ -2912,6 +2914,8 @@ function setupFrontmatter() {
         tags:   $('fm-tags').value.trim(),
         source: $('fm-source').value.trim(),
       };
+      const srcInput = $('fm-source');
+      if (srcInput) srcInput.title = fm.source;   // keep the hover text in step
       const newContent = serializeFrontmatter(fm, body);
       editor.value = newContent;
       tab.content = newContent;
