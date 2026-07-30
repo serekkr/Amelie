@@ -666,8 +666,10 @@ kbd {
 .note-nav-btn {
   width: 24px; height: 24px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: transparent; border: 1px solid var(--border);
-  border-radius: 4px; color: var(--text-2); cursor: pointer;
+  /* Bright enough to read: a 13px chevron at --text-2 was the dimmest thing in
+     the header, and the box around it disappeared into the background. */
+  background: transparent; border: 1px solid var(--text-3);
+  border-radius: 4px; color: var(--text-0); cursor: pointer;
   margin-right: 4px; padding: 0; flex-shrink: 0;
   transition: background .12s, color .12s, border-color .12s;
 }
@@ -675,7 +677,7 @@ kbd {
 .note-nav-btn:hover { background: var(--bg-3); color: var(--text-0); border-color: var(--text-3); }
 .note-nav-btn:active { background: var(--bg-4); }
 .note-nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.note-nav-btn:disabled:hover { background: transparent; color: var(--text-2); border-color: var(--border); }
+.note-nav-btn:disabled:hover { background: transparent; color: var(--text-0); border-color: var(--text-3); }
 #btn-next-note { margin-right: 10px; }
 
 /* Rows 3-4: tags / source — only shown in edit mode when non-empty */
@@ -1930,7 +1932,8 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #btn-focus-mode {
   width: 38px; flex-shrink: 0;
   background: transparent; border: none; border-right: 1px solid var(--border);
-  cursor: pointer; color: var(--text-1);
+  /* Same white as the gear and the + it shares the bar with. */
+  cursor: pointer; color: var(--text-0);
   display: flex; align-items: center; justify-content: center;
   transition: color .15s, background .15s;
   -webkit-app-region: no-drag;
