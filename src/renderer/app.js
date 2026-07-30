@@ -16213,7 +16213,7 @@ function setTodoFilter(f) { _todoFilter = f; renderTodoView(); }
 
 async function renderTodoView() {
   const list = $('todo-view-list'); if (!list) return;
-  let data; try { data = await window.inkwell.todo.list(); } catch(_) { data = { today: [], upcoming: [], done: [] }; }
+  let data; try { data = await window.inkwell.todo.list(); } catch(_) { data = _emptyTodoBuckets(); }
   _todoCache = data;
   document.querySelectorAll('.tv-filter').forEach(b => b.classList.toggle('active', b.dataset.f === _todoFilter));
   const addRow = $('todo-add-row');
@@ -16472,8 +16472,14 @@ async function addTodo() {
 }
 
 // ── Notifiche ToDo (scadenze + avvisi) ─────────────────────────────────────
+const TODO_MISSED_WINDOW_MS = 7 * 24 * 3600 * 1000;   // how far back a missed reminder still fires
 let _todoAlertTimers = [];
-let _todoCache = { today: [], upcoming: [], done: [] };
+// Every bucket the board has. 'tomorrow' was missing from the fallbacks and from both
+// places that scan for deadlines, so a task moved to Tomorrow silently stopped being
+// watched: no bell, no reminder, however overdue it was.
+const TODO_ALERT_BUCKETS = ['today', 'tomorrow', 'upcoming'];   // 'done' never alerts
+const _emptyTodoBuckets = () => ({ today: [], tomorrow: [], upcoming: [], done: [] });
+let _todoCache = _emptyTodoBuckets();
 
 function _todoFireKeySeen(key) {
   try { const s = JSON.parse(localStorage.getItem('amelie-todo-fired') || '[]'); return s.includes(key); } catch(_) { return false; }
@@ -16483,9 +16489,9 @@ function _todoMarkFired(key) {
 }
 
 async function refreshTodoAlerts() {
-  try { _todoCache = await window.inkwell.todo.list(); } catch(_) { _todoCache = { today: [], upcoming: [], done: [] }; }
+  try { _todoCache = await window.inkwell.todo.list(); } catch(_) { _todoCache = _emptyTodoBuckets(); }
   _todoAlertTimers.forEach(t => clearTimeout(t)); _todoAlertTimers = [];
-  const all = [...(_todoCache.today || []), ...(_todoCache.upcoming || [])];
+  const all = TODO_ALERT_BUCKETS.flatMap(b => _todoCache[b] || []);
   const now = Date.now();
   for (const it of all) {
     if (!it.due || it.alert === '' || it.alert == null) continue;
@@ -16495,6 +16501,11 @@ async function refreshTodoAlerts() {
     const delay = fireAt - now;
     if (delay > 0 && delay < 2147483647 && !_todoFireKeySeen(key)) {
       _todoAlertTimers.push(setTimeout(() => { _fireTodoNotif(it); _todoMarkFired(key); updateNotifBell(); }, delay));
+    } else if (delay <= 0 && fireAt > now - TODO_MISSED_WINDOW_MS && !_todoFireKeySeen(key)) {
+      // The moment passed while Amelie was closed. Say so once — the point of a reminder
+      // is missed otherwise. Bounded to the last few days, so opening an old vault does
+      // not fire a burst of ancient deadlines, and marked as fired so it stays once.
+      _fireTodoNotif(it); _todoMarkFired(key);
     }
   }
   updateNotifBell();
@@ -16513,9 +16524,18 @@ function _dismissNotif(it) {
 function _dueTodos() {
   const now = Date.now(), soon = now + 24 * 3600 * 1000;
   const dis = _notifDismissed();
-  return [...(_todoCache.today || []), ...(_todoCache.upcoming || [])]
-    .filter(it => it.due && it.alert !== '' && it.alert != null)
-    .filter(it => { const m = new Date(it.due).getTime(); return !isNaN(m) && m <= soon; })
+  return TODO_ALERT_BUCKETS.flatMap(b => _todoCache[b] || [])
+    .filter(it => it.due)
+    // A deadline that has ALREADY passed belongs in the bell whether or not a reminder
+    // was set: the reminder says "warn me before", it does not decide whether an expired
+    // task is worth knowing about. Still-to-come ones only show when asked for (a
+    // reminder is set), so the bell doesn't turn into a list of everything scheduled.
+    .filter(it => {
+      const m = new Date(it.due).getTime();
+      if (isNaN(m)) return false;
+      if (m <= now) return true;                                  // overdue
+      return m <= soon && it.alert !== '' && it.alert != null;     // due soon, reminder asked for
+    })
     .filter(it => !dis.includes(_notifKey(it)))
     .sort((a, b) => new Date(a.due) - new Date(b.due));
 }
