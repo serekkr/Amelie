@@ -16368,6 +16368,10 @@ function openTodoView() {
   // the list (which would close any open editor and reset the scroll).
   const tv0 = $('todo-view');
   if (_kanbanOpen && tv0 && tv0.style.display !== 'none') return;
+  // Remember where to come back to: the board's tab is appended at the END, so closing it
+  // would otherwise fall to the neighbour rule and land on the last tab in the bar.
+  const cur = getActiveTab();
+  if (cur && cur.path && !cur.type) _todoReturnPath = cur.path;
   const existing = tabs.findIndex(t => t.type === 'todo');
   if (existing !== -1) { switchTab(existing); return; }
   tabs.push({ type: 'todo', name: 'ToDo', path: null, isDirty: false });
@@ -16387,12 +16391,23 @@ function showTodoView() {
   renderTodoView();
 }
 function openKanban() { openTodoView(); }   // alias (voce ToDo nell'albero / addTodo)
-function closeKanban() {
+let _todoReturnPath = null;   // the note the board was opened from
+
+async function closeKanban() {
   if (!_kanbanOpen) return;
   // Its own tab now: closing the board means closing that tab, which switches to the
-  // neighbouring note and hides the view through hideAllSpecialViews.
+  // neighbouring note and hides the view through hideAllSpecialViews — then back to the note
+  // the board was opened from, which is rarely that neighbour.
   const idx = tabs.findIndex(t => t.type === 'todo');
-  if (idx !== -1) { closeTab(idx); return; }
+  if (idx !== -1) {
+    const back = _todoReturnPath;
+    await closeTab(idx);
+    if (back) {
+      const i = tabs.findIndex(t => t.path === back && !t.type);
+      if (i !== -1 && i !== activeTabIdx) await switchTab(i);
+    }
+    return;
+  }
   _kanbanOpen = false;
   const tv = $('todo-view'); if (tv) tv.style.display = 'none';
   const vf = $('view-files'); if (vf) vf.classList.remove('kanban-active');
@@ -16874,8 +16889,12 @@ function switchSidebarView(view) {
   // empty-state in the main area so the sidebar tabs (Files, Recent, …) bring
   // the user back to their notes.
   if (_kanbanOpen) {
+    const hadTab = tabs.some(t => t.type === 'todo');
     closeKanban();
-    if (activeTabIdx >= 0 && tabs[activeTabIdx]) {
+    // With a board tab, closeKanban already lands on the right note — switching again here
+    // would race it and could hand you a different tab.
+    if (hadTab) { /* handled by closeKanban */ }
+    else if (activeTabIdx >= 0 && tabs[activeTabIdx]) {
       switchTab(activeTabIdx);
     } else {
       const es = $('empty-state'); if (es) es.style.display = 'flex';
