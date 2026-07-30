@@ -134,9 +134,8 @@ function openTab(node, activate = true) {
   // tab. Callers that don't know the kind — a click in Bookmarks/Recent, which come
   // in by path — land here, so the routing belongs here rather than in each caller.
   if (isAttachNode(node)) {
-    if (node.type === 'pdf')   { openPdfFile(node, activate);   return; }
-    if (node.type === 'image') { openImageFile(node, activate); return; }
-    openMediaFile(node, activate);
+    if (node.type === 'pdf') { openPdfFile(node, activate); return; }
+    openAttachmentNode(node, activate);
     return;
   }
   // Focus-based routing: with the split pane open and last focused, a click on
@@ -2773,12 +2772,8 @@ async function openNote(node) {
     openPdfFile(node);
     return;
   }
-  if (node.type === 'image') {
-    openImageFile(node);
-    return;
-  }
-  if (node.type === 'audio' || node.type === 'video') {
-    openMediaFile(node);
+  if (node.type === 'image' || node.type === 'audio' || node.type === 'video') {
+    openAttachmentNode(node);      // the note that links it, or the file on its own
     return;
   }
   // Focus-based routing: with the split pane open and last focused, the
@@ -12305,6 +12300,52 @@ function openImageFile(node, activate = true) {
     attachmentName,
   });
   if (activate) switchTab(tabs.length - 1);
+}
+
+// A photo, recording or video in the vault almost always BELONGS to a note, so clicking
+// it reopens that note and lands on the link — where the media shows or plays in place.
+// Only a file no note links to (dropped into the vault and never embedded) opens on its
+// own in the viewer/player. PDFs never come through here: a PDF is a document in its own
+// right, not note media, so it always opens in its viewer.
+async function openAttachmentNode(node, activate = true) {
+  const attachmentName = node.attachmentName
+    || (node.path ? node.path.replace(/^attachments\//, '') : node.name);
+  let owners = [];
+  try { owners = (await window.inkwell.attachmentUsedBy(attachmentName)) || []; } catch (_) {}
+  const owner = owners.length ? findNote(state.notes, owners[0]) : null;
+  if (owner) {
+    await openNote(owner);            // a note node: no way back into this branch
+    _revealAttachmentInNote(attachmentName);
+    return;
+  }
+  if (node.type === 'image') openImageFile(node, activate);
+  else openMediaFile(node, activate);
+}
+
+// Put the link on screen once the note is up: the caret on it while editing, the media
+// itself scrolled into view while reading. Best effort — landing on the right note is
+// what matters, so a miss here is silent.
+function _revealAttachmentInNote(attachmentName) {
+  requestAnimationFrame(() => {
+    try {
+      if (state.viewMode === 'edit') {
+        const text = editor.value || '';
+        const at = text.indexOf('attachments/' + attachmentName);
+        if (at < 0) return;
+        if (_cmActive && _cmHandle) { _cmHandle.setSelection(at, at); _cmHandle.scrollToPos(at, 'center'); return; }
+        editor.focus();
+        editor.setSelectionRange(at, at);
+        const lh = parseFloat(getComputedStyle(editor).lineHeight) || 20;
+        editor.scrollTop = Math.max(0, text.slice(0, at).split('\n').length * lh - editor.clientHeight / 2);
+      } else if (previewContent) {
+        // The link may be written raw or percent-encoded — look for both.
+        const enc = attachmentName.split('/').map(encodeURIComponent).join('/');
+        const el = [attachmentName, enc].map(v =>
+          previewContent.querySelector(`[src*="${CSS.escape(v)}"], [href*="${CSS.escape(v)}"]`)).find(Boolean);
+        if (el) el.scrollIntoView({ block: 'center' });
+      }
+    } catch (_) {}
+  });
 }
 
 // Audio/video from the tree, in a tab of its own — same shape as the image viewer.

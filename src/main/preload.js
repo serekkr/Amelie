@@ -85,6 +85,7 @@ contextBridge.exposeInMainWorld('inkwell', {
   // Attachments
   attachmentExists: (rel) => ipcRenderer.invoke('attachment:exists', rel),
   saveAttachment: (name, buf) => ipcRenderer.invoke('attachment:save', name, buf),
+  attachmentUsedBy: (name) => ipcRenderer.invoke('attachment:usedBy', name),   // notes that link it
   importAttachmentPath: (srcPath, name) => ipcRenderer.invoke('attachment:importPath', srcPath, name),
   showAttachmentInFolder: (name) => ipcRenderer.invoke('attachment:showInFolder', name),
   openAttachmentFile: (name) => ipcRenderer.invoke('attachment:openFile', name),

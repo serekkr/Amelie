@@ -3300,6 +3300,61 @@ ipcMain.handle('attachment:save', async (_, originalName, buffer) => {
   return r;
 });
 
+// Which notes link a given attachment. The sidebar lists media as files of their own,
+// but a recording, a photo or a video usually BELONGS to a note — so finding one in the
+// search means "where do I use this?", and the answer is that note. Same reference scan
+// as the unused-media sweep, so the two always agree on what "linked" means.
+// Unlike the sweep, a note that cannot be read (vault locked, unreadable file) is SKIPPED
+// rather than aborting: the cost of missing one here is opening the file on its own, not
+// deleting something.
+ipcMain.handle('attachment:usedBy', async (_, attachmentName) => {
+  const want = String(attachmentName || '').replace(/^attachments\//, '');
+  if (!want || !NOTES_DIR) return [];
+  const out = [];
+  const decodeSeg = (s) => { try { return decodeURIComponent(s); } catch (_) { return s; } };
+  const walk = (dir, base) => {
+    let items;
+    try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+    for (const it of items) {
+      const abs = path.join(dir, it.name);
+      if (it.isDirectory()) { walk(abs, base ? `${base}/${it.name}` : it.name); continue; }
+      // Present the note under its LOGICAL name, the one the tree uses (an encrypted
+      // note is `foo.enc` on disk but `foo.md` everywhere else).
+      let logical = null, encrypted = false;
+      if (it.name.endsWith(ENC_EXT)) {
+        if (!ENCRYPTION_KEY) continue;
+        const stem = it.name.slice(0, -ENC_EXT.length);
+        logical = stem.endsWith('.draw') ? stem : stem + '.md';
+        encrypted = true;
+      } else if (it.name.endsWith('.md') || it.name.endsWith('.draw')) {
+        logical = it.name;
+      } else continue;
+      let content;
+      try {
+        const raw = fs.readFileSync(abs, 'utf8');
+        content = encrypted ? decryptContent(raw, ENCRYPTION_KEY) : raw;
+      } catch (_) { continue; }
+      const re = /attachments\/([^)\s"'<>\]]+)/g;
+      let m, hit = false;
+      while (!hit && (m = re.exec(content)) !== null) {
+        let ref = m[1].replace(/\{[^}]*\}$/, '').replace(/#.*$/, '');   // drop {width=…}/#frag
+        ref = ref.split('/').map(decodeSeg).join('/');
+        if (ref === want) hit = true;
+      }
+      if (hit) {
+        let mtime = 0;
+        try { mtime = fs.statSync(abs).mtimeMs; } catch (_) {}
+        out.push({ p: base ? `${base}/${logical}` : logical, mtime });
+      }
+    }
+  };
+  walk(NOTES_DIR, '');
+  // Most recently touched note first: when a photo is used in several notes, the one the
+  // user worked on last is the one they are most likely looking for. Directory order,
+  // which is what a plain walk gives, would be arbitrary.
+  return out.sort((a, b) => b.mtime - a.mtime).map(x => x.p);
+});
+
 /** Does the attachment still exist on disk? (used to mark dead links). */
 ipcMain.handle('attachment:exists', async (_, rel) => {
   try {
