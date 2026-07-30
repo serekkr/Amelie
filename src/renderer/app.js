@@ -7426,8 +7426,11 @@ function openSplitView(path, name, orient = 'right') {
   // `owner` is the note the split was opened FROM: clicking a note in the tree reuses the
   // same tab rather than opening a new one, so keying on the tab object alone let the pane
   // follow you onto every note you opened next.
+  // Recorded for ANY split, including the common one: right-click a tab → Split, which puts
+  // the SAME note in both halves. An earlier `host.path !== path` guard skipped exactly that
+  // case, so the pane was never remembered and never came back.
   const _host = getActiveTab();
-  if (_host && _host.path && _host.path !== path) {
+  if (_host && _host.path) {
     _host.split = { path, name: name || null, orient: _splitOrient, owner: _host.path, basis: _splitBasis };
   }
   const paneB = $('editor-pane-b');
