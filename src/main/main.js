@@ -1178,6 +1178,25 @@ function parseNoteCreated(textWithFm) {
   const c = m[1].match(/^\s*created\s*:\s*(.+?)\s*$/m);
   return c ? c[1] : null;
 }
+// The note's own `modified`, for a save that must NOT count as an edit — resizing a
+// photo or a video in the reading view rewrites `{width=N}` in the markdown, and the
+// user does not consider that editing the note.
+function parseNoteModified(textWithFm) {
+  const m = textWithFm.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!m) return null;
+  const c = m[1].match(/^\s*modified\s*:\s*(.+?)\s*$/m);
+  return c ? c[1] : null;
+}
+function _readModifiedHead(filePath) {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      const buf = Buffer.alloc(512);
+      const n = fs.readSync(fd, buf, 0, 512, 0);
+      return parseNoteModified(buf.toString('utf8', 0, n));
+    } finally { fs.closeSync(fd); }
+  } catch (_) { return null; }
+}
 function buildNoteWithFrontmatter(body, created, modified) {
   return `---\ncreated: ${created}\nmodified: ${modified}\n---\n\n${body}`;
 }
@@ -1306,7 +1325,7 @@ function _backupBeforeShrink(filePath, relPath, oldBody, newBody) {
   } catch (_) {}
 }
 
-function writeNoteContent(relPath, content) {
+function writeNoteContent(relPath, content, keepModified) {
   _internalWriteUntil = Date.now() + 1500;   // suppress the vault watcher for our own saves
   const filePath = noteFilePath(relPath);
   const dir = path.dirname(filePath);
@@ -1343,9 +1362,21 @@ function writeNoteContent(relPath, content) {
       }
     } catch (_) {}
     const now = fmtLocalDate(new Date());
+    // `keepModified`: carry the note's existing `modified` over instead of stamping now.
+    // Used by the media-resize save, which changes the markdown without being an edit the
+    // user made to the text. Falls back to now when the note has no frontmatter yet.
+    let modified = now;
+    if (keepModified) {
+      try {
+        const prev = ENCRYPTION_KEY
+          ? parseNoteModified(decryptContent(fs.readFileSync(filePath, 'utf8'), ENCRYPTION_KEY))
+          : _readModifiedHead(filePath);
+        if (prev) modified = prev;
+      } catch (_) {}
+    }
     // content is the clean body (frontmatter stripped on read); strip again
     // defensively so we never nest two frontmatter blocks.
-    toWrite = buildNoteWithFrontmatter(stripNoteFrontmatter(body), created || now, now);
+    toWrite = buildNoteWithFrontmatter(stripNoteFrontmatter(body), created || now, modified);
   }
   // Atomic write (tmp + fsync + rename): a crash or full disk mid-write must NOT
   // truncate the existing note — a half-written encrypted blob is undecryptable,
@@ -3007,10 +3038,10 @@ ipcMain.handle('fs:readNote', async (_, filePath) => {
   return readNoteContent(filePath);
 });
 
-ipcMain.handle('fs:writeNote', async (_, filePath, content) => {
+ipcMain.handle('fs:writeNote', async (_, filePath, content, opts) => {
   const fullPath = noteFilePath(filePath);
   if (!fullPath.startsWith(NOTES_DIR + path.sep)) throw new Error('Invalid path');
-  writeNoteContent(filePath, content);
+  writeNoteContent(filePath, content, !!(opts && opts.keepModified));
   if (syncManager) syncManager.scheduleSync();
   return true;
 });

@@ -4164,9 +4164,9 @@ function setupEditor() {
   // Undo / Redo header buttons — focus the editor first so the native history
   // applies to the note text.
   $('btn-undo')?.addEventListener('mousedown', e => e.preventDefault());
-  $('btn-undo')?.addEventListener('click', () => { editor.focus(); document.execCommand('undo'); });
+  $('btn-undo')?.addEventListener('click', () => { if (_editingBlocked()) return; editor.focus(); document.execCommand('undo'); });
   $('btn-redo')?.addEventListener('mousedown', e => e.preventDefault());
-  $('btn-redo')?.addEventListener('click', () => { editor.focus(); document.execCommand('redo'); });
+  $('btn-redo')?.addEventListener('click', () => { if (_editingBlocked()) return; editor.focus(); document.execCommand('redo'); });
 
   $('btn-prev-note')?.addEventListener('click', () => navigateNote('prev'));
   $('btn-next-note')?.addEventListener('click', () => navigateNote('next'));
@@ -4296,7 +4296,15 @@ function scheduleAutosave() {
   state.saveTimer = setTimeout(saveCurrentNote, AUTOSAVE_DELAY_MS);
 }
 
+// In the reading view the note is not editable, so nothing on the toolbar may write to
+// it: the buttons used to act on the hidden editor, inserting text into a note you were
+// only reading and bumping its "last edited" through the autosave that followed. Guarded
+// at the command dispatcher (toolbar clicks AND the Ctrl+B/I/… shortcuts route through
+// it) and again at insertAtCursor, which every insert — heading, table, colour, emoji —
+// goes through, so a new button cannot reintroduce this.
+const _editingBlocked = () => state.viewMode !== 'edit';
 function handleToolbarCmd(cmd) {
+  if (_editingBlocked()) return;
   const sel = { s: editor.selectionStart, e: editor.selectionEnd };
   const text = editor.value.substring(sel.s, sel.e);
   let insert = '';
@@ -4395,6 +4403,7 @@ function handleToolbarCmd(cmd) {
 }
 
 function insertAtCursor(text, start, end) {
+  if (_editingBlocked()) return;
   start = start ?? editor.selectionStart;
   end = end ?? editor.selectionEnd;
   // CM engine: replace the range via a proper CM transaction (execCommand targets
@@ -4592,6 +4601,28 @@ function _persistEditorNoRender() {
   try { syncSplitFromMain(); } catch (_) {}
 }
 
+// Resizing a photo or a video rewrites `{width=N}` in the markdown — a change that has to
+// be stored, but not one the user made to the note's text, so it must not move "last
+// edited". Saved right here with keepModified instead of going through the autosave, which
+// always stamps the current time. If the note ALREADY had unsaved edits, those are a real
+// edit: the timestamp moves, and this just rides along with them.
+async function _persistMediaSize() {
+  const tab = getActiveTab();
+  if (!tab || !tab.path) { _persistEditorNoRender(); return; }
+  const hadEdits = !!tab.isDirty;
+  tab.content = editor.value;
+  applyEditorHighlight();
+  updateWordCount();
+  try { syncSplitFromMain(); } catch (_) {}
+  if (hadEdits) { _persistEditorNoRender(); return; }
+  try {
+    await window.inkwell.writeNote(tab.path, editor.value, { keepModified: true });
+    tab.isDirty = false;
+    setSavedState(true);
+    updateNoteMeta(tab);
+  } catch (_) { _persistEditorNoRender(); }   // couldn't save quietly → the normal route
+}
+
 // Drag the handle → live width change; on release the width is persisted into
 // the markdown as `[🎬 …](url){width=N}` (mirrors syncImageSizeToMarkdown).
 // Pointer capture: pointerup is guaranteed to reach the handle even if the
@@ -4622,7 +4653,7 @@ function _setupVideoResize(video, handle, href) {
       const updated = editor.value.replace(re, `$1{width=${w}}`);
       if (updated !== editor.value) {
         editor.value = updated;
-        _persistEditorNoRender();
+        _persistMediaSize();   // stored, but it does not count as editing the note
       }
     };
     handle.addEventListener('pointermove', onMove);
@@ -4689,6 +4720,16 @@ function _cmScrollEl() { try { return _cmHandle && _cmHandle.view && _cmHandle.v
 function _scrollFrac(el) { if (!el) return 0; const max = el.scrollHeight - el.clientHeight; return max > 8 ? el.scrollTop / max : 0; }
 function _applyScrollFrac(el, frac) { if (!el || frac == null) return; const max = el.scrollHeight - el.clientHeight; el.scrollTop = max > 0 ? Math.max(0, Math.round(frac * max)) : 0; }
 
+// A control that cannot do anything must not look as if it could: in the reading view the
+// writing buttons (bold, italic, lists, code, link, emoji, image, heading, colour, table,
+// undo/redo) are dimmed and stop taking clicks. The toolbar lives in the note header, not
+// in the editor pane, so it stays on screen while reading — which is how a click on one of
+// them used to reach the note at all. Reading-mode controls (search, index, export, the
+// mode toggle) are untouched.
+const WRITING_CONTROL_SEL = '.tool-btn[data-cmd], #btn-heading, #btn-color, #btn-table, #btn-undo, #btn-redo, #btn-audio-rec';
+function _updateWritingControls(mode) {
+  document.querySelectorAll(WRITING_CONTROL_SEL).forEach(b => b.classList.toggle('reading-off', mode !== 'edit'));
+}
 function setViewMode(mode, opts) {
   const editorPane = $('editor-pane');
   const previewPane = $('preview-pane');
@@ -4703,6 +4744,7 @@ function setViewMode(mode, opts) {
   }
   state.viewMode = mode;
   updateModeToggle(mode);
+  _updateWritingControls(mode);
   try { if (typeof _vcHideBubble === 'function') _vcHideBubble(); } catch (_) {}
   if (mode === 'edit') {
     editorPane.style.display = 'flex';
@@ -14804,7 +14846,7 @@ function syncImageSizeToMarkdown(img) {
     editor.value = updated;
     // No 'input' dispatch: a preview re-render would rebuild this very <img>
     // right after the drag (visible flash). See _persistEditorNoRender.
-    _persistEditorNoRender();
+    _persistMediaSize();   // stored, but it does not count as editing the note
   }
 }
 

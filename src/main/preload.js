@@ -73,7 +73,7 @@ contextBridge.exposeInMainWorld('inkwell', {
   listNotes: () => ipcRenderer.invoke('fs:listNotes'),
   searchNotes: (q) => ipcRenderer.invoke('fs:searchNotes', q),
   readNote: (p) => ipcRenderer.invoke('fs:readNote', p),
-  writeNote: (p, c) => ipcRenderer.invoke('fs:writeNote', p, c),
+  writeNote: (p, c, opts) => ipcRenderer.invoke('fs:writeNote', p, c, opts),   // opts.keepModified: don't bump `modified`
   deleteNote: (p) => ipcRenderer.invoke('fs:deleteNote', p),
   createFolder: (p) => ipcRenderer.invoke('fs:createFolder', p),
   deleteFolder: (p) => ipcRenderer.invoke('fs:deleteFolder', p),

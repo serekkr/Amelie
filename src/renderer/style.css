@@ -698,6 +698,9 @@ kbd {
   font-family: var(--editor-font); display: flex; align-items: center; gap: 4px;
 }
 .tool-btn:hover { background: var(--bg-3); color: var(--text-0); }
+/* Reading view: the buttons that would write to the note are visibly out of play
+   (they used to look normal and still act on the note behind the preview). */
+.tool-btn.reading-off { opacity: .3; pointer-events: none; }
 .tool-btn.danger:hover { color: var(--red); }
 .tool-btn.panel-toggle { font-size: 11px; gap: 4px; }
 .tool-btn.panel-toggle.active { color: var(--accent); background: var(--active-bg); }
