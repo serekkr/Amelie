@@ -737,12 +737,16 @@ kbd {
   background: transparent; border-bottom-color: transparent; padding: 2px 14px;
 }
 #editor-toolbar.reading-only #btn-note-search {
-  width: 26px; height: 26px; padding: 0; justify-content: center;
   border: 1px solid var(--border); background: var(--bg-1);
 }
 #editor-toolbar.reading-only #btn-note-search:hover { background: var(--bg-3); border-color: var(--text-3); }
 .tool-btn.danger:hover { color: var(--red); }
 .tool-btn.panel-toggle { font-size: 11px; gap: 4px; }
+/* The search is the same square in both modes — reading only adds the border, and
+   border-box keeps that from making it 2px bigger than the one you see while editing. */
+#btn-note-search {
+  box-sizing: border-box; width: 26px; height: 26px; padding: 0; justify-content: center;
+}
 .tool-btn.panel-toggle.active { color: var(--accent); background: var(--active-bg); }
 .toolbar-sep { width: 1px; height: 16px; background: var(--border); margin: 0 3px; }
 
