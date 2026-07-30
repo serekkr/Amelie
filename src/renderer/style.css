@@ -734,7 +734,9 @@ kbd {
 /* With one button left there is no row to draw: the strip loses its background and its
    rule, so what you see is the search on its own, square, over the note's own colour. */
 #editor-toolbar.reading-only {
-  background: transparent; border-bottom-color: transparent; padding: 2px 14px;
+  /* Padding stays as it is while editing: the search must sit at exactly the same
+     height in both modes, not creep up when the strip loses its background. */
+  background: transparent; border-bottom-color: transparent;
 }
 #editor-toolbar.reading-only #btn-note-search {
   border: 1px solid var(--border); background: var(--bg-1);
@@ -1951,7 +1953,9 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #btn-focus-mode {
   width: 38px; flex-shrink: 0;
   background: transparent; border: none; border-right: 1px solid var(--border);
-  cursor: pointer; color: var(--icon-strong);
+  /* --text-1, the same muted grey as the other quiet icons: at 21px the glyph carries it,
+     and it is unmistakably grey rather than a shade of white. */
+  cursor: pointer; color: var(--text-1);
   display: flex; align-items: center; justify-content: center;
   transition: color .15s, background .15s;
   -webkit-app-region: no-drag;
