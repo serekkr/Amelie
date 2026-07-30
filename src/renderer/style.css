@@ -357,8 +357,6 @@ html.is-mac #titlebar { padding-left: 72px; }
   display: flex; align-items: center; gap: 6px; padding: 0 8px;
   -webkit-app-region: no-drag;
 }
-/* #titlebar-actions is empty now that Settings lives in the left icon bar; kept as the
-   slot for anything titlebar-level that comes later. */
 /* Sync state is shown by coloring the sync icon itself (no separate dot). */
 #sync-status, #backup-status { display: inline-flex; align-items: center; transition: color .3s; }
 #sync-status.sync-idle,    #backup-status.sync-idle    { color: inherit; }
@@ -3214,18 +3212,6 @@ kbd {
   -webkit-app-region: no-drag;   /* keep the icons clickable */
 }
 .sst:hover { color: var(--text-0); }
-/* Settings in the left icon bar: NOT a `.sst`, which are flex:1 and would make the gear
-   a sixth equal column (squeezing the five view icons and inheriting their green
-   underline). Fixed width, no dividing line and no extra margin: it sits right next to the
-   bell, spaced by the bar's own 7px gap like every other icon. */
-.sst-action {
-  flex: 0 0 auto; width: 26px; background: transparent; border: none; cursor: pointer;
-  color: var(--text-1); padding: 0; display: flex; align-items: center; justify-content: center;
-  transition: color .15s;
-  -webkit-app-region: no-drag;   /* keep it clickable inside the drag area */
-}
-.sst-action:hover { color: var(--text-0); }
-.sst-action svg { width: 15px; height: 15px; }
 /* Active tab: icon in a neutral color (like Tag/Bookmark), no longer green.
    The "active" indicator stays the green underline below the icon. */
 .sst.active { color: var(--text-0); border-bottom-color: var(--accent); }
