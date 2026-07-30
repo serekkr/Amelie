@@ -2765,7 +2765,10 @@ body.split-open .pane-flash::after {
 /* ─── Tables in preview ─────────────────────────────────────── */
 #preview-content table {
   border-collapse: collapse; width: auto; max-width: 100%;
-  margin: 1em 0; font-family: var(--editor-font); font-size: 13px;
+  /* --editor-font-FAMILY, the font actually chosen in Settings: the raw --editor-font that
+     used to be here is the built-in default, so tables ignored your choice while the text
+     around them followed it. */
+  margin: 1em 0; font-family: var(--editor-font-family); font-size: 13px;
 }
 #preview-content th, #preview-content td {
   border: 1px solid var(--border-light);
@@ -2774,9 +2777,10 @@ body.split-open .pane-flash::after {
   position: relative;
 }
 #preview-content th {
-  /* Header row (first row): bold + white so it stands out from the body cells. */
-  background: var(--bg-3); color: var(--text-0); font-weight: 700;
-  font-size: 12px;
+  /* Header row: the SAME size as the cells below it (it used to be 12px against their 13,
+     which just read as an odd shrunken line) and a lighter 600 instead of 700 — the tint
+     behind it already sets it apart, so it doesn't need to shout. */
+  background: var(--bg-3); color: var(--text-0); font-weight: 600;
 }
 #preview-content tr:nth-child(even) td { background: var(--bg-2); }
 #preview-content tr:hover td { background: var(--bg-3); }
