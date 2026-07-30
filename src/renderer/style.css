@@ -3216,12 +3216,11 @@ kbd {
 .sst:hover { color: var(--text-0); }
 /* Settings in the left icon bar: NOT a `.sst`, which are flex:1 and would make the gear
    a sixth equal column (squeezing the five view icons and inheriting their green
-   underline). Fixed width, its own gap, and the same hairline the toolbar uses so the
-   "switch a view" group reads as separate from it. */
+   underline). Fixed width, no dividing line and no extra margin: it sits right next to the
+   bell, spaced by the bar's own 7px gap like every other icon. */
 .sst-action {
   flex: 0 0 auto; width: 26px; background: transparent; border: none; cursor: pointer;
   color: var(--text-1); padding: 0; display: flex; align-items: center; justify-content: center;
-  margin-left: 9px; border-left: 1px solid var(--border); padding-left: 11px;
   transition: color .15s;
   -webkit-app-region: no-drag;   /* keep it clickable inside the drag area */
 }
