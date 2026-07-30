@@ -24,7 +24,7 @@
   --text-2: #767676;
   --text-3: #4f4f4f;
   /* Small icons that must read clearly without competing with the white ones. */
-  --icon-strong: color-mix(in srgb, var(--text-0) 45%, var(--text-1));
+  --icon-strong: color-mix(in srgb, var(--text-0) 15%, var(--text-1));
   --accent: #3fb950;
   --accent-dim: #238636;
   --accent-glow: rgba(63,185,80,0.12);
@@ -1939,7 +1939,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   transition: color .15s, background .15s;
   -webkit-app-region: no-drag;
 }
-#btn-focus-mode svg { width: 17px; height: 17px; }
+#btn-focus-mode svg { width: 21px; height: 21px; }
 #btn-focus-mode:hover { color: var(--text-0); background: var(--bg-3); }
 #app.focus-mode #btn-focus-mode { color: var(--accent); }
 /* Chevron points "<" normally (collapse) and ">" once the column is hidden. */
