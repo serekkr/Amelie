@@ -1430,6 +1430,7 @@ const FONTS = {
   lato:         "'Lato', sans-serif",
   nunito:       "'Nunito', sans-serif",
   atkinson:     "'Atkinson Hyperlegible', sans-serif",
+  lexend:       "'Lexend', sans-serif",
   // ── Serif (bundled offline) ──
   lora:         "'Lora', serif",
   merriweather: "'Merriweather', serif",
@@ -1460,15 +1461,22 @@ const FONT_LABELS = {
   sourcecodepro: 'Source Code Pro', ibmplex: 'IBM Plex Mono', spacemono: 'Space Mono',
   couriernew: 'Courier New',
   inter: 'Inter', robotosans: 'Roboto', sourcesans: 'Source Sans', lato: 'Lato',
-  nunito: 'Nunito', atkinson: 'Atkinson Hyperlegible',
+  nunito: 'Nunito', atkinson: 'Atkinson Hyperlegible', lexend: 'Lexend',
   lora: 'Lora', merriweather: 'Merriweather', ebgaramond: 'EB Garamond', fraunces: 'Fraunces',
   helvetica: 'Helvetica', arial: 'Arial', system: 'System',
   noto: 'Noto Sans', cantarell: 'Cantarell', dejavu: 'DejaVu Sans',
   georgia: 'Georgia', times: 'Times New Roman', verdana: 'Verdana',
 };
+// The picker shows every family in ALPHABETICAL order (by label). The list below stays
+// grouped by kind — it is the readable record of what each family is — and is sorted where
+// the menu is built, so adding a font in the right group still lands it in the right place
+// alphabetically.
+const fontPickerOrder = () => [...FONT_ORDER].sort((x, y) =>
+  (FONT_LABELS[x] || x).localeCompare(FONT_LABELS[y] || y, undefined, { sensitivity: 'base' }));
+
 const FONT_ORDER = [
   'jetbrains','roboto','fira','sourcecodepro','ibmplex','spacemono','couriernew',
-  'inter','robotosans','sourcesans','lato','nunito','atkinson',
+  'inter','robotosans','sourcesans','lato','nunito','atkinson','lexend',
   'lora','merriweather','ebgaramond','fraunces',
   'helvetica','arial','system','noto','cantarell','dejavu','georgia','times','verdana',
 ];
@@ -1567,7 +1575,7 @@ function setupFontDropdown() {
   const menu = document.getElementById('font-dd-menu');
   if (!btn || !menu) return;
   menu.innerHTML = '';
-  FONT_ORDER.forEach(key => {
+  fontPickerOrder().forEach(key => {
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'font-dd-item';
