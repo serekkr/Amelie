@@ -312,6 +312,14 @@ async function switchTab(idx) {
     renderTree();
     return;
   }
+  // Special tab: the ToDo board
+  if (tab.type === 'todo') {
+    state.currentPath = null;
+    showTodoView();
+    renderTabBar();
+    renderTree();
+    return;
+  }
   // Special tab: PDF viewer
   if (tab.type === 'pdf') {
     emptyState.style.display = 'none';
@@ -16185,13 +16193,22 @@ function _fmtDate(ms) { const d = new Date(ms); if (isNaN(d)) return '—'; retu
 function _fmtDateDMY(ms) { const d = new Date(ms); if (isNaN(d)) return '—'; const p = n => String(n).padStart(2, '0'); return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear(); }
 function _isOverdue(due) { const d = new Date(due); return !isNaN(d) && d.getTime() < Date.now(); }
 
+// The board lives in a TAB of its own, like the graph: opening it from a notification (or
+// the sections bar) used to leave the tab bar showing the note you had open before, so the
+// tab said "shopping list" while the ToDo board was on screen.
 function openTodoView() {
   // Already on the board → stay put, no refresh: re-opening must not rebuild
   // the list (which would close any open editor and reset the scroll).
   const tv0 = $('todo-view');
   if (_kanbanOpen && tv0 && tv0.style.display !== 'none') return;
-  // Leave whatever view we were in (note editor, mindmap, canvas, pdf) first.
-  hideAllSpecialViews();
+  const existing = tabs.findIndex(t => t.type === 'todo');
+  if (existing !== -1) { switchTab(existing); return; }
+  tabs.push({ type: 'todo', name: 'ToDo', path: null, isDirty: false });
+  switchTab(tabs.length - 1);
+}
+// Put the board on screen. Called from switchTab, so every route in (a click on the tab,
+// a notification, the sections bar) goes through the same place.
+function showTodoView() {
   try { closeTOC(); } catch (_) {}   // the index belongs to a note, not the ToDo board
   _kanbanOpen = true;
   const es = $('empty-state'); if (es) es.style.display = 'none';
@@ -16205,6 +16222,10 @@ function openTodoView() {
 function openKanban() { openTodoView(); }   // alias (voce ToDo nell'albero / addTodo)
 function closeKanban() {
   if (!_kanbanOpen) return;
+  // Its own tab now: closing the board means closing that tab, which switches to the
+  // neighbouring note and hides the view through hideAllSpecialViews.
+  const idx = tabs.findIndex(t => t.type === 'todo');
+  if (idx !== -1) { closeTab(idx); return; }
   _kanbanOpen = false;
   const tv = $('todo-view'); if (tv) tv.style.display = 'none';
   const vf = $('view-files'); if (vf) vf.classList.remove('kanban-active');
