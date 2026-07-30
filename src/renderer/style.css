@@ -353,10 +353,14 @@ html, body {
    clear the traffic-lights. */
 html.is-mac .tb-btn { display: none; }
 html.is-mac #titlebar { padding-left: 72px; }
+/* The window's grab handle now that the tabs may fill their strip: this band — its 8px
+   padding either side and the air around the two hairlines — stays draggable, and only the
+   buttons inside opt out. Always present, however many tabs are open. */
 #titlebar-actions {
   display: flex; align-items: center; gap: 6px; padding: 0 8px;
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
 }
+#titlebar-actions button { -webkit-app-region: no-drag; }
 /* Hairline flanking the new-tab +, one on each side: same 1px line the editor toolbar
    uses, so the title bar doesn't invent a look of its own. Both sides are alike — the left
    one used to be the button's own full-height border-right, which made the two sides of the
@@ -1831,11 +1835,14 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   scrollbar-width: none; flex: 0 1 auto; min-width: 0;
   -webkit-app-region: drag;
 }
-/* The window's grab handle. Tabs are all no-drag, so with a full bar there was
-   no draggable pixel left and the window became impossible to move. This takes
-   the slack when tabs are few and never shrinks below 90px when they are many. */
+/* Takes the slack while the tabs are few, and gives ALL of it up when they are many, so a
+   full strip runs right up to the divider before the + instead of stopping short. It used
+   to hold 90px back as the window's grab handle — tabs are no-drag, so a full bar left no
+   draggable pixel and the window could not be moved. That handle now lives in
+   #titlebar-actions (the band around the dividers and the gear), which is always there
+   whatever the tabs do. */
 #tab-drag-space {
-  flex: 1 1 90px; min-width: 90px; align-self: stretch;
+  flex: 1 1 0; min-width: 0; align-self: stretch;
   -webkit-app-region: drag;
 }
 #tab-list::-webkit-scrollbar { display: none; }
