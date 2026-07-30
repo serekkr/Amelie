@@ -2333,13 +2333,16 @@ body.split-open .pane-flash::after {
   background: var(--bg-1); flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
+/* The graph's header and its options read in the font chosen for the editor, so the view
+   matches the notes it maps. The node labels on the canvas keep the interface font: they are
+   9-11px and a display face would be unreadable at that size. */
 #mindmap-title {
-  font-family: var(--ui-font); font-weight: 500;
+  font-family: var(--editor-font-family); font-weight: 500;
   font-size: 15px; color: var(--text-0); flex: 1;
 }
 #mindmap-legend {
   display: flex; align-items: center;
-  font-family: var(--ui-font); font-size: 11px; color: var(--text-2);
+  font-family: var(--editor-font-family); font-size: 11px; color: var(--text-2);
 }
 .mm-legend-hint { opacity: 0.75; }
 .mm-legend-dot {
@@ -2383,7 +2386,7 @@ body.split-open .pane-flash::after {
 #mm-settings {
   position: absolute; left: 14px; top: 58px; z-index: 6;
   display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
-  font-family: var(--ui-font); pointer-events: none;
+  font-family: var(--editor-font-family); pointer-events: none;
 }
 #mm-settings > * { pointer-events: auto; }
 #btn-mm-settings {
@@ -2397,6 +2400,7 @@ body.split-open .pane-flash::after {
 #btn-mm-settings.active { background: var(--bg-4); color: var(--accent); }
 
 #mm-settings-panel {
+  font-family: var(--editor-font-family);
   display: none;
   width: 226px; max-height: 72vh; overflow-y: auto;
   background: var(--bg-2); border: 1px solid var(--border);
@@ -2424,7 +2428,7 @@ body.split-open .pane-flash::after {
   width: 100%; box-sizing: border-box;
   background: var(--bg-1); border: 1px solid var(--border);
   border-radius: 5px; padding: 5px 8px;
-  font-family: var(--ui-font); font-size: 12px; color: var(--text-0);
+  font-family: var(--editor-font-family); font-size: 12px; color: var(--text-0);
 }
 .mm-search:focus { outline: none; border-color: var(--accent); }
 
@@ -2444,7 +2448,7 @@ body.split-open .pane-flash::after {
   margin: 8px 10px 0; width: calc(100% - 20px);
   background: var(--bg-3); border: 1px solid var(--border);
   border-radius: 5px; padding: 5px 8px; cursor: pointer;
-  font-family: var(--ui-font); font-size: 11px; color: var(--text-1);
+  font-family: var(--editor-font-family); font-size: 11px; color: var(--text-1);
 }
 .mm-restore:hover { background: var(--bg-4); color: var(--text-0); }
 

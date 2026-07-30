@@ -1447,6 +1447,13 @@ const FONTS = {
   verdana:      "Verdana, Geneva, Tahoma, sans-serif",
 };
 
+// The family currently chosen for the editor, for the places that need it as a string
+// (canvas contexts, which cannot inherit CSS).
+function _editorFontFamily() {
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--editor-font-family').trim();
+  return v || FONTS.roboto;
+}
+
 // Labels + order for the font dropdown.
 const FONT_LABELS = {
   jetbrains: 'JetBrains Mono', roboto: 'Roboto Mono', fira: 'Fira Code',
@@ -12538,6 +12545,16 @@ const PDF_FONTS = [
   { id: 'CourierBoldOblique',   family: 'Courier',   css: _MONO,  weight: 'bold',   style: 'italic' },
 ];
 function _pdfFontOf(id) { return PDF_FONTS.find(f => f.id === id) || PDF_FONTS[0]; }
+// Which standard PDF family sits closest to the font chosen for the editor. The text added to
+// a PDF must be one of the base-14 families — anything else would have to be embedded in the
+// file — so the best we can do is start from the matching KIND: a monospace editor font opens
+// the text tool on Courier, a serif one on Times, anything else on Helvetica.
+function _pdfFontForEditorFont() {
+  const fam = _editorFontFamily().toLowerCase();
+  if (/mono|courier|consol/.test(fam)) return 'Courier';
+  if (/serif|garamond|georgia|times|lora|merriweather|fraunces/.test(fam) && !/sans-serif/.test(fam)) return 'Times';
+  return 'Helvetica';
+}
 function _pdfFontCss(id) { return _pdfFontOf(id).css; }
 // Apply family + weight + style of a PDF font id to an on-screen element.
 function _applyPdfFont(el, id) {
@@ -15865,6 +15882,9 @@ function setupFileDrop() {
       o.style.fontFamily = f.css; o.style.fontWeight = f.weight; o.style.fontStyle = f.style;
       _pdfFontSel.appendChild(o);
     }
+    // Start on the standard family closest to the editor font, so text added to a PDF looks
+    // as much like the notes as the format allows. Still fully changeable from this picker.
+    PDF_TEXT.font = _pdfFontForEditorFont();
     _pdfFontSel.value = PDF_TEXT.font;
     _pdfFontSel.addEventListener('change', (e) => setPdfTextFont(e.target.value));
   }
