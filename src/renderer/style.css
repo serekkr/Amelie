@@ -47,6 +47,10 @@
   --editor-font-size: 14px;
   --editor-line-height: 1.85;
   --editor-font-family: var(--editor-font);
+  /* Code — and anything that shows a path, a command or a key — stays monospaced whatever font
+     you choose for the app: proportional code is unreadable. --editor-font itself now follows
+     your choice (applyAppearance sets it), so these use their own variable. */
+  --code-font: 'Roboto Mono', monospace;
 }
 
 /* ── THEME: Navy ────────────────────────────────────────────── */
@@ -1099,7 +1103,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #preview-content a:visited { color: #a07ddc; }
 
 #preview-content code {
-  font-family: var(--editor-font); font-size: .88em; font-style: normal;
+  font-family: var(--code-font); font-size: .88em; font-style: normal;
   background: var(--bg-2); border: 1px solid var(--border);
   border-radius: 3px; padding: 1px 5px; color: var(--accent);
 }
@@ -1113,7 +1117,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 }
 #preview-content pre code {
   background: none; border: none; padding: 0; color: var(--text-0);
-  font-style: normal; font-family: var(--editor-font);
+  font-style: normal; font-family: var(--code-font);
   /* Block code was inheriting the inline-code .88em (~14px at the 16px base) which
      felt too small. Bump ~1px to .94em (~15px) — still a touch smaller than normal
      body text, as intended. Inline `code` keeps its .88em. */
@@ -1400,7 +1404,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   font-size: 12px; color: var(--text-2); line-height: 1.7;
 }
 .info-box strong { color: var(--text-0); }
-.info-box code { font-family: var(--editor-font); background: var(--bg-4); padding: 1px 5px; border-radius: 3px; color: var(--accent); font-size: 11px; }
+.info-box code { font-family: var(--code-font); background: var(--bg-4); padding: 1px 5px; border-radius: 3px; color: var(--accent); font-size: 11px; }
 .btn-test {
   background: var(--bg-4); border: 1px solid var(--border);
   color: var(--text-0); padding: 7px 14px; border-radius: var(--radius);
@@ -1533,7 +1537,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .wstep-title svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--accent); }
 .wstep-desc { font-size: 11px; color: var(--text-2); line-height: 1.65; font-family: var(--ui-font); }
 .wstep-desc strong { font-weight: 400; }
-.wstep-desc code { font-family: var(--editor-font); font-size: 11px; background: var(--bg-3); padding: 1px 5px; border-radius: 3px; color: var(--accent); }
+.wstep-desc code { font-family: var(--code-font); font-size: 11px; background: var(--bg-3); padding: 1px 5px; border-radius: 3px; color: var(--accent); }
 .wg-drop-zone {
   border: 1.5px dashed var(--border-light); border-radius: var(--radius);
   padding: 8px 16px; display: flex; flex-direction: row;
@@ -1610,7 +1614,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   background: var(--bg-0); border: 1px solid var(--border);
   border-radius: var(--radius); overflow: hidden;
 }
-.path-prefix { padding: 7px 10px; font-family: var(--editor-font); font-size: 12px; color: var(--text-3); background: var(--bg-2); white-space: nowrap; border-right: 1px solid var(--border); }
+.path-prefix { padding: 7px 10px; font-family: var(--code-font); font-size: 12px; color: var(--text-3); background: var(--bg-2); white-space: nowrap; border-right: 1px solid var(--border); }
 .path-input-row input { flex: 1; background: var(--bg-0); border: none; outline: none; color: var(--text-0); font-family: var(--editor-font); font-size: 13px; padding: 7px 10px; }
 .path-browse-btn {
   flex-shrink: 0; align-self: stretch; display: flex; align-items: center; justify-content: center;
@@ -1619,7 +1623,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 }
 .path-browse-btn:hover { background: var(--bg-4); color: var(--accent); }
 .path-browse-btn svg { width: 17px; height: 17px; }
-.path-preview { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; font-family: var(--editor-font); font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+.path-preview { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; font-family: var(--code-font); font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
 .pp-row { display: flex; align-items: center; gap: 7px; color: var(--text-1); }
 .pp-child { padding-left: 18px; color: var(--text-2); }
 .pp-child2 { padding-left: 36px; color: var(--text-3); }
@@ -2768,7 +2772,10 @@ body.split-open .pane-flash::after {
   /* --editor-font-FAMILY, the font actually chosen in Settings: the raw --editor-font that
      used to be here is the built-in default, so tables ignored your choice while the text
      around them followed it. */
-  margin: 1em 0; font-family: var(--editor-font-family); font-size: 13px;
+  /* .93em, not a fixed 13px: the size you pick in Settings (and Ctrl+wheel) changes the note's
+     font size, and a table full of hard pixels stayed behind while the text around it grew.
+     Slightly smaller than the body, which is the density this had at 13 against 14. */
+  margin: 1em 0; font-family: var(--editor-font-family); font-size: .93em;
 }
 #preview-content th, #preview-content td {
   border: 1px solid var(--border-light);
@@ -3786,7 +3793,7 @@ html:not([data-theme]) .notif-row:hover .simple-name {
   font-size: 12px; color: var(--text-2); line-height: 1.6;
 }
 .wg-manual-note svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; stroke: var(--accent-dim); fill: none; stroke-width: 1.5; }
-.wg-manual-note code { font-family: var(--editor-font); font-size: 11px; color: var(--accent-dim); }
+.wg-manual-note code { font-family: var(--code-font); font-size: 11px; color: var(--accent-dim); }
 
 /* ─── Samba path preview ────────────────────────────────────── */
 .smb-preview {

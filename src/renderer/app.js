@@ -1500,6 +1500,12 @@ function applyAppearance(prefs = {}) {
   root.style.setProperty('--tree-item-py',        treePy   + 'px');
   root.style.setProperty('--tree-font-size',      treeSize + 'px');
   root.style.setProperty('--editor-font-family',  FONTS[fontKey] ?? FONTS.jetbrains);
+  // The whole app follows the choice, not just the notes: --ui-font drives the sidebar, the
+  // headers, the menus and the settings, and --editor-font the smaller labels (dates, chips,
+  // counters, the status bar). Code keeps --code-font, a fixed monospace — proportional code
+  // is unreadable whatever the taste.
+  root.style.setProperty('--ui-font',            FONTS[fontKey] ?? FONTS.jetbrains);
+  root.style.setProperty('--editor-font',        FONTS[fontKey] ?? FONTS.jetbrains);
   root.style.setProperty('--toolbar-zoom',        (tbZoom / 100).toFixed(3));
   // persist
   try { localStorage.setItem('inkwell-appearance', JSON.stringify({ editorFontSize: edSize, treeSpacing: treePy, treeFontSize: treeSize, editorFont: fontKey, drawLocation: drawLoc, noteLocation: noteLoc, toolbarZoom: tbZoom })); } catch(_) {}
