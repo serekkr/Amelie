@@ -8169,6 +8169,13 @@ function setupMindmap() {
         // loader (a bare {path,name} would drop the 'pdf/…' attachmentName).
         openNote({ path: mmDownHit.path, name: mmDownHit.label, modified: mmDownHit.modified,
           type: mmDownHit.type, attachmentName: mmDownHit.attachmentName });
+        // You have left the graph: close its tab instead of leaving it in the bar behind the
+        // note you just opened (every node clicked used to add a tab and keep 'Graph' around,
+        // so it still looked like you were in the graph).
+        try {
+          const gi = tabs.findIndex(t => t.type === 'mindmap');
+          if (gi !== -1) closeTab(gi);
+        } catch (_) {}
       }
     }
     mmDownHit = null;
