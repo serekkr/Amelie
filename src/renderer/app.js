@@ -7500,7 +7500,8 @@ function updatePaneMetaChips() {
 // title). BOTH halves can carry it now: the selected one gets a thin light outline, so it is
 // always clear which half a keystroke or a tree click will land in. Only while split — a
 // single pane needs no outline (the CSS is scoped to body.split-open).
-function setFocusedPane(which) {
+function setFocusedPane(which, opts) {
+  const prev = _focusedPane;
   _focusedPane = (which === 'split') ? 'split' : 'main';
   try { updateTitleForFocus(); } catch (_) {}
   const split = !!_splitPath;
@@ -7512,6 +7513,23 @@ function setFocusedPane(which) {
     const el = $(id);
     if (el) el.classList.toggle('pane-focused', split && _focusedPane === 'main');
   });
+  // Show the frame only for a moment. setFocusedPane also runs on plain refreshes (a tab
+  // switch, a title re-assert), and flashing on those would blink for no reason — so only
+  // on a real change of half, or when a click asks for it explicitly.
+  if (split && (prev !== _focusedPane || (opts && opts.flash))) _flashFocusedPane();
+}
+
+// A 2-second frame around the selected half, then gone. The class is removed afterwards so
+// selecting again re-triggers the animation from the start.
+let _paneFlashTimer = null;
+function _flashFocusedPane() {
+  document.querySelectorAll('.pane-flash').forEach(el => el.classList.remove('pane-flash'));
+  clearTimeout(_paneFlashTimer);
+  if (!_splitPath) return;
+  const ids = _focusedPane === 'split' ? ['editor-pane-b'] : ['editor-pane', 'preview-pane'];
+  const els = ids.map(id => $(id)).filter(Boolean);
+  els.forEach(el => { void el.offsetWidth; el.classList.add('pane-flash'); });   // reflow → restart
+  _paneFlashTimer = setTimeout(() => els.forEach(el => el.classList.remove('pane-flash')), 2100);
 }
 
 // The big header title follows the FOCUSED pane in split mode: click the left
@@ -7858,10 +7876,10 @@ function setupSplitView() {
   // mode switches, toolbar actions…) must never flip the pane — only a real
   // user click does. Tab-bar clicks imply the main pane.
   const paneBFocus = $('editor-pane-b');
-  if (paneBFocus) paneBFocus.addEventListener('pointerdown', () => setFocusedPane('split'), true);
+  if (paneBFocus) paneBFocus.addEventListener('pointerdown', () => setFocusedPane('split', { flash: true }), true);
   ['editor-pane', 'preview-pane', 'tab-list'].forEach(id => {
     const el = $(id);
-    if (el) el.addEventListener('pointerdown', () => setFocusedPane('main'), true);
+    if (el) el.addEventListener('pointerdown', () => setFocusedPane('main', { flash: true }), true);
   });
 
   // Drag the resizer to change the split panes' relative size. Works for both

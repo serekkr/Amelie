@@ -2106,11 +2106,19 @@ body.split-open .split-a-close { display: flex; }
    inset box-shadow is painted under the children, and the editor's own background covered it
    completely, which is why the old accent ring was invisible. pointer-events: none so it
    never eats a click, and inset 0 so it costs no layout. */
-body.split-open .pane-focused { position: relative; }
-body.split-open .pane-focused::after {
+body.split-open .pane-focused, body.split-open .pane-flash { position: relative; }
+body.split-open .pane-flash::after {
   content: ''; position: absolute; inset: 0; z-index: 4;
   border: 1.5px solid var(--text-0); border-radius: 2px;
   pointer-events: none;
+  animation: paneFlash 2s ease-out forwards;
+}
+/* Holds for most of the two seconds, then fades — a hint, not a permanent frame. */
+@keyframes paneFlash {
+  0%   { opacity: 0; }
+  6%   { opacity: 1; }
+  72%  { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* Inline audio/video players for media attachments in the preview */
