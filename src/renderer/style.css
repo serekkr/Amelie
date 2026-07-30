@@ -2065,7 +2065,11 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 /* Floating action buttons (no title bar — keeps it clean per request):
    mode toggle (edit/view) + close, side by side in the top-right corner. */
 #split-b-actions {
-  position: absolute; top: 6px; right: 8px; z-index: 3;
+  /* Clear of the pane's scrollbar (12px) instead of sitting on it: the buttons used to
+     touch the scroll thumb. The offset is on the PANE, which is the same box in both
+     modes — the editor and the preview each scroll inside it — so the buttons land in
+     exactly the same place whether you are editing or reading. */
+  position: absolute; top: 6px; right: 20px; z-index: 3;
   display: flex; gap: 4px;
 }
 #split-b-mode, #split-b-close {
