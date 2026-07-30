@@ -729,9 +729,18 @@ kbd {
    (they used to look normal and still act on the note behind the preview). */
 .tool-btn.reading-off { opacity: .3; pointer-events: none; }
 /* …and in the note's own toolbar they are not shown at all — a row of controls that
-   cannot do anything is just noise while reading. Only the search stays, in its usual
-   place at the right, on the same strip as before. */
+   cannot do anything is just noise while reading. Only the search stays, at the right. */
 #editor-toolbar.reading-only #toolbar-buttons > *:not(#btn-note-search):not(.toolbar-spacer) { display: none; }
+/* With one button left there is no row to draw: the strip loses its background and its
+   rule, so what you see is the search on its own, square, over the note's own colour. */
+#editor-toolbar.reading-only {
+  background: transparent; border-bottom-color: transparent; padding: 2px 14px;
+}
+#editor-toolbar.reading-only #btn-note-search {
+  width: 26px; height: 26px; padding: 0; justify-content: center;
+  border: 1px solid var(--border); background: var(--bg-1);
+}
+#editor-toolbar.reading-only #btn-note-search:hover { background: var(--bg-3); border-color: var(--text-3); }
 .tool-btn.danger:hover { color: var(--red); }
 .tool-btn.panel-toggle { font-size: 11px; gap: 4px; }
 .tool-btn.panel-toggle.active { color: var(--accent); background: var(--active-bg); }
