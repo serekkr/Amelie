@@ -31,13 +31,6 @@ echo -e "  ${D}Removing app state (recent, bookmarks, settings)...${N}"
 rm -rf "$HOME/.config/amelie"
 rm -rf "$HOME/.cache/amelie" 2>/dev/null || true
 
-# Older setups could leave this file behind; Amelie does not use it. Remove it
-# if present (needs sudo, since it lives under /etc).
-if [ -f /etc/sudoers.d/amelie ]; then
-  echo -e "  ${D}Removing /etc/sudoers.d/amelie ...${N}"
-  sudo rm -f /etc/sudoers.d/amelie
-  echo -e "  ${G}✓${N}  /etc/sudoers.d/amelie removed"
-fi
 
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
 gtk-update-icon-cache -f "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
