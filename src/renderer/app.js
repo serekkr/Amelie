@@ -15252,6 +15252,10 @@ function closeNoteSearch() {
   noteSearchMatches = []; noteSearchIdx = 0;
 }
 
+// In split mode the search follows the SELECTED half: searching while the second pane is the
+// one you are working in used to comb the main note instead, which is the wrong text.
+function _searchInSplitHalf() { return !!_splitPath && _focusedPane === 'split'; }
+
 function runNoteSearch(query) {
   clearNoteSearchHighlights();
   noteSearchMatches = []; noteSearchIdx = 0;
@@ -15259,9 +15263,11 @@ function runNoteSearch(query) {
 
   if (!query.trim()) { countEl.textContent = ''; return; }
 
+  const inHalf = _searchInSplitHalf();
+
   if (state.viewMode === 'view') {
-    // Highlight in preview DOM
-    const container = previewContent;
+    // Highlight in preview DOM — the selected half's
+    const container = inHalf ? $('preview-content-b') : previewContent;
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
     const q = query.toLowerCase();
     const ranges = [];
@@ -15291,8 +15297,9 @@ function runNoteSearch(query) {
     countEl.textContent = noteSearchMatches.length ? `1 / ${noteSearchMatches.length}` : window.i18n.t('search.no_results');
     if (noteSearchMatches.length) { noteSearchIdx = 0; scrollToMatch(0); }
   } else {
-    // Edit mode: find in textarea and jump to first occurrence
-    const content = editor.value.toLowerCase();
+    // Edit mode: find in the text of the half being searched
+    const src = inHalf ? ($('markdown-editor-b') || {}).value || '' : editor.value;
+    const content = src.toLowerCase();
     const q = query.toLowerCase();
     let idx = 0, pos;
     while ((pos = content.indexOf(q, idx)) !== -1) {
@@ -15302,13 +15309,27 @@ function runNoteSearch(query) {
     countEl.textContent = noteSearchMatches.length ? `1 / ${noteSearchMatches.length}` : window.i18n.t('search.no_results');
     if (noteSearchMatches.length) {
       noteSearchIdx = 0;
-      if (_cmActive && _cmHandle) { _cmHandle.setSearchHighlight(query, noteSearchMatches[0]); }
+      if (inHalf) { _showMatchInSplitEditor(noteSearchMatches[0], query.length); }
+      else if (_cmActive && _cmHandle) { _cmHandle.setSearchHighlight(query, noteSearchMatches[0]); }
       else { _searchHL = { query, currentPos: noteSearchMatches[0] }; applyEditorHighlight(); _scrollEditorToPos(noteSearchMatches[0]); }
     } else {
-      if (_cmActive && _cmHandle) { _cmHandle.setSearchHighlight('', -1); }
+      if (inHalf) { /* nothing to show */ }
+      else if (_cmActive && _cmHandle) { _cmHandle.setSearchHighlight('', -1); }
       else { _searchHL = { query, currentPos: -1 }; applyEditorHighlight(); }
     }
   }
+}
+
+// The split half is a plain textarea (not the CodeMirror engine), so a match is shown by
+// selecting it and scrolling it into view. The selection stays visible while the search box
+// keeps the keyboard, so Enter goes on stepping instead of typing into the note.
+function _showMatchInSplitEditor(pos, len) {
+  const edB = $('markdown-editor-b');
+  if (!edB) return;
+  try { edB.setSelectionRange(pos, pos + len); } catch (_) {}
+  const before = edB.value.slice(0, pos).split('\n').length;
+  const lineH = parseFloat(getComputedStyle(edB).lineHeight) || 22;
+  edB.scrollTop = Math.max(0, (before - 4) * lineH);
 }
 
 function _scrollEditorToPos(pos) {
@@ -15323,6 +15344,8 @@ function noteSearchStep(dir) {
   $('note-search-count').textContent = `${noteSearchIdx + 1} / ${noteSearchMatches.length}`;
   if (state.viewMode === 'view') {
     scrollToMatch(noteSearchIdx);
+  } else if (_searchInSplitHalf()) {
+    _showMatchInSplitEditor(noteSearchMatches[noteSearchIdx], $('note-search-input').value.length);
   } else {
     jumpEditorToMatch(noteSearchIdx, $('note-search-input').value.length);
   }
@@ -15347,10 +15370,14 @@ function jumpEditorToMatch(idx, len) {
 }
 
 function clearNoteSearchHighlights() {
-  previewContent.querySelectorAll('.note-search-highlight').forEach(el => {
-    el.replaceWith(document.createTextNode(el.textContent));
+  // Both previews: a search can have marked either half, and leftovers in the other one
+  // would stay lit after the next search.
+  [previewContent, $('preview-content-b')].filter(Boolean).forEach(root => {
+    root.querySelectorAll('.note-search-highlight').forEach(el => {
+      el.replaceWith(document.createTextNode(el.textContent));
+    });
+    root.normalize();
   });
-  previewContent.normalize();
 }
 
 // ─── Sidebar view buttons ─────────────────────────────────────────────────────
