@@ -1448,11 +1448,16 @@ const FONTS = {
   verdana:      "Verdana, Geneva, Tahoma, sans-serif",
 };
 
+// Amelie's default family, in one place: it was spelled 'roboto' in one branch and
+// 'jetbrains' in three others, so a missing pref gave you a different font depending on
+// which line read it first.
+const DEFAULT_FONT = 'noto';
+
 // The family currently chosen for the editor, for the places that need it as a string
 // (canvas contexts, which cannot inherit CSS).
 function _editorFontFamily() {
   const v = getComputedStyle(document.documentElement).getPropertyValue('--editor-font-family').trim();
-  return v || FONTS.roboto;
+  return v || FONTS[DEFAULT_FONT];
 }
 
 // Labels + order for the font dropdown.
@@ -1490,7 +1495,7 @@ function applyAppearance(prefs = {}) {
   // An unknown key (a font that has since been removed — Mr Robot was one) falls back to
   // the default instead of leaving the editor on a family that no longer exists and the
   // dropdown showing a blank label.
-  const fontKey   = FONTS[prefs.editorFont] ? prefs.editorFont : 'roboto';
+  const fontKey   = FONTS[prefs.editorFont] ? prefs.editorFont : DEFAULT_FONT;
   // Where a new drawing / note is created: 'root' (vault root) or 'current' (selected folder).
   const drawLoc   = prefs.drawLocation    ?? 'root';
   const noteLoc   = prefs.noteLocation    ?? 'current';
@@ -1499,13 +1504,13 @@ function applyAppearance(prefs = {}) {
   root.style.setProperty('--editor-font-size',   edSize   + 'px');
   root.style.setProperty('--tree-item-py',        treePy   + 'px');
   root.style.setProperty('--tree-font-size',      treeSize + 'px');
-  root.style.setProperty('--editor-font-family',  FONTS[fontKey] ?? FONTS.jetbrains);
+  root.style.setProperty('--editor-font-family',  FONTS[fontKey] ?? FONTS[DEFAULT_FONT]);
   // The whole app follows the choice, not just the notes: --ui-font drives the sidebar, the
   // headers, the menus and the settings, and --editor-font the smaller labels (dates, chips,
   // counters, the status bar). Code keeps --code-font, a fixed monospace — proportional code
   // is unreadable whatever the taste.
-  root.style.setProperty('--ui-font',            FONTS[fontKey] ?? FONTS.jetbrains);
-  root.style.setProperty('--editor-font',        FONTS[fontKey] ?? FONTS.jetbrains);
+  root.style.setProperty('--ui-font',            FONTS[fontKey] ?? FONTS[DEFAULT_FONT]);
+  root.style.setProperty('--editor-font',        FONTS[fontKey] ?? FONTS[DEFAULT_FONT]);
   root.style.setProperty('--toolbar-zoom',        (tbZoom / 100).toFixed(3));
   // persist
   try { localStorage.setItem('inkwell-appearance', JSON.stringify({ editorFontSize: edSize, treeSpacing: treePy, treeFontSize: treeSize, editorFont: fontKey, drawLocation: drawLoc, noteLocation: noteLoc, toolbarZoom: tbZoom })); } catch(_) {}
@@ -1604,7 +1609,7 @@ function setupFontDropdown() {
     if (open) { close(); return; }
     closeOtherDropdowns(menu);   // close lang/other dropdowns first
     // Highlight the active font on open.
-    const cur = (loadAppearance().editorFont) || 'jetbrains';
+    const cur = (loadAppearance().editorFont) || DEFAULT_FONT;
     menu.querySelectorAll('.font-dd-item').forEach(i => i.classList.toggle('active', i.dataset.font === cur));
     menu.style.display = 'block';
   });
@@ -11600,7 +11605,7 @@ async function openSettings() {
   const edSize   = ap.editorFontSize ?? 14;
   const treePy   = ap.treeSpacing    ?? 3;
   const treeSize = ap.treeFontSize   ?? 13;
-  const fontKey  = ap.editorFont     ?? 'jetbrains';
+  const fontKey  = ap.editorFont     ?? DEFAULT_FONT;
   const tbZoom   = ap.toolbarZoom     ?? 100;
   updateNumberDdCurrent('edsize-dd', edSize,   'px');
   updateNumberDdCurrent('treesp-dd', treePy,   'px');
