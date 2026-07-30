@@ -1381,8 +1381,6 @@ const THEMES = {
 };
 
 const FONTS = {
-  // ── Display / decorative (bundled offline, see fonts.css) ──
-  mrrobot:      "'MrRobot', monospace",
   // ── Monospace (bundled offline, see fonts.css) ──
   jetbrains:    "'JetBrains Mono', monospace",
   roboto:       "'Roboto Mono', monospace",
@@ -1417,7 +1415,6 @@ const FONTS = {
 
 // Labels + order for the font dropdown.
 const FONT_LABELS = {
-  mrrobot: 'Mr Robot',
   jetbrains: 'JetBrains Mono', roboto: 'Roboto Mono', fira: 'Fira Code',
   sourcecodepro: 'Source Code Pro', ibmplex: 'IBM Plex Mono', spacemono: 'Space Mono',
   couriernew: 'Courier New',
@@ -1429,7 +1426,6 @@ const FONT_LABELS = {
   georgia: 'Georgia', times: 'Times New Roman', verdana: 'Verdana',
 };
 const FONT_ORDER = [
-  'mrrobot',
   'jetbrains','roboto','fira','sourcecodepro','ibmplex','spacemono','couriernew',
   'inter','robotosans','sourcesans','lato','nunito','atkinson',
   'lora','merriweather','ebgaramond','fraunces',
@@ -1442,7 +1438,10 @@ function applyAppearance(prefs = {}) {
   const edSize    = prefs.editorFontSize  ?? 14;
   const treePy    = prefs.treeSpacing     ?? 3;
   const treeSize  = prefs.treeFontSize    ?? 13;
-  const fontKey   = prefs.editorFont      ?? 'roboto';
+  // An unknown key (a font that has since been removed — Mr Robot was one) falls back to
+  // the default instead of leaving the editor on a family that no longer exists and the
+  // dropdown showing a blank label.
+  const fontKey   = FONTS[prefs.editorFont] ? prefs.editorFont : 'roboto';
   // Where a new drawing / note is created: 'root' (vault root) or 'current' (selected folder).
   const drawLoc   = prefs.drawLocation    ?? 'root';
   const noteLoc   = prefs.noteLocation    ?? 'current';

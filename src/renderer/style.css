@@ -1727,9 +1727,15 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   width: 100%; padding: 8px 12px; cursor: pointer;
   background: var(--bg-2); border: 1.5px solid var(--border); border-radius: 7px;
   color: var(--text-0); font-size: 13px; transition: border-color .15s, background .15s;
+  /* Fixed height, and a line-height that does not follow the font's own metrics: the font
+     picker shows its label IN the chosen font, so the box used to grow or shrink by a
+     pixel or two with every font (34px on Verdana, 36 on Roboto Mono) and nudge the
+     controls beside it. The preview stays, the size stops moving. */
+  height: 36px; box-sizing: border-box;
 }
 .font-dd-btn:hover { border-color: var(--border-light); background: var(--bg-3); }
-.font-dd-current { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* line-height fixed, not the chosen font's own: see the height note above. */
+.font-dd-current { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
 .font-dd-chev { width: 16px; height: 16px; flex: 0 0 16px; color: var(--text-2); }
 .font-dd-menu {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50;
@@ -1906,7 +1912,9 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #tab-new-btn {
   width: 38px; flex-shrink: 0;
   background: transparent; border: none;   /* its dividers are .titlebar-sep, both sides */
-  cursor: pointer; color: var(--text-1);
+  /* Same brightest text colour as the settings gear beside it (white in the dark themes):
+     the two sit in the same strip, and one being dimmer read as disabled. */
+  cursor: pointer; color: var(--text-0);
   display: flex; align-items: center; justify-content: center;
   transition: color .15s, background .15s;
   -webkit-app-region: no-drag;
