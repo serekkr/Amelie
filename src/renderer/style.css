@@ -367,8 +367,11 @@ html.is-mac #titlebar { padding-left: 72px; }
   background: var(--border);
 }
 #tab-bar .titlebar-sep { margin-right: 6px; }
-/* Eats part of #titlebar-actions' 8px padding, so the air matches the left side. */
-#titlebar-actions .titlebar-sep { margin-left: -2px; }
+/* Eats part of #titlebar-actions' 8px padding, so the air matches the left side. Only the
+   FIRST one: the trailing divider (gear | window buttons) must not be pulled towards the
+   gear, and the window controls bring their own 8px padding. */
+#titlebar-actions .titlebar-sep:first-child { margin-left: -2px; }
+#titlebar-actions .titlebar-sep:last-child  { margin-right: -3px; }
 /* Sync state is shown by coloring the sync icon itself (no separate dot). */
 #sync-status, #backup-status { display: inline-flex; align-items: center; transition: color .3s; }
 #sync-status.sync-idle,    #backup-status.sync-idle    { color: inherit; }
