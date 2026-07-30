@@ -728,6 +728,10 @@ kbd {
 /* Reading view: the buttons that would write to the note are visibly out of play
    (they used to look normal and still act on the note behind the preview). */
 .tool-btn.reading-off { opacity: .3; pointer-events: none; }
+/* …and in the note's own toolbar they are not shown at all — a row of controls that
+   cannot do anything is just noise while reading. Only the search stays, in its usual
+   place at the right, on the same strip as before. */
+#editor-toolbar.reading-only #toolbar-buttons > *:not(#btn-note-search):not(.toolbar-spacer) { display: none; }
 .tool-btn.danger:hover { color: var(--red); }
 .tool-btn.panel-toggle { font-size: 11px; gap: 4px; }
 .tool-btn.panel-toggle.active { color: var(--accent); background: var(--active-bg); }

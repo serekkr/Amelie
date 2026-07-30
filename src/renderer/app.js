@@ -4807,6 +4807,8 @@ function _applyScrollFrac(el, frac) { if (!el || frac == null) return; const max
 const WRITING_CONTROL_SEL = '.tool-btn[data-cmd], #btn-heading, #btn-color, #btn-table, #btn-undo, #btn-redo, #btn-audio-rec';
 function _updateWritingControls(mode) {
   document.querySelectorAll(WRITING_CONTROL_SEL).forEach(b => b.classList.toggle('reading-off', mode !== 'edit'));
+  // In the note's toolbar they are hidden outright, leaving the search on its own.
+  document.getElementById('editor-toolbar')?.classList.toggle('reading-only', mode !== 'edit');
 }
 function setViewMode(mode, opts) {
   const editorPane = $('editor-pane');
