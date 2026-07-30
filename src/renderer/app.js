@@ -8504,19 +8504,34 @@ function mmSimStep(alpha) {
 }
 
 
+// The note to come back to when the graph closes. Its tab is appended at the END, so closing
+// it used to land on whatever tab sat last in the bar — not on the note you opened it from.
+let _mmReturnPath = null;
+
 async function openMindmap() {
   mmOffset = { x: 0, y: 0 };
   mmScale = 1;
+  const cur = getActiveTab();
+  if (cur && cur.path && !cur.type) _mmReturnPath = cur.path;
   const existing = tabs.findIndex(t => t.type === 'mindmap');
   if (existing !== -1) { await switchTab(existing); return; }
   tabs.push({ type: 'mindmap', name: 'Graph', path: null, isDirty: false });
   await switchTab(tabs.length - 1);
 }
 
-function closeMindmap() {
+async function closeMindmap() {
   stopMindmapPhysics();          // never keep a rAF loop alive behind a hidden overlay
   const idx = tabs.findIndex(t => t.type === 'mindmap');
-  if (idx !== -1) { closeTab(idx); return; }
+  if (idx !== -1) {
+    const back = _mmReturnPath;
+    await closeTab(idx);
+    // Back to the note the graph was opened from, if it is still open.
+    if (back) {
+      const i = tabs.findIndex(t => t.path === back && !t.type);
+      if (i !== -1 && i !== activeTabIdx) await switchTab(i);
+    }
+    return;
+  }
   $('mindmap-overlay').style.display = 'none';
   $('btn-mindmap').classList.remove('active');
   $('mindmap-tooltip').style.display = 'none';
