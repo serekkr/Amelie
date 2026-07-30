@@ -454,13 +454,29 @@ async function switchTab(idx) {
   try { updateTitleForFocus(); } catch (_) {}
 }
 
+// The note the OPEN split belongs to (the pane is shown for one note at a time).
+function _splitOwnerPath() {
+  const t = tabs.find(x => x && x.split && x.split.path === _splitPath);
+  return t && t.split ? t.split.owner : null;
+}
+
 // Bring the split pane in line with the tab being shown.
 function _applyTabSplit(tab) {
   // Only for the note it was opened from. A tab showing something else comes up whole, and
   // the memory is kept: come back to that note and its pane is there again.
   const want = tab && tab.split && tab.split.path && tab.split.owner === tab.path ? tab.split : null;
-  const paneOpen = (() => { const p = $('editor-pane-b'); return !!p && p.style.display !== 'none'; })();
+  const paneB = $('editor-pane-b');
+  const paneOpen = !!paneB && paneB.style.display !== 'none';
+  // Leaving a pane behind: store the size it is at, so returning restores the divider where
+  // the user left it rather than back at the middle.
+  if (paneOpen && paneB) {
+    const live = paneB.style.flexBasis || (paneB.style.flex || '').split(' ').pop();
+    if (live && live !== '0%' && live !== 'auto') _splitBasis = live;
+    const host = tabs.find(t => t && t.split && t.split.owner === _splitOwnerPath());
+    if (host && host.split) host.split.basis = _splitBasis;
+  }
   if (want) {
+    _splitBasis = want.basis || _splitBasis;
     if (_splitPath !== want.path || !paneOpen) openSplitView(want.path, want.name, want.orient);
     return;
   }
@@ -7394,6 +7410,7 @@ function goBackNote() {
 // own edit/view toggle. When both panes show the same path they stay in sync.
 let _splitPath = null;
 let _splitSyncing = false;
+let _splitBasis = null;       // the pane's size (e.g. '35%' or '407px'), so reopening keeps it
 let _splitOrient = 'right';   // 'right' = side-by-side, 'down' = stacked
 let _splitMode = 'edit';      // edit | view — independent from the main pane
 let _focusedPane = 'main';    // main | split — last pane the user interacted with
@@ -7411,7 +7428,7 @@ function openSplitView(path, name, orient = 'right') {
   // follow you onto every note you opened next.
   const _host = getActiveTab();
   if (_host && _host.path && _host.path !== path) {
-    _host.split = { path, name: name || null, orient: _splitOrient, owner: _host.path };
+    _host.split = { path, name: name || null, orient: _splitOrient, owner: _host.path, basis: _splitBasis };
   }
   const paneB = $('editor-pane-b');
   const edB = $('markdown-editor-b');
@@ -7450,7 +7467,10 @@ function openSplitView(path, name, orient = 'right') {
   // Toggle layout direction; reset to a 50% split only on first open (loading
   // another note into an already-open pane keeps the user's size).
   if (split) split.classList.toggle('split-down', _splitOrient === 'down');
-  if (!wasOpen) paneB.style.flex = '0 0 50%';
+  // Reopening keeps the size it had: `basis` comes from the tab's remembered split, so
+  // walking away and coming back does not snap the divider back to the middle. 50% only
+  // for a split that has no size yet.
+  if (!wasOpen) paneB.style.flex = `0 0 ${_splitBasis || '50%'}`;
   paneB.style.display = 'flex';
   if (resizer) resizer.style.display = 'block';
   document.body.classList.add('split-open');
@@ -7865,12 +7885,14 @@ function setupSplitView() {
         const min = 100, max = rect.height - 150;
         bSize = Math.max(min, Math.min(max, bSize));
         paneB.style.flex = `0 0 ${bSize}px`;
+        _splitBasis = `${bSize}px`;   // remembered, so reopening this split keeps the size
       } else {
         // Width of pane B = distance from the cursor to the right edge.
         let bSize = rect.right - e.clientX;
         const min = 120, max = rect.width - 200;
         bSize = Math.max(min, Math.min(max, bSize));
         paneB.style.flex = `0 0 ${bSize}px`;
+        _splitBasis = `${bSize}px`;   // remembered, so reopening this split keeps the size
       }
     });
     window.addEventListener('mouseup', () => {
