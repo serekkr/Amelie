@@ -12396,6 +12396,10 @@ async function newDraw() {
 }
 
 function openDrawFile(node, activate = true) {
+  // Where to come back to when the drawing closes: its tab is appended at the end, so the
+  // neighbour rule would drop you on the last tab in the bar instead.
+  const cur = getActiveTab();
+  if (activate && cur && cur.path && !cur.type) _drawReturnPath = cur.path;
   const existingIdx = tabs.findIndex(t => t.type === 'canvas' && t.path === node.path);
   if (existingIdx >= 0) { if (activate) switchTab(existingIdx); return; }
   tabs.push({ type: 'canvas', name: node.name, path: node.path, isDirty: false });
@@ -13840,11 +13844,21 @@ function pdfZoomFitWidth() {
   }).catch(() => {});
 }
 
-function closeCanvas() {
+let _drawReturnPath = null;   // the note the drawing was opened from
+
+async function closeCanvas() {
   const idx = tabs.findIndex((t, i) => t.type === 'canvas' && i === activeTabIdx);
-  if (idx >= 0) { closeTab(idx); return; }
-  const anyIdx = tabs.findIndex(t => t.type === 'canvas');
-  if (anyIdx >= 0) { closeTab(anyIdx); return; }
+  const anyIdx = idx >= 0 ? idx : tabs.findIndex(t => t.type === 'canvas');
+  if (anyIdx >= 0) {
+    const back = _drawReturnPath;
+    await closeTab(anyIdx);
+    // Back to the note the drawing was opened from, if it is still open.
+    if (back) {
+      const i = tabs.findIndex(t => t.path === back && !t.type);
+      if (i !== -1 && i !== activeTabIdx) await switchTab(i);
+    }
+    return;
+  }
   $('canvas-overlay').style.display = 'none';
   $('btn-canvas').classList.remove('active');
 }
