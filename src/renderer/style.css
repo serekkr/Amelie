@@ -23,6 +23,8 @@
   --text-1: #969696;
   --text-2: #767676;
   --text-3: #4f4f4f;
+  /* Small icons that must read clearly without competing with the white ones. */
+  --icon-strong: color-mix(in srgb, var(--text-0) 45%, var(--text-1));
   --accent: #3fb950;
   --accent-dim: #238636;
   --accent-glow: rgba(63,185,80,0.12);
@@ -666,10 +668,10 @@ kbd {
 .note-nav-btn {
   width: 24px; height: 24px;
   display: inline-flex; align-items: center; justify-content: center;
-  /* Bright enough to read: a 13px chevron at --text-2 was the dimmest thing in
-     the header, and the box around it disappeared into the background. */
+  /* Readable without going white: halfway between the body text and the muted
+     grey, mixed from the theme's own colours so light themes darken instead. */
   background: transparent; border: 1px solid var(--text-3);
-  border-radius: 4px; color: var(--text-0); cursor: pointer;
+  border-radius: 4px; color: var(--icon-strong); cursor: pointer;
   margin-right: 4px; padding: 0; flex-shrink: 0;
   transition: background .12s, color .12s, border-color .12s;
 }
@@ -677,7 +679,7 @@ kbd {
 .note-nav-btn:hover { background: var(--bg-3); color: var(--text-0); border-color: var(--text-3); }
 .note-nav-btn:active { background: var(--bg-4); }
 .note-nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.note-nav-btn:disabled:hover { background: transparent; color: var(--text-0); border-color: var(--text-3); }
+.note-nav-btn:disabled:hover { background: transparent; color: var(--icon-strong); border-color: var(--text-3); }
 #btn-next-note { margin-right: 10px; }
 
 /* Rows 3-4: tags / source — only shown in edit mode when non-empty */
@@ -1932,13 +1934,15 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #btn-focus-mode {
   width: 38px; flex-shrink: 0;
   background: transparent; border: none; border-right: 1px solid var(--border);
-  /* Same white as the gear and the + it shares the bar with. */
-  cursor: pointer; color: var(--text-0);
+  cursor: pointer; color: var(--icon-strong);
   display: flex; align-items: center; justify-content: center;
   transition: color .15s, background .15s;
   -webkit-app-region: no-drag;
 }
-#btn-focus-mode svg { width: 16px; height: 16px; }
+#btn-focus-mode svg { width: 17px; height: 17px; }
+/* The strip stands for the left column: solid while it is there, gone once hidden. */
+#btn-focus-mode .panel-fill { transition: opacity .15s; }
+#app.focus-mode #btn-focus-mode .panel-fill { opacity: 0; }
 #btn-focus-mode:hover { color: var(--text-0); background: var(--bg-3); }
 #app.focus-mode #btn-focus-mode { color: var(--accent); }
 /* Chevron points "<" normally (collapse) and ">" once the column is hidden. */
