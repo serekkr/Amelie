@@ -3964,6 +3964,10 @@ function setupEditor() {
     let plainPaths = [];
     if (!files.length && !paths.length && plain.trim()) {
       const lines = plain.split('\n').map(l => l.trim()).filter(Boolean);
+      // Wider than what Amelie ACCEPTS on purpose (scripts, and ogg/oga which are no
+      // longer supported): recognising the paste as a file paste is what lets the
+      // "unsupported format" toast explain the refusal, instead of dumping a raw path
+      // into the note.
       const ATTACHABLE_RE = /\.(png|jpe?g|gif|webp|svg|pdf|sh|bash|zsh|fish|ps1|psm1|bat|cmd|py|rb|pl|mp3|wav|ogg|oga|flac|m4a|aac|opus|mp4|webm|mkv|mov|m4v)$/i;
       if (lines.length && lines.every(l => /^(file:\/\/|\/)/.test(l) && ATTACHABLE_RE.test(l))) {
         plainPaths = lines
@@ -4397,13 +4401,16 @@ function insertAtCursor(text, start, end) {
 // Old files in scripts/ media/ audio/ video/ keep working (links carry the path;
 // playback is extension-based, not folder-based — so a video in videos/ plays the
 // same way).
-const AUDIO_EXT_RE = /\.(mp3|wav|ogg|oga|flac|m4a|aac|opus|wma|mka|weba)$/i;
-const VIDEO_EXT_RE = /\.(mp4|webm|mkv|mov|m4v|avi|wmv|mpg|mpeg|flv)$/i;
-const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i;
+const AUDIO_EXT_RE = /\.(mp3|wav|flac|m4a|aac|opus|wma|weba)$/i;
+const VIDEO_EXT_RE = /\.(mp4|webm|mkv|mov|m4v|avi|wmv|mpeg)$/i;
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
 // The ONLY attachment types Amelie accepts, anywhere (drag, paste, sidebar):
 // images, audio, video, PDF. Everything else (scripts, archives, docs, …) is
 // refused with an "unsupported format" toast — never saved, never linked.
-const SUPPORTED_ATTACH_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif|mp3|wav|ogg|oga|flac|m4a|aac|opus|wma|mka|weba|mp4|webm|mkv|mov|m4v|avi|wmv|mpg|mpeg|flv|pdf)$/i;
+// Deliberately NOT accepted, though they are images/audio/video: ico, avif, ogg,
+// oga, mka, mpg, flv. `weba` stays — it is what Amelie's own voice recorder writes
+// (`rec-….weba`), so dropping it would orphan every recording made in the app.
+const SUPPORTED_ATTACH_RE = /\.(png|jpe?g|gif|webp|svg|bmp|mp3|wav|flac|m4a|aac|opus|wma|weba|mp4|webm|mkv|mov|m4v|avi|wmv|mpeg|pdf)$/i;
 function isSupportedAttachmentName(name) { return SUPPORTED_ATTACH_RE.test(name || ''); }
 // File form: accept by extension, or (for named-less pastes like screenshots) by MIME.
 function isSupportedAttachmentFile(file) {
@@ -7674,7 +7681,7 @@ function setupSplitView() {
       const encNewEsc = esc(encNew);
       const mediaIcon = AUDIO_EXT_RE.test(finalName) ? '🎵'
                       : VIDEO_EXT_RE.test(finalName) ? '🎬'
-                      : /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(finalName) ? '📷'
+                      : /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(finalName) ? '📷'
                       : '';
       if (mediaIcon) {
         updated = updated.replace(
@@ -15478,9 +15485,9 @@ function setupFileDrop() {
     // note rewrite can point at their final (sanitized) names. Only for FOLDER drops
     // (hasDir) — a loose file drop keeps its old behaviour (a single PDF opens in a tab
     // below). Skips hidden dirs (.obsidian/.trash/.stversions/…).
-    const IMG_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i;
+    const IMG_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
     const AV_EXT_RE  = /\.(mp4|mov|webm|mp3|wav|m4a)$/i;
-    const ATT_ANY_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|pdf|mp4|mov|webm|mp3|wav|m4a)$/i;
+    const ATT_ANY_RE = /\.(png|jpe?g|gif|webp|svg|bmp|pdf|mp4|mov|webm|mp3|wav|m4a)$/i;
     const _hiddenRel = (r) => r.split('/').some(s => s.startsWith('.'));
     const _attByBase = new Map(), _attByRel = new Map();
     let mediaImported = 0;

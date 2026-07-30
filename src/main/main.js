@@ -1593,6 +1593,9 @@ app.whenReady().then(async () => {
   // Attachments are served with REAL Range support (206 Partial Content):
   // audio playback issues ranged requests on play/seek, and the legacy
   // registerFileProtocol broke them (MEDIA_ERR_NETWORK mid-playback).
+  // Deliberately still maps formats Amelie no longer IMPORTS (ogg, oga, mka, mpg,
+  // flv): a vault that already holds one keeps serving it with the right type
+  // instead of a download, so nothing that used to play stops playing.
   const MIME_BY_EXT = {
     weba: 'audio/webm', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav',
     ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', flac: 'audio/flac',
@@ -2045,7 +2048,7 @@ ipcMain.handle('vault:importFolder', async (_, rawSrc) => {
   } catch (e) { return { ok: false, error: e.message }; }
 
   const NOTE_EXT = new Set(['.md', '.markdown', '.txt']);
-  const ATT_EXT  = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.pdf']);
+  const ATT_EXT  = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.pdf']);
   let notes = 0, attachments = 0, skipped = 0;
   const errors = [];
 
@@ -2110,9 +2113,9 @@ ipcMain.handle('vault:importObsidian', async (_, rawSrc, destFolder) => {
 
   const SKIP_DIRS  = new Set(['.obsidian', '.trash', '.stversions', '.stfolder', '.git']);
   const NOTE_EXT   = new Set(['.md', '.markdown', '.txt']);
-  const IMG_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i;
+  const IMG_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
   const AV_EXT_RE  = /\.(mp4|mov|webm|mp3|wav|m4a)$/i;
-  const ATT_ANY_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|pdf|mp4|mov|webm|mp3|wav|m4a)$/i;
+  const ATT_ANY_RE = /\.(png|jpe?g|gif|webp|svg|bmp|pdf|mp4|mov|webm|mp3|wav|m4a)$/i;
 
   const noteFiles = [], attFiles = [];
   const walk = (dir, rel) => {
@@ -2657,7 +2660,7 @@ function _rewriteAttachmentLinksInNotes(pairs, key) {
 // to match. Runs on unlock (key available → can rewrite .enc notes; in plaintext-
 // while-open mode files are already plaintext and key is null). New imports already
 // land in videos/ (renderer _attachmentTarget), so on a tidy vault this is a no-op.
-const VIDEO_EXT_RE = /\.(mp4|webm|mkv|mov|m4v|avi|wmv|mpg|mpeg|flv)$/i;
+const VIDEO_EXT_RE = /\.(mp4|webm|mkv|mov|m4v|avi|wmv|mpeg)$/i;
 function migrateVideosToVideosFolder(key) {
   if (!ATTACHMENTS_DIR || !fs.existsSync(ATTACHMENTS_DIR)) return 0;
   const videosDir = path.join(ATTACHMENTS_DIR, 'videos');
@@ -2717,7 +2720,7 @@ function migrateVideosToVideosFolder(key) {
 // used to drop audio there) and the old shared media/ bucket (import used to put
 // audio+video together). New audio already lands in audio/ (renderer
 // _attachmentTarget + importObsidian), so on a tidy vault this is a no-op.
-const AUDIO_EXT_RE = /\.(mp3|wav|m4a|ogg|oga|flac|aac|opus|wma|mka|weba)$/i;
+const AUDIO_EXT_RE = /\.(mp3|wav|m4a|flac|aac|opus|wma|weba)$/i;
 function migrateAudioToAudioFolder(key) {
   if (!ATTACHMENTS_DIR || !fs.existsSync(ATTACHMENTS_DIR)) return 0;
   const audioDir = path.join(ATTACHMENTS_DIR, 'audio');
@@ -2868,6 +2871,9 @@ ipcMain.handle('vault:autoUnlock', async () => {
 function _attachmentStats() {
   const stats = { total: 0, pdf: 0, video: 0, audio: 0, image: 0, script: 0, other: 0 };
   const VIDEO = ['.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v'];
+  // Wider than what Amelie now accepts (.ogg, .avif): these count what is ON DISK, so
+  // a file imported before they were dropped is still counted as audio/image instead of
+  // falling into "other".
   const AUDIO = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.opus', '.aac'];
   const IMAGE = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.avif'];
   const SCRIPT = ['.sh', '.bash', '.zsh', '.py', '.js', '.ts', '.rb', '.pl', '.lua', '.ps1', '.bat'];
@@ -3254,10 +3260,12 @@ ipcMain.handle('attachment:exists', async (_, rel) => {
 // must refuse anything else: without this a compromised renderer (post-XSS)
 // could ask main to read arbitrary files (~/.ssh/id_rsa, /etc/passwd, browser
 // cookie DBs…) into the vault and then read them back → exfiltration.
+// Keep in step with SUPPORTED_ATTACH_RE in the renderer: ico, avif, ogg, oga, mka,
+// mpg and flv are no longer accepted (`weba` is — the voice recorder writes it).
 const IMPORTABLE_ATTACHMENT_EXT = new Set([
-  'png','jpg','jpeg','gif','webp','svg','bmp','ico','avif',                 // images
-  'mp3','wav','m4a','ogg','oga','flac','aac','opus','wma','mka','weba',     // audio
-  'mp4','m4v','mkv','mov','avi','wmv','mpg','mpeg','flv','webm',            // video
+  'png','jpg','jpeg','gif','webp','svg','bmp',                 // images
+  'mp3','wav','m4a','flac','aac','opus','wma','weba',          // audio
+  'mp4','m4v','mkv','mov','avi','wmv','mpeg','webm',           // video
   'pdf',
 ]);
 ipcMain.handle('attachment:importPath', async (_, srcPath, targetName) => {
@@ -3807,7 +3815,7 @@ ipcMain.handle('attachment:openDialog', async () => {
 // SAFETY: if any note can't be read/decrypted we ABORT (throw) rather than risk
 // deleting media referenced by a note we couldn't inspect.
 // PDFs are NEVER swept — see the media matcher below for why.
-const UNUSED_IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif|tiff?)$/i;
+const UNUSED_IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp|tiff?)$/i;
 ipcMain.handle('attachment:removeUnusedMedia', async (_, apply) => {
   if (!ATTACHMENTS_DIR || !fs.existsSync(ATTACHMENTS_DIR)) return { files: [], count: 0, bytes: 0 };
 
@@ -4906,7 +4914,7 @@ function listNotesRecursive(dir, base = '') {
       for (const item of fs.readdirSync(imgDir, { withFileTypes: true })) {
         if (!item.isFile()) continue;
         const logical = stripEnc(item.name);   // drop the at-rest .enc marker
-        if (!/\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i.test(logical)) continue;
+        if (!/\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(logical)) continue;
         const stat = fs.statSync(path.join(imgDir, item.name));
         entries.push({
           type: 'image',
