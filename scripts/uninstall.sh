@@ -31,7 +31,6 @@ echo -e "  ${D}Removing app state (recent, bookmarks, settings)...${N}"
 rm -rf "$HOME/.config/amelie"
 rm -rf "$HOME/.cache/amelie" 2>/dev/null || true
 
-
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
 gtk-update-icon-cache -f "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
 
