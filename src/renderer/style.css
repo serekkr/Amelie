@@ -2087,15 +2087,22 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 /* ✕ on the MAIN pane, split mode only — same look as the split pane's ✕.
    Closing it promotes the split note into the main tab ("close this half"). */
 .split-a-close {
-  /* Clear of the pane's 12px scrollbar (and of the divider between the halves) instead of
-     leaning on it — same offset as the split pane's own buttons, so the two halves match. */
-  display: none; position: absolute; top: 6px; right: 20px; z-index: 3;
+  /* 12px, not the 20px the right half uses: geometrically 20/20 measured the same, but the
+     divider line sits right next to this one, so the gap READ as bigger. Nudged towards the
+     divider until the two halves look alike. Still clear of the pane's scrollbar. */
+  display: none; position: absolute; top: 6px; right: 12px; z-index: 3;
   background: var(--bg-2); border: 1px solid var(--border);
   color: var(--text-3); cursor: pointer;
   font-size: 12px; line-height: 1; padding: 3px 6px; border-radius: 4px;
   align-items: center; justify-content: center;
 }
 body.split-open .split-a-close { display: flex; }
+/* Reading mode: #preview-pane is itself the scroller, so `right` is measured INSIDE its
+   scrollbar and the ✕ landed 12px further left than while editing (where the scroller is a
+   child and the pane is a stable anchor, as in the other half). Reserve the gutter always
+   and cancel the offset, so the button sits in the same place in both modes. */
+#preview-pane { scrollbar-gutter: stable; }
+#preview-pane > .split-a-close { right: 0; }
 .split-a-close:hover { background: var(--bg-3); color: var(--text-0); }
 /* Focus ring: in split mode the pane that owns the header title (the last one
    clicked) carries a subtle inner accent line, so it's always obvious which
