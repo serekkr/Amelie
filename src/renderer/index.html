@@ -352,8 +352,9 @@
                 <div id="split-resizer" style="display:none"></div>
                 <!-- Secondary split pane: its own note, mode toggle and close -->
                 <div id="editor-pane-b" style="display:none">
+                  <!-- Only ✕ here: edit/view is the note's own toggle in the header, which now
+                       applies to both halves at once. -->
                   <div id="split-b-actions">
-                    <button id="split-b-mode" title="Anteprima" data-i18n-title="toolbar.view_tip"></button>
                     <button id="split-b-close" title="Chiudi vista affiancata">✕</button>
                   </div>
                   <textarea id="markdown-editor-b" spellcheck="true"></textarea>

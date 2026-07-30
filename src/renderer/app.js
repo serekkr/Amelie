@@ -4784,6 +4784,9 @@ function setViewMode(mode, opts) {
   state.viewMode = mode;
   updateModeToggle(mode);
   _updateWritingControls(mode);
+  // One toggle for the whole note: the split half had its own edit/view button, which meant
+  // two controls doing the same thing and two halves that could disagree. It follows this one.
+  if (_splitPath) { try { setSplitMode(mode); } catch (_) {} }
   try { if (typeof _vcHideBubble === 'function') _vcHideBubble(); } catch (_) {}
   if (mode === 'edit') {
     editorPane.style.display = 'flex';
@@ -7407,7 +7410,7 @@ let _splitPath = null;
 let _splitSyncing = false;
 let _splitBasis = null;       // the pane's size (e.g. '35%' or '407px'), so reopening keeps it
 let _splitOrient = 'right';   // 'right' = side-by-side, 'down' = stacked
-let _splitMode = 'edit';      // edit | view — independent from the main pane
+let _splitMode = 'edit';      // edit | view — follows the note's own toggle, for both halves
 let _focusedPane = 'main';    // main | split — last pane the user interacted with
 
 // orient: 'right' (side-by-side) or 'down' (stacked vertically).
@@ -7470,8 +7473,8 @@ function openSplitView(path, name, orient = 'right') {
   paneB.style.display = 'flex';
   if (resizer) resizer.style.display = 'block';
   document.body.classList.add('split-open');
-  if (_splitMode === 'view') renderSplitPreview();
-  updateSplitModeBtn();
+  // A freshly opened half starts in the note's current mode, so the two never disagree.
+  try { setSplitMode(state.viewMode === 'view' ? 'view' : 'edit'); } catch (_) {}
   updatePaneMetaChips();
   setFocusedPane(_focusedPane);   // refresh title + focus ring
 }
@@ -7656,16 +7659,6 @@ function setSplitMode(mode) {
     edB.style.display = 'block';
     edB.focus();
   }
-  updateSplitModeBtn();
-}
-
-function updateSplitModeBtn() {
-  const btn = $('split-b-mode');
-  if (!btn) return;
-  const goingToView = (_splitMode === 'edit');
-  btn.innerHTML = goingToView ? _VIEW_ICON : _EDIT_ICON;
-  btn.title = window.i18n.t(goingToView ? 'toolbar.view_tip' : 'toolbar.edit_tip');
-  btn.removeAttribute('data-tip');
 }
 
 // Clone every CSS rule that targets #preview-content onto #preview-content-b
@@ -7863,12 +7856,7 @@ function setupSplitView() {
     pane.appendChild(btn);
   });
 
-  // Edit/view toggle of the split pane (independent from the main pane).
-  const modeBtn = $('split-b-mode');
-  if (modeBtn) {
-    modeBtn.addEventListener('click', () => setSplitMode(_splitMode === 'edit' ? 'view' : 'edit'));
-    updateSplitModeBtn();
-  }
+  // No edit/view button in the split half any more — the note's own toggle drives both.
 
   // Focus tracking: the last pane the user CLICKED receives the notes clicked
   // in the sidebar (see openTab), the header title and the focus ring.

@@ -2072,14 +2072,13 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   position: absolute; top: 6px; right: 20px; z-index: 3;
   display: flex; gap: 4px;
 }
-#split-b-mode, #split-b-close {
+#split-b-close {
   background: var(--bg-2); border: 1px solid var(--border);
   color: var(--text-3); cursor: pointer;
   font-size: 12px; line-height: 1; padding: 3px 6px; border-radius: 4px;
   display: flex; align-items: center; justify-content: center;
 }
-#split-b-mode svg { width: 13px; height: 13px; }
-#split-b-mode:hover, #split-b-close:hover { background: var(--bg-3); color: var(--text-0); }
+#split-b-close:hover { background: var(--bg-3); color: var(--text-0); }
 /* The per-pane "created · last edited" chips that used to float in each pane's
    bottom-right corner are gone (they sat over the text). The header's own dates row stays
    visible in split mode instead, so the information is still one glance away. */
