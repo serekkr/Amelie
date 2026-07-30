@@ -44,7 +44,7 @@
   /* Appearance — tunable from settings */
   --tree-item-py: 1px;
   --tree-font-size: 13px;
-  --editor-font-size: 13px;
+  --editor-font-size: 14px;
   --editor-line-height: 1.85;
   --editor-font-family: var(--editor-font);
 }

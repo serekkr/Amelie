@@ -1431,7 +1431,7 @@ const FONT_ORDER = [
 // Apply appearance vars to :root
 function applyAppearance(prefs = {}) {
   const root = document.documentElement;
-  const edSize    = prefs.editorFontSize  ?? 13;
+  const edSize    = prefs.editorFontSize  ?? 14;
   const treePy    = prefs.treeSpacing     ?? 3;
   const treeSize  = prefs.treeFontSize    ?? 13;
   const fontKey   = prefs.editorFont      ?? 'roboto';
@@ -1555,7 +1555,7 @@ function setupFontDropdown() {
 // sliders. Each lists discrete values over its old slider range; picking one applies
 // + persists via applyAppearance (which also refreshes the button label).
 const NUMBER_DROPDOWNS = [
-  { ddId: 'edsize-dd', key: 'editorFontSize', min: 9,  max: 22,  step: 1, unit: 'px', def: 13  },
+  { ddId: 'edsize-dd', key: 'editorFontSize', min: 9,  max: 22,  step: 1, unit: 'px', def: 14  },
   { ddId: 'treesp-dd', key: 'treeSpacing',    min: 1,  max: 10,  step: 1, unit: 'px', def: 3   },
   { ddId: 'treesz-dd', key: 'treeFontSize',   min: 11, max: 18,  step: 1, unit: 'px', def: 13  },
   { ddId: 'tbsize-dd', key: 'toolbarZoom',    min: 70, max: 160, step: 5, unit: '%',  def: 100 },
@@ -4192,7 +4192,7 @@ function setupEditor() {
 // ─── Note content zoom (Ctrl+= / Ctrl+- / Ctrl+0 / Ctrl+wheel) ─────────────
 
 const NOTE_ZOOM_KEY = 'amelie.noteZoom';
-const NOTE_ZOOM_BASE = 13; // px — must match --editor-font-size default
+const NOTE_ZOOM_BASE = 14; // px — must match --editor-font-size default
 let _noteZoom = parseInt(localStorage.getItem(NOTE_ZOOM_KEY), 10) || 100;
 // One-time readability bump for EXISTING users only: raise a small note zoom once.
 // A FRESH install stays at 100% so the editor matches the chosen font size (13px)
@@ -4234,13 +4234,20 @@ function setupNoteZoom() {
   // v979: the editor font size is now driven by the 'editorFontSize' appearance pref
   // (the settings dropdown), used as applyNoteZoom's base. Seed it once to
   // NOTE_ZOOM_BASE so the dropdown is authoritative and matches the intended default.
-  // Bump the key (v2, v980: default 14→13) to re-seed everyone to the new base once.
+  // Bump the key (v2, v980: default 14→13; v3, v1.0.18: 13→14) to carry a new base to
+  // profiles that already exist — a saved size otherwise keeps the old value and the
+  // change reaches nobody who has used Amelie before. Unlike v2, which overwrote the
+  // size whatever it was, this only moves a profile still sitting on the PREVIOUS
+  // default: a size someone picked on purpose (11, 18…) is theirs, not ours to raise.
+  const ED_SIZE_PREV_DEFAULT = 13;
   try {
-    if (!localStorage.getItem('amelie.edFontSize.unify-v2')) {
+    if (!localStorage.getItem('amelie.edFontSize.unify-v3')) {
       const ap = loadAppearance();
-      ap.editorFontSize = NOTE_ZOOM_BASE;
-      applyAppearance(ap);   // persists + refreshes the dropdown label
-      localStorage.setItem('amelie.edFontSize.unify-v2', '1');
+      if ((ap.editorFontSize ?? ED_SIZE_PREV_DEFAULT) === ED_SIZE_PREV_DEFAULT) {
+        ap.editorFontSize = NOTE_ZOOM_BASE;
+        applyAppearance(ap);   // persists + refreshes the dropdown label
+      }
+      localStorage.setItem('amelie.edFontSize.unify-v3', '1');
     }
   } catch (_) {}
   applyNoteZoom();
@@ -11428,7 +11435,7 @@ async function openSettings() {
   document.querySelectorAll('.theme-card').forEach(c =>
     c.classList.toggle('active', c.dataset.theme === state.theme));
   const ap = loadAppearance();
-  const edSize   = ap.editorFontSize ?? 13;
+  const edSize   = ap.editorFontSize ?? 14;
   const treePy   = ap.treeSpacing    ?? 3;
   const treeSize = ap.treeFontSize   ?? 13;
   const fontKey  = ap.editorFont     ?? 'jetbrains';
