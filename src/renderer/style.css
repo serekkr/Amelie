@@ -3566,9 +3566,16 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 .todo-row.done .todo-title { color: var(--text-3); text-decoration: line-through; }
 .todo-chip { align-self: flex-start; font-family: var(--editor-font); font-size: 11px; color: var(--text-0); background: var(--bg-3); border-radius: 6px; padding: 2px 7px; }
 .todo-chip.overdue { color: var(--red); }
-.todo-row-actions { display: flex; gap: 4px; opacity: 0; transition: opacity .12s; }
+.todo-row-actions { display: flex; gap: 6px; opacity: 0; transition: opacity .12s; }
 .todo-row:hover .todo-row-actions { opacity: 1; }
-.todo-row-btn { width: 24px; height: 24px; border: none; background: transparent; color: var(--text-3); border-radius: 6px; cursor: pointer; font-size: 14px; }
+/* Bigger and less faint than they were (24px box, 14px glyph, --text-3): a control that only
+   appears on hover has one moment to be seen, and » and × are thin marks. */
+.todo-row-btn {
+  width: 30px; height: 30px; border: none; background: transparent;
+  color: var(--text-2); border-radius: 7px; cursor: pointer;
+  font-size: 20px; line-height: 1; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
 .todo-row-btn:hover { background: var(--bg-4); color: var(--text-0); }
 .todo-row-btn.del:hover { color: var(--red); }
 
