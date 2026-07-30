@@ -2467,8 +2467,8 @@ body.split-open .pane-flash::after {
   -webkit-app-region: no-drag;
 }
 #canvas-title {
-  /* Label, not a heading — same as the graph's title, which the user un-bolded first. */
-  font-family: var(--ui-font); font-weight: 400;
+  /* Semi-bold here by choice: only the PDF and the graph titles were asked to be lighter. */
+  font-family: var(--ui-font); font-weight: 500;
   font-size: 13px; color: var(--text-0);
 }
 #canvas-header-actions { flex: 1; display: flex; align-items: center; gap: 8px; }
@@ -2931,7 +2931,7 @@ body.split-open .pane-flash::after {
   background: var(--bg-1); flex-shrink: 0; -webkit-app-region: no-drag;
 }
 #img-view-title {
-  font-family: var(--ui-font); font-weight: 400;
+  font-family: var(--ui-font); font-weight: 500;
   font-size: 15px; color: var(--text-0); flex: 1;
 }
 #img-view-tools { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -2959,7 +2959,7 @@ body.split-open .pane-flash::after {
   background: var(--bg-1); flex-shrink: 0; -webkit-app-region: no-drag;
 }
 #media-view-title {
-  font-family: var(--ui-font); font-weight: 400;
+  font-family: var(--ui-font); font-weight: 500;
   font-size: 15px; color: var(--text-0); flex: 1;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
