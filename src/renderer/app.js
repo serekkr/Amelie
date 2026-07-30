@@ -7471,27 +7471,12 @@ function _fmtNoteDate(dt) {
   return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear()
     + ' · ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
-function _setPaneChip(paneId, node) {
-  const pane = $(paneId);
-  if (!pane) return;
-  let chip = pane.querySelector(':scope > .pane-meta-chip');
-  if (!node) { if (chip) chip.remove(); return; }
-  if (!chip) {
-    chip = document.createElement('div');
-    chip.className = 'pane-meta-chip';
-    pane.appendChild(chip);
-  }
-  const creL = window.i18n.t('meta.created');
-  const modL = window.i18n.t('meta.last_edited');
-  chip.textContent = `${creL} ${_fmtNoteDate(node.created || node.modified)}  ·  ${modL} ${_fmtNoteDate(node.modified)}`;
-}
+// The floating "created · last edited" chip each pane carried in split mode is gone — it
+// sat on top of the text in the corner. The header's dates row is no longer hidden while
+// splitting, so the information is still there. Kept as a no-op that also SWEEPS any chip
+// left in the DOM, so nothing lingers for someone updating mid-session.
 function updatePaneMetaChips() {
-  const on = !!_splitPath;
-  const t = getActiveTab();
-  const mainNode = (on && t && t.path) ? (_findNode(t.path) || t) : null;
-  _setPaneChip('editor-pane', mainNode);
-  _setPaneChip('preview-pane', mainNode);
-  _setPaneChip('editor-pane-b', on ? (_findNode(_splitPath) || { modified: null }) : null);
+  document.querySelectorAll('.pane-meta-chip').forEach(el => el.remove());
 }
 
 // Central focus switch: remembers the pane, updates the header title and the

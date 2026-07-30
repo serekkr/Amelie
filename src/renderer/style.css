@@ -2080,23 +2080,17 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 }
 #split-b-mode svg { width: 13px; height: 13px; }
 #split-b-mode:hover, #split-b-close:hover { background: var(--bg-3); color: var(--text-0); }
-/* While the split pane is open the header dates row is hidden: each pane
-   carries its OWN "created · last edited" chip instead (bottom-right corner,
-   see updatePaneMetaChips in app.js). */
-body.split-open #note-header-meta { display: none; }
-.pane-meta-chip {
-  position: absolute; right: 14px; bottom: 8px; z-index: 3;
-  font-family: var(--ui-font); font-size: 11px; color: var(--text-3);
-  background: var(--bg-1); border: 1px solid var(--border); border-radius: 5px;
-  padding: 2px 8px; pointer-events: none; opacity: .9;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;
-}
+/* The per-pane "created · last edited" chips that used to float in each pane's
+   bottom-right corner are gone (they sat over the text). The header's own dates row stays
+   visible in split mode instead, so the information is still one glance away. */
 /* The chips need a positioning context on every pane */
 #preview-pane { position: relative; }
 /* ✕ on the MAIN pane, split mode only — same look as the split pane's ✕.
    Closing it promotes the split note into the main tab ("close this half"). */
 .split-a-close {
-  display: none; position: absolute; top: 6px; right: 8px; z-index: 3;
+  /* Clear of the pane's 12px scrollbar (and of the divider between the halves) instead of
+     leaning on it — same offset as the split pane's own buttons, so the two halves match. */
+  display: none; position: absolute; top: 6px; right: 20px; z-index: 3;
   background: var(--bg-2); border: 1px solid var(--border);
   color: var(--text-3); cursor: pointer;
   font-size: 12px; line-height: 1; padding: 3px 6px; border-radius: 4px;
