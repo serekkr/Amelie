@@ -16102,6 +16102,7 @@ function renderRecentView() {
     const row = document.createElement('div'); row.className = 'simple-row';
     const main = document.createElement('div'); main.className = 'simple-main';
     const name = document.createElement('div'); name.className = 'simple-name'; name.textContent = it.name;
+    if (it.path) name.title = it.path;   // hover shows where it lives, as in Bookmarks and Tags
     main.appendChild(name);
     if (mod) { const sub = document.createElement('div'); sub.className = 'simple-sub'; sub.textContent = window.i18n.t('recent.modified') + ' ' + _fmtDateDMY(mod); main.appendChild(sub); }
     main.addEventListener('click', () => _openByPath(it.path, it.name));
@@ -16117,6 +16118,9 @@ function renderBookmarksView() {
   b.forEach(it => {
     const removeFn = () => { toggleBookmark({ path: it.path }); renderBookmarksView(); };
     const row = _simpleRow(it.name, () => _openByPath(it.path, it.name), removeFn);
+    // Hovering shows where the note lives, as the tags view does for its source notes: the
+    // list only has room for the name, and two notes can share one.
+    if (it.path) { const n = row.querySelector('.simple-name'); if (n) n.title = it.path; }
     // For the search bar filter: note name and path.
     row.dataset.name = ((it.name || '') + '\n' + (it.path || '')).toLowerCase();
     // Right-click → remove from bookmarks (no extra tab opened).
