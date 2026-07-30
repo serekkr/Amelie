@@ -16586,6 +16586,14 @@ function _clearAllEventNotifs() {
   if (_sidebarView === 'notifications') renderNotificationsView();
   const pop = $('notif-popup'); if (pop && pop.style.display !== 'none') toggleNotifPopup();
 }
+// "Clear all" as the user means it: mark everything currently listed as read, deadlines
+// included. Coming back after a few days away, the bell holds every deadline that expired
+// meanwhile, and dismissing them one by one is not a plan. Dismissing a deadline only
+// silences the notification — the task itself stays on the board, untouched.
+function _clearAllNotifs() {
+  _dueTodos().forEach(it => _dismissNotif(it));
+  _clearAllEventNotifs();          // also refreshes the bell / closes the popup
+}
 function _fmtNotifTime(ts) {
   try {
     const d = new Date(ts), p = n => String(n).padStart(2, '0');
@@ -16645,6 +16653,13 @@ function toggleNotifPopup() {
   const list = $('notif-popup-list'); list.innerHTML = '';
   const items = _dueTodos();
   if (!items.length && !_eventNotifs.length) { list.innerHTML = `<div class="notif-empty">${window.i18n.t('todo.no_due')}</div>`; }
+  if (items.length || _eventNotifs.length) {
+    const bar = document.createElement('div'); bar.className = 'notif-clear-bar';
+    const clr = document.createElement('button'); clr.className = 'notif-clear-all';
+    clr.textContent = window.i18n.t('notif.clear_all');
+    clr.addEventListener('click', (e) => { e.stopPropagation(); _clearAllNotifs(); });
+    bar.appendChild(clr); list.appendChild(bar);
+  }
   // Event notifications (backup done, etc.) — newest first, with their time.
   _eventNotifs.forEach(ev => {
     const row = document.createElement('div'); row.className = 'notif-row';
@@ -16716,12 +16731,14 @@ function switchSidebarView(view) {
 function renderNotificationsView() {
   const c = $('notifications-list'); if (!c) return; c.innerHTML = '';
   const items = _dueTodos();
-  // "Svuota tutto" — clear the whole event-notification log in one click.
-  if (_eventNotifs.length) {
+  // "Clear all" — mark everything shown as read, deadlines included (it used to appear
+  // only when there were backup/sync events, so a screen full of expired deadlines had
+  // no way out but one × at a time).
+  if (_eventNotifs.length || items.length) {
     const bar = document.createElement('div'); bar.className = 'notif-clear-bar';
     const btn = document.createElement('button'); btn.className = 'notif-clear-all';
     btn.textContent = window.i18n.t('notif.clear_all');
-    btn.addEventListener('click', () => _clearAllEventNotifs());
+    btn.addEventListener('click', () => _clearAllNotifs());
     bar.appendChild(btn); c.appendChild(bar);
   }
   // Event notifications (backup done, etc.) first, with their time.
