@@ -454,25 +454,20 @@ async function switchTab(idx) {
   try { updateTitleForFocus(); } catch (_) {}
 }
 
-// The note the OPEN split belongs to (the pane is shown for one note at a time).
-function _splitOwnerPath() {
-  const t = tabs.find(x => x && x.split && x.split.path === _splitPath);
-  return t && t.split ? t.split.owner : null;
-}
-
 // Bring the split pane in line with the tab being shown.
+// Each tab carries its own split (or none). Called from switchTab, and from the paths that
+// change which note the tab shows — the pane is pinned to the TAB, so it stays put while the
+// main half moves from note to note.
 function _applyTabSplit(tab) {
-  // Only for the note it was opened from. A tab showing something else comes up whole, and
-  // the memory is kept: come back to that note and its pane is there again.
-  const want = tab && tab.split && tab.split.path && tab.split.owner === tab.path ? tab.split : null;
+  const want = tab && tab.split && tab.split.path ? tab.split : null;
   const paneB = $('editor-pane-b');
   const paneOpen = !!paneB && paneB.style.display !== 'none';
-  // Leaving a pane behind: store the size it is at, so returning restores the divider where
-  // the user left it rather than back at the middle.
+  // Store the size the open pane is at, so a tab you come back to reopens with the divider
+  // where you left it instead of back at the middle.
   if (paneOpen && paneB) {
     const live = paneB.style.flexBasis || (paneB.style.flex || '').split(' ').pop();
     if (live && live !== '0%' && live !== 'auto') _splitBasis = live;
-    const host = tabs.find(t => t && t.split && t.split.owner === _splitOwnerPath());
+    const host = tabs.find(t => t && t.split && t.split.path === _splitPath);
     if (host && host.split) host.split.basis = _splitBasis;
   }
   if (want) {
@@ -480,8 +475,8 @@ function _applyTabSplit(tab) {
     if (_splitPath !== want.path || !paneOpen) openSplitView(want.path, want.name, want.orient);
     return;
   }
-  // Nothing to show here. Close the pane WITHOUT forgetting: closeSplitView() deletes the
-  // record, which is right when the user closes it but not when they merely moved away.
+  // This tab has no split. Close the pane WITHOUT forgetting anything: closeSplitView()
+  // clears the ACTIVE tab's record, which is right when the user closes it themselves.
   if (_splitPath || paneOpen) {
     const keep = tab && tab.split;
     closeSplitView();
@@ -7426,13 +7421,11 @@ function openSplitView(path, name, orient = 'right') {
   // `owner` is the note the split was opened FROM: clicking a note in the tree reuses the
   // same tab rather than opening a new one, so keying on the tab object alone let the pane
   // follow you onto every note you opened next.
-  // Recorded for ANY split, including the common one: right-click a tab → Split, which puts
-  // the SAME note in both halves. An earlier `host.path !== path` guard skipped exactly that
-  // case, so the pane was never remembered and never came back.
+  // The pane is PINNED to the tab, not to a note: it keeps showing its own note while you
+  // open other notes in the main half, and closes only when you close it. Recorded on the
+  // tab so the other tabs stay whole and this one gets its pane back.
   const _host = getActiveTab();
-  if (_host && _host.path) {
-    _host.split = { path, name: name || null, orient: _splitOrient, owner: _host.path, basis: _splitBasis };
-  }
+  if (_host) _host.split = { path, name: name || null, orient: _splitOrient, basis: _splitBasis };
   const paneB = $('editor-pane-b');
   const edB = $('markdown-editor-b');
   const resizer = $('split-resizer');
