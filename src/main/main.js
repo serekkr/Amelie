@@ -3235,10 +3235,18 @@ async function saveAttachmentBuffer(originalName, buffer) {
   // returned LOGICAL leaf (no .enc) keeps the real extension for mime detection.
   writeAttachmentFile(path.join(destDir, leaf), fs.readFileSync(tmp));
   fs.rmSync(tmp, { force: true });
-  return subDir ? `${subDir}/${leaf}` : leaf;   // e.g. "scripts/deploy.sh"
+  return subDir ? `${subDir}/${leaf}` : leaf;   // e.g. "audio/rec-20260730-1015.weba"
 }
 
 ipcMain.handle('attachment:save', async (_, originalName, buffer) => {
+  // The BYTES route (paste, drop, voice recorder) had NO check here: the renderer's own
+  // predicate was the only thing between a .zip or a .sh and the vault, so a compromised
+  // renderer could plant any file it liked — while the path route below was properly
+  // gated. Same allowlist for both. Tested on the extension actually STORED, because
+  // saveAttachmentBuffer gives a name that has none the default .png: a name-less pasted
+  // blob must still be accepted.
+  const _saveExt = (path.extname(String(originalName || '')) || '.png').slice(1).toLowerCase();
+  if (!IMPORTABLE_ATTACHMENT_EXT.has(_saveExt)) throw new Error('Unsupported attachment type');
   const r = await saveAttachmentBuffer(originalName, buffer);
   if (syncManager) syncManager.scheduleSync();   // realtime sync: media counts as a change
   return r;
@@ -3255,11 +3263,12 @@ ipcMain.handle('attachment:exists', async (_, rel) => {
 // Import an attachment from a LOCAL file path (paste of a file copied in the
 // file manager: the clipboard only carries a file:// URI, not the bytes).
 // targetName decides the subfolder routing (e.g. "video/clip.mp4").
-// Attachment types Amelie actually supports (images / audio / video / pdf).
-// attachment:importPath reads a renderer-supplied absolute path off disk, so it
-// must refuse anything else: without this a compromised renderer (post-XSS)
-// could ask main to read arbitrary files (~/.ssh/id_rsa, /etc/passwd, browser
-// cookie DBs…) into the vault and then read them back → exfiltration.
+// Attachment types Amelie actually supports (images / audio / video / pdf) — the gate
+// for BOTH routes into the vault: attachment:save (bytes from the renderer) and
+// attachment:importPath (a path main reads off disk). importPath is the dangerous one:
+// without the check a compromised renderer (post-XSS) could ask main to read arbitrary
+// files (~/.ssh/id_rsa, /etc/passwd, browser cookie DBs…) into the vault and then read
+// them back → exfiltration. Never trust the renderer's own predicate for this.
 // Keep in step with SUPPORTED_ATTACH_RE in the renderer: ico, avif, ogg, oga, mka,
 // mpg and flv are no longer accepted (`weba` is — the voice recorder writes it).
 const IMPORTABLE_ATTACHMENT_EXT = new Set([

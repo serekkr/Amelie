@@ -3881,6 +3881,10 @@ function setupEditor() {
     return false;
   };
   const _isTooLargeErr = (err) => /ATTACHMENT_TOO_LARGE/.test(err?.message || String(err || ''));
+  // Main has the final say on the format (its allowlist is the one that cannot be
+  // bypassed), so its refusal has to reach the user: a paste whose type looked fine
+  // here but whose extension main rejects would otherwise fail in silence.
+  const _isUnsupportedErr = (err) => /Unsupported attachment type/.test(err?.message || String(err || ''));
   // Block the middle-mouse-button "primary selection" paste (X11/Linux/Wayland):
   // a middle click in the editor would otherwise paste whatever text is selected
   // elsewhere. The user only wants explicit Ctrl+V pastes. preventDefault on the
@@ -4015,7 +4019,11 @@ function setupEditor() {
         const name = await window.inkwell.saveAttachment(target, new Uint8Array(buf));
         insertAttachmentRef(name);
         saved++;
-      } catch (err) { console.error('Paste save failed:', file.name, err); if (_isTooLargeErr(err)) showToast(window.i18n.t('attach.too_large')); }
+      } catch (err) {
+        console.error('Paste save failed:', file.name, err);
+        if (_isTooLargeErr(err)) showToast(window.i18n.t('attach.too_large'));
+        else if (_isUnsupportedErr(err)) showToast(window.i18n.t('attach.unsupported_format'));
+      }
     }
   };
   editor.addEventListener('paste', _editorPasteHandler);
@@ -4118,7 +4126,11 @@ function setupEditor() {
         const buf = await file.arrayBuffer();
         const name = await window.inkwell.saveAttachment(_attachmentTarget(file.name || 'file'), new Uint8Array(buf));
         insertAttachmentRef(name);
-      } catch (err) { console.error('Drop save failed:', file.name, err); if (_isTooLargeErr(err)) showToast(window.i18n.t('attach.too_large')); }
+      } catch (err) {
+        console.error('Drop save failed:', file.name, err);
+        if (_isTooLargeErr(err)) showToast(window.i18n.t('attach.too_large'));
+        else if (_isUnsupportedErr(err)) showToast(window.i18n.t('attach.unsupported_format'));
+      }
     }
   };
   editor.addEventListener('drop', _editorDropHandler);
@@ -4412,12 +4424,24 @@ const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
 // (`rec-….weba`), so dropping it would orphan every recording made in the app.
 const SUPPORTED_ATTACH_RE = /\.(png|jpe?g|gif|webp|svg|bmp|mp3|wav|flac|m4a|aac|opus|wma|weba|mp4|webm|mkv|mov|m4v|avi|wmv|mpeg|pdf)$/i;
 function isSupportedAttachmentName(name) { return SUPPORTED_ATTACH_RE.test(name || ''); }
-// File form: accept by extension, or (for named-less pastes like screenshots) by MIME.
+// The types a clipboard/drop item may be accepted BY, when its name carries no usable
+// extension — a pasted screenshot often arrives as a nameless `image/png` blob. Only
+// the formats above are listed: the previous check asked `/^(image|audio|video)\//`,
+// which let every removed format straight back in (an `audio/ogg`, an `image/avif` or
+// an `image/tiff` was "an audio/an image", so it passed). Absent on purpose:
+// audio/ogg, image/avif, image/x-icon, image/tiff, video/x-flv.
+const SUPPORTED_ATTACH_MIME = new Set([
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/x-ms-bmp',
+  'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/flac', 'audio/x-flac',
+  'audio/mp4', 'audio/aac', 'audio/webm', 'audio/x-ms-wma',
+  'video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/x-msvideo',
+  'video/x-ms-wmv', 'video/mpeg', 'application/pdf',
+]);
+// File form: accept by extension, or (for name-less pastes like screenshots) by MIME.
 function isSupportedAttachmentFile(file) {
   if (!file) return false;
   if (isSupportedAttachmentName(file.name)) return true;
-  const t = file.type || '';
-  return /^(image|audio|video)\//.test(t) || t === 'application/pdf';
+  return SUPPORTED_ATTACH_MIME.has((file.type || '').toLowerCase());
 }
 function _attachmentTarget(name) {
   if (/\.pdf$/i.test(name)) return 'pdf/' + name;
