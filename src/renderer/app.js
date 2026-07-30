@@ -3038,13 +3038,22 @@ function loadFrontmatterPanel(tab) {
   updateMetaRows(state.viewMode === 'edit');
 }
 
+// A row shows whenever the field has something in it, in BOTH modes: hiding tags and
+// source while reading took 48px out of the header, so everything under it — the toolbar
+// and the search in it — jumped up on every edit⇄view toggle. While reading the fields are
+// read-only, so the row is information rather than a control.
 function updateMetaRows(editMode) {
   const tagsRow   = $('meta-row-tags');
   const srcRow    = $('meta-row-source');
   const tagsVal   = ($('fm-tags')   || {}).value || '';
   const srcVal    = ($('fm-source') || {}).value || '';
-  if (tagsRow)  tagsRow.style.display   = (editMode && tagsVal)   ? 'flex' : 'none';
-  if (srcRow)   srcRow.style.display    = (editMode && srcVal)    ? 'flex' : 'none';
+  if (tagsRow)  tagsRow.style.display   = tagsVal ? 'flex' : 'none';
+  if (srcRow)   srcRow.style.display    = srcVal  ? 'flex' : 'none';
+  [['fm-tags', tagsRow], ['fm-source', srcRow]].forEach(([id, row]) => {
+    const el = $(id);
+    if (el) el.readOnly = !editMode;
+    if (row) row.classList.toggle('reading', !editMode);
+  });
 }
 
 function setupFrontmatter() {

@@ -703,6 +703,10 @@ kbd {
 }
 .meta-field-input:focus { border-bottom-color: var(--border-light); color: var(--text-0); }
 .meta-field-input::placeholder { color: var(--text-3); }
+/* Reading view: the row is there to be read, not typed into — no caret, no focus ring,
+   and the hover tooltip on a long source URL still works. */
+.note-meta-row.reading .meta-field-input { cursor: default; caret-color: transparent; }
+.note-meta-row.reading .meta-field-input:focus { border-bottom-color: transparent; }
 
 /* ─── Editor toolbar ────────────────────────────────────────── */
 #editor-toolbar {
