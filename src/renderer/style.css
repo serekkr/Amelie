@@ -1107,7 +1107,9 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #preview-content a:visited { color: #a07ddc; }
 
 #preview-content code {
-  font-family: var(--code-font); font-size: .88em; font-style: normal;
+  /* .95em — a hair under the note's text (19 against 20), and a ratio rather than a
+     fixed size so it holds at every setting and under Ctrl+wheel. */
+  font-family: var(--code-font); font-size: .95em; font-style: normal;
   background: var(--bg-2); border: 1px solid var(--border);
   border-radius: 3px; padding: 1px 5px; color: var(--accent);
 }
@@ -1122,10 +1124,8 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #preview-content pre code {
   background: none; border: none; padding: 0; color: var(--text-0);
   font-style: normal; font-family: var(--code-font);
-  /* Block code was inheriting the inline-code .88em (~14px at the 16px base) which
-     felt too small. Bump ~1px to .94em (~15px) — still a touch smaller than normal
-     body text, as intended. Inline `code` keeps its .88em. */
-  font-size: .94em;
+  /* .95em like inline code: 19 where the note text is 20. */
+  font-size: .95em;
 }
 #preview-content blockquote {
   border-left: 3px solid var(--accent-dim); margin: 1em 0;
@@ -2776,10 +2776,10 @@ body.split-open .pane-flash::after {
   /* --editor-font-FAMILY, the font actually chosen in Settings: the raw --editor-font that
      used to be here is the built-in default, so tables ignored your choice while the text
      around them followed it. */
-  /* .93em, not a fixed 13px: the size you pick in Settings (and Ctrl+wheel) changes the note's
+  /* 1em, not a fixed 13px: the size you pick in Settings (and Ctrl+wheel) changes the note's
      font size, and a table full of hard pixels stayed behind while the text around it grew.
-     Slightly smaller than the body, which is the density this had at 13 against 14. */
-  margin: 1em 0; font-family: var(--editor-font-family); font-size: .93em;
+     .95em: 19 where the note text is 20, the same step down as the code. */
+  margin: 1em 0; font-family: var(--editor-font-family); font-size: .95em;
 }
 #preview-content th, #preview-content td {
   border: 1px solid var(--border-light);
