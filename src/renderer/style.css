@@ -357,13 +357,18 @@ html.is-mac #titlebar { padding-left: 72px; }
   display: flex; align-items: center; gap: 6px; padding: 0 8px;
   -webkit-app-region: no-drag;
 }
-/* Hairline between the new-tab + and the settings gear: same 1px line the editor toolbar
-   uses, so the title bar doesn't invent a look of its own. The negative left margin eats
-   part of the container's 8px padding, keeping the line nearer the + than the gear. */
-#titlebar-actions .titlebar-sep {
-  width: 1px; height: 16px; flex-shrink: 0;
-  background: var(--border); margin-left: -2px;
+/* Hairline flanking the new-tab +, one on each side: same 1px line the editor toolbar
+   uses, so the title bar doesn't invent a look of its own. Both sides are alike — the left
+   one used to be the button's own full-height border-right, which made the two sides of the
+   same button look unrelated. `align-self: center` keeps them short and centred inside the
+   stretch-aligned bar. */
+.titlebar-sep {
+  width: 1px; height: 16px; flex-shrink: 0; align-self: center;
+  background: var(--border);
 }
+#tab-bar .titlebar-sep { margin-right: 6px; }
+/* Eats part of #titlebar-actions' 8px padding, so the air matches the left side. */
+#titlebar-actions .titlebar-sep { margin-left: -2px; }
 /* Sync state is shown by coloring the sync icon itself (no separate dot). */
 #sync-status, #backup-status { display: inline-flex; align-items: center; transition: color .3s; }
 #sync-status.sync-idle,    #backup-status.sync-idle    { color: inherit; }
@@ -1890,7 +1895,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 
 #tab-new-btn {
   width: 38px; flex-shrink: 0;
-  background: transparent; border: none; border-left: 1px solid var(--border);
+  background: transparent; border: none;   /* its dividers are .titlebar-sep, both sides */
   cursor: pointer; color: var(--text-1);
   display: flex; align-items: center; justify-content: center;
   transition: color .15s, background .15s;
