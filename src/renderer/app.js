@@ -7519,7 +7519,7 @@ function setFocusedPane(which, opts) {
   if (split && (prev !== _focusedPane || (opts && opts.flash))) _flashFocusedPane();
 }
 
-// A 2-second frame around the selected half, then gone. The class is removed afterwards so
+// A 1-second frame around the selected half, then gone. The class is removed afterwards so
 // selecting again re-triggers the animation from the start.
 let _paneFlashTimer = null;
 function _flashFocusedPane() {
@@ -7529,7 +7529,7 @@ function _flashFocusedPane() {
   const ids = _focusedPane === 'split' ? ['editor-pane-b'] : ['editor-pane', 'preview-pane'];
   const els = ids.map(id => $(id)).filter(Boolean);
   els.forEach(el => { void el.offsetWidth; el.classList.add('pane-flash'); });   // reflow → restart
-  _paneFlashTimer = setTimeout(() => els.forEach(el => el.classList.remove('pane-flash')), 2100);
+  _paneFlashTimer = setTimeout(() => els.forEach(el => el.classList.remove('pane-flash')), 1100);
 }
 
 // The big header title follows the FOCUSED pane in split mode: click the left

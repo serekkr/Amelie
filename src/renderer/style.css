@@ -2109,15 +2109,16 @@ body.split-open .split-a-close { display: flex; }
 body.split-open .pane-focused, body.split-open .pane-flash { position: relative; }
 body.split-open .pane-flash::after {
   content: ''; position: absolute; inset: 0; z-index: 4;
-  border: 1.5px solid var(--text-0); border-radius: 2px;
+  border: 1px solid var(--text-0); border-radius: 2px;
   pointer-events: none;
-  animation: paneFlash 2s ease-out forwards;
+  animation: paneFlash 1s ease-in-out forwards;
 }
-/* Holds for most of the two seconds, then fades — a hint, not a permanent frame. */
+/* Gentle on purpose: it rises over ~250ms to a soft half-opacity white, rests, then fades
+   over the last ~400ms. A full-strength line snapping in and out read as aggressive. */
 @keyframes paneFlash {
   0%   { opacity: 0; }
-  6%   { opacity: 1; }
-  72%  { opacity: 1; }
+  25%  { opacity: .5; }
+  60%  { opacity: .5; }
   100% { opacity: 0; }
 }
 
