@@ -7497,15 +7497,20 @@ function updatePaneMetaChips() {
 
 // Central focus switch: remembers the pane, updates the header title and the
 // visual focus ring. The ring lives ONLY on the split pane (when it owns the
-// title) — the main pane is never highlighted (user preference).
+// title). BOTH halves can carry it now: the selected one gets a thin light outline, so it is
+// always clear which half a keystroke or a tree click will land in. Only while split — a
+// single pane needs no outline (the CSS is scoped to body.split-open).
 function setFocusedPane(which) {
   _focusedPane = (which === 'split') ? 'split' : 'main';
   try { updateTitleForFocus(); } catch (_) {}
+  const split = !!_splitPath;
   const b = $('editor-pane-b');
-  if (b) b.classList.toggle('pane-focused', !!_splitPath && _focusedPane === 'split');
+  if (b) b.classList.toggle('pane-focused', split && _focusedPane === 'split');
+  // The main half is one of two elements depending on the mode (editor or preview); mark
+  // both, only the visible one shows.
   ['editor-pane', 'preview-pane'].forEach(id => {
     const el = $(id);
-    if (el) el.classList.remove('pane-focused');
+    if (el) el.classList.toggle('pane-focused', split && _focusedPane === 'main');
   });
 }
 

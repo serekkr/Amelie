@@ -2101,7 +2101,17 @@ body.split-open .split-a-close { display: flex; }
 /* Focus ring: in split mode the pane that owns the header title (the last one
    clicked) carries a subtle inner accent line, so it's always obvious which
    note the big title refers to. */
-body.split-open .pane-focused { box-shadow: inset 0 0 0 1.5px var(--accent-dim); }
+/* The selected half of a split: a thin light frame (the brightest text colour — white on the
+   dark themes, dark on the light one). Drawn as an overlay ON TOP of the pane's content: an
+   inset box-shadow is painted under the children, and the editor's own background covered it
+   completely, which is why the old accent ring was invisible. pointer-events: none so it
+   never eats a click, and inset 0 so it costs no layout. */
+body.split-open .pane-focused { position: relative; }
+body.split-open .pane-focused::after {
+  content: ''; position: absolute; inset: 0; z-index: 4;
+  border: 1.5px solid var(--text-0); border-radius: 2px;
+  pointer-events: none;
+}
 
 /* Inline audio/video players for media attachments in the preview */
 .media-embed { margin: 12px 0; }
