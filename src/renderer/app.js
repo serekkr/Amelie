@@ -2414,7 +2414,13 @@ function filterTree(nodes, q) {
       const nameLower = n.name.toLowerCase();
       // `path` carries the on-disk name with its extension (`notes/sketch.draw`).
       const fileLower = String(n.path || '').toLowerCase().split('/').pop();
-      if (terms.every(t => nameLower.includes(t) || (isExtTerm(t) && fileLower.endsWith(t)))) results.push(n);
+      const dot = fileLower.lastIndexOf('.');
+      const extLower = dot >= 0 ? fileLower.slice(dot) : '';
+      // A dotted term matches the extension by PREFIX, so the list narrows as you type:
+      // `.d` already shows the drawings, `.p` the PDFs and photos, `.dr` just the
+      // drawings. Matching the whole extension meant `.d`, `.dr` and `.dra` all answered
+      // nothing and you had to type `.draw` in full before seeing anything.
+      if (terms.every(t => nameLower.includes(t) || (isExtTerm(t) && extLower.startsWith(t)))) results.push(n);
     }
   }
   return results;
