@@ -442,12 +442,35 @@ async function switchTab(idx) {
   });
 
   applyEditorHighlight();
+  // Each tab shows its OWN split (or none): a tab that never split comes up whole, and the
+  // one that did gets its pane back. Done after the content is in the editor, so the pane
+  // seeds from the right note.
+  try { _applyTabSplit(tab); } catch (_) {}
   renderTabBar();
   renderTree();
   // switchTab can fire programmatically (sync refresh, session restore…)
   // while the SPLIT pane owns the header title: re-assert the focused pane's
   // title so the bare `noteTitle.value = tab.name` above can't clobber it.
   try { updateTitleForFocus(); } catch (_) {}
+}
+
+// Bring the split pane in line with the tab being shown.
+function _applyTabSplit(tab) {
+  // Only for the note it was opened from. A tab showing something else comes up whole, and
+  // the memory is kept: come back to that note and its pane is there again.
+  const want = tab && tab.split && tab.split.path && tab.split.owner === tab.path ? tab.split : null;
+  const paneOpen = (() => { const p = $('editor-pane-b'); return !!p && p.style.display !== 'none'; })();
+  if (want) {
+    if (_splitPath !== want.path || !paneOpen) openSplitView(want.path, want.name, want.orient);
+    return;
+  }
+  // Nothing to show here. Close the pane WITHOUT forgetting: closeSplitView() deletes the
+  // record, which is right when the user closes it but not when they merely moved away.
+  if (_splitPath || paneOpen) {
+    const keep = tab && tab.split;
+    closeSplitView();
+    if (keep && tab) tab.split = keep;
+  }
 }
 
 function renderTabBar() {
@@ -7379,6 +7402,17 @@ let _focusedPane = 'main';    // main | split — last pane the user interacted 
 function openSplitView(path, name, orient = 'right') {
   _splitPath = path;
   _splitOrient = (orient === 'down') ? 'down' : 'right';
+  // The split belongs to the tab that opened it. It used to be app-wide state, so every
+  // other tab you clicked came up split as well, showing a pane of a note it had nothing
+  // to do with. Recorded on the ACTIVE tab — the one hosting the split; the paths that
+  // load another note INTO the pane keep the same active tab, so the owner doesn't move.
+  // `owner` is the note the split was opened FROM: clicking a note in the tree reuses the
+  // same tab rather than opening a new one, so keying on the tab object alone let the pane
+  // follow you onto every note you opened next.
+  const _host = getActiveTab();
+  if (_host && _host.path && _host.path !== path) {
+    _host.split = { path, name: name || null, orient: _splitOrient, owner: _host.path };
+  }
   const paneB = $('editor-pane-b');
   const edB = $('markdown-editor-b');
   const resizer = $('split-resizer');
@@ -7524,6 +7558,9 @@ function _mirrorActiveTabLabel() {
 }
 
 function closeSplitView() {
+  // Closing is deliberate: forget it for this tab too, or coming back would reopen it.
+  const _host = getActiveTab();
+  if (_host) delete _host.split;
   _splitPath = null;
   _focusedPane = 'main';
   const paneB = $('editor-pane-b');
