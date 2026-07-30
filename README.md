@@ -56,15 +56,17 @@ development:
 - **To-do lists** — built-in task lists / checklists.
 - **Mind maps** with zoom and reset.
 - **PDF** — built-in viewer, editor and export.
-- **Audio & video player** — play media attachments inline, with seeking.
-- **Infinite canvas / whiteboard** powered by tldraw.
+- **Audio & video player** — play media inline in a note or straight from the
+  sidebar, with seeking.
+- **Infinite canvas / whiteboard** powered by Excalidraw.
 
 ### Organization
 - **Folder-based vault** with a navigable file tree.
 - **Live vault watcher** — external changes (file manager, sync) refresh the
   tree automatically, no restart needed.
 - **Session & tab restore** — reopen exactly where you left off.
-- **Search** across your notes.
+- **Search** across your notes — full text, and by file extension
+  (`.pdf`, `.mp3`, `.draw`) to list files of one kind.
 - **10 built-in themes** (Cyberpunk/GitHub-dark, Dracula, Nord, Gruvbox,
   Solarized, One Dark, Amber, Navy, Rose, and a Light theme).
 - **7 UI languages**: English, Italiano, Español, Français, Deutsch, Polski, Română.
@@ -95,7 +97,7 @@ Amelie is written in **JavaScript** and runs as an **Electron** desktop app.
 | Language         | JavaScript — no renderer framework, vanilla JS |
 | Editor           | [CodeMirror](https://codemirror.net/) |
 | Markdown         | `marked` + `DOMPurify` + `highlight.js` |
-| Canvas           | [tldraw](https://tldraw.dev/) |
+| Canvas           | [Excalidraw](https://excalidraw.com/) |
 | PDF              | `pdf-lib` |
 | Sync             | `webdav` (npm), bundled Go static SMB helper (`amelie-smb`), WireGuard, `rsync` |
 | Encryption       | Node.js `crypto` — AES-256-GCM; Argon2id (`hash-wasm`) key derivation |
@@ -161,13 +163,47 @@ You pick the vault folder in the setup wizard. Inside it:
 
 ```
 <your-vault>/
-├── notes...            # your Markdown notes (.md), in any folder structure
-├── attachments/        # images and files referenced by your notes
-└── .amelie-backups/    # local autosave safety net
+├── notes...              # your Markdown notes (.md) and drawings (.draw), in any folder structure
+├── attachments/
+│   ├── images/           # photos dropped into the vault
+│   ├── audio/            # voice notes and audio files
+│   ├── videos/
+│   ├── pdf/
+│   └── ...               # images pasted into a note live here, next to their note's text
+└── .amelie-backups/      # local autosave safety net
 ```
 
 Everything is plain files on your disk. Point any other tool at the same folder,
 or back it up however you like.
+
+---
+
+## 📎 Supported file types
+
+Notes are Markdown (`.md`) and drawings are `.draw`. Everything else you bring in is
+an attachment, sorted into its own folder:
+
+| Kind | Extensions | Stored in |
+|---|---|---|
+| Images | `png` `jpg` `jpeg` `gif` `webp` `svg` `bmp` | `attachments/images/` |
+| Audio | `mp3` `wav` `flac` `m4a` `aac` `opus` `wma` `weba` | `attachments/audio/` |
+| Video | `mp4` `webm` `mkv` `mov` `m4v` `avi` `wmv` `mpeg` | `attachments/videos/` |
+| Documents | `pdf` | `attachments/pdf/` |
+
+PDFs, photos, audio and video in those folders appear in the sidebar as files of their
+own: you open a PDF or play a recording straight from the tree, without a note having to
+embed it. An image pasted into a note belongs to that note instead, and stays out of the
+sidebar.
+
+Anything else — archives, executables, office documents — is refused with a message and
+never saved. The extension alone is not enough either: Amelie reads the head of every
+incoming file and refuses it when the bytes are not what the name claims, so an
+executable renamed `photo.png` does not get in. (That is a check against mislabelling,
+not a virus scan — Amelie never runs an attachment.)
+
+**Search by extension.** Type an extension in the sidebar search to list files of that
+kind — `.pdf`, `.mp3`, `.mp4`, `.png`, `.draw`, `.md` — and combine it with words as
+usual: `invoice .pdf` narrows to PDFs whose name contains "invoice".
 
 ---
 
