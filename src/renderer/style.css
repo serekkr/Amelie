@@ -357,6 +357,13 @@ html.is-mac #titlebar { padding-left: 72px; }
   display: flex; align-items: center; gap: 6px; padding: 0 8px;
   -webkit-app-region: no-drag;
 }
+/* Hairline between the new-tab + and the settings gear: same 1px line the editor toolbar
+   uses, so the title bar doesn't invent a look of its own. The negative left margin eats
+   part of the container's 8px padding, keeping the line nearer the + than the gear. */
+#titlebar-actions .titlebar-sep {
+  width: 1px; height: 16px; flex-shrink: 0;
+  background: var(--border); margin-left: -2px;
+}
 /* Sync state is shown by coloring the sync icon itself (no separate dot). */
 #sync-status, #backup-status { display: inline-flex; align-items: center; transition: color .3s; }
 #sync-status.sync-idle,    #backup-status.sync-idle    { color: inherit; }
