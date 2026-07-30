@@ -2323,6 +2323,13 @@ function renderTree() {
   persistOpenFolders();
 }
 
+// A term the user means as an extension: `.draw`, `.pdf`, `.PNG`. Matched against the
+// REAL file name, because the tree's `name` has the extension stripped for notes and
+// drawings (main.js builds it that way) while PDFs and images keep theirs — so before
+// this `.pdf`/`.png` filtered by accident and `.draw`/`.md` could not work at all.
+// Only a leading dot triggers it: a bare `md` or `png` keeps matching names only,
+// which is what stops every note in the vault from answering a 2-letter word.
+const isExtTerm = (t) => /^\.[a-z0-9]+$/i.test(t);
 function filterTree(nodes, q) {
   // Multi-word: all terms must appear somewhere in the name
   const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -2333,7 +2340,9 @@ function filterTree(nodes, q) {
       if (children.length) results.push({ ...n, children });
     } else {
       const nameLower = n.name.toLowerCase();
-      if (terms.every(t => nameLower.includes(t))) results.push(n);
+      // `path` carries the on-disk name with its extension (`notes/sketch.draw`).
+      const fileLower = String(n.path || '').toLowerCase().split('/').pop();
+      if (terms.every(t => nameLower.includes(t) || (isExtTerm(t) && fileLower.endsWith(t)))) results.push(n);
     }
   }
   return results;
@@ -6254,6 +6263,11 @@ function hideSearchResults() {
 
 async function runFullTextSearch(query) {
   if (!query.trim()) return;
+  // A search made only of extensions (`.pdf`, `.draw .md`) belongs to the tree filter:
+  // this index holds notes only, and their names are stored without `.md`, so it would
+  // always answer "no results for .pdf" in a panel covering the very files the tree
+  // has just listed. Guarded here, so the focus handler behaves the same.
+  if (query.trim().split(/\s+/).every(isExtTerm)) { hideSearchResults(); return; }
   const results = await window.inkwell.searchNotes(query);
   renderSearchResults(results, query);
 }
