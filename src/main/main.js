@@ -3189,10 +3189,58 @@ function _findIdenticalFile(dir, candidatePath) {
 // risks OOM / Node's ~Buffer.MAX_LENGTH wall. Playback is streamed and unaffected.
 const MAX_ATTACHMENT_BYTES = 512 * 1024 * 1024;   // 512 MB
 
+// ─── Does the content match the extension? (magic bytes) ─────────────────────
+// An extension is a claim, not evidence: an executable renamed fake.png was stored
+// as an image, and a PDF is exactly the kind of file people forward on. Every format
+// Amelie accepts has a recognisable head, so the first 4 KB are matched against the
+// extension the file arrives under and refused when they disagree. This is NOT a virus
+// scan and cannot be one — it stops the mismatch, nothing more.
+const _ascii = (b, off, s) => b.length >= off + s.length && b.toString('latin1', off, off + s.length) === s;
+const _riff = (b, form) => _ascii(b, 0, 'RIFF') && _ascii(b, 8, form);
+// ISO base media (mp4/m4v/m4a/mov). Not only 'ftyp': an older QuickTime file can open
+// on another top-level atom, and refusing those would be a false accusation.
+const _isoBmff = (b) => ['ftyp', 'moov', 'mdat', 'free', 'wide', 'skip', 'pnot'].some(a => _ascii(b, 4, a));
+// MPEG audio: an ID3 tag, or a bare frame sync (11 set bits).
+const _mp3ish = (b) => _ascii(b, 0, 'ID3') || (b.length > 1 && b[0] === 0xff && (b[1] & 0xe0) === 0xe0);
+const _asf  = (b) => b.length > 3 && b[0] === 0x30 && b[1] === 0x26 && b[2] === 0xb2 && b[3] === 0x75;  // wma/wmv
+const _ebml = (b) => b.length > 3 && b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3;  // webm/mkv/weba
+const _mpegVideo = (b) =>
+  (b.length > 3 && b[0] === 0 && b[1] === 0 && b[2] === 1 && [0xb3, 0xba, 0xbb].includes(b[3]))  // program/elementary
+  || (b.length > 188 && b[0] === 0x47 && b[188] === 0x47);                                        // transport stream
+const ATTACHMENT_SIGNATURES = {
+  png:  b => _ascii(b, 0, '\x89PNG\r\n\x1a\n'),
+  jpg:  b => b.length > 2 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  gif:  b => _ascii(b, 0, 'GIF87a') || _ascii(b, 0, 'GIF89a'),
+  webp: b => _riff(b, 'WEBP'),
+  bmp:  b => _ascii(b, 0, 'BM'),
+  svg:  b => /<svg[\s>]/i.test(b.toString('utf8')),   // text format: no magic number to read
+  pdf:  b => b.toString('latin1').includes('%PDF-'),  // readers tolerate junk before the header
+  mp3:  _mp3ish,
+  wav:  b => _riff(b, 'WAVE'),
+  flac: b => _ascii(b, 0, 'fLaC') || _ascii(b, 0, 'ID3'),
+  aac:  b => _mp3ish(b) || _ascii(b, 0, 'ADIF'),
+  opus: b => _ascii(b, 0, 'OggS'),                    // Opus ships inside an Ogg container
+  wma:  _asf,  wmv: _asf,
+  weba: _ebml, webm: _ebml, mkv: _ebml,
+  m4a:  _isoBmff, mp4: _isoBmff, m4v: _isoBmff, mov: _isoBmff,
+  avi:  b => _riff(b, 'AVI '),
+  mpeg: _mpegVideo,
+};
+ATTACHMENT_SIGNATURES.jpeg = ATTACHMENT_SIGNATURES.jpg;
+
 async function saveAttachmentBuffer(originalName, buffer) {
   const blen = (buffer && (buffer.byteLength != null ? buffer.byteLength : buffer.length)) || 0;
   if (blen > MAX_ATTACHMENT_BYTES) throw new Error('ATTACHMENT_TOO_LARGE');
   const ext = path.extname(originalName) || '.png';
+  // Both routes into the vault (bytes from the renderer, a path main reads off disk)
+  // come through here, so the content check belongs here rather than at each entrance.
+  {
+    const check = ATTACHMENT_SIGNATURES[ext.slice(1).toLowerCase()];
+    if (check) {
+      const u8 = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer || []);
+      if (!check(Buffer.from(u8.subarray(0, 4096)))) throw new Error('ATTACHMENT_CONTENT_MISMATCH');
+    }
+  }
   const baseName = path.basename(originalName, ext)
     .replace(/[^a-zA-Z0-9_\-]/g, '_')
     .replace(/_+/g, '_')

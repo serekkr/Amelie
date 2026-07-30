@@ -3885,6 +3885,8 @@ function setupEditor() {
   // bypassed), so its refusal has to reach the user: a paste whose type looked fine
   // here but whose extension main rejects would otherwise fail in silence.
   const _isUnsupportedErr = (err) => /Unsupported attachment type/.test(err?.message || String(err || ''));
+  // Refused because the bytes are not what the extension says (main reads the head).
+  const _isMismatchErr = (err) => /ATTACHMENT_CONTENT_MISMATCH/.test(err?.message || String(err || ''));
   // Block the middle-mouse-button "primary selection" paste (X11/Linux/Wayland):
   // a middle click in the editor would otherwise paste whatever text is selected
   // elsewhere. The user only wants explicit Ctrl+V pastes. preventDefault on the
@@ -4023,6 +4025,7 @@ function setupEditor() {
         console.error('Paste save failed:', file.name, err);
         if (_isTooLargeErr(err)) showToast(window.i18n.t('attach.too_large'));
         else if (_isUnsupportedErr(err)) showToast(window.i18n.t('attach.unsupported_format'));
+        else if (_isMismatchErr(err)) showToast(window.i18n.t('attach.content_mismatch'));
       }
     }
   };
@@ -4130,6 +4133,7 @@ function setupEditor() {
         console.error('Drop save failed:', file.name, err);
         if (_isTooLargeErr(err)) showToast(window.i18n.t('attach.too_large'));
         else if (_isUnsupportedErr(err)) showToast(window.i18n.t('attach.unsupported_format'));
+        else if (_isMismatchErr(err)) showToast(window.i18n.t('attach.content_mismatch'));
       }
     }
   };
