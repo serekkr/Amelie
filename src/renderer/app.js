@@ -3755,8 +3755,21 @@ function setupEditor() {
 
   // Focus / reading mode: hide the left column to maximise reading width.
   const FOCUS_KEY = 'amelie-focus-mode';
-  const applyFocusMode = on => document.getElementById('app').classList.toggle('focus-mode', !!on);
+  // The tooltip names what the click will do, so it flips with the state: "Hide left
+  // column" while the column is there, "Show left column" once it is gone.
+  const updateFocusTitle = () => {
+    const btn = $('btn-focus-mode');
+    if (!btn) return;
+    const hidden = document.getElementById('app').classList.contains('focus-mode');
+    btn.title = window.i18n.t(hidden ? 'tab.show_column' : 'tab.hide_column');
+    btn.setAttribute('aria-label', btn.title);
+  };
+  const applyFocusMode = on => {
+    document.getElementById('app').classList.toggle('focus-mode', !!on);
+    updateFocusTitle();
+  };
   try { applyFocusMode(localStorage.getItem(FOCUS_KEY) === '1'); } catch (_) {}
+  document.addEventListener('amelie:lang-changed', updateFocusTitle);
   $('btn-focus-mode')?.addEventListener('click', () => {
     const on = !document.getElementById('app').classList.contains('focus-mode');
     applyFocusMode(on);

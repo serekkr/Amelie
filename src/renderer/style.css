@@ -1940,9 +1940,6 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   -webkit-app-region: no-drag;
 }
 #btn-focus-mode svg { width: 17px; height: 17px; }
-/* The strip stands for the left column: solid while it is there, gone once hidden. */
-#btn-focus-mode .panel-fill { transition: opacity .15s; }
-#app.focus-mode #btn-focus-mode .panel-fill { opacity: 0; }
 #btn-focus-mode:hover { color: var(--text-0); background: var(--bg-3); }
 #app.focus-mode #btn-focus-mode { color: var(--accent); }
 /* Chevron points "<" normally (collapse) and ">" once the column is hidden. */
