@@ -2881,6 +2881,36 @@ body.split-open .pane-focused { box-shadow: inset 0 0 0 1.5px var(--accent-dim);
   max-width: 100%; height: auto; display: block;
   border-radius: 4px; box-shadow: 0 2px 16px rgba(0,0,0,.5);
 }
+/* Audio/video player — same frame as the image viewer. Audio is centred as a
+   single bar (its element is only ~54px tall, so top alignment would pin it
+   under the header); video is centred and never wider than the pane. */
+#media-view-overlay {
+  position: absolute; inset: 0; z-index: 50;
+  display: flex; flex-direction: column;
+  background: var(--bg-0); font-family: var(--ui-font);
+}
+#media-view-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 16px; height: 44px; box-sizing: border-box;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-1); flex-shrink: 0; -webkit-app-region: no-drag;
+}
+#media-view-title {
+  font-family: var(--ui-font); font-weight: 500;
+  font-size: 15px; color: var(--text-0); flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#media-view-embed {
+  flex: 1; width: 100%; overflow: auto; background: #1a1a1a;
+  display: flex; align-items: center; justify-content: center; padding: 18px;
+}
+/* Audio sits at the TOP of the pane: it is a 54px bar, and centred in a full-height
+   pane it floated alone in the middle of the void. Video stays centred (it fills). */
+#audio-view-content { width: min(560px, 100%); align-self: flex-start; }
+#video-view-content {
+  max-width: 100%; max-height: 100%;
+  border-radius: 4px; box-shadow: 0 2px 16px rgba(0,0,0,.5); background: #000;
+}
 #pdf-header {
   display: flex; align-items: center; gap: 12px;
   padding: 0 16px; height: 44px; box-sizing: border-box;

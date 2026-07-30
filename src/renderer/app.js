@@ -85,6 +85,21 @@ function moveTab(from, to) {
   renderTabBar();
 }
 
+// A hidden <audio>/<video> keeps playing, so leaving the player must stop it —
+// otherwise sound comes out of a note you are quietly typing in. Skipped when the
+// tab being switched TO is the very file already loaded: switchTab also fires on
+// spurious re-opens (a sync refresh), which must not pause what you are listening to.
+function pauseMediaViewUnlessActive() {
+  const t = typeof tabs !== 'undefined' ? tabs[activeTabIdx] : null;
+  for (const id of ['audio-view-content', 'video-view-content']) {
+    const el = $(id);
+    if (!el || !el.src || el.paused) continue;
+    const stillOn = t && (t.type === 'audio' || t.type === 'video')
+      && el.dataset.loaded === t.attachmentName;
+    if (!stillOn) { try { el.pause(); } catch (_) {} }
+  }
+}
+
 // Hide ALL special full-screen views (mindmap / canvas / pdf / todo) and clear
 // their toolbar-active state. Central helper so every view-switch is consistent:
 // whichever view you open next first calls this, guaranteeing the others are
@@ -94,6 +109,8 @@ function hideAllSpecialViews() {
   const cv = $('canvas-overlay');  if (cv) cv.style.display = 'none';
   const pdf = $('pdf-overlay');    if (pdf) pdf.style.display = 'none';
   const iv = $('img-view-overlay'); if (iv) iv.style.display = 'none';
+  const mv = $('media-view-overlay'); if (mv) mv.style.display = 'none';
+  pauseMediaViewUnlessActive();
   const tv = $('todo-view');       if (tv) tv.style.display = 'none';
   const mmTip = $('mindmap-tooltip'); if (mmTip) mmTip.style.display = 'none';
   const bm = $('btn-mindmap'); if (bm) bm.classList.remove('active');
@@ -112,6 +129,16 @@ function hideAllSpecialViews() {
 // (the `!tab.content` guard in switchTab). This keeps startup O(1) render, not O(N).
 function openTab(node, activate = true) {
   if (activate) _returnToFilesView();   // a real open (not lazy session-restore) → back to the tree
+  // An attachment (PDF, photo, audio, video) needs its own viewer: the tab pushed
+  // below is a NOTE tab, and reading a PDF or an MP3 as note text gives a broken
+  // tab. Callers that don't know the kind — a click in Bookmarks/Recent, which come
+  // in by path — land here, so the routing belongs here rather than in each caller.
+  if (isAttachNode(node)) {
+    if (node.type === 'pdf')   { openPdfFile(node, activate);   return; }
+    if (node.type === 'image') { openImageFile(node, activate); return; }
+    openMediaFile(node, activate);
+    return;
+  }
   // Focus-based routing: with the split pane open and last focused, a click on
   // a note (sidebar tree, recent/bookmarks/tags lists, links) loads it into
   // the SPLIT pane instead of the main tabs. Only regular .md notes — special
@@ -148,6 +175,12 @@ async function closeTab(idx, e) {
   const wasActive = (idx === activeTabIdx);
   tabs.splice(idx, 1);
   if (tab?.type === 'pdf') _destroyPdfDoc();   // free pdf.js worker memory (reloaded if a PDF tab is reopened)
+  // Closing the player's tab stops it and lets the file go: without clearing `src`
+  // the stream stays open and reopening the same file would resume mid-way.
+  if (tab?.type === 'audio' || tab?.type === 'video') {
+    const el = $(tab.type === 'audio' ? 'audio-view-content' : 'video-view-content');
+    if (el) { try { el.pause(); } catch (_) {} el.removeAttribute('src'); el.dataset.loaded = ''; try { el.load(); } catch (_) {} }
+  }
   if (tabs.length === 0) {
     activeTabIdx = -1;
     state.currentPath = null;
@@ -327,6 +360,29 @@ async function switchTab(idx) {
       img.removeAttribute('style');
       _imgZoom = 1.0; _updateImgZoomLabel();
       img.src = 'inkwell://attachments/' + tab.attachmentName.split('/').map(encodeURIComponent).join('/');
+    }
+    renderTabBar();
+    renderTree();
+    return;
+  }
+  // Special tab: audio / video player (files in the vault, not note embeds)
+  if (tab.type === 'audio' || tab.type === 'video') {
+    emptyState.style.display = 'none';
+    editorContainer.style.display = 'none';
+    $('media-view-overlay').style.display = 'flex';
+    $('media-view-title').textContent = tab.name || 'Media';
+    state.currentPath = tab.path || null;
+    const el    = $(tab.type === 'audio' ? 'audio-view-content' : 'video-view-content');
+    const other = $(tab.type === 'audio' ? 'video-view-content' : 'audio-view-content');
+    if (other) { other.style.display = 'none'; }
+    if (el) {
+      el.style.display = '';
+      // Only (re)load on a DIFFERENT file: coming back to the tab must keep the
+      // position you were at, not restart from zero.
+      if (tab.attachmentName && el.dataset.loaded !== tab.attachmentName) {
+        el.dataset.loaded = tab.attachmentName;
+        el.src = 'inkwell://attachments/' + tab.attachmentName.split('/').map(encodeURIComponent).join('/');
+      }
     }
     renderTabBar();
     renderTree();
@@ -2067,8 +2123,8 @@ async function restoreSession() {
     const { paths = [], activePath, activeType } = JSON.parse(raw);
     const flat = flattenTree(state.notes);
     // Restore ONLY plain notes, and LAZILY (activate=false): create the tab in the
-    // bar but don't read/render its file. Drawings, PDFs, images and the mindmap
-    // are intentionally NOT reopened at startup (user preference: notes only) —
+    // bar but don't read/render its file. Drawings, PDFs, images, audio/video and the
+    // mindmap are intentionally NOT reopened at startup (user preference: notes only) —
     // this also avoids building the mindmap during init, which could error.
     for (const path of paths) {
       const node = flat.find(n => n.path === path);
@@ -2076,7 +2132,7 @@ async function restoreSession() {
     }
     if (tabs.length === 0) { renderTabBar(); return; }
     // Land on the note that was active (matched by path). If the active tab was a
-    // drawing / PDF / image / mindmap (not restored), fall back to the LAST note.
+    // drawing / PDF / image / player / mindmap (not restored), fall back to the LAST note.
     let idx = (activePath && (!activeType || activeType === 'note'))
       ? tabs.findIndex(t => t.path === activePath) : -1;
     if (idx < 0) idx = tabs.length - 1;
@@ -2322,6 +2378,15 @@ function renderTree() {
   renderNodes(filtered, fileTree);
   persistOpenFolders();
 }
+
+// A vault file that lives in attachments/ — PDF, photo, audio, video — as opposed to a
+// note or drawing on disk. They are renamed and deleted through the attachment API,
+// only ever REORDER in the tree (never move into a folder), and have none of the
+// note-only extras (duplicate, colour, emoji). One predicate instead of a chain of
+// `type === 'pdf' || type === 'image'` comparisons, so a new kind can't be forgotten
+// at one of the dozen places that ask this question.
+const ATTACH_NODE_TYPES = new Set(['pdf', 'image', 'audio', 'video']);
+const isAttachNode = (n) => !!n && ATTACH_NODE_TYPES.has(n.type);
 
 // A term the user means as an extension: `.draw`, `.pdf`, `.PNG`. Matched against the
 // REAL file name, because the tree's `name` has the extension stripped for notes and
@@ -2612,7 +2677,7 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   // Files (notes, draws, pdfs, images) are all freely re-orderable via drag.
   // PDFs/images live in attachments/ on disk, so they only ever REORDER — they
   // are never renamed/moved into a folder (unlike notes/draws).
-  const isAttach = node.type === 'pdf' || node.type === 'image';
+  const isAttach = isAttachNode(node);
 
   el.setAttribute('draggable', 'true');
   // Drag & drop reorder
@@ -2710,6 +2775,10 @@ async function openNote(node) {
   }
   if (node.type === 'image') {
     openImageFile(node);
+    return;
+  }
+  if (node.type === 'audio' || node.type === 'video') {
+    openMediaFile(node);
     return;
   }
   // Focus-based routing: with the split pane open and last focused, the
@@ -3386,7 +3455,7 @@ async function deleteNote(node) {
     await loadTree();
     return;
   }
-  if (node.type === 'pdf' || node.type === 'image') {
+  if (isAttachNode(node)) {
     await window.inkwell.deleteAttachment(node.attachmentName || node.name);
     const tabIdx = tabs.findIndex(t => t.type === node.type && t.attachmentName === (node.attachmentName || node.name));
     if (tabIdx !== -1) closeTab(tabIdx);
@@ -3420,7 +3489,7 @@ async function deleteNote(node) {
 // Apply a rename once a new name is known (shared by inline editor + any caller).
 async function commitRename(node, newName) {
   if (!newName || newName === node.name) return;
-  if (node.type === 'pdf' || node.type === 'image') {
+  if (isAttachNode(node)) {
     const oldAttachment = node.attachmentName || node.name;
     const finalName = await window.inkwell.renameAttachment(oldAttachment, newName);
     renameInTreeOrder(node.path, `attachments/${finalName}`);   // preserve manual order
@@ -3429,7 +3498,10 @@ async function commitRename(node, newName) {
       tab.attachmentName = finalName;
       tab.name = node.type === 'pdf' ? finalName : finalName.split('/').pop();
       tab.path = `attachments/${finalName}`;
-      const embed = node.type === 'pdf' ? $('pdf-embed') : $('img-view-content');
+      const embed = node.type === 'pdf'   ? $('pdf-embed')
+                  : node.type === 'image' ? $('img-view-content')
+                  : node.type === 'audio' ? $('audio-view-content')
+                  :                         $('video-view-content');
       if (embed) embed.dataset.loaded = '';
       renderTabBar();
       if (tabs[activeTabIdx] === tab) await switchTab(activeTabIdx);
@@ -3608,7 +3680,7 @@ async function _applyRename(node, newName) {
 
 // Prepend an emoji to the note/folder name (replacing any existing emoji).
 async function addEmojiToNode(node, emoji) {
-  if (!node || node.type === 'pdf' || node.type === 'image') return;
+  if (!node || isAttachNode(node)) return;
   const base = node.name.replace(/^[\p{Extended_Pictographic}️‍]+\s*/u, '').trim();
   await _applyRename(node, emoji + ' ' + base);
 }
@@ -6979,22 +7051,22 @@ function showContextMenu(e, node) {
   $('ctx-rename').style.display       = hasTarget ? '' : 'none';
   // Duplicate: available for notes and folders (not for PDFs / attachments).
   const ctxDup = $('ctx-duplicate');
-  if (ctxDup) ctxDup.style.display = (hasTarget && node.type !== 'pdf' && node.type !== 'image') ? '' : 'none';
+  if (ctxDup) ctxDup.style.display = (hasTarget && !isAttachNode(node)) ? '' : 'none';
   // Set color — notes and folders (not PDFs). Always reads "Set color ›"
   // regardless of whether a color is already assigned.
   const ctxColor = $('ctx-color');
   if (ctxColor) {
-    const showColor = hasTarget && node.type !== 'pdf' && node.type !== 'image';
+    const showColor = hasTarget && !isAttachNode(node);
     ctxColor.style.display = showColor ? '' : 'none';
     if (showColor) ctxColor.textContent = window.i18n.t('ctx.color_set');
   }
-  const ctxEmoji = $('ctx-emoji'); if (ctxEmoji) ctxEmoji.style.display = (hasTarget && node.type !== 'pdf' && node.type !== 'image') ? '' : 'none';
+  const ctxEmoji = $('ctx-emoji'); if (ctxEmoji) ctxEmoji.style.display = (hasTarget && !isAttachNode(node)) ? '' : 'none';
   $('ctx-open-location').style.display= hasTarget ? '' : 'none';
   // PDFs/images are encrypted at rest — they can't be opened straight from the
   // vault folder. This decrypts to a temp file and opens it in the default app.
   const ctxExt = $('ctx-open-external');
   if (ctxExt) ctxExt.style.display =
-    (hasTarget && (node.type === 'pdf' || node.type === 'image') && node.attachmentName) ? '' : 'none';
+    (hasTarget && isAttachNode(node) && node.attachmentName) ? '' : 'none';
   const ctxBm = $('ctx-bookmark');
   if (ctxBm) {
     ctxBm.style.display = (hasTarget && !isFolder) ? '' : 'none';
@@ -7021,7 +7093,7 @@ function showContextMenu(e, node) {
 // Notes: copies content. Folders: recursively copies every note inside.
 // Does NOT open the duplicate — it just appears in the tree.
 async function duplicateNode(node) {
-  if (!node || node.type === 'pdf' || node.type === 'image') return;
+  if (!node || isAttachNode(node)) return;
   const flat = flattenTree(state.notes);
 
   // Pick a unique sibling name based on `base`, testing `exists(candidatePath)`.
@@ -7147,7 +7219,7 @@ function setupTabContextMenu() {
       return;
     }
     const node = findNote(state.notes, tab.path)
-      || { type: (tab.type === 'pdf' || tab.type === 'image') ? tab.type : 'note', name: tab.name, path: tab.path,
+      || { type: ATTACH_NODE_TYPES.has(tab.type) ? tab.type : 'note', name: tab.name, path: tab.path,
            attachmentName: tab.attachmentName };
     renameNote(node);
   });
@@ -8354,7 +8426,7 @@ async function buildMindmapData() {
   const wikiRe  = /\[\[([^\]|\n]+)(?:\|[^\]\n]+)?\]\]/g;
   const attMdRe = /!?\[[^\]\n]*\]\((attachments\/[^)\s]+)\)/g;   // ![](attachments/…) / [x](attachments/…)
   for (const n of allNotes) {
-    const isAttach = (n.type === 'pdf' || n.type === 'image');
+    const isAttach = isAttachNode(n);
     const colorKey = noteColors[n.path];
     const color = colorKey ? NOTE_COLORS.find(c => c.key === colorKey)?.hex : null;
     const _folder = n.path.includes('/') ? n.path.split('/').slice(0, -1).join('/') : null;
@@ -12200,6 +12272,24 @@ function openImageFile(node, activate = true) {
   if (activate) switchTab(tabs.length - 1);
 }
 
+// Audio/video from the tree, in a tab of its own — same shape as the image viewer.
+// The type comes from the node (main.js already decided it from the extension), so a
+// file whose extension says audio never lands in the <video> element.
+function openMediaFile(node, activate = true) {
+  const attachmentName = node.attachmentName
+    || (node.path ? node.path.replace(/^attachments\//, '') : node.name);
+  const type = node.type === 'video' ? 'video' : 'audio';
+  const existingIdx = tabs.findIndex(t => t.type === type && t.attachmentName === attachmentName);
+  if (existingIdx >= 0) { if (activate) switchTab(existingIdx); return; }
+  tabs.push({
+    type,
+    name: node.name,
+    path: node.path || `attachments/${attachmentName}`,
+    attachmentName,
+  });
+  if (activate) switchTab(tabs.length - 1);
+}
+
 // PDF.js library, lazy-loaded the first time a PDF is opened.
 let _pdfjsLib = null;
 async function getPdfJs() {
@@ -14333,7 +14423,8 @@ function renderLinkMatches(query) {
   // Notes/drawings + single-file PDFs. Exclude folders and embedded images
   // (those belong inside notes). Keep type-less entries (plain .md notes often
   // have no `type` field) so they're not accidentally dropped.
-  const allNotes = flattenTree(state.notes).filter(n => n.type !== 'folder' && n.type !== 'image');
+  const allNotes = flattenTree(state.notes).filter(n => n.type !== 'folder'
+    && n.type !== 'image' && n.type !== 'audio' && n.type !== 'video');
   const q = (query || '').toLowerCase().trim();
   const qAlpha = q.replace(/[^a-z0-9]/g, '');
   const scored = [];
@@ -14365,9 +14456,9 @@ function renderLinkMatches(query) {
     item.className = 'link-item' + (i === 0 ? ' active' : '');
     // Hide the internal attachments/ path: PDFs are single files (show just the
     // name), notes show their folder (e.g. "serbia"); only a real sub-folder is shown.
-    const clean = (n.path || '').replace(/^attachments\/(pdf|images)\//, '').replace(/^attachments\//, '');
+    const clean = (n.path || '').replace(/^attachments\/(pdf|images|audio|videos)\//, '').replace(/^attachments\//, '');
     const showPath = clean.includes('/') ? clean : '';
-    const icon = n.type === 'pdf' ? '📕' : '📄';
+    const icon = n.type === 'pdf' ? '📕' : n.type === 'audio' ? '🎵' : n.type === 'video' ? '🎬' : '📄';
     const modMs = n.modified ? new Date(n.modified).getTime() : NaN;
     const modStr = isNaN(modMs) ? '' : _fmtDateDMY(modMs);   // gg/mm/aaaa
     item.innerHTML = `<span class="link-item-icon">${icon}</span>
@@ -15518,6 +15609,12 @@ function setupFileDrop() {
   $('btn-img-view-close')?.addEventListener('click', () => {
     if (tabs[activeTabIdx]?.type === 'image') closeTab(activeTabIdx);
     else $('img-view-overlay').style.display = 'none';
+  });
+  // Media player close (same rule as the image viewer: close the tab if it owns one)
+  $('btn-media-view-close')?.addEventListener('click', () => {
+    const t = tabs[activeTabIdx];
+    if (t?.type === 'audio' || t?.type === 'video') closeTab(activeTabIdx);
+    else { $('media-view-overlay').style.display = 'none'; pauseMediaViewUnlessActive(); }
   });
   $('img-zoom-in')?.addEventListener('click', () => setImgZoom(_imgZoom + 0.2));
   $('img-zoom-out')?.addEventListener('click', () => setImgZoom(_imgZoom - 0.2));

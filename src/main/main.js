@@ -4919,11 +4919,39 @@ function listNotesRecursive(dir, base = '') {
         });
       }
     }
+    // Audio and video, surfaced like the PDFs and photos above: they were on disk
+    // and playable inside a note, but invisible in the tree — so there was no way
+    // to reach a recording except through the note that embedded it, and nothing
+    // for a search like `.mp3` to match. Both folders also hold media recorded or
+    // pasted into notes; being listed does not change how a note plays them.
+    const avSources = [
+      { dir: path.join(attachDir, 'audio'),  sub: 'audio/',  type: 'audio', re: AUDIO_EXT_RE },
+      { dir: path.join(attachDir, 'videos'), sub: 'videos/', type: 'video', re: VIDEO_EXT_RE },
+    ];
+    for (const src of avSources) {
+      if (!fs.existsSync(src.dir)) continue;
+      for (const item of fs.readdirSync(src.dir, { withFileTypes: true })) {
+        if (!item.isFile()) continue;
+        const logical = stripEnc(item.name);   // drop the at-rest .enc marker
+        if (!src.re.test(logical)) continue;
+        const stat = fs.statSync(path.join(src.dir, item.name));
+        entries.push({
+          type: src.type,
+          name: logical,
+          path: `attachments/${src.sub}${logical}`,
+          attachmentName: `${src.sub}${logical}`,
+          modified: stat.mtime.toISOString(),
+          created: (stat.birthtime && stat.birthtime.getTime() > 0 ? stat.birthtime : stat.ctime).toISOString(),
+          size: stat.size,
+        });
+      }
+    }
   }
-  // Order: folders (alphabetical) → notes/draws (oldest → newest) → PDFs
-  // (oldest → newest). Sorting notes/PDFs by creation time ascending means
-  // newly imported items always land at the bottom of the list.
-  const rank = t => t === 'folder' ? 0 : (t === 'pdf' || t === 'image') ? 2 : 1;
+  // Order: folders (alphabetical) → notes/draws (oldest → newest) → attachments
+  // (PDFs, photos, audio, video — oldest → newest). Sorting notes/attachments by
+  // creation time ascending means newly imported items land at the bottom.
+  const ATTACH_KINDS = ['pdf', 'image', 'audio', 'video'];
+  const rank = t => t === 'folder' ? 0 : ATTACH_KINDS.includes(t) ? 2 : 1;
   const ts = n => new Date(n.created || n.modified || 0).getTime();
   return entries.sort((a, b) => {
     const ra = rank(a.type), rb = rank(b.type);

@@ -574,6 +574,21 @@
           <div id="img-view-embed"><img id="img-view-content" alt=""/></div>
         </div>
 
+        <!-- Media player: audio and video files in the vault open here, like photos.
+             Both elements exist; only the one matching the file is shown. -->
+        <div id="media-view-overlay" style="display:none">
+          <div id="media-view-header">
+            <span id="media-view-title">Media</span>
+            <button id="btn-media-view-close" class="icon-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div id="media-view-embed">
+            <audio id="audio-view-content" controls preload="metadata" style="display:none"></audio>
+            <video id="video-view-content" controls preload="metadata" style="display:none"></video>
+          </div>
+        </div>
+
       </main>
     </div>
 
