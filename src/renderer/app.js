@@ -16537,6 +16537,17 @@ function _todoRow(it) {
   meta.textContent = metaTxt;
   main.appendChild(meta);
   const actions = document.createElement('div'); actions.className = 'todo-row-actions';
+  // Edit: the task text has always opened the editor on click, but nothing said so — the row
+  // gets an explicit pencil next to move and delete.
+  const ed = document.createElement('button'); ed.className = 'todo-row-btn edit';
+  ed.title = window.i18n.t('todo.edit');
+  ed.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+  ed.addEventListener('click', e => {
+    e.stopPropagation();
+    if (document.querySelector('.todo-editor')) return;   // one editor at a time
+    row.replaceWith(_todoInlineEditor(it.bucket, it));
+  });
+  actions.appendChild(ed);
   if (it.bucket !== 'done') {
     const order = ['today', 'tomorrow', 'upcoming'];
     const next = order[(order.indexOf(it.bucket) + 1) % order.length];
@@ -16547,6 +16558,7 @@ function _todoRow(it) {
     actions.appendChild(mv);
   }
   const del = document.createElement('button'); del.className = 'todo-row-btn del'; del.textContent = '×';
+  del.title = window.i18n.t('ctx.delete');   // it was the only one of the three with no tooltip
   del.addEventListener('click', async e => { e.stopPropagation(); await window.inkwell.todo.remove(it.bucket, it.file); renderTodoView(); refreshTodoAlerts(); });
   actions.appendChild(del);
   row.append(chk, main, actions);

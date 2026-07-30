@@ -3578,6 +3578,8 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 }
 .todo-row-btn:hover { background: var(--bg-4); color: var(--text-0); }
 .todo-row-btn.del:hover { color: var(--red); }
+/* The pencil is an SVG, not a glyph: size it to sit with » and × rather than fill the box. */
+.todo-row-btn.edit svg { width: 15px; height: 15px; }
 
 .todo-editor { display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--bg-2); border: 1px solid var(--border-light); border-radius: 8px; margin-bottom: 6px; }
 
