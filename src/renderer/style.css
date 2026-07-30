@@ -3438,7 +3438,8 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 .kc-text {
   width: 100%; box-sizing: border-box; resize: vertical; min-height: 40px;
   background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px;
-  color: var(--text-0); font-family: var(--ui-font); font-size: 13px; padding: 7px 9px; outline: none;
+  /* Writing a task uses the editor font too, so what you type looks like what you'll read. */
+  color: var(--text-0); font-family: var(--editor-font-family); font-size: 13px; padding: 7px 9px; outline: none;
 }
 .kc-text:focus { border-color: var(--accent); }
 .kc-meta { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -3552,7 +3553,9 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 .todo-check:hover { border-color: var(--accent); }
 .todo-row.done .todo-check { background: var(--green); border-color: var(--green); color: #fff; }
 .todo-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.todo-title { font-size: 14px; color: var(--text-0); line-height: 1.4; cursor: pointer; word-break: break-word; }
+/* A task reads like a note: same font family you pick in Settings for the editor. The size
+   stays the board's own (14px) — the note zoom belongs to notes. */
+.todo-title { font-family: var(--editor-font-family); font-size: 14px; color: var(--text-0); line-height: 1.4; cursor: pointer; word-break: break-word; }
 .todo-row.done .todo-title { color: var(--text-3); text-decoration: line-through; }
 .todo-chip { align-self: flex-start; font-family: var(--editor-font); font-size: 11px; color: var(--text-0); background: var(--bg-3); border-radius: 6px; padding: 2px 7px; }
 .todo-chip.overdue { color: var(--red); }
