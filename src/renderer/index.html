@@ -1539,10 +1539,13 @@
                 </div>
               </div>
               <div class="ui-top-col">
-                <!-- Editor font -->
+                <!-- The app font. Called "default font" because it is not the editor's
+                     alone: applyAppearance points --ui-font at it too, so it sets the
+                     sidebar, tabs, headers, menus and settings as well. Only code,
+                     paths and commands keep their own monospaced --code-font. -->
                 <div class="color-row">
                   <div class="color-row-info">
-                    <span class="color-row-name" data-i18n="theme.font_editor">Font</span>
+                    <span class="color-row-name" data-i18n="theme.font_default">Default font</span>
                   </div>
                   <div class="color-row-right" style="flex:0 1 230px;max-width:230px">
                     <div id="font-dd" class="font-dd" style="flex:1;max-width:none">
