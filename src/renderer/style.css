@@ -3401,7 +3401,8 @@ kbd {
   font-family: var(--editor-font); font-size: 12px; color: var(--accent);
   padding: 8px 8px 4px; font-weight: 500;
 }
-/* Tag rows: two columns — the clickable #hashtag and the blue source note. */
+/* Tag rows: the clickable #hashtag on its own. The blue source-note column was
+   dropped — the note's name is the tail of the path the row shows on hover. */
 .tag-row {
   display: flex; align-items: baseline; gap: 8px;
   padding: 4px 8px; border-radius: 6px;
@@ -3413,12 +3414,6 @@ kbd {
   color: var(--accent); white-space: nowrap;
 }
 .tag-chip:hover { text-decoration: underline; }
-.tag-src {
-  flex: 1; min-width: 0; cursor: pointer;
-  font-size: 13px; color: var(--link);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.tag-src:hover { text-decoration: underline; }
 
 /* Inline #tags in the note body — blue in BOTH the editor (.cm-md-tag) and the
    rendered preview (.md-tag) so a hashtag reads clearly as a tag. Fixed blue
@@ -3439,7 +3434,6 @@ html:not([data-theme]) .tree-note:hover .tree-name,
 html:not([data-theme]) .tree-folder:hover .tree-name,
 html:not([data-theme]) .simple-row:hover .simple-name,
 html:not([data-theme]) .tag-row:hover .tag-chip,
-html:not([data-theme]) .tag-row:hover .tag-src,
 html:not([data-theme]) .notif-row:hover .notif-row-title,
 html:not([data-theme]) .notif-row:hover .simple-name {
   color: var(--accent);

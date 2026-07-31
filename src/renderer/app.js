@@ -16397,23 +16397,21 @@ async function renderTagsView() {
     const group = document.createElement('div'); group.className = 'tag-group';
     // For the search bar filter: tag and source note names.
     group.dataset.tag = t.toLowerCase();
-    group.dataset.srcs = tagMap[t].map(n => (n.name || '').toLowerCase()).join('\n');
+    // Searchable by note name AND by path: the path is what the row now shows on hover,
+    // so it has to be findable — the name is no longer written anywhere in the list.
+    group.dataset.srcs = tagMap[t].map(n => ((n.name || '') + '\n' + (n.path || '')).toLowerCase()).join('\n');
     tagMap[t].forEach(n => {
       const row = document.createElement('div'); row.className = 'tag-row';
-      // Column 1: the hashtag itself — clicking jumps to "#tag" inside the note
-      // with the caret placed right before it.
+      // The row is the hashtag and nothing else — the note's name used to sit beside it
+      // in blue, and it is already the tail of the path the tooltip shows. Clicking
+      // jumps to "#tag" inside the note with the caret placed right before it.
       const tagBtn = document.createElement('span');
       tagBtn.className = 'tag-chip';
       tagBtn.textContent = `#${t}`;
-      tagBtn.title = window.i18n.t('tags.goto_tag');
+      // Hover shows where the tag is: the full path, note name included.
+      tagBtn.title = n.path;
       tagBtn.addEventListener('click', () => _openByPathAtTag(n.path, n.name, t));
-      // Column 2: the source (note name) in blue — opens the note at the top.
-      const src = document.createElement('span');
-      src.className = 'tag-src';
-      src.textContent = n.name;
-      src.title = n.path;
-      src.addEventListener('click', () => _openByPath(n.path, n.name));
-      row.append(tagBtn, src);
+      row.append(tagBtn);
       group.appendChild(row);
     });
     c.appendChild(group);
