@@ -2887,14 +2887,25 @@ body.split-open .pane-flash::after {
 
 /* ─── Sidebar view buttons (graph + canvas) ─────────────────── */
 #sidebar-views {
-  display: flex; gap: 6px;
+  display: flex;
+  /* 10px, not the old 6: at the default sidebar width the five buttons were nearly
+     touching. The buttons shrink a little to pay for it (flex: 1 1 auto below) —
+     the icons inside are 16px, so they lose padding, not legibility. The row is NOT
+     stretched to the full width: with justify-content: space-between, any spare room
+     went into the gaps, and at a small icon size (70%) that left the five buttons
+     marooned far apart. Spare room now stays at the end of the row instead. */
+  gap: 10px;
   padding: 0 10px 8px; flex-shrink: 0;
 }
 .sidebar-view-btn {
   /* Cap the width so the buttons stay square-ish and DON'T stretch into wide
      rectangles when the sidebar is widened (the divider drag must not change
-     the icon aspect ratio). They still shrink to fit at the minimum width. */
-  flex: 1 1 auto; max-width: 38px;
+     the icon aspect ratio). They still shrink to fit at the minimum width.
+     The cap is DIVIDED by the icon zoom: this row carries `zoom`, so a flat 38px
+     is 38 × zoom on screen — at 70% the buttons were capped at 27 real pixels and
+     could not take up the row, leaving the leftover to open gaps between them.
+     Dividing keeps the cap at 38 real pixels whatever the icon size. */
+  flex: 1 1 auto; max-width: calc(38px / var(--toolbar-zoom, 1));
   display: flex; align-items: center; justify-content: center;
   background: var(--bg-2); border: 1px solid var(--border);
   border-radius: var(--radius); color: var(--text-1);
