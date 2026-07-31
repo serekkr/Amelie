@@ -6827,8 +6827,14 @@ function setupTooltips() {
     if (!text) return;
     tip.textContent = text;
     // Wrap mode BEFORE measuring — the size below depends on it.
-    tip.classList.toggle('wide', text.length > 60);
+    // Decided by MEASURING, not by counting characters: the old `text.length > 60`
+    // test was in characters while the bubble's limit is 280 pixels, so anything
+    // from roughly 45 to 60 characters — a note two folders deep, say — was cut off
+    // with nowrap+ellipsis and never allowed to wrap. Whether it has spaces or
+    // hyphens makes no difference; only how wide it draws does.
+    tip.classList.remove('wide');
     tip.classList.add('show');
+    if (tip.scrollWidth > tip.clientWidth) tip.classList.add('wide');
     const r = el.getBoundingClientRect();
     const tw = tip.offsetWidth, th = tip.offsetHeight;
     const vw = window.innerWidth, vh = window.innerHeight;
