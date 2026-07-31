@@ -15677,7 +15677,35 @@ function setupColorCustomization() {
     });
   });
 
-  $('btn-reset-all-colors')?.addEventListener('click', clearCustomColorOverrides);
+  $('btn-restore-defaults')?.addEventListener('click', restoreAppearanceDefaults);
+}
+
+// "Restore default": everything the User Interface tab controls goes back to what a
+// fresh install shows — the custom color overrides dropped (so the active theme's own
+// palette comes through), the font back to DEFAULT_FONT, and every numeric dropdown
+// back to the default declared in NUMBER_DROPDOWNS (icon size, sidebar spacing,
+// sidebar font size, editor font size) rather than to numbers repeated here.
+// NOT touched: the theme and the language, which are choices of their own, and the
+// folder-icon style.
+function restoreAppearanceDefaults() {
+  clearCustomColorOverrides();
+  const prefs = loadAppearance();
+  prefs.editorFont = DEFAULT_FONT;
+  NUMBER_DROPDOWNS.forEach(cfg => { prefs[cfg.key] = cfg.def; });
+  applyAppearance(prefs);   // applies the vars, persists, relabels every dropdown
+  // Ctrl+wheel / Ctrl± zoom multiplies the editor font size, and it is applied AFTER
+  // the pref — so a note left at 130% would keep the text off the default size even
+  // with the dropdown reading 14px. Back to 100% too, or "restore default" would not
+  // be what you see.
+  try {
+    _noteZoom = 100;
+    localStorage.setItem(NOTE_ZOOM_KEY, '100');
+    applyNoteZoom();
+  } catch (_) {}
+  // Keep the font dropdown's own highlight in step with the label.
+  const menu = document.getElementById('font-dd-menu');
+  if (menu) menu.querySelectorAll('.font-dd-item').forEach(i =>
+    i.classList.toggle('active', i.dataset.font === DEFAULT_FONT));
 }
 
 // Helper: convert rgb(...) string to #rrggbb
