@@ -1486,6 +1486,11 @@ const FONT_ORDER = [
   'helvetica','arial','system','noto','cantarell','dejavu','georgia','times','verdana',
 ];
 
+// Set by setupResize once the sidebar exists; applyAppearance calls it whenever the icon
+// zoom changes, so the section-tab strip is re-fitted to the sidebar at the new scale
+// instead of waiting for the next sidebar resize.
+let syncSSTWidth = null;
+
 // Apply appearance vars to :root
 function applyAppearance(prefs = {}) {
   const root = document.documentElement;
@@ -1512,6 +1517,9 @@ function applyAppearance(prefs = {}) {
   root.style.setProperty('--ui-font',            FONTS[fontKey] ?? FONTS[DEFAULT_FONT]);
   root.style.setProperty('--editor-font',        FONTS[fontKey] ?? FONTS[DEFAULT_FONT]);
   root.style.setProperty('--toolbar-zoom',        (tbZoom / 100).toFixed(3));
+  // The strip's width is written in px and `zoom` scales it, so it has to be recomputed
+  // for the new zoom — otherwise it keeps the previous size until the sidebar is resized.
+  try { if (syncSSTWidth) syncSSTWidth(); } catch (_) {}
   // persist
   try { localStorage.setItem('inkwell-appearance', JSON.stringify({ editorFontSize: edSize, treeSpacing: treePy, treeFontSize: treeSize, editorFont: fontKey, drawLocation: drawLoc, noteLocation: noteLoc, toolbarZoom: tbZoom })); } catch(_) {}
   updateFontDropdownCurrent(fontKey);
@@ -12313,9 +12321,40 @@ function setupResize() {
   const saved = parseInt(localStorage.getItem('amelie-sidebar-w'));
   if (saved && saved >= MIN_W && saved <= MAX_W) sidebar.style.width = saved + 'px';
 
-  // Keep sidebar-section-tabs always the same width as sidebar
+  // Keep sidebar-section-tabs always the same width as the sidebar — DIVIDED by the icon
+  // zoom. The strip carries `zoom: var(--toolbar-zoom)`, and a width in px is measured in
+  // the zoomed coordinate system: writing the sidebar's 235px while the icons are at 130%
+  // painted it 235 × 1.3 = 305px, so the strip escaped the sidebar and ran over the tab
+  // bar (its border no longer met the sidebar divider). Dividing keeps the two edges on
+  // the same line at every icon size.
   const sst = $('sidebar-section-tabs');
-  const syncSSTWidth = () => { if (sst) sst.style.width = sidebar.offsetWidth + 'px'; };
+  const SST_GAP = 7, SST_PAD_X = 8, SST_PAD_LEFT = 10;   // the CSS defaults
+  syncSSTWidth = () => {
+    if (!sst) return;
+    const z = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--toolbar-zoom')) || 1;
+    const avail = sidebar.offsetWidth / z;
+    sst.style.width = avail + 'px';
+    // Fitting the icons: five buttons at their natural size need more room than the
+    // sidebar has once the icon size passes ~120%, and they used to spill over the
+    // divider onto the tab bar. Give back the space by tightening the gap and the
+    // buttons' side padding — proportionally, and only by as much as is missing, so
+    // the icons themselves never shrink and every size up to the overflow point looks
+    // exactly as before.
+    const btns = sst.querySelectorAll('.sst');
+    const n = btns.length;
+    if (!n) return;
+    sst.style.removeProperty('--sst-gap');
+    sst.style.removeProperty('--sst-pad-x');
+    let iconsW = 0;
+    btns.forEach(b => { iconsW += b.offsetWidth; });
+    const need = SST_PAD_LEFT + iconsW + SST_GAP * (n - 1);
+    const missing = need - avail;
+    if (missing <= 0) return;                       // they fit: leave the CSS alone
+    const shrinkable = n * SST_PAD_X * 2 + (n - 1) * SST_GAP;
+    const f = Math.max(0, 1 - missing / shrinkable);
+    sst.style.setProperty('--sst-gap',   (SST_GAP   * f).toFixed(2) + 'px');
+    sst.style.setProperty('--sst-pad-x', (SST_PAD_X * f).toFixed(2) + 'px');
+  };
   syncSSTWidth();
   new ResizeObserver(syncSSTWidth).observe(sidebar);
 

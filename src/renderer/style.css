@@ -3304,7 +3304,10 @@ kbd {
      just like the empty area on the right of the titlebar. The buttons below
      opt back out with no-drag so they stay clickable. */
   -webkit-app-region: drag;
-  gap: 7px; padding-left: 10px;
+  /* gap + the icons' side padding are tightened by syncSSTWidth when the icon size
+     is large enough that five icons no longer fit the sidebar's width. Untouched
+     (7px / 8px) whenever they do fit, which is every size up to about 120%. */
+  gap: var(--sst-gap, 7px); padding-left: 10px;
 }
 .sst {
   flex: 1; background: transparent; border: none; cursor: pointer;
@@ -3336,8 +3339,12 @@ kbd {
 .sst.kanban-active .sst-default-icon { display: none; }
 .sst.kanban-active .sst-check-icon { display: inline-flex; }
 /* Compact icons (no longer flex:1) so empty space remains on the right to
-   drag the app window from the top bar. */
-.sst { position: relative; flex: 0 0 auto; padding: 5px 8px; }
+   drag the app window from the top bar. They may SHRINK though (flex: 0 1 auto):
+   the strip is exactly as wide as the sidebar, and past ~120% the five icons no
+   longer fit in it — without shrinking they crossed the sidebar divider and sat
+   over the tab bar. Shrinking eats the padding first, so the icons themselves keep
+   their size and simply sit closer together. */
+.sst { position: relative; flex: 0 1 auto; padding: 5px var(--sst-pad-x, 8px); }
 #todo-badge {
   background: var(--red); color: #fff;
   font-size: 10px; font-family: var(--editor-font);
