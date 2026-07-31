@@ -3855,9 +3855,15 @@ function setupEditor() {
   // before the browser inserts a plain newline).
   editor.addEventListener('keydown', handleFenceEnterIndent);
 
-  // Selected-character count in the status bar (left side, edit mode only).
-  document.addEventListener('selectionchange', () => { if (document.activeElement === editor) updateSelectionCount(); });
-  editor.addEventListener('blur', updateSelectionCount);
+  // Selected-character count in the status bar (its left side), in BOTH modes.
+  // Bound on the document rather than on the editor: under CM the selection lives in
+  // CM's own contenteditable and in reading mode in the preview, so an editor-only
+  // listener saw neither. selectionchange is the one that fires for both; mouseup and
+  // keyup are the belt and braces for what Chromium coalesces (releasing a drag,
+  // holding shift+arrow), and cost a couple of property reads.
+  document.addEventListener('selectionchange', updateSelectionCount);
+  document.addEventListener('mouseup', updateSelectionCount);
+  document.addEventListener('keyup', updateSelectionCount);
 
   editor.addEventListener('input', (e) => {
     const tab = getActiveTab();
@@ -4877,6 +4883,10 @@ function setViewMode(mode, opts) {
     // enhancePreviewContent applies it against the complete document height.
     if (_frac != null) _pendingPreviewScrollFrac = _frac;
   }
+  // The pane on screen changed, so what counts as "selected" did too: re-read it, or a
+  // count from the mode we just left would sit in the status bar. Also covers a tab
+  // switch, which comes through here.
+  try { updateSelectionCount(); } catch (_) {}
 }
 
 // Add a language label (top-left) and a copy button (top-right) to every
@@ -5802,13 +5812,50 @@ function updateWordCount() {
   statusWords.textContent = `${words} ${wLabel}`;
 }
 
-// Selected-character count, shown on the LEFT of the status bar ONLY while text is
-// selected in the editor (edit mode). Clears on collapse/blur.
+// How many characters the selection in the note pane covers, in WHATEVER mode is on
+// screen — 0 when nothing is selected there.
+//
+// Reading mode counts the DOM selection, but only when it lies inside the preview, so
+// dragging over a filename in the sidebar or the note title doesn't report a count in
+// the status bar. Edit mode asks CodeMirror instead of the textarea: CM is the only
+// editor now and the textarea it proxies is display:none, so `document.activeElement`
+// is never it — the old check could never be true and the counter never appeared.
+// Each side is read only while its pane is actually visible, otherwise a selection
+// left behind in the editor would still be counted while reading (and vice versa).
+function _selectedCharCount() {
+  const ae = document.activeElement;
+  // The split half is still a plain textarea, so read it straight off the element.
+  if (ae && ae.id === 'markdown-editor-b') return Math.abs(ae.selectionEnd - ae.selectionStart);
+  if (state.viewMode === 'edit') {
+    // Ask CM, never the DOM: this runs on every keyup, and reading the document
+    // selection (or an element's layout) here would tax typing on a big note.
+    if (_cmActive && _cmHandle) {
+      try {
+        // Sum every range, so a multi-cursor selection reports the whole total.
+        return _cmHandle.view.state.selection.ranges
+          .reduce((n, r) => n + Math.abs(r.to - r.from), 0);
+      } catch (_) { return 0; }
+    }
+    return ae === editor ? Math.abs(editor.selectionEnd - editor.selectionStart) : 0;
+  }
+  const sel = window.getSelection ? window.getSelection() : null;
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return 0;
+  for (const root of [previewContent, document.getElementById('preview-content-b')]) {
+    if (root && (root.contains(sel.anchorNode) || root.contains(sel.focusNode))) {
+      return sel.toString().length;
+    }
+  }
+  return 0;
+}
+
+// Selected-character count, shown on the LEFT of the status bar while text is selected
+// in the note pane — in edit AND reading mode. Hidden when the selection collapses.
 function updateSelectionCount() {
   const el = document.getElementById('status-selection');
   if (!el) return;
-  const n = Math.abs(editor.selectionEnd - editor.selectionStart);
-  if (n > 0 && document.activeElement === editor) {
+  let n = 0;
+  try { n = _selectedCharCount(); } catch (_) { n = 0; }
+  if (n > 0) {
     const key = n === 1 ? 'status.char_selected' : 'status.chars_selected';
     el.textContent = window.i18n.t(key, { n });
     el.style.display = '';
