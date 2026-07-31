@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
    AMELIE — Multi-theme notes app
-   Fonts: Roboto (UI) + Roboto Mono (editor/code)
+   Fonts: Noto Sans at 14px (app + notes, the default the font picker starts on)
+          + Roboto Mono for code, paths and commands, whatever font you pick
 ═══════════════════════════════════════════════════════════════ */
 
 /* ── DEFAULT THEME: Green Dark (id: github-dark) ─────────────── */
@@ -40,8 +41,11 @@
   --h3: #2dd4bf;
   --h4: #6ee7b7;
   --link: #5b8def;
-  --editor-font: 'Roboto Mono', monospace;
-  --ui-font: 'Roboto', sans-serif;
+  /* The default font, and the value the very first paint uses — applyAppearance
+     overwrites both from the saved pref a moment later, so keep them equal to
+     FONTS.noto (app.js) or startup flashes one typeface before settling on another. */
+  --editor-font: 'Noto Sans', 'Open Sans', sans-serif;
+  --ui-font: 'Noto Sans', 'Open Sans', sans-serif;
   --radius: 6px;
   /* Appearance — tunable from settings */
   --tree-item-py: 1px;
@@ -2956,7 +2960,7 @@ body.split-open .pane-flash::after {
   position: absolute; inset: 0; z-index: 50;
   display: flex; flex-direction: column;
   background: var(--bg-0);
-  font-family: var(--ui-font);   /* the whole PDF view uses the same font (Roboto Mono) */
+  font-family: var(--ui-font);   /* the whole PDF view follows the app font (Noto Sans by default) */
 }
 /* Image viewer (photos in the sidebar): same shell as the PDF viewer */
 #img-view-overlay {

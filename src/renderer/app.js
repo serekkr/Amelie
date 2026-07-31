@@ -1911,7 +1911,7 @@ function loadAppearance() {
     if (saved) {
       // One-time bumps for EXISTING users (migrations of old profiles). A FRESH
       // install skips these (see the else branch) so it starts at the clean
-      // defaults — Roboto Mono, editor 13 — instead of an oversized 15/16px.
+      // defaults — Noto Sans, editor 14px — instead of an oversized 15/16px.
       // One-time bump (v1.0.152): old builds defaulted to editor 14 / tree 13.
       if (!localStorage.getItem('inkwell-fontsize-bump-v1')) {
         if ((prefs.editorFontSize ?? 0) < 16) prefs.editorFontSize = 16;
@@ -1930,7 +1930,8 @@ function loadAppearance() {
       }
     } else {
       // Fresh install: mark all migrations done so they never bump this profile;
-      // the empty prefs then fall back to the defaults (Roboto Mono, editor 13).
+      // the empty prefs then fall back to the defaults (Noto Sans, editor 14px —
+      // DEFAULT_FONT and the `?? 14` in applyAppearance).
       localStorage.setItem('inkwell-fontsize-bump-v1', '1');
       localStorage.setItem('inkwell-editorsize-15-v1', '1');
       localStorage.setItem('inkwell-treesize-13-v1', '1');
