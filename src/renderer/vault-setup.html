@@ -6,7 +6,11 @@
 <title>Amelie — Setup</title>
 <link rel="stylesheet" href="fonts.css"/>
 <style>
-:root{--bg-0:#0a0e17;--bg-1:#0e1520;--bg-2:#131c2b;--bg-3:#192436;--bg-4:#1f2d42;--border:#243348;--border-light:#2e4160;--text-0:#dde6f0;--text-1:#9aacbe;--text-2:#5c7490;--text-3:#344d66;--accent:#3d9970;--accent-dim:#2a6b4e;--active-bg:rgba(61,153,112,.12);--red:#e05c6a;--green:#3d9970;--yellow:#e0a84a;--ef:'Roboto Mono',monospace;--uf:'Roboto',sans-serif;--r:6px}
+:root{--bg-0:#0a0e17;--bg-1:#0e1520;--bg-2:#131c2b;--bg-3:#192436;--bg-4:#1f2d42;--border:#243348;--border-light:#2e4160;--text-0:#dde6f0;--text-1:#9aacbe;--text-2:#5c7490;--text-3:#344d66;--accent:#3d9970;--accent-dim:#2a6b4e;--active-bg:rgba(61,153,112,.12);--red:#e05c6a;--green:#3d9970;--yellow:#e0a84a;--ef:'Roboto Mono',monospace;--uf:'Noto Sans','Open Sans',sans-serif;--r:6px}
+/* --uf is the app's default font (Noto Sans 14px, same stack as FONTS.noto in app.js):
+   the wizard is the first window a new user sees, and it opened in a different typeface
+   from the app that starts right after it. --ef stays monospaced for the few places the
+   app keeps monospaced whatever font you pick — code chips and the path/passphrase fields. */
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var(--uf);font-size:14px;-webkit-font-smoothing:antialiased;overflow:hidden}
 /* titlebar drag region */
