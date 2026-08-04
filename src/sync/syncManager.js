@@ -41,7 +41,17 @@ class SyncManager {
   }
 
   reloadConfig(newConfig) {
+    // A scheduled backup is skipped when the vault hasn't changed since the last
+    // successful one — but that shortcut is only sound while the DESTINATIONS
+    // stay the same. Switching a share ON left it empty for as long as the vault
+    // sat untouched: the fingerprint still matched a run that had written
+    // somewhere else entirely, so every hourly pass skipped and nothing was ever
+    // copied to the new destination (silently, since a skip reports no status).
+    // Any change to WHERE, or in WHAT FORMAT, the backup writes drops the
+    // shortcut so the next scheduled pass actually runs.
+    const prevDests = this._backupDestSignature(this.config);
     this.config = newConfig;
+    if (this._backupDestSignature(newConfig) !== prevDests) this._lastBackupSig = null;
     this._setupWebDAV();
     this._stopAutoSync();
     if (newConfig.sync?.enabled) {
@@ -182,6 +192,29 @@ class SyncManager {
       this._setStatus('error', e.message, meta);
       return { success: false, error: e.message };
     }
+  }
+
+  /**
+   * Fingerprint of WHERE a backup writes: which destinations are enabled, the
+   * target each one points at, and the formats requested (a dated folder and/or
+   * a .tar.gz). Compared across a config reload to decide whether the
+   * "vault unchanged → skip" shortcut still covers what is now configured:
+   * turning on a share, repointing one at another folder, or asking for the
+   * archive alongside the folder all mean the previous run's output no longer
+   * does. Deliberately ignores everything else in the config (frequency, how
+   * many copies to keep, two-way sync) — those don't change what gets written.
+   */
+  _backupDestSignature(cfg) {
+    const s = (cfg && cfg.sync) || {};
+    const l = s.local || {}, w = s.webdav || {}, v = s.vpn || {}, sa = s.samba || {};
+    const smb = v.smb || {};
+    const fmt = (d) => [d.folder !== false, !!d.archive, !!d.archiveOnly];
+    return JSON.stringify([
+      !!l.enabled, l.path || '', fmt(l),
+      !!w.enabled, w.url || '', w.remotePath || '', fmt(w),
+      !!v.enabled, smb.ip || v.peerIp || '', smb.share || '', smb.path || v.remotePath || '', fmt(v),
+      !!sa.enabled, sa.host || sa.ip || '', sa.share || '', sa.remoteSubPath || '',
+    ]);
   }
 
   /**
