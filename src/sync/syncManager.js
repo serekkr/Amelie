@@ -50,7 +50,9 @@ class SyncManager {
     // Any change to WHERE, or in WHAT FORMAT, the backup writes drops the
     // shortcut so the next scheduled pass actually runs.
     const prevDests = this._backupDestSignature(this.config);
+    const prevTargets = this._enabledDestTargets(this.config);
     this.config = newConfig;
+    const newTargets = this._enabledDestTargets(newConfig);
     if (this._backupDestSignature(newConfig) !== prevDests) this._lastBackupSig = null;
     this._setupWebDAV();
     this._stopAutoSync();
@@ -61,6 +63,42 @@ class SyncManager {
     // including when sync got fully disabled (so disabling WireGuard always
     // brings our tunnel down, and enabling it brings it up).
     this.ensureVpnTunnel();
+    // A destination you just switched on gets its FIRST copy right away, instead
+    // of at the end of the next interval — and, with an untouched vault, instead
+    // of never: the interval run would find nothing changed and skip, leaving a
+    // brand-new destination empty for as long as nobody edited a note. Only a
+    // destination (or target, or format) that WASN'T being written before earns
+    // this; switching one off, or changing the frequency, does not.
+    const gained = newTargets.filter(t => !prevTargets.includes(t));
+    if (gained.length) this._scheduleFirstBackup(gained);
+    else if (!this._anyBackupDestination()) this._cancelFirstBackup();
+  }
+
+  /** True when at least one backup destination is enabled. */
+  _anyBackupDestination() {
+    const s = this.config?.sync || {};
+    return !!(s.local?.enabled || s.vpn?.enabled || s.samba?.enabled || s.webdav?.enabled);
+  }
+
+  // Settings are autosaved on every toggle and every keystroke, so setting a
+  // destination up produces a burst of config reloads. Wait for it to settle and
+  // then run ONE backup — re-arming on each new gain, never cancelled by a later
+  // reload that gained nothing (that would swallow the run the burst started).
+  _FIRST_BACKUP_DELAY_MS = 5000;
+  _scheduleFirstBackup(reason) {
+    if (this._firstBackupTimer) clearTimeout(this._firstBackupTimer);
+    this._firstBackupTimer = setTimeout(() => {
+      this._firstBackupTimer = null;
+      if (!this._anyBackupDestination()) return;      // switched back off meanwhile
+      console.log('[Sync] New backup destination (' + reason.join(', ') + ') — first backup now');
+      // force: the vault may be untouched, and this copy still has to be made.
+      // manual: false — nobody pressed a button, so the notification reads as the
+      // automatic run it is.
+      Promise.resolve(this.runBackup({ force: true, manual: false })).catch(() => {});
+    }, this._FIRST_BACKUP_DELAY_MS);
+  }
+  _cancelFirstBackup() {
+    if (this._firstBackupTimer) { clearTimeout(this._firstBackupTimer); this._firstBackupTimer = null; }
   }
 
   _stopTimers() {
@@ -145,7 +183,11 @@ class SyncManager {
   // Scheduled backup (one-way: local → remote, plus WireGuard/WebDAV).
   // force=true (manual "Esegui backup ora") always runs; scheduled runs skip
   // when the vault hasn't changed since the last successful backup.
-  async runBackup({ force = false } = {}) {
+  // `manual` decides only the wording in the notifications bell, and defaults to
+  // following `force` (the "Back up now" button is the usual forced run). The
+  // first backup of a freshly enabled destination forces WITHOUT being manual —
+  // nobody pressed anything — so it must be able to say so.
+  async runBackup({ force = false, manual = force } = {}) {
     if (this._syncPausedPlaintext()) return { success: false, skipped: true, plaintextOpen: true, error: 'Cifratura a riposo disattivata: backup in pausa per non esporre i file in chiaro. Riattiva "Cifra i file a riposo".' };
     if (this._busy()) return { success: false, error: 'Already syncing' };
     // No enabled destination → don't pretend "backup complete". Tell the user.
@@ -161,7 +203,7 @@ class SyncManager {
       console.log('[Sync] Vault unchanged — automatic backup skipped');
       return { success: true, skipped: true };
     }
-    const meta = { op: 'backup', manual: !!force };
+    const meta = { op: 'backup', manual: !!manual };
     this._setStatus('syncing', null, meta);
     console.log('[Sync] Backup run...', force ? '(forced)' : '');
     try {
@@ -215,6 +257,29 @@ class SyncManager {
       !!v.enabled, smb.ip || v.peerIp || '', smb.share || '', smb.path || v.remotePath || '', fmt(v),
       !!sa.enabled, sa.host || sa.ip || '', sa.share || '', sa.remoteSubPath || '',
     ]);
+  }
+
+  /**
+   * One string per ENABLED destination, describing what it writes and where.
+   * Comparing two of these lists tells whether the backup gained somewhere new
+   * to write (a destination switched on, repointed, or asked for another format)
+   * as opposed to merely losing one or being reconfigured in ways that don't
+   * change its output.
+   */
+  _enabledDestTargets(cfg) {
+    const s = (cfg && cfg.sync) || {};
+    const out = [];
+    const fmt = (d) => `folder=${d.folder !== false}:archive=${!!d.archive}:only=${!!d.archiveOnly}`;
+    const l = s.local || {}, w = s.webdav || {}, v = s.vpn || {}, sa = s.samba || {};
+    if (l.enabled) out.push(`local|${l.path || ''}|${fmt(l)}`);
+    if (w.enabled) out.push(`webdav|${w.url || ''}|${w.remotePath || ''}|${fmt(w)}`);
+    if (v.enabled) {
+      const smb = v.smb || {};
+      out.push(`samba|${smb.ip || v.peerIp || ''}|${smb.share || ''}|${smb.path || v.remotePath || ''}|${fmt(v)}`);
+    } else if (sa.enabled) {
+      out.push(`samba|${sa.host || sa.ip || ''}|${sa.share || ''}|${sa.remoteSubPath || ''}|${fmt(v)}`);
+    }
+    return out;
   }
 
   /**

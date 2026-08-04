@@ -111,6 +111,72 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   check('switching a destination off drops it as well', m._lastBackupSig === null, `_lastBackupSig=${m._lastBackupSig}`);
 }
 
+// ── The first backup of a destination you just switched on ────────────────────
+// Dropping the shortcut is not enough on its own: the next interval run can be an
+// hour away. A destination that gains somewhere new to write is backed up at once.
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+// Records what runBackup was called with instead of running one.
+function armed(cfg) {
+  const m = mgr(cfg);
+  m._FIRST_BACKUP_DELAY_MS = 10;          // the shipped 5s wait is for a burst of autosaves
+  m.calls = [];
+  m.runBackup = async (opts) => { m.calls.push(opts || {}); return { success: true }; };
+  return m;
+}
+{
+  const m = armed(LOCAL_ONLY());
+  const next = clone(LOCAL_ONLY()); next.sync.vpn.enabled = true;
+  m.reloadConfig(next);
+  await sleep(60);
+  check('enabling the share backs it up at once', m.calls.length === 1, JSON.stringify(m.calls));
+  check('forced, so an untouched vault is copied anyway', m.calls[0]?.force === true, JSON.stringify(m.calls[0]));
+  check('not called manual — nobody pressed a button', m.calls[0]?.manual === false, JSON.stringify(m.calls[0]));
+}
+{
+  const m = armed(LOCAL_ONLY());
+  const next = clone(LOCAL_ONLY()); next.sync.local.path = '/mnt/elsewhere';
+  m.reloadConfig(next);
+  await sleep(60);
+  check('repointing a destination backs up to the new place', m.calls.length === 1, JSON.stringify(m.calls));
+}
+{
+  const cfg = clone(LOCAL_ONLY()); cfg.sync.vpn.enabled = true;
+  const m = armed(cfg);
+  const next = clone(cfg); next.sync.vpn.enabled = false;
+  m.reloadConfig(next);
+  await sleep(60);
+  check('switching one OFF backs up nothing', m.calls.length === 0, JSON.stringify(m.calls));
+}
+{
+  const m = armed(LOCAL_ONLY());
+  const next = clone(LOCAL_ONLY()); next.sync.local.intervalMinutes = 30; next.sync.local.keepLast = 9;
+  m.reloadConfig(next);
+  await sleep(60);
+  check('changing frequency or retention backs up nothing', m.calls.length === 0, JSON.stringify(m.calls));
+}
+{
+  // The settings modal autosaves on every keystroke: the burst must produce ONE
+  // backup, and a later reload that gained nothing must not swallow it.
+  const m = armed(LOCAL_ONLY());
+  const on = clone(LOCAL_ONLY()); on.sync.vpn.enabled = true;
+  m.reloadConfig(on);
+  const typing = clone(on); typing.sync.local.keepLast = 7;
+  m.reloadConfig(typing);
+  m.reloadConfig(clone(typing));
+  await sleep(60);
+  check('a burst of saves produces exactly one backup', m.calls.length === 1, JSON.stringify(m.calls));
+}
+{
+  // Switched on and straight back off before the wait elapsed: nothing to write.
+  const m = armed(LOCAL_ONLY());
+  const on = clone(LOCAL_ONLY()); on.sync.vpn.enabled = true;
+  m.reloadConfig(on);
+  const off = clone(LOCAL_ONLY()); off.sync.vpn.enabled = false; off.sync.local.enabled = false;
+  m.reloadConfig(off);
+  await sleep(60);
+  check('enabled then disabled before the wait: no backup', m.calls.length === 0, JSON.stringify(m.calls));
+}
+
 // ── The destination list the notification is built from ───────────────────────
 {
   const w = SyncManager._writtenDests;
