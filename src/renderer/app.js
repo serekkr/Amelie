@@ -1450,8 +1450,10 @@ const FONTS = {
 
 // Amelie's default family, in one place: it was spelled 'roboto' in one branch and
 // 'jetbrains' in three others, so a missing pref gave you a different font depending on
-// which line read it first.
-const DEFAULT_FONT = 'noto';
+// which line read it first. Keep --editor-font / --ui-font in style.css (and --uf in
+// vault-setup.html) on the SAME stack, or the first paint flashes one typeface before
+// applyAppearance settles on this one.
+const DEFAULT_FONT = 'helvetica';
 
 // The family currently chosen for the editor, for the places that need it as a string
 // (canvas contexts, which cannot inherit CSS).
@@ -1494,9 +1496,9 @@ let syncSSTWidth = null;
 // Apply appearance vars to :root
 function applyAppearance(prefs = {}) {
   const root = document.documentElement;
-  const edSize    = prefs.editorFontSize  ?? 14;
+  const edSize    = prefs.editorFontSize  ?? 15;
   const treePy    = prefs.treeSpacing     ?? 3;
-  const treeSize  = prefs.treeFontSize    ?? 13;
+  const treeSize  = prefs.treeFontSize    ?? 14;
   // An unknown key (a font that has since been removed — Mr Robot was one) falls back to
   // the default instead of leaving the editor on a family that no longer exists and the
   // dropdown showing a blank label.
@@ -1630,9 +1632,9 @@ function setupFontDropdown() {
 // sliders. Each lists discrete values over its old slider range; picking one applies
 // + persists via applyAppearance (which also refreshes the button label).
 const NUMBER_DROPDOWNS = [
-  { ddId: 'edsize-dd', key: 'editorFontSize', min: 9,  max: 22,  step: 1, unit: 'px', def: 14  },
+  { ddId: 'edsize-dd', key: 'editorFontSize', min: 9,  max: 22,  step: 1, unit: 'px', def: 15  },
   { ddId: 'treesp-dd', key: 'treeSpacing',    min: 1,  max: 10,  step: 1, unit: 'px', def: 3   },
-  { ddId: 'treesz-dd', key: 'treeFontSize',   min: 11, max: 18,  step: 1, unit: 'px', def: 13  },
+  { ddId: 'treesz-dd', key: 'treeFontSize',   min: 11, max: 18,  step: 1, unit: 'px', def: 14  },
   { ddId: 'tbsize-dd', key: 'toolbarZoom',    min: 70, max: 160, step: 5, unit: '%',  def: 100 },
 ];
 
@@ -1919,7 +1921,7 @@ function loadAppearance() {
     if (saved) {
       // One-time bumps for EXISTING users (migrations of old profiles). A FRESH
       // install skips these (see the else branch) so it starts at the clean
-      // defaults — Noto Sans, editor 14px — instead of an oversized 15/16px.
+      // defaults — Helvetica, editor 15px — instead of an oversized 16px.
       // One-time bump (v1.0.152): old builds defaulted to editor 14 / tree 13.
       if (!localStorage.getItem('inkwell-fontsize-bump-v1')) {
         if ((prefs.editorFontSize ?? 0) < 16) prefs.editorFontSize = 16;
@@ -1936,13 +1938,24 @@ function loadAppearance() {
         if ((prefs.treeFontSize ?? 0) > 13) prefs.treeFontSize = 13;
         localStorage.setItem('inkwell-treesize-13-v1', '1');
       }
+      // v1.0.25: the defaults moved to Helvetica, editor 15px, sidebar 14px (the whole
+      // interface went up a pixel with them). Carry that to a profile that is still on
+      // the PREVIOUS defaults — a size or a family someone picked on purpose is theirs,
+      // not ours to change, so anything else is left exactly as it is.
+      if (!localStorage.getItem('amelie.defaults-helvetica-15-v1')) {
+        if ((prefs.editorFontSize ?? 14) === 14) prefs.editorFontSize = 15;
+        if ((prefs.treeFontSize   ?? 13) === 13) prefs.treeFontSize   = 14;
+        if ((prefs.editorFont     ?? 'noto') === 'noto') prefs.editorFont = DEFAULT_FONT;
+        localStorage.setItem('amelie.defaults-helvetica-15-v1', '1');
+      }
     } else {
       // Fresh install: mark all migrations done so they never bump this profile;
-      // the empty prefs then fall back to the defaults (Noto Sans, editor 14px —
-      // DEFAULT_FONT and the `?? 14` in applyAppearance).
+      // the empty prefs then fall back to the defaults (Helvetica, editor 15px,
+      // sidebar 14px — DEFAULT_FONT and the `??` values in applyAppearance).
       localStorage.setItem('inkwell-fontsize-bump-v1', '1');
       localStorage.setItem('inkwell-editorsize-15-v1', '1');
       localStorage.setItem('inkwell-treesize-13-v1', '1');
+      localStorage.setItem('amelie.defaults-helvetica-15-v1', '1');
     }
     return prefs;
   } catch(_) { return {}; }
@@ -2447,7 +2460,7 @@ function renderTree() {
   // reachable from the icon in the sections bar at the top.
   const filtered = query ? filterTree(state.notes, query) : state.notes;
   if (filtered.length === 0) {
-    fileTree.innerHTML = '<div style="padding:14px;color:var(--text-3);font-size:12px;font-style:italic">' + escHtml(window.i18n.t('canvas.empty')) + '</div>';
+    fileTree.innerHTML = '<div style="padding:14px;color:var(--text-3);font-size:13px;font-style:italic">' + escHtml(window.i18n.t('canvas.empty')) + '</div>';
     return;
   }
   renderNodes(filtered, fileTree);
@@ -4302,7 +4315,7 @@ function setupEditor() {
 // ─── Note content zoom (Ctrl+= / Ctrl+- / Ctrl+0 / Ctrl+wheel) ─────────────
 
 const NOTE_ZOOM_KEY = 'amelie.noteZoom';
-const NOTE_ZOOM_BASE = 14; // px — must match --editor-font-size default
+const NOTE_ZOOM_BASE = 15; // px — must match --editor-font-size default
 let _noteZoom = parseInt(localStorage.getItem(NOTE_ZOOM_KEY), 10) || 100;
 // One-time readability bump for EXISTING users only: raise a small note zoom once.
 // A FRESH install stays at 100% so the editor matches the chosen font size (13px)
@@ -5367,7 +5380,7 @@ function enhancePreviewContent(token, widthsByTable) {
         if (ok === false && !a.dataset.missingMarked) {
           a.dataset.missingMarked = '1';
           const pre = document.createElement('span');
-          pre.style.cssText = 'color:var(--warn, #d29922);font-size:12px;margin-right:4px';
+          pre.style.cssText = 'color:var(--warn, #d29922);font-size:13px;margin-right:4px';
           pre.textContent = '⚠ ' + window.i18n.t('media.missing') + ' —';
           a.parentNode?.insertBefore(pre, a);
           a.style.opacity = '.55';
@@ -5948,7 +5961,7 @@ const PDF_PRINT_CSS = `
   body {
     color: #1a1a1a;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    font-size: 11px; line-height: 1.55;
+    font-size: 11px; line-height: 1.55;   /* PAPER, not interface: stays put when the UI grows */
     padding: 0;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
@@ -6262,7 +6275,7 @@ function renderTOC() {
 
   list.innerHTML = '';
   if (matched.length === 0) {
-    list.innerHTML = '<div style="padding:12px 14px;font-size:11px;color:var(--text-3);font-family:var(--editor-font);font-style:italic">' + escHtml(window.i18n.t('toc.empty')) + '</div>';
+    list.innerHTML = '<div style="padding:12px 14px;font-size:12px;color:var(--text-3);font-family:var(--editor-font);font-style:italic">' + escHtml(window.i18n.t('toc.empty')) + '</div>';
     return;
   }
 
@@ -7055,7 +7068,7 @@ function setupViewColorBubble() {
   _vcBubble.type = 'button';
   _vcBubble.id = 'view-color-bubble';
   _vcBubble.title = window.i18n ? window.i18n.t('toolbar.text_color_remove') : 'Rimuovi colore';
-  _vcBubble.style.cssText = 'position:fixed;display:none;z-index:3100;gap:5px;height:28px;padding:0 10px;align-items:center;justify-content:center;background:var(--bg-2);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.4);cursor:pointer;color:var(--text-1);font-family:var(--ui-font);font-size:12px;white-space:nowrap';
+  _vcBubble.style.cssText = 'position:fixed;display:none;z-index:3100;gap:5px;height:28px;padding:0 10px;align-items:center;justify-content:center;background:var(--bg-2);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.4);cursor:pointer;color:var(--text-1);font-family:var(--ui-font);font-size:13px;white-space:nowrap';
   // Crossed-out drop icon + "Remove color" text.
   _vcBubble.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M5 16L10 5l5 11M7 12h6"/><line x1="4" y1="20" x2="20" y2="4"/></svg><span></span>';
   _vcBubble.querySelector('span').textContent = window.i18n ? window.i18n.t('toolbar.text_color_remove') : 'Rimuovi colore';
@@ -7106,7 +7119,7 @@ let _linkHint = null;
 function setupLinkHoverHint() {
   _linkHint = document.createElement('div');
   _linkHint.id = 'link-hover-hint';
-  _linkHint.style.cssText = 'position:fixed;left:0;top:0;display:none;z-index:3300;max-width:60vw;padding:5px 10px;background:var(--bg-2);border:1px solid var(--border);border-radius:7px;box-shadow:0 4px 14px rgba(0,0,0,.4);font-family:var(--ui-font);font-size:12px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none';
+  _linkHint.style.cssText = 'position:fixed;left:0;top:0;display:none;z-index:3300;max-width:60vw;padding:5px 10px;background:var(--bg-2);border:1px solid var(--border);border-radius:7px;box-shadow:0 4px 14px rgba(0,0,0,.4);font-family:var(--ui-font);font-size:13px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none';
   document.body.appendChild(_linkHint);
 
   const targetOf = (a) => {
@@ -11170,13 +11183,15 @@ function updateBackupDestSummary() {
     const dot = document.createElement('span'); dot.className = 'bkd-dot';
     const name = document.createElement('span'); name.className = 'bkd-name'; name.textContent = t(d.key);
     row.append(dot, name);
-    if (d.target) {
-      const tg = document.createElement('span'); tg.className = 'bkd-target'; tg.textContent = '— ' + d.target;
-      row.appendChild(tg);
-    }
+    // State BEFORE the target: a long path wraps, and "(off)" sitting after it ended up
+    // stranded on a line of its own, far from the name it belongs to.
     if (!d.enabled) {
       const st = document.createElement('span'); st.className = 'bkd-state'; st.textContent = '(' + t('sync.dest_off') + ')';
       row.appendChild(st);
+    }
+    if (d.target) {
+      const tg = document.createElement('span'); tg.className = 'bkd-target'; tg.textContent = '— ' + d.target;
+      row.appendChild(tg);
     }
     box.appendChild(row);
   });
@@ -11743,9 +11758,9 @@ async function openSettings() {
   document.querySelectorAll('.theme-card').forEach(c =>
     c.classList.toggle('active', c.dataset.theme === state.theme));
   const ap = loadAppearance();
-  const edSize   = ap.editorFontSize ?? 14;
+  const edSize   = ap.editorFontSize ?? 15;
   const treePy   = ap.treeSpacing    ?? 3;
-  const treeSize = ap.treeFontSize   ?? 13;
+  const treeSize = ap.treeFontSize   ?? 14;
   const fontKey  = ap.editorFont     ?? DEFAULT_FONT;
   const tbZoom   = ap.toolbarZoom     ?? 100;
   updateNumberDdCurrent('edsize-dd', edSize,   'px');
@@ -13907,7 +13922,7 @@ async function renderPdfPages(attachmentName, container) {
       if (myToken !== _pdfRenderToken) return;   // superseded — leave the newer render's view
       console.warn('PDF empty or not a PDF (skipped):', attachmentName, 'bytes=' + data.length);
       container.innerHTML =
-        `<div style="padding:18px;color:#e0758a;font-size:13px;text-align:center">` +
+        `<div style="padding:18px;color:#e0758a;font-size:14px;text-align:center">` +
         `${escHtml(window.i18n.t('pdf.empty'))}</div>`;
       return;
     }
@@ -13922,7 +13937,7 @@ async function renderPdfPages(attachmentName, container) {
     if (myToken !== _pdfRenderToken) return;
     console.error('PDF render failed:', err);
     container.innerHTML =
-      `<div style="padding:18px;color:#e0758a;font-size:13px;text-align:center">` +
+      `<div style="padding:18px;color:#e0758a;font-size:14px;text-align:center">` +
       `${escHtml(window.i18n.t('pdf.load_error'))}: ${escHtml(err?.message || String(err))}</div>`;
   }
 }
@@ -15424,7 +15439,7 @@ function showToast(msg, duration = 2800) {
     toast.style.cssText = `
       position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(10px);
       background:var(--bg-3);border:1px solid var(--border-light);border-radius:7px;
-      padding:9px 20px;font-family:var(--ui-font);font-size:13px;color:var(--text-0);
+      padding:9px 20px;font-family:var(--ui-font);font-size:14px;color:var(--text-0);
       box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:9999;
       opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;
     `;
@@ -16231,11 +16246,11 @@ function setupFileDrop() {
         sw.style.cssText = 'width:26px;height:26px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:' + color;
       } else {
         sw.textContent = '✕';
-        sw.style.cssText = 'width:26px;height:26px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text-2)';
+        sw.style.cssText = 'width:26px;height:26px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text-2)';
       }
       const tx = document.createElement('span');
       tx.textContent = label;
-      tx.style.cssText = 'font-size:10px;line-height:1.1;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:54px';
+      tx.style.cssText = 'font-size:11px;line-height:1.1;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:54px';
       cell.appendChild(sw); cell.appendChild(tx);
       cell.addEventListener('mousedown', ev => ev.preventDefault());
       cell.addEventListener('click', () => { onClick(); _closeColorPop(); editor.focus(); });
@@ -16247,7 +16262,7 @@ function setupFileDrop() {
     const rm = document.createElement('button');
     rm.type = 'button';
     rm.textContent = '✕  Rimuovi colore';
-    rm.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:8px;padding:6px;background:transparent;border:1px solid var(--border);border-radius:7px;cursor:pointer;color:var(--text-2);font:inherit;font-size:12px';
+    rm.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:8px;padding:6px;background:transparent;border:1px solid var(--border);border-radius:7px;cursor:pointer;color:var(--text-2);font:inherit;font-size:13px';
     rm.addEventListener('mouseenter', () => { rm.style.background = 'var(--bg-3)'; rm.style.color = 'var(--text-0)'; });
     rm.addEventListener('mouseleave', () => { rm.style.background = 'transparent'; rm.style.color = 'var(--text-2)'; });
     rm.addEventListener('mousedown', ev => ev.preventDefault());
