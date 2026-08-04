@@ -170,6 +170,11 @@ class SyncManager {
         return { success: false, error: msg, results, lastSync: this.lastSync };
       }
       this._lastBackupSig = sig;   // remember success → skip next time if unchanged
+      // Tell the renderer WHICH destinations were written, so the notification can
+      // name them. "Backup completed" alone is ambiguous when more than one
+      // destination exists: a run that only wrote the local folder looked exactly
+      // like one that also reached the share.
+      meta.dests = SyncManager._writtenDests(results);
       this._setStatus('ok', null, meta);
       return { success: true, results, lastSync: this.lastSync };
     } catch (e) {
@@ -177,6 +182,23 @@ class SyncManager {
       this._setStatus('error', e.message, meta);
       return { success: false, error: e.message };
     }
+  }
+
+  /**
+   * Which destinations actually WROTE in this run, as stable keys the renderer
+   * turns into names ('local' | 'samba' | 'webdav'). A destination that was
+   * skipped (e.g. Samba with both backup formats off) or returned an empty
+   * result wrote nothing, so it must not be named — the notification would
+   * otherwise claim a copy that doesn't exist.
+   */
+  static _writtenDests(results) {
+    const wrote = (r) => !!r && !r.error && !r.skipped
+      && (typeof r !== 'object' || Object.keys(r).length > 0);
+    const out = [];
+    if (wrote(results.local)) out.push('local');
+    if (wrote(results.webdav) || wrote(results.webdavArchive)) out.push('webdav');
+    if (wrote(results.samba)) out.push('samba');
+    return out;
   }
 
   /**
@@ -1539,6 +1561,8 @@ class SyncManager {
       lastSync: this.lastSync,
       op: meta && meta.op ? meta.op : null,
       manual: !!(meta && meta.manual),
+      // Destinations actually written (backup only) → named in the notification.
+      dests: Array.isArray(meta && meta.dests) ? meta.dests : null,
     }));
   }
 

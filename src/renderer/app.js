@@ -11106,8 +11106,14 @@ function updateActionNowButtons() {
   // configuration" persists the flags — toggling alone is not enough.
   const s = state.config?.sync || {};
   // Backup via VPN+Samba ready = flag saved + at least one mode (folder/tar)
-  // saved + connection TESTED ok (sync.samba is written only by a passing test).
-  const backupTested = !!(s.samba && (s.samba.host || s.samba.ip) && s.samba.share);
+  // saved + a saved connection. The connection is read the same way the ENGINE
+  // reads it (`_sambaConfig()`: the legacy `sync.samba` mirror if present, else
+  // `sync.vpn.smb`). This used to demand `sync.samba`, which is written only when
+  // a passing test gets committed by a Samba-field blur — so a destination that
+  // backed up correctly every hour could have no "Backup now" button at all,
+  // invisible unless another destination happened to be enabled too.
+  const smbConn = s.samba || s.vpn?.smb;
+  const backupTested = !!(smbConn && (smbConn.host || smbConn.ip) && smbConn.share);
   const modeOk = (s.vpn?.folder !== false) || !!s.vpn?.archive;
   const vpnReady = !!s.vpn?.enabled && modeOk && backupTested;
   const anyBackup = !!(s.local?.enabled || s.webdav?.enabled || vpnReady);
@@ -11120,6 +11126,68 @@ function updateActionNowButtons() {
     || (s.twoway?.transport !== 'webdav' && !!(s.twoway?.smb && (s.twoway.smb.ip || s.twoway.smb.host)))
   );
   const sblk = $('sync-now-block'); if (sblk) sblk.style.display = syncReady ? 'flex' : 'none';
+  updateBackupDestSummary();
+}
+
+// The destination recap under the Backup pills. The pills show ONE section at a
+// time and hide the rest, so an enabled destination can sit invisible in a
+// collapsed section — which is exactly how a local folder backup ran for weeks
+// while the user was looking at the (configured but switched-off) Samba panel.
+// This line always states all three: enabled ones with their target, and
+// configured-but-off ones struck through, whatever pill is selected.
+//
+// Reads the LIVE form, not the saved config: every toggle change autosaves
+// immediately (the settings-modal 'change' listener), so the DOM is the truth
+// the user is looking at and never lags behind by a save.
+function updateBackupDestSummary() {
+  const box = $('bk-dest-summary');
+  if (!box) return;
+  const v = (id) => { const el = $(id); return el && typeof el.value === 'string' ? el.value.trim() : ''; };
+  const on = (id) => !!$(id)?.checked;
+  const smbShare = v('cfg-smb-share'), smbPath = v('cfg-smb-path');
+  const wdUrl = v('cfg-webdav-url') || state._webdavSaved?.backup?.url || state.config?.sync?.webdav?.url || '';
+  const dests = [
+    { key: 'sync.local', enabled: on('cfg-local-enabled'), target: v('cfg-local-path'),
+      configured: !!v('cfg-local-path') },
+    { key: 'sync.transport_samba', enabled: on('cfg-vpn-enabled'),
+      target: smbShare ? smbShare + (smbPath ? '/' + smbPath : '') : '',
+      configured: !!(v('cfg-smb-ip') && smbShare) },
+    { key: 'sync.transport_webdav', enabled: on('cfg-webdav-enabled'), target: wdUrl,
+      configured: !!wdUrl },
+  ];
+  const shown = dests.filter(d => d.enabled || d.configured);
+  const t = (k) => window.i18n.t(k);
+  box.innerHTML = '';
+  // Nothing configured at all → say nothing (a fresh install shouldn't scold).
+  if (!shown.length) return;
+  const head = document.createElement('div');
+  head.className = 'bkd-row bkd-state';
+  head.textContent = t('sync.dests_label');
+  box.appendChild(head);
+  shown.forEach(d => {
+    const row = document.createElement('div');
+    row.className = 'bkd-row' + (d.enabled ? '' : ' bkd-off');
+    const dot = document.createElement('span'); dot.className = 'bkd-dot';
+    const name = document.createElement('span'); name.className = 'bkd-name'; name.textContent = t(d.key);
+    row.append(dot, name);
+    if (d.target) {
+      const tg = document.createElement('span'); tg.className = 'bkd-target'; tg.textContent = '— ' + d.target;
+      row.appendChild(tg);
+    }
+    if (!d.enabled) {
+      const st = document.createElement('span'); st.className = 'bkd-state'; st.textContent = '(' + t('sync.dest_off') + ')';
+      row.appendChild(st);
+    }
+    box.appendChild(row);
+  });
+  // Configured destinations but every one switched off: the scheduled backup
+  // would report "completed" having written nowhere. Say so, in red.
+  if (!dests.some(d => d.enabled)) {
+    const w = document.createElement('div');
+    w.className = 'bkd-row bkd-warn';
+    w.textContent = t('sync.dests_none');
+    box.appendChild(w);
+  }
 }
 
 // At least ONE backup mode (folder/archive) must be selected for the "VPN with
@@ -11867,6 +11935,9 @@ function updateBackupTransportView(transport) {
   Object.entries(sec).forEach(([k, id]) => { const el = $(id); if (el) el.style.display = (k === t) ? 'block' : 'none'; });
   const b = $(body[t]); if (b) b.style.display = 'flex';          // tab = expanded
   const c = $(chev[t]); if (c) c.classList.add('open');
+  // The hidden sections stay ENABLED — the recap under the pills is what keeps
+  // them visible, so refresh it whenever the visible section changes.
+  updateBackupDestSummary();
 }
 
 async function updateTwowayConnView(forceEdit = false) {
@@ -16989,10 +17060,24 @@ function logSyncEventNotif(data) {
   const label = window.i18n.t(`notif.${data.op}_${key}`);
   if (data.status === 'ok') {
     const d = new Date(), p2 = n => String(n).padStart(2, '0');
-    addEventNotif(`${label} (${p2(d.getHours())}:${p2(d.getMinutes())})`, true);
+    // Name the destinations. "Backup completed" on its own reads as "everything
+    // you configured got a copy", which is wrong as soon as one destination is
+    // switched off — the local folder can succeed while the share never got
+    // written to. The engine reports which ones it actually wrote.
+    const where = _destNames(data.dests);
+    addEventNotif(`${label}${where ? ' — ' + where : ''} (${p2(d.getHours())}:${p2(d.getMinutes())})`, true);
   } else {
     addEventNotif(`${label}: ${data.error || window.i18n.t('notif.unknown_error')}`, false);
   }
+}
+
+// Destination keys from the sync engine ('local' | 'samba' | 'webdav') → the same
+// names the Backup settings use, so the notification and the settings agree.
+// Unknown keys pass through verbatim rather than vanishing.
+function _destNames(dests) {
+  if (!Array.isArray(dests) || !dests.length) return '';
+  const k = { local: 'sync.local', samba: 'sync.transport_samba', webdav: 'sync.transport_webdav' };
+  return dests.map(d => (k[d] ? window.i18n.t(k[d]) : d)).join(', ');
 }
 
 // Add an event notification (e.g. "Backup completato") to the bell.

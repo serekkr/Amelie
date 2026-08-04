@@ -3927,6 +3927,27 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 #tw-transport-pills .dlp.active, #bk-transport-pills .dlp.active {
   background: var(--accent); color: #fff; border-color: var(--accent);
 }
+/* Backup destinations recap, under the pills. The pills show ONE section at a
+   time, so this line is the only place that states every destination at once:
+   the enabled ones (green dot + target) and the configured-but-off ones (dim,
+   struck through) — an enabled destination must never be invisible. */
+.bk-dest-summary {
+  display: flex; flex-direction: column; gap: 3px;
+  margin-top: 8px; font-family: var(--ui-font); font-size: 12px; color: var(--text-1);
+}
+.bk-dest-summary .bkd-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.bk-dest-summary .bkd-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: var(--green); align-self: center;
+}
+.bk-dest-summary .bkd-off .bkd-dot { background: var(--text-3); }
+.bk-dest-summary .bkd-name { color: var(--text-0); }
+.bk-dest-summary .bkd-off .bkd-name { color: var(--text-2); text-decoration: line-through; }
+/* The target (path / share / URL) is secondary info — dim and breakable so a long
+   path can't push the settings panel into horizontal scrolling. */
+.bk-dest-summary .bkd-target { color: var(--text-2); word-break: break-all; }
+.bk-dest-summary .bkd-state { color: var(--text-2); }
+.bk-dest-summary .bkd-warn { color: var(--red); }
 /* Sync option labels (Two-way sync / WebDAV / VPN with Samba): bright white like
    the Backup tab's destination titles, instead of the dim grey field-label color.
    Needs ID specificity to beat #settings-modal .field-group label:not(.toggle). */

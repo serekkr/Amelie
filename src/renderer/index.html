@@ -704,6 +704,14 @@
                 <button type="button" class="dlp" data-bktransport="webdav" data-i18n="sync.transport_webdav">WebDAV</button>
                 <button type="button" class="dlp" data-bktransport="vpn" data-i18n="sync.transport_samba">VPN with Samba</button>
               </div>
+              <!-- ALWAYS-VISIBLE list of the destinations the backup will write
+                   to. The pills above show one section at a time and hide the
+                   others, so an ENABLED destination could sit invisible in a
+                   collapsed section (a local folder backup quietly running while
+                   the user looked at the Samba panel, or a configured share that
+                   was never switched on). This line states it regardless of which
+                   pill is selected. Filled by updateBackupDestSummary(). -->
+              <div id="bk-dest-summary" class="bk-dest-summary"></div>
             </div>
 
             <!-- ── Section: Local (moved to the top, before WireGuard/WebDAV) ── -->
