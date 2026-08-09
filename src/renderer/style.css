@@ -3590,6 +3590,13 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 }
 .notif-row-due { font-family: var(--editor-font); font-size: 13px; color: var(--text-3); margin-top: 2px; }
 .notif-row.overdue .notif-row-due { color: var(--red); }
+/* The destination under a notification's title finishes the sentence the title
+   starts ("… completed with:"), so it reads in the title's colour. Only the
+   colour changes — size, face and spacing stay those of the line below it, which
+   is the date and genuinely is secondary. Two rules because the bell and the
+   Notifications view title in different tones. */
+.notif-row-due.notif-dest { color: var(--text-0); }
+.simple-sub.notif-dest    { color: var(--text-1); }
 
 /* ─── ToDo view (agenda / lista) ─────────────────────────────── */
 #todo-view { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
