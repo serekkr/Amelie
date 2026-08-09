@@ -18,7 +18,8 @@
     "test:enc": "node test/editor-encrypted.cdp.mjs",
     "test:backup": "node test/backup-restore.cdp.mjs",
     "test:attach": "node test/attachment-gate.cdp.mjs",
-    "test:media": "node test/media-opens-note.cdp.mjs"
+    "test:media": "node test/media-opens-note.cdp.mjs",
+    "test:nav": "node test/note-nav.cdp.mjs"
   },
   "dependencies": {
     "hash-wasm": "^4.12.0",

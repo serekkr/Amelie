@@ -2853,7 +2853,10 @@ function makeNoteEl(node, parentArray, folderPath = '') {
 }
 
 // ─── Note open/save ───────────────────────────────────────────────────────────
-async function openNote(node) {
+// opts.inPlace — load the note into the tab that is already active instead of
+// jumping to whichever other tab happens to hold it. The prev/next arrows use
+// it so paging never wanders off the tab being read.
+async function openNote(node, opts) {
   _returnToFilesView();   // leaving Recent/Bookmarks/Tags/Notifications → back to the tree
   // Opening a note clears any folder selection: from now on a new note follows
   // the open note's folder again (until the user clicks another folder).
@@ -2890,19 +2893,31 @@ async function openNote(node) {
     // caret/scroll to the top (and with the CM engine that yanks the view up
     // mid-typing when something re-triggers openNote). Leave it as-is.
     if (existing === activeTabIdx) { if (typeof _cmLog === 'function') _cmLog('openNote: already active — skip reset <- ' + _cmStack()); return; }
-    tabs[existing].cursorPos = 0;
-    tabs[existing].scrollPos = 0;
-    switchTab(existing);
-    return;
+    // Paging with the arrows stays in the tab being read, so it does NOT take
+    // this exit: landing on a note that happened to be open elsewhere is what
+    // made a run of prev/next jump to another tab mid-read. Fall through and
+    // let the note load in place, twin and all.
+    if (!opts?.inPlace) {
+      tabs[existing].cursorPos = 0;
+      tabs[existing].scrollPos = 0;
+      switchTab(existing);
+      return;
+    }
   }
 
   // Replace the active tab in-place (single-tab navigation), but only if it's a note tab
   if (activeTabIdx !== -1 && !tabs[activeTabIdx]?.type) {
     const tab = tabs[activeTabIdx];
+    // The same note may already be open in another tab (only the arrows get
+    // here, having skipped the switch above). Start from ITS content, which can
+    // hold unsaved edits: blanking would show the on-disk version, and the twin
+    // reconciliation in switchTab would then push that stale text over the
+    // edits on the next tab change. Same seeding as "Open in new tab".
+    const twin = tabs.find(t => t !== tab && t.path === node.path && !t.type);
     tab.path     = node.path;
     tab.name     = node.name;
-    tab.content  = '';
-    tab.isDirty  = false;
+    tab.content  = twin ? twin.content : '';
+    tab.isDirty  = twin ? twin.isDirty : false;
     tab.viewMode = 'edit';
     tab.scrollPos = 0;
     tab.cursorPos = 0;
@@ -2961,7 +2976,7 @@ async function navigateNote(direction) {
   if (idx === -1) return;
   const nextIdx = direction === 'next' ? idx + 1 : idx - 1;
   if (nextIdx < 0 || nextIdx >= list.length) return;
-  await openNote(list[nextIdx]);
+  await openNote(list[nextIdx], { inPlace: true });
 }
 
 // ─── Frontmatter (YAML) ───────────────────────────────────────────────────────
