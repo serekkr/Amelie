@@ -17088,20 +17088,20 @@ function logSyncEventNotif(data) {
   if (data.status !== 'ok' && data.status !== 'error') return;   // 'syncing'/'idle' aren't outcomes
   const key = data.manual ? 'manual' : 'auto';
   const label = window.i18n.t(`notif.${data.op}_${key}`);
+  // No time in the text: every row already prints the full date and time
+  // underneath, so writing "(17:43)" here said the same thing twice.
   if (data.status === 'ok' && data.unchanged) {
     // Nothing was copied because nothing had changed. Worth saying — silence here
     // reads exactly like a backup that failed to run — but it must not claim a copy
     // was made, so it gets its own wording and names no destination.
-    const d = new Date(), p2 = n => String(n).padStart(2, '0');
-    addEventNotif(`${window.i18n.t('notif.backup_unchanged')} (${p2(d.getHours())}:${p2(d.getMinutes())})`, true);
+    addEventNotif(window.i18n.t('notif.backup_unchanged'), true);
   } else if (data.status === 'ok') {
-    const d = new Date(), p2 = n => String(n).padStart(2, '0');
     // Name the destinations. "Backup completed" on its own reads as "everything
     // you configured got a copy", which is wrong as soon as one destination is
     // switched off — the local folder can succeed while the share never got
     // written to. The engine reports which ones it actually wrote.
     const where = _destNames(data.dests);
-    addEventNotif(`${label}${where ? ' — ' + where : ''} (${p2(d.getHours())}:${p2(d.getMinutes())})`, true);
+    addEventNotif(`${label}${where ? ' — ' + where : ''}`, true);
   } else {
     addEventNotif(`${label}: ${data.error || window.i18n.t('notif.unknown_error')}`, false);
   }
