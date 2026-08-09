@@ -12150,7 +12150,7 @@ function setupSync() {
     // they finish. (The manual buttons set their own "syncing" state.)
     if (data.status === 'ok') {
       syncStatusDot.className = 'sync-ok';
-      loadTree();
+      if (!data.unchanged) loadTree();   // a pass that copied nothing changed nothing to re-read
       setTimeout(() => syncStatusDot.className = 'sync-idle', 4000);
     } else if (data.status === 'error') {
       // Don't flash the icon orange/red; the error is reported via notifications.
@@ -17088,7 +17088,13 @@ function logSyncEventNotif(data) {
   if (data.status !== 'ok' && data.status !== 'error') return;   // 'syncing'/'idle' aren't outcomes
   const key = data.manual ? 'manual' : 'auto';
   const label = window.i18n.t(`notif.${data.op}_${key}`);
-  if (data.status === 'ok') {
+  if (data.status === 'ok' && data.unchanged) {
+    // Nothing was copied because nothing had changed. Worth saying — silence here
+    // reads exactly like a backup that failed to run — but it must not claim a copy
+    // was made, so it gets its own wording and names no destination.
+    const d = new Date(), p2 = n => String(n).padStart(2, '0');
+    addEventNotif(`${window.i18n.t('notif.backup_unchanged')} (${p2(d.getHours())}:${p2(d.getMinutes())})`, true);
+  } else if (data.status === 'ok') {
     const d = new Date(), p2 = n => String(n).padStart(2, '0');
     // Name the destinations. "Backup completed" on its own reads as "everything
     // you configured got a copy", which is wrong as soon as one destination is

@@ -31,10 +31,16 @@ class SyncManager {
       }
     }
     this._setupWebDAV();
-    // NO backup at startup (the user asked not to). Only the interval timer runs
-    // scheduled backups; the two-way Sync also waits for its own timer.
+    // No UNCONDITIONAL backup at startup — the user asked for that and it stands.
+    // What runs here is the missed one: the interval timer counts app UPTIME and
+    // dies with the app, so half an hour of work, closed, reopened five hours
+    // later, never reached an hourly pass and nothing was ever copied. The last
+    // successful run is now on disk (nothing survived the process before), so
+    // startup can tell an overdue backup from a punctual one.
+    this._loadSyncState();
     if (this.config.sync?.enabled) {
       this._startAutoSync();
+      this._scheduleCatchUp();
     }
     // Bring the WireGuard tunnel up at startup if the option is enabled.
     this.ensureVpnTunnel();
@@ -71,7 +77,7 @@ class SyncManager {
     // this; switching one off, or changing the frequency, does not.
     const gained = newTargets.filter(t => !prevTargets.includes(t));
     if (gained.length) this._scheduleFirstBackup(gained);
-    else if (!this._anyBackupDestination()) this._cancelFirstBackup();
+    else if (!this._anyBackupDestination() && !this._twowayConfigured()) { this._cancelFirstBackup(); this._cancelCatchUp(); }
   }
 
   /** True when at least one backup destination is enabled. */
@@ -99,6 +105,151 @@ class SyncManager {
   }
   _cancelFirstBackup() {
     if (this._firstBackupTimer) { clearTimeout(this._firstBackupTimer); this._firstBackupTimer = null; }
+  }
+
+  // How often a backup is due, in minutes. Historically stored under the LOCAL
+  // destination and still read from there so existing settings keep working —
+  // which is why it reads oddly when, as here, the local folder is switched off
+  // and the share is the one being written. Read in ONE place so the interval
+  // timer and the startup catch-up can never disagree about the frequency.
+  _backupIntervalMinutes() {
+    const min = parseInt(this.config?.sync?.local?.intervalMinutes, 10);
+    return (Number.isFinite(min) && min > 0) ? min : 60;
+  }
+
+  // The two-way sync's own frequency, read in one place for the same reason.
+  _twowayIntervalMinutes() {
+    const min = parseInt(this.config?.sync?.twoway?.intervalMinutes, 10);
+    return (Number.isFinite(min) && min > 0) ? min : 15;
+  }
+
+  // Whether the two-way sync has somewhere to sync WITH — the same condition
+  // _startAutoSync uses to decide it deserves a timer at all.
+  _twowayConfigured() {
+    const tw = this.config?.sync?.twoway || {};
+    const hasFolder = tw.smb?.remoteSubPath || tw.subPath || tw.path
+      || (tw.transport === 'webdav' && tw.webdav?.url);
+    return !!(tw.enabled && hasFolder);
+  }
+
+  // When each of the two last succeeded. Kept beside the settings rather than
+  // inside them: the renderer rewrites the whole settings file on every toggle and
+  // every keystroke, so a value written from here would be raced away.
+  _syncStatePath() { return path.join(path.dirname(this.configFile), 'sync-state.json'); }
+
+  _loadSyncState() {
+    let st = null;
+    try { st = JSON.parse(fs.readFileSync(this._syncStatePath(), 'utf8')); } catch (_) {}
+    this._syncState = st;
+    // Carry the unchanged-vault shortcut across restarts, but ONLY while the
+    // destinations are still the ones that run wrote to — the same reasoning as
+    // reloadConfig. Without this the vault fingerprint started empty every launch
+    // and an untouched vault was copied again on every catch-up, spending the
+    // keepLast slots on identical snapshots.
+    if (st && st.dests === this._backupDestSignature(this.config)) {
+      this._lastBackupSig = st.vaultSig || null;
+    }
+    return st;
+  }
+
+  // Merged, never wholesale: the backup and the two-way sync each stamp their own
+  // key, and one finishing must not erase the other's record.
+  _updateSyncState(patch) {
+    // Merged against what is on DISK, not just against what this instance happens
+    // to hold: main rebuilds the SyncManager on a vault switch, and an instance
+    // that never loaded the file would otherwise write its own key and silently
+    // drop the other one's.
+    let onDisk = null;
+    try { onDisk = JSON.parse(fs.readFileSync(this._syncStatePath(), 'utf8')); } catch (_) {}
+    const next = Object.assign({}, onDisk || {}, this._syncState || {}, patch);
+    this._syncState = next;
+    try {
+      fs.writeFileSync(this._syncStatePath(), JSON.stringify(next, null, 1));
+    } catch (e) {
+      // Not fatal: the run itself succeeded. It only means the next start cannot
+      // tell whether one is overdue, and will make one up to be safe.
+      console.error('[Sync] could not record the run time:', e.message);
+    }
+  }
+
+  _recordBackupState(vaultSig) {
+    this._updateSyncState({
+      lastBackupAt: new Date().toISOString(),
+      vaultSig,
+      dests: this._backupDestSignature(this.config),
+    });
+  }
+
+  _recordTwowayState() {
+    this._updateSyncState({ lastTwowayAt: new Date().toISOString() });
+  }
+
+  // How long past due a run is, in ms. No record at all counts as overdue: it is
+  // either a first run under this version or an unreadable file, and making one
+  // extra copy is the safe way to be wrong.
+  _overdueBy(stamp, minutes) {
+    const at = Date.parse(this._syncState?.[stamp] || '');
+    if (!Number.isFinite(at)) return { overdue: true, sinceMin: null };
+    return { overdue: Date.now() - (at + minutes * 60 * 1000) >= 0,
+             sinceMin: Math.round((Date.now() - at) / 60000) };
+  }
+
+  // Runs missed while the app was closed, made up shortly after launch.
+  //
+  // The backup catch-up is NOT forced: an untouched vault still skips, so
+  // restarting five times over an idle vault does not spend five of the keepLast
+  // snapshots on identical copies. The two-way sync has no such shortcut — it has
+  // to reach the remote to find out whether anything came in — so an overdue one
+  // always runs.
+  //
+  // They run in SEQUENCE, never together: _busy() rejects a second run while one
+  // is in flight ("Already syncing"), which would turn the loser into an error in
+  // the bell. Awaiting the first is what keeps a slow backup from doing that to
+  // the sync behind it.
+  _CATCH_UP_DELAY_MS = 30000;
+  _scheduleCatchUp() {
+    this._cancelCatchUp();
+    const jobs = [];
+
+    if (this._anyBackupDestination()) {
+      const min = this._backupIntervalMinutes();
+      const { overdue, sinceMin } = this._overdueBy('lastBackupAt', min);
+      if (overdue) {
+        console.log(sinceMin == null
+          ? '[Sync] No record of a previous backup — catching up'
+          : `[Sync] Last backup ${sinceMin} min ago, past the ${min} min interval — catching up`);
+        jobs.push({ what: 'backup', run: () => this._anyBackupDestination() && this.runBackup({ manual: false }) });
+      } else {
+        console.log(`[Sync] Last backup ${sinceMin} min ago — under the ${min} min interval, nothing to catch up`);
+      }
+    }
+
+    if (this._twowayConfigured()) {
+      const min = this._twowayIntervalMinutes();
+      const { overdue, sinceMin } = this._overdueBy('lastTwowayAt', min);
+      if (overdue) {
+        console.log(sinceMin == null
+          ? '[Sync] No record of a previous two-way sync — catching up'
+          : `[Sync] Last two-way sync ${sinceMin} min ago, past the ${min} min interval — catching up`);
+        jobs.push({ what: 'twoway', run: () => this._twowayConfigured() && this.runTwoway({ manual: false }) });
+      } else {
+        console.log(`[Sync] Last two-way sync ${sinceMin} min ago — under the ${min} min interval, nothing to catch up`);
+      }
+    }
+
+    if (!jobs.length) return;
+    this._catchUpTimer = setTimeout(async () => {
+      this._catchUpTimer = null;
+      for (const job of jobs) {
+        // Re-checked at the moment it fires: the destination may have been
+        // switched off during the wait.
+        try { await job.run(); } catch (e) { console.error(`[Sync] catch-up ${job.what} failed:`, e && e.message); }
+      }
+    }, this._CATCH_UP_DELAY_MS);
+  }
+
+  _cancelCatchUp() {
+    if (this._catchUpTimer) { clearTimeout(this._catchUpTimer); this._catchUpTimer = null; }
   }
 
   _stopTimers() {
@@ -141,7 +292,7 @@ class SyncManager {
     // frequency (default hourly — a sensible backup cadence).
     const backupOn = s.local?.enabled || s.vpn?.enabled || s.samba?.enabled || s.webdav?.enabled;
     if (backupOn) {
-      const min = parseInt(s.local?.intervalMinutes) || 60;
+      const min = this._backupIntervalMinutes();
       this._backupTimer = setInterval(() => this.runBackup(), min * 60 * 1000);
       console.log(`[Sync] Backup every ${min} min`);
     }
@@ -150,7 +301,7 @@ class SyncManager {
     const twHasFolder = s.twoway?.smb?.remoteSubPath || s.twoway?.subPath || s.twoway?.path
       || (s.twoway?.transport === 'webdav' && s.twoway?.webdav?.url);
     if (s.twoway?.enabled && twHasFolder) {
-      const min = parseInt(s.twoway?.intervalMinutes) || 15;
+      const min = this._twowayIntervalMinutes();
       this._twowayTimer = setInterval(() => this.runTwoway(), min * 60 * 1000);
       console.log(`[Sync] Two-way sync every ${min} min`);
     }
@@ -201,8 +352,18 @@ class SyncManager {
     const sig = this._vaultSignature();
     if (!force && this._lastBackupSig && sig === this._lastBackupSig) {
       console.log('[Sync] Vault unchanged — automatic backup skipped');
+      // Say so, once. A skip used to be entirely silent, which is indistinguishable
+      // from a backup that never ran at all — the question this answers is "why is
+      // there nothing new on the share?". Only the FIRST of a run of skips is
+      // reported: an app left open all day over an untouched vault would otherwise
+      // file the same line every hour and bury everything else in the bell.
+      if (!this._skipNotified) {
+        this._skipNotified = true;
+        this._setStatus('ok', null, { op: 'backup', manual: !!manual, unchanged: true });
+      }
       return { success: true, skipped: true };
     }
+    this._skipNotified = false;
     const meta = { op: 'backup', manual: !!manual };
     this._setStatus('syncing', null, meta);
     console.log('[Sync] Backup run...', force ? '(forced)' : '');
@@ -222,6 +383,7 @@ class SyncManager {
         return { success: false, error: msg, results, lastSync: this.lastSync };
       }
       this._lastBackupSig = sig;   // remember success → skip next time if unchanged
+      this._recordBackupState(sig);   // and on disk, so the next start knows if one is overdue
       // Tell the renderer WHICH destinations were written, so the notification can
       // name them. "Backup completed" alone is ambiguous when more than one
       // destination exists: a run that only wrote the local folder looked exactly
@@ -315,6 +477,12 @@ class SyncManager {
       }
     };
     walk(this.notesDir);
+    // Attachments count as the vault changing. The backup copies them (putdir of
+    // attachmentsDir alongside notes), but the fingerprint used to describe the
+    // notes alone — so a batch of photos or recordings added without touching a
+    // single note left the fingerprint identical, every scheduled run skipped,
+    // and those files reached no destination until some note happened to change.
+    walk(this.attachmentsDir);
     return `${count}:${size}:${Math.round(maxMtime)}`;
   }
 
@@ -331,6 +499,7 @@ class SyncManager {
     try {
       const twoway = await this._syncTwoway();
       this.lastSync = new Date().toISOString();
+      this._recordTwowayState();   // so the next start knows if one is overdue
       this._setStatus('ok', null, meta);
       return { success: true, results: { twoway }, lastSync: this.lastSync };
     } catch (e) {
@@ -1661,6 +1830,8 @@ class SyncManager {
       manual: !!(meta && meta.manual),
       // Destinations actually written (backup only) → named in the notification.
       dests: Array.isArray(meta && meta.dests) ? meta.dests : null,
+      // A pass that found nothing to copy: reported, but worded as the no-op it is.
+      unchanged: !!(meta && meta.unchanged),
     }));
   }
 
