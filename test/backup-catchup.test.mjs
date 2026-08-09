@@ -262,6 +262,35 @@ const stampTwoway = (agoMin) => {
   check('and the backup does not erase the sync\'s either', !!raw2.lastTwowayAt, JSON.stringify(raw2));
 }
 
+// ── The claim marker is written once, not over itself every backup ───────────
+// Rewriting it left a `.amelie-backup.amelie-tmp-<pid>-<nanos>` on the share on every
+// run: `put` renames onto the target, which first needs the old file deleted, and a
+// share that refuses that delete refuses the temp's cleanup too.
+{
+  const m = mgr();
+  const calls = [];
+  m._smb = async (cfg, args) => { calls.push(args[0]); return ''; };
+
+  m._smbHasFile = async () => true;                  // already claimed
+  await m._smbWriteFile({}, 'amelie/backup', '.amelie-backup');
+  check('a marker that is already on the share is left alone', calls.length === 0, JSON.stringify(calls));
+
+  m._smbHasFile = async () => false;                 // a fresh destination
+  await m._smbWriteFile({}, 'amelie/backup', '.amelie-backup');
+  check('a destination without one still gets it', calls.join(',') === 'put', JSON.stringify(calls));
+
+  calls.length = 0;
+  m._smbHasFile = async () => { throw new Error('share unreachable'); };
+  await m._smbWriteFile({}, 'amelie/backup', '.amelie-backup');
+  check('if we cannot tell, it writes rather than skip', calls.join(',') === 'put', JSON.stringify(calls));
+
+  m._smbHasFile = async () => false;
+  m._smb = async () => { throw new Error('rename: ACCESS_DENIED'); };
+  let threw = false;
+  try { await m._smbWriteFile({}, 'amelie/backup', '.amelie-backup'); } catch (_) { threw = true; }
+  check('a marker that cannot be written never fails the backup', !threw);
+}
+
 // ── Saying that nothing was copied, without saying it every hour ─────────────
 {
   // A manager that runs the REAL runBackup, with only the parts that reach the

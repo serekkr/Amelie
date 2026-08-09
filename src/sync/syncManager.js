@@ -773,12 +773,31 @@ class SyncManager {
 
   /** Write a claim-marker file (with its README text) into a folder on the share. */
   async _smbWriteFile(cfg, subPath, filename) {
+    // Write the claim marker ONCE, when it isn't already there.
+    //
+    // Its text is fixed and never changes, so rewriting it every backup bought
+    // nothing — and it cost. `put` is atomic: the helper uploads to a temp name
+    // beside the target and renames onto it, and because go-smb2's Rename will not
+    // replace an existing file, it first has to DELETE the old one. On a share
+    // where that delete is refused the rename then fails, the helper's own cleanup
+    // of the temp is refused for the same reason, and every single backup left one
+    // more `.amelie-backup.amelie-tmp-<pid>-<nanos>` lying on the share. The error
+    // never surfaced: the call sites swallow it, and a marker is not worth failing
+    // a backup over.
+    //
+    // A dated snapshot never hits this — its folder is new each run, so nothing has
+    // to be replaced. The marker was the one file written over itself every time.
+    try {
+      if (await this._smbHasFile(cfg, subPath, filename)) return;
+    } catch (_) { /* can't tell → fall through and try, as before */ }
     const tmp = path.join(os.homedir(), '.local', 'share', 'amelie', 'tmp');
     if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
     const local = path.join(tmp, filename);
     try { fs.writeFileSync(local, SyncManager._MARK_TEXT[filename] || ''); } catch (_) {}
     const remote = String(subPath).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '') + '/' + filename;
-    try { await this._smb(cfg, ['put', local, remote], { timeout: 30000 }); } catch (_) {}
+    // Logged, not swallowed: silence here is what kept the litter invisible.
+    try { await this._smb(cfg, ['put', local, remote], { timeout: 30000 }); }
+    catch (e) { console.warn(`[Samba] could not write the ${filename} marker:`, e && e.message); }
   }
 
   /** Does `subPath` on the share contain `filename`? (used for the backup/sync claim) */
