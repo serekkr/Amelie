@@ -333,7 +333,9 @@ const stampTwoway = (agoMin) => {
     m._status.length === 1 && m._status[0].unchanged === true, JSON.stringify(m._status));
 
   // "Back up now" is no longer forced: with nothing changed there is nothing to
-  // write, and keepLast would evict a real snapshot to fit the duplicate.
+  // write, and keepLast would evict a real snapshot to fit the duplicate. It only
+  // refuses after LOOKING, though — the copy has to actually be at the destination.
+  m._lastBackupMissingFrom = async () => [];        // verified present
   m._status.length = 0;
   const manual = await m.runBackup({ manual: true });
   check('"Back up now" on an unchanged vault copies nothing',
@@ -350,6 +352,94 @@ const stampTwoway = (agoMin) => {
   m._status.length = 0;
   const forced = await m.runBackup({ force: true });
   check('a forced run still copies regardless', forced.skipped !== true, JSON.stringify(forced));
+
+  // The refusal is only trustworthy because it looked. A copy that never landed —
+  // a run that reported success but wrote nothing, an upload cut halfway, a folder
+  // deleted on the share since — must not be answered with "already backed up".
+  m._lastBackupMissingFrom = async () => ['samba'];
+  m._status.length = 0;
+  const remade = await m.runBackup({ manual: true });
+  check('an unchanged vault whose copy is NOT on the share is backed up anyway',
+    remade.success === true && remade.skipped !== true && remade.remade === true, JSON.stringify(remade));
+
+  // A check that could not run is not permission to reassure anyone.
+  m._lastBackupMissingFrom = async () => { throw new Error('share unreachable'); };
+  m._status.length = 0;
+  const unsure = await m.runBackup({ manual: true });
+  check('and so is one we could not verify at all', unsure.skipped !== true, JSON.stringify(unsure));
+
+  // The hourly pass keeps the cheap answer: it runs unattended, and a network
+  // hiccup must not make it copy the whole vault for nothing.
+  let looked = false;
+  m._lastBackupMissingFrom = async () => { looked = true; return ['samba']; };
+  m._status.length = 0;
+  const auto = await m.runBackup();
+  check('the scheduled pass does not go looking, and still skips',
+    looked === false && auto.skipped === true, JSON.stringify({ looked, auto }));
+}
+
+// ── What the verification compares ───────────────────────────────────────────
+{
+  const m = mgr();
+  fs.writeFileSync(path.join(NOTES, 'e.md'), 'counted');
+  const c = m._localVaultCounts();
+  check('the vault is measured in files and bytes', c.files > 0 && c.bytes > 0, JSON.stringify(c));
+  const before = m._localVaultCounts();
+  fs.writeFileSync(path.join(ATT, 'shot.png'), Buffer.alloc(1234));
+  const after = m._localVaultCounts();
+  check('attachments are counted too, as the snapshot holds them',
+    after.files === before.files + 1 && after.bytes === before.bytes + 1234, JSON.stringify({ before, after }));
+
+  check('with nothing recorded there is nothing to verify against, so it copies',
+    (await (() => { const x = mgr(); x._syncState = {}; return x._lastBackupMissingFrom(); })()).length > 0);
+}
+
+// ── A .tar.gz destination is checked too, by the archive's size ──────────────
+// It cannot be checked by counting the vault: it is compressed, and two archives
+// of the very same notes differ byte for byte anyway (each carries its own
+// timestamps). The size it had when it was uploaded is the comparable thing.
+{
+  const DEST = fs.mkdtempSync(path.join(os.tmpdir(), 'amelie-dest-'));
+  const LOCAL_ARCH = () => ({ sync: { enabled: true,
+    local: { enabled: true, path: DEST, folder: false, archive: true, intervalMinutes: 60 },
+    vpn: { enabled: false }, webdav: { enabled: false, url: '' } } });
+
+  check('a run records the archive it wrote, with its size', (() => {
+    const a = SyncManager._backupArtifacts({ local: { archive: 'amelie-vault-x.tar.gz', archiveBytes: 4096 } });
+    return a.local && a.local.archive === 'amelie-vault-x.tar.gz' && a.local.archiveBytes === 4096;
+  })());
+
+  const m = mgr(LOCAL_ARCH());
+  m._syncState = { artifacts: { local: { folder: null, archive: 'arch.tar.gz', archiveBytes: 500 } } };
+  check('an archive that is not there at all counts as missing',
+    (await m._lastBackupMissingFrom()).includes('local'));
+
+  fs.writeFileSync(path.join(DEST, 'arch.tar.gz'), Buffer.alloc(500));
+  check('one that is there, at the size it was uploaded, counts as present',
+    !(await m._lastBackupMissingFrom()).includes('local'));
+
+  fs.writeFileSync(path.join(DEST, 'arch.tar.gz'), Buffer.alloc(120));   // upload cut short
+  check('one that is there but truncated counts as missing',
+    (await m._lastBackupMissingFrom()).includes('local'));
+
+  // Both formats on: the folder being fine does not excuse a missing archive.
+  const BOTH = clone(LOCAL_ARCH()); BOTH.sync.local.folder = true;
+  const m2 = mgr(BOTH);
+  m2._syncState = { artifacts: { local: { folder: 'snap', archive: 'gone.tar.gz', archiveBytes: 500 } } };
+  const snap = path.join(DEST, 'snap', 'notes');
+  fs.mkdirSync(snap, { recursive: true });
+  for (const f of fs.readdirSync(NOTES)) fs.copyFileSync(path.join(NOTES, f), path.join(snap, f));
+  const snapAtt = path.join(DEST, 'snap', 'attachments');
+  fs.mkdirSync(snapAtt, { recursive: true });
+  for (const f of fs.readdirSync(ATT)) fs.copyFileSync(path.join(ATT, f), path.join(snapAtt, f));
+  check('with both formats on, a complete folder does not excuse a missing archive',
+    (await m2._lastBackupMissingFrom()).includes('local'));
+
+  fs.writeFileSync(path.join(DEST, 'gone.tar.gz'), Buffer.alloc(500));
+  check('and with both of them there, the destination passes',
+    !(await m2._lastBackupMissingFrom()).includes('local'));
+
+  fs.rmSync(DEST, { recursive: true, force: true });
 }
 
 fs.rmSync(ROOT, { recursive: true, force: true });

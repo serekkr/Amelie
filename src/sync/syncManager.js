@@ -172,12 +172,173 @@ class SyncManager {
     }
   }
 
-  _recordBackupState(vaultSig) {
+  _recordBackupState(vaultSig, results) {
     this._updateSyncState({
       lastBackupAt: new Date().toISOString(),
       vaultSig,
       dests: this._backupDestSignature(this.config),
+      // WHAT was written, per destination, so a later press can go and look
+      // instead of taking the fingerprint's word for it.
+      artifacts: SyncManager._backupArtifacts(results),
     });
+  }
+
+  /**
+   * What each destination actually received in a run: the dated folder, the
+   * .tar.gz, or both — a destination can be set to write either or each.
+   * The archive's size comes along because a .tar.gz cannot be checked by
+   * counting the vault: it is compressed, and two archives of identical notes
+   * differ byte for byte anyway (they carry their own timestamps). Its size at
+   * the moment it was uploaded is the only thing a later look can compare.
+   */
+  static _backupArtifacts(results) {
+    const r = results || {};
+    const usable = (x) => !!x && !x.error && !x.skipped;
+    const one = (x) => (usable(x) ? {
+      folder: x.dateFolder || (x.folder && x.folder.dateFolder) || null,
+      archive: x.archive || null,
+      archiveBytes: (typeof x.archiveBytes === 'number') ? x.archiveBytes : null,
+    } : null);
+    const w = one(r.webdav) || {};
+    // WebDAV reports its archive separately from the folder snapshot.
+    if (usable(r.webdavArchive)) {
+      w.archive = (typeof r.webdavArchive === 'string') ? r.webdavArchive : (r.webdavArchive.archive || null);
+      if (typeof r.webdavArchive?.archiveBytes === 'number') w.archiveBytes = r.webdavArchive.archiveBytes;
+    }
+    return { local: one(r.local), samba: one(r.samba), webdav: Object.keys(w).length ? w : null };
+  }
+
+  /** Files and total bytes in the vault — the two halves a snapshot must mirror. */
+  _localVaultCounts() {
+    let files = 0, bytes = 0;
+    const walk = (dir) => {
+      let entries;
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+      for (const e of entries) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else { try { const st = fs.statSync(p); files++; bytes += st.size; } catch (_) {} }
+      }
+    };
+    walk(this.notesDir);
+    walk(this.attachmentsDir);
+    return { files, bytes };
+  }
+
+  /**
+   * Destinations whose copy of the last backup is NOT there, or does not match.
+   *
+   * Only worth asking when the vault fingerprint says nothing has changed: in that
+   * one moment the newest snapshot and the vault must hold the same files, so a
+   * different count or a different number of bytes means something never landed —
+   * a run that reported success but wrote nothing, an upload cut halfway, a folder
+   * deleted on the share since. Any other time the two differ for good reasons.
+   *
+   * Counted, not hashed: the listing already carries every name and size, so this
+   * costs one directory listing and no transfer. Hashing would mean downloading
+   * the whole backup on every press, which does not pay for the one extra case it
+   * catches — a file corrupted without changing size.
+   *
+   * Anything we cannot check counts as not matching. Being told "already backed
+   * up" by a check that could not run is exactly the reassurance we are removing.
+   */
+  async _lastBackupMissingFrom() {
+    const s = this.config.sync || {};
+    const art = this._syncState?.artifacts;
+    const local = this._localVaultCounts();
+    const out = [];
+    // Nothing recorded (a backup from before this existed) → nothing to check against.
+    if (!art) return ['unknown'];
+
+    if (s.local?.enabled) {
+      const a = art.local, root = s.local.path;
+      let ok = !!(a && root);
+      // Whichever formats this destination is set to write, each has to be there.
+      if (ok && s.local.folder !== false && !s.local.archiveOnly) {
+        try {
+          const dir = a.folder ? path.join(root, a.folder) : null;
+          if (!dir || !fs.existsSync(dir)) ok = false;
+          else {
+            let files = 0, bytes = 0;
+            const walk = (d) => {
+              for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+                const q = path.join(d, e.name);
+                if (e.isDirectory()) walk(q);
+                else if (e.name !== '.amelie-vault.json') { const st = fs.statSync(q); files++; bytes += st.size; }
+              }
+            };
+            walk(dir);
+            ok = files === local.files && bytes === local.bytes;
+          }
+        } catch (_) { ok = false; }
+      }
+      if (ok && (s.local.archive || s.local.archiveOnly)) {
+        try {
+          const st = a.archive ? fs.statSync(path.join(root, a.archive)) : null;
+          ok = !!st && (a.archiveBytes == null || st.size === a.archiveBytes);
+        } catch (_) { ok = false; }
+      }
+      if (!ok) out.push('local');
+    }
+
+    const scfg = this._sambaConfig();
+    if (scfg && scfg.enabled && (scfg.folder !== false || scfg.archive || scfg.archiveOnly)) {
+      const a = art.samba;
+      let ok = !!a;
+      const base = String(scfg.remoteSubPath || 'amelie/backup').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+      if (ok && scfg.folder !== false && !scfg.archiveOnly) {
+        try {
+          const list = a.folder ? await this._smbJson(scfg, ['listr', base + '/' + a.folder], { timeout: 120000 }) : null;
+          if (!Array.isArray(list)) ok = false;
+          else {
+            let files = 0, bytes = 0;
+            for (const e of list) {
+              if (e.dir) continue;
+              const rel = String(e.path || '');
+              if (!rel.startsWith('notes/') && !rel.startsWith('attachments/')) continue;   // skip .amelie-vault.json
+              files++; bytes += Number(e.size) || 0;
+            }
+            ok = files === local.files && bytes === local.bytes;
+          }
+        } catch (_) { ok = false; }
+      }
+      if (ok && (scfg.archive || scfg.archiveOnly)) {
+        try {
+          const st = a.archive ? await this._smbJson(scfg, ['stat', base + '/' + a.archive], { timeout: 60000 }) : null;
+          ok = !!(st && st.exists) && (a.archiveBytes == null || Number(st.size) === a.archiveBytes);
+        } catch (_) { ok = false; }
+      }
+      if (!ok) out.push('samba');
+    }
+
+    if (s.webdav?.enabled && this.webdavClient && (s.webdav.folder !== false || s.webdav.archive || s.webdav.archiveOnly)) {
+      const a = art.webdav;
+      let ok = !!a;
+      const root = '/' + String(s.webdav.remotePath || 'amelie/backup').replace(/^\/+|\/+$/g, '');
+      if (ok && s.webdav.folder !== false && !s.webdav.archiveOnly) {
+        try {
+          const items = a.folder ? await this.webdavClient.getDirectoryContents(`${root}/${a.folder}`, { deep: true }) : null;
+          if (!items) ok = false;
+          else {
+            let files = 0, bytes = 0;
+            for (const it of items) {
+              if (it.type !== 'file') continue;
+              if (String(it.basename) === '.amelie-vault.json') continue;
+              files++; bytes += Number(it.size) || 0;
+            }
+            ok = files === local.files && bytes === local.bytes;
+          }
+        } catch (_) { ok = false; }
+      }
+      if (ok && (s.webdav.archive || s.webdav.archiveOnly)) {
+        try {
+          const st = a.archive ? await this.webdavClient.stat(`${root}/${a.archive}`) : null;
+          ok = !!st && (a.archiveBytes == null || Number(st.size) === a.archiveBytes);
+        } catch (_) { ok = false; }
+      }
+      if (!ok) out.push('webdav');
+    }
+    return out;
   }
 
   _recordTwowayState() {
@@ -351,6 +512,21 @@ class SyncManager {
     }
     const sig = this._vaultSignature();
     if (!force && this._lastBackupSig && sig === this._lastBackupSig) {
+      // Someone pressing the button is asking whether the copy is THERE, not
+      // whether the vault changed. Go and look before refusing them: an unchanged
+      // vault means the newest snapshot must hold exactly the files the vault
+      // holds, so a destination that does not is one the copy never reached.
+      // The scheduled passes keep the cheap answer — they run unattended, a
+      // network hiccup would make them copy everything for nothing, and the next
+      // real edit brings a missing destination back anyway.
+      if (manual) {
+        const missing = await this._lastBackupMissingFrom().catch(() => ['unknown']);
+        if (missing.length) {
+          console.log('[Sync] Vault unchanged, but the last copy is missing from: ' + missing.join(', ') + ' — backing up anyway');
+          this._skipNotified = false;
+          return await this._doBackup(sig, { manual, reason: 'missing' });
+        }
+      }
       console.log('[Sync] Vault unchanged — automatic backup skipped');
       // Say so, once. A skip used to be entirely silent, which is indistinguishable
       // from a backup that never ran at all — the question this answers is "why is
@@ -367,9 +543,14 @@ class SyncManager {
       return { success: true, skipped: true, unchanged: true };
     }
     this._skipNotified = false;
+    return await this._doBackup(sig, { manual, forced: force });
+  }
+
+  /** The copy itself, shared by a normal run and by one the verification forced. */
+  async _doBackup(sig, { manual = false, forced = false, reason = null } = {}) {
     const meta = { op: 'backup', manual: !!manual };
     this._setStatus('syncing', null, meta);
-    console.log('[Sync] Backup run...', force ? '(forced)' : '');
+    console.log('[Sync] Backup run...', forced ? '(forced)' : (reason === 'missing' ? '(copy was missing)' : ''));
     try {
       const results = await this._runBackupInner();
       this.lastSync = new Date().toISOString();
@@ -386,14 +567,14 @@ class SyncManager {
         return { success: false, error: msg, results, lastSync: this.lastSync };
       }
       this._lastBackupSig = sig;   // remember success → skip next time if unchanged
-      this._recordBackupState(sig);   // and on disk, so the next start knows if one is overdue
+      this._recordBackupState(sig, results);   // when, and what was written where
       // Tell the renderer WHICH destinations were written, so the notification can
       // name them. "Backup completed" alone is ambiguous when more than one
       // destination exists: a run that only wrote the local folder looked exactly
       // like one that also reached the share.
       meta.dests = SyncManager._writtenDests(results);
       this._setStatus('ok', null, meta);
-      return { success: true, results, lastSync: this.lastSync };
+      return { success: true, results, lastSync: this.lastSync, remade: reason === 'missing' || undefined };
     } catch (e) {
       console.error('[Sync] Backup failed:', e);
       this._setStatus('error', e.message, meta);
@@ -1061,7 +1242,7 @@ class SyncManager {
     await this._smb(cfg, ['mkdirp', base]).catch(() => {});
 
     // Build the local tar.gz first (if requested) so we can upload it too.
-    let archiveName = null, tmpDir = null;
+    let archiveName = null, tmpDir = null, archiveBytes = null;
     if (archOpts.archive || archOpts.archiveOnly) {
       tmpDir = path.join(os.homedir(), '.local', 'share', 'amelie', 'tmp');
       archiveName = path.basename(await this.createArchive(tmpDir));
@@ -1081,6 +1262,9 @@ class SyncManager {
         }
       }
       if (archiveName) {
+        // Measure it before uploading: the local copy is deleted in the finally
+        // below, and the size is what a later check compares against on the share.
+        try { archiveBytes = fs.statSync(path.join(tmpDir, archiveName)).size; } catch (_) {}
         await this._smb(cfg, ['put', path.join(tmpDir, archiveName), base + '/' + archiveName], { timeout: 1800000 });
       }
       console.log('[Samba] push done', archiveName ? `(+ ${archiveName})` : '');
@@ -1097,7 +1281,7 @@ class SyncManager {
       }
       // Mark this as a BACKUP folder so the two-way Sync UI can refuse it.
       try { await this._smbWriteFile(cfg, base, SyncManager._MARK_BACKUP); } catch (_) {}
-      return { method: 'smb', archive: archiveName || undefined, dateFolder: dateFolder || undefined };
+      return { method: 'smb', archive: archiveName || undefined, archiveBytes: archiveBytes || undefined, dateFolder: dateFolder || undefined };
     } finally {
       if (archiveName && tmpDir) { try { fs.unlinkSync(path.join(tmpDir, archiveName)); } catch (_) {} }
     }
