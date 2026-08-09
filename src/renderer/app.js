@@ -16367,7 +16367,12 @@ function renderRecentView() {
     const row = document.createElement('div'); row.className = 'simple-row';
     const main = document.createElement('div'); main.className = 'simple-main';
     const name = document.createElement('div'); name.className = 'simple-name'; name.textContent = it.name;
-    if (it.path) name.title = it.path;   // hover shows where it lives, as in Bookmarks and Tags
+    // Hover shows where it lives, as in Bookmarks and Tags — but on the whole
+    // block, not just the name. This is the one list with a second line under the
+    // title ("Modified <date>"), and with the tooltip on the name alone it
+    // vanished as soon as the pointer crossed onto that line, inside what reads
+    // and clicks as a single entry.
+    if (it.path) main.title = it.path;
     main.appendChild(name);
     if (mod) { const sub = document.createElement('div'); sub.className = 'simple-sub'; sub.textContent = window.i18n.t('recent.modified') + ' ' + _fmtDateDMY(mod); main.appendChild(sub); }
     main.addEventListener('click', () => _openByPath(it.path, it.name));
