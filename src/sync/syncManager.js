@@ -357,11 +357,14 @@ class SyncManager {
       // there nothing new on the share?". Only the FIRST of a run of skips is
       // reported: an app left open all day over an untouched vault would otherwise
       // file the same line every hour and bury everything else in the bell.
-      if (!this._skipNotified) {
-        this._skipNotified = true;
+      // A press of "Back up now" always gets an answer: the collapsing exists to
+      // keep the hourly passes from filling the bell, and someone who just pushed
+      // a button is owed a reply every time.
+      if (manual || !this._skipNotified) {
+        if (!manual) this._skipNotified = true;
         this._setStatus('ok', null, { op: 'backup', manual: !!manual, unchanged: true });
       }
-      return { success: true, skipped: true };
+      return { success: true, skipped: true, unchanged: true };
     }
     this._skipNotified = false;
     const meta = { op: 'backup', manual: !!manual };

@@ -332,8 +332,24 @@ const stampTwoway = (agoMin) => {
   check('and the next idle stretch is announced once more',
     m._status.length === 1 && m._status[0].unchanged === true, JSON.stringify(m._status));
 
-  check('the manual "Back up now" is never skipped',
-    (await m.runBackup({ force: true })).skipped !== true);
+  // "Back up now" is no longer forced: with nothing changed there is nothing to
+  // write, and keepLast would evict a real snapshot to fit the duplicate.
+  m._status.length = 0;
+  const manual = await m.runBackup({ manual: true });
+  check('"Back up now" on an unchanged vault copies nothing',
+    manual.skipped === true && manual.unchanged === true, JSON.stringify(manual));
+  check('and says so, marked as the manual press it was',
+    m._status.length === 1 && m._status[0].unchanged === true && m._status[0].manual === true, JSON.stringify(m._status));
+
+  m._status.length = 0;
+  await m.runBackup({ manual: true });
+  await m.runBackup({ manual: true });
+  check('pressing it again always answers, never collapses into silence',
+    m._status.length === 2, JSON.stringify(m._status));
+
+  m._status.length = 0;
+  const forced = await m.runBackup({ force: true });
+  check('a forced run still copies regardless', forced.skipped !== true, JSON.stringify(forced));
 }
 
 fs.rmSync(ROOT, { recursive: true, force: true });

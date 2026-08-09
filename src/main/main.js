@@ -4124,9 +4124,12 @@ ipcMain.handle('sync:triggerTwoway', async () => {
   return { success: false, error: 'Sync manager not initialized' };
 });
 
-// Force a manual backup (the "Backup now" button in Settings → Backup).
+// The manual backup (the "Backup now" button in Settings → Backup). NOT forced:
+// with nothing changed since the last successful copy there is nothing to write,
+// and keepLast means writing it anyway would evict a real snapshot to make room
+// for a duplicate. The run reports back that it skipped, and the button says so.
 ipcMain.handle('sync:triggerBackup', async () => {
-  if (syncManager) return syncManager.runBackup({ force: true });
+  if (syncManager) return syncManager.runBackup({ force: false, manual: true });
   return { success: false, error: 'Sync manager not initialized' };
 });
 

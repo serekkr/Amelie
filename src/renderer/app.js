@@ -10235,7 +10235,11 @@ function setupSettings() {
     if (res) { res.style.display = ''; res.textContent = window.i18n.t('toast.backup_running'); res.className = 'test-result'; }
     showToast(window.i18n.t('toast.backup_running'));
     const result = await window.inkwell.triggerBackup();
-    if (result && result.success) {
+    if (result && result.unchanged) {
+      const msg = window.i18n.t('notif.backup_unchanged');
+      if (res) { res.textContent = '✓ ' + msg; res.className = 'test-result ok'; }
+      showToast('✓ ' + msg);
+    } else if (result && result.success) {
       // Same style as the manual sync notification: "Manual backup … (18:36)" —
       // everywhere: inline result, toast AND the notifications bell.
       const when = (() => { const d = new Date(), p2 = n => String(n).padStart(2, '0'); return p2(d.getHours()) + ':' + p2(d.getMinutes()); })();
@@ -12109,7 +12113,12 @@ function setupSync() {
     if (dot) dot.className = 'sync-syncing';
     showToast(window.i18n.t('toast.backup_running'));
     const result = await window.inkwell.triggerBackup();
-    if (result && result.success) {
+    if (result && result.unchanged) {
+      // Nothing has changed since the last successful copy, so nothing was written:
+      // with keepLast, a duplicate would have pushed a real snapshot out to fit.
+      if (dot) dot.className = 'sync-ok';
+      showToast('✓ ' + window.i18n.t('notif.backup_unchanged'));
+    } else if (result && result.success) {
       if (dot) dot.className = 'sync-ok';
       // Manual backup → say so, with the time (like the manual sync notif).
       const when = (() => { const d = new Date(), p2 = n => String(n).padStart(2, '0'); return p2(d.getHours()) + ':' + p2(d.getMinutes()); })();
@@ -17105,8 +17114,10 @@ function logSyncEventNotif(data) {
     // you configured got a copy", which is wrong as soon as one destination is
     // switched off — the local folder can succeed while the share never got
     // written to. The engine reports which ones it actually wrote.
-    const where = _destNames(data.dests);
-    addEventNotif(`${label}${where ? ' — ' + where : ''}`, true);
+    // The destination goes on the date line, not after a dash on the title. The
+    // title then stays one short sentence and stops wrapping, which is what left
+    // the dash hanging at the end of a line with nothing after it.
+    addEventNotif(label, true, _destNames(data.dests));
   } else {
     addEventNotif(`${label}: ${data.error || window.i18n.t('notif.unknown_error')}`, false);
   }
@@ -17122,8 +17133,9 @@ function _destNames(dests) {
 }
 
 // Add an event notification (e.g. "Backup completato") to the bell.
-function addEventNotif(text, ok = true) {
-  _eventNotifs.unshift({ text, ts: Date.now(), ok: !!ok });
+// `where` is shown on the second line, beside the date — not glued to the title.
+function addEventNotif(text, ok = true, where = '') {
+  _eventNotifs.unshift({ text, ts: Date.now(), ok: !!ok, where: where || '' });
   _eventNotifs = _eventNotifs.slice(0, 30);
   _eventUnread++;
   _saveEventNotifs();
@@ -17164,7 +17176,7 @@ function toggleNotifPopup() {
   _eventNotifs.forEach(ev => {
     const row = document.createElement('div'); row.className = 'notif-row';
     const info = document.createElement('div'); info.className = 'notif-row-info';
-    info.innerHTML = `<div class="notif-row-title">${ev.ok ? '✓' : '✗'} ${escHtml(ev.text)}</div><div class="notif-row-due">${_fmtNotifTime(ev.ts)}</div>`;
+    info.innerHTML = `<div class="notif-row-title">${ev.ok ? '✓' : '✗'} ${escHtml(ev.text)}</div><div class="notif-row-due">${_fmtNotifTime(ev.ts)}${ev.where ? ' · ' + escHtml(ev.where) : ''}</div>`;
     const dis = document.createElement('button'); dis.className = 'notif-dismiss'; dis.textContent = '×'; dis.title = window.i18n.t('todo.dismiss');
     dis.addEventListener('click', e => {
       e.stopPropagation(); _eventNotifs = _eventNotifs.filter(x => x !== ev); _saveEventNotifs(); updateNotifBell(); row.remove();
@@ -17249,7 +17261,7 @@ function renderNotificationsView() {
   _eventNotifs.forEach(ev => {
     const row = document.createElement('div'); row.className = 'simple-row notif-row';
     const info = document.createElement('div'); info.className = 'simple-main';
-    info.innerHTML = `<div class="simple-name">${ev.ok ? '✓' : '✗'} ${escHtml(ev.text)}</div><div class="simple-sub">${_fmtNotifTime(ev.ts)}</div>`;
+    info.innerHTML = `<div class="simple-name">${ev.ok ? '✓' : '✗'} ${escHtml(ev.text)}</div><div class="simple-sub">${_fmtNotifTime(ev.ts)}${ev.where ? ' · ' + escHtml(ev.where) : ''}</div>`;
     const dis = document.createElement('button'); dis.className = 'simple-remove'; dis.textContent = '×'; dis.title = window.i18n.t('todo.dismiss');
     dis.addEventListener('click', e => { e.stopPropagation(); _eventNotifs = _eventNotifs.filter(x => x !== ev); _saveEventNotifs(); updateNotifBell(); renderNotificationsView(); });
     row.append(info, dis);
