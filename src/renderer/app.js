@@ -17176,7 +17176,7 @@ function toggleNotifPopup() {
   _eventNotifs.forEach(ev => {
     const row = document.createElement('div'); row.className = 'notif-row';
     const info = document.createElement('div'); info.className = 'notif-row-info';
-    info.innerHTML = `<div class="notif-row-title">${ev.ok ? '✓' : '✗'} ${escHtml(ev.text)}</div><div class="notif-row-due">${_fmtNotifTime(ev.ts)}${ev.where ? ' · ' + escHtml(ev.where) : ''}</div>`;
+    info.innerHTML = `<div class="notif-row-title">${ev.ok ? '✓' : '✗'} ${escHtml(ev.text)}${ev.where ? ' ' + escHtml(window.i18n.t('notif.with')) : ''}</div>${ev.where ? `<div class="notif-row-due">${escHtml(ev.where)}</div>` : ''}<div class="notif-row-due">${_fmtNotifTime(ev.ts)}</div>`;
     const dis = document.createElement('button'); dis.className = 'notif-dismiss'; dis.textContent = '×'; dis.title = window.i18n.t('todo.dismiss');
     dis.addEventListener('click', e => {
       e.stopPropagation(); _eventNotifs = _eventNotifs.filter(x => x !== ev); _saveEventNotifs(); updateNotifBell(); row.remove();
@@ -17261,7 +17261,7 @@ function renderNotificationsView() {
   _eventNotifs.forEach(ev => {
     const row = document.createElement('div'); row.className = 'simple-row notif-row';
     const info = document.createElement('div'); info.className = 'simple-main';
-    info.innerHTML = `<div class="simple-name">${ev.ok ? '✓' : '✗'} ${escHtml(ev.text)}</div><div class="simple-sub">${_fmtNotifTime(ev.ts)}${ev.where ? ' · ' + escHtml(ev.where) : ''}</div>`;
+    info.innerHTML = `<div class="simple-name">${ev.ok ? '✓' : '✗'} ${escHtml(ev.text)}${ev.where ? ' ' + escHtml(window.i18n.t('notif.with')) : ''}</div>${ev.where ? `<div class="simple-sub">${escHtml(ev.where)}</div>` : ''}<div class="simple-sub">${_fmtNotifTime(ev.ts)}</div>`;
     const dis = document.createElement('button'); dis.className = 'simple-remove'; dis.textContent = '×'; dis.title = window.i18n.t('todo.dismiss');
     dis.addEventListener('click', e => { e.stopPropagation(); _eventNotifs = _eventNotifs.filter(x => x !== ev); _saveEventNotifs(); updateNotifBell(); renderNotificationsView(); });
     row.append(info, dis);

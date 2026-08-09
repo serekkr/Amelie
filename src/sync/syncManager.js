@@ -684,6 +684,9 @@ class SyncManager {
       const twoway = await this._syncTwoway();
       this.lastSync = new Date().toISOString();
       this._recordTwowayState();   // so the next start knows if one is overdue
+      // Name where it synced, as a backup names what it wrote to. One remote at a
+      // time here, so it is whichever transport the two-way is set to use.
+      meta.dests = [this.config.sync?.twoway?.transport === 'webdav' ? 'webdav' : 'samba'];
       this._setStatus('ok', null, meta);
       return { success: true, results: { twoway }, lastSync: this.lastSync };
     } catch (e) {
