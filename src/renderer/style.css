@@ -13,8 +13,9 @@
       main layer; below #111111 that mismatch shows as a rectangular "mask".
       At #111111 the two layers match (rendered 17,17,17). See
       [[amelie-autofill-purple-input]]. Green accents unchanged.
-   A green cast was tried on this ladder (2026-08-18) and taken back off: tinting
-   every surface made the whole app read green, not just the page you write on. */
+   Two experiments on 2026-08-18, both taken back off: a green cast on the greys
+   (tinting every surface made the whole app read green, not just the page you
+   write on), and One Dark's lighter blue-grey ladder in place of these neutrals. */
 :root {
   --bg-0: #111111;
   --bg-1: #161616;
