@@ -1007,7 +1007,7 @@ kbd {
 #markdown-editor {
   position: relative; z-index: 1;
   flex: 1; resize: none; background: transparent;
-  border: none; outline: none; color: transparent; caret-color: var(--accent);
+  border: none; outline: none; color: transparent; caret-color: var(--text-0);
   font-family: 'AmelieWideTick', var(--editor-font-family); font-size: var(--editor-font-size);
   font-weight: 300;
   /* Left padding is 60 (= 48 + the 12px scrollbar) so the VISIBLE left margin
@@ -1045,7 +1045,9 @@ kbd {
 }
 /* padding:0 removes CM's default 4px top/bottom so the first edit line sits at the
    scroller's 28px top — matching #preview-content's first line (see :first-child below). */
-#cm-mount .cm-content { color: var(--text-0); caret-color: var(--accent); padding: 0; }
+/* Caret in the text colour, not the accent: it sits inside the words you are writing,
+   and --text-0 keeps it white on the dark themes and dark on Light Paper. */
+#cm-mount .cm-content { color: var(--text-0); caret-color: var(--text-0); padding: 0; }
 /* CM's default .cm-line padding is "0 2px 0 6px" — that 6px left made edit-mode text
    start 6px right of the preview. Zero the left so text glyphs begin exactly at the
    scroller's 48px padding = #preview-content's 48px, keeping edit↔view in register. */
@@ -1061,7 +1063,9 @@ kbd {
 #editor-pane.line-numbers #cm-mount .cm-lineNumbers .cm-gutterElement { padding: 0 16px 0 6px; min-width: 3em; text-align: left; box-sizing: content-box; }
 #cm-mount .cm-activeLine { background: transparent; }
 #cm-mount .cm-selectionBackground, #cm-mount .cm-content ::selection { background: rgba(100,180,255,.25) !important; }
-#cm-mount .cm-cursor { border-left-color: var(--accent); }
+/* 2px, over CodeMirror's own 1.2: a hairline caret in a 15px proportional font is easy
+   to lose in the text, and it was the accent colour that used to make it findable. */
+#cm-mount .cm-cursor { border-left-color: var(--text-0); border-left-width: 2px; }
 /* Code-block grey masks (CM line decorations, virtualized). Same fill as the
    legacy .editor-code-rect so they look identical. */
 /* Indent the ``` + code 2 CHARACTERS inside the grey box (box left stays at the
