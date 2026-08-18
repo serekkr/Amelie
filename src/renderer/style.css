@@ -396,7 +396,17 @@ html.is-mac #titlebar { padding-left: 72px; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
 
 /* ─── Layout ────────────────────────────────────────────────── */
-#app { display: flex; flex-direction: column; height: 100vh; }
+/* A 1px line all the way round, so the window has a visible edge against whatever is
+   behind it (the frame is ours, not the system's, and against a dark desktop the app
+   simply bled into it). Mixed from the theme's own text colour rather than written as
+   a fixed light grey: on the dark themes that gives the dimmed white asked for, and on
+   Light Paper the same rule gives a dim DARK line instead of an invisible one.
+   box-sizing: border-box (the reset above) keeps 100vh including the border, so this
+   costs no scrollbar. */
+#app {
+  display: flex; flex-direction: column; height: 100vh;
+  border: 1px solid color-mix(in srgb, var(--text-0) 26%, transparent);
+}
 #layout { display: flex; flex: 1; overflow: hidden; position: relative; }
 
 /* ─── Sidebar ───────────────────────────────────────────────── */
