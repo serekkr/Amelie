@@ -1204,7 +1204,23 @@
 
             <div class="theme-grid">
 
-              <div class="theme-card active" data-theme="github-dark" title="Green Dark (default)">
+              <!-- Colours here are only the pre-JS fallback: paintAllThemePreviews()
+                   repaints every card from the real palette in style.css. -->
+              <div class="theme-card active" data-theme="serekkr" title="Serekkr (default)">
+                <div class="theme-preview">
+                  <div class="tp-sidebar" style="background:#0e171c"></div>
+                  <div class="tp-editor" style="background:#0a1014">
+                    <div class="tp-line accent" style="background:#57d68a"></div>
+                    <div class="tp-line dim" style="background:#a3b6b4"></div>
+                    <div class="tp-line short" style="background:#3ec9a0"></div>
+                    <div class="tp-line dim" style="background:#a3b6b4"></div>
+                    <div class="tp-line short" style="background:#5fa8e0"></div>
+                  </div>
+                </div>
+                <div class="theme-name">Serekkr</div>
+              </div>
+
+              <div class="theme-card" data-theme="github-dark" title="Green Dark">
                 <div class="theme-preview">
                   <div class="tp-sidebar" style="background:#161616"></div>
                   <div class="tp-editor" style="background:#111111">
@@ -1217,6 +1233,7 @@
                 </div>
                 <div class="theme-name">Green Dark</div>
               </div>
+
 
               <div class="theme-card" data-theme="navy" title="Navy">
                 <div class="theme-preview">

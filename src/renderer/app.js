@@ -1402,6 +1402,7 @@ function _initCmEditor() {
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
+  serekkr:       { label: 'Serekkr',       attr: 'serekkr'   },
   'github-dark': { label: 'Green Dark',     attr: ''          },
   navy:          { label: 'Navy',          attr: 'navy'      },
   amber:         { label: 'Amber Dark',    attr: 'amber'     },
@@ -1413,6 +1414,12 @@ const THEMES = {
   onedark:       { label: 'One Dark',      attr: 'onedark'   },
   dracula:       { label: 'Dracula',       attr: 'dracula'   },
 };
+
+// The theme a fresh profile gets, and the one anything falls back to (a deleted custom
+// theme, an unknown saved id). Named once so the three places that need it cannot
+// drift apart — it used to be the string 'github-dark' written out at each of them.
+// The wizard has its OWN copy of this default (vault-setup.html) — keep the two in step.
+const DEFAULT_THEME = 'serekkr';
 
 const FONTS = {
   // ── Monospace (bundled offline, see fonts.css) ──
@@ -2061,9 +2068,9 @@ async function loadCustomThemes() {
       card.remove();
       // Deleting the active theme falls back to the default one.
       if (state.theme === t.id) {
-        applyTheme('github-dark');
+        applyTheme(DEFAULT_THEME);
         document.querySelectorAll('.theme-card').forEach(c =>
-          c.classList.toggle('active', c.dataset.theme === 'github-dark'));
+          c.classList.toggle('active', c.dataset.theme === DEFAULT_THEME));
       }
     });
     card.appendChild(del);
@@ -2126,7 +2133,7 @@ function setupTheme() {
   // be custom, so the custom ones are loaded FIRST).
   loadCustomThemes().finally(() => {
     const savedTheme = (() => { try { return localStorage.getItem('inkwell-theme'); } catch(_) { return null; } })();
-    applyTheme(savedTheme && THEMES[savedTheme] ? savedTheme : 'github-dark');
+    applyTheme(savedTheme && THEMES[savedTheme] ? savedTheme : DEFAULT_THEME);
     paintAllThemePreviews();
   });
 

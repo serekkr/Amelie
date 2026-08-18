@@ -536,7 +536,8 @@ applyLang(appLang, true);
 // Theme picker → saved to `inkwell-theme`, which the MAIN app reads on startup
 // (shared localStorage). Each card previews the theme's real palette.
 const THEME_PALETTE = [
-  { id:'github-dark', name:'Green Dark',   def:true, bg:'#111111', acc:'#3fb950', txt:'#e6edf3' },
+  { id:'serekkr',     name:'Serekkr',     def:true, bg:'#0a1014', acc:'#3fb950', txt:'#dfeae7' },
+  { id:'github-dark', name:'Green Dark',   bg:'#111111', acc:'#3fb950', txt:'#e6edf3' },
   { id:'navy',        name:'Navy',        bg:'#0a0e17', acc:'#5b8def', txt:'#dde6f0' },
   { id:'amber',       name:'Amber Dark',  bg:'#0b0b0d', acc:'#c9a96e', txt:'#e8e6e0' },
   { id:'solarized',   name:'Solarized',   bg:'#002b36', acc:'#2aa198', txt:'#fdf6e3' },
@@ -550,8 +551,8 @@ const THEME_PALETTE = [
 (function renderThemeGrid() {
   const grid = document.getElementById('theme-grid');
   if (!grid) return;
-  let cur = 'github-dark';
-  try { cur = localStorage.getItem('inkwell-theme') || 'github-dark'; } catch (_) {}
+  let cur = 'serekkr';   // keep in step with DEFAULT_THEME in app.js
+  try { cur = localStorage.getItem('inkwell-theme') || 'serekkr'; } catch (_) {}
   grid.innerHTML = THEME_PALETTE.map(p =>
     '<button type="button" class="theme-card' + (p.id === cur ? ' sel' : '') + '" data-theme="' + p.id + '" title="' + p.name + '">' +
       '<span class="swatch" style="background:' + p.bg + '">' +

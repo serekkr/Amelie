@@ -90,6 +90,42 @@
   --link: #6ab0d4;
 }
 
+/* ── THEME: Serekkr ─────────────────────────────────────────── */
+/* Navy's depth carrying Green Dark's accent. Navy sits at hue ~222 (pure blue) and
+   #3fb950 on it reads as two unrelated colours fighting, so the whole ladder was
+   rotated to ~197 — still deep and cold, but leaning cyan, which is where blue and
+   green meet. The headings then walk the same road, green → teal → cyan (#57d68a →
+   #3ec9a0 → #35b7b0), and the link stays the one frankly blue thing on screen so a
+   link never looks like an accent. Greys keep a little of that cyan (B a few points
+   over R) — the same lean as the background, so folders and icons in --accent sit ON
+   the palette instead of on top of it. */
+[data-theme="serekkr"] {
+  --bg-0: #0a1014;
+  --bg-1: #0e171c;
+  --bg-2: #122027;
+  --bg-3: #182a32;
+  --bg-4: #20363f;
+  --border: #233b45;
+  --border-light: #2e4e59;
+  --text-0: #dfeae7;
+  --text-1: #a3b6b4;
+  --text-2: #6c8189;
+  --text-3: #41565e;
+  --accent: #3fb950;
+  --accent-dim: #238636;
+  --accent-glow: rgba(63,185,80,0.13);
+  --active-bg: rgba(63,185,80,0.11);
+  --active-border: #3fb950;
+  --red: #e5646d;
+  --green: #3fb950;
+  --yellow: #d9a441;
+  --h1: #57d68a;
+  --h2: #3ec9a0;
+  --h3: #35b7b0;
+  --h4: #7fdcae;
+  --link: #5fa8e0;
+}
+
 /* ── THEME: Amber Dark (original) ───────────────────────────── */
 [data-theme="amber"] {
   --bg-0: #0b0b0d;
@@ -3532,22 +3568,39 @@ kbd {
    (not a theme var: --link/--accent aren't blue in every theme). */
 .md-tag, .cm-md-tag { color: #2f7ef2; }
 
-/* Green Dark theme only (the default green palette → no data-theme attribute,
-   see applyTheme). Hovering a sidebar item turns its text the accent green. */
+/* The two GREEN palettes: Green Dark (the default → no data-theme attribute, see
+   applyTheme) and Serekkr. Hovering a sidebar item turns its text the accent green.
+   Serekkr is listed explicitly rather than folded in with :where(), which carries no
+   specificity and would lose to the plain .sst:hover / .tree-name rules above. */
 html:not([data-theme]) .sst:hover,
+html[data-theme="serekkr"] .sst:hover,
 html:not([data-theme]) .tool-btn:hover:not(.danger),
+html[data-theme="serekkr"] .tool-btn:hover:not(.danger),
 html:not([data-theme]) .note-nav-btn:hover:not(:disabled),
+html[data-theme="serekkr"] .note-nav-btn:hover:not(:disabled),
 html:not([data-theme]) .note-tab:hover,
+html[data-theme="serekkr"] .note-tab:hover,
 html:not([data-theme]) .note-tab:hover .tab-name,
+html[data-theme="serekkr"] .note-tab:hover .tab-name,
 html:not([data-theme]) #tab-new-btn:hover,
+html[data-theme="serekkr"] #tab-new-btn:hover,
 html:not([data-theme]) #btn-settings:hover,
+html[data-theme="serekkr"] #btn-settings:hover,
 html:not([data-theme]) #btn-focus-mode:hover,
+html[data-theme="serekkr"] #btn-focus-mode:hover,
 html:not([data-theme]) .tree-note:hover .tree-name,
+html[data-theme="serekkr"] .tree-note:hover .tree-name,
 html:not([data-theme]) .tree-folder:hover .tree-name,
+html[data-theme="serekkr"] .tree-folder:hover .tree-name,
 html:not([data-theme]) .simple-row:hover .simple-name,
+html[data-theme="serekkr"] .simple-row:hover .simple-name,
 html:not([data-theme]) .tag-row:hover .tag-chip,
+html[data-theme="serekkr"] .tag-row:hover .tag-chip,
 html:not([data-theme]) .notif-row:hover .notif-row-title,
-html:not([data-theme]) .notif-row:hover .simple-name {
+html[data-theme="serekkr"] .notif-row:hover .notif-row-title,
+html:not([data-theme]) .notif-row:hover .simple-name,
+html[data-theme="serekkr"] .notif-row:hover .simple-name
+{
   color: var(--accent);
 }
 
@@ -4306,7 +4359,11 @@ html:not([data-theme]) .notif-row:hover .simple-name {
 :root:not([data-theme]) #settings-modal .wiz-btn:hover,
 :root:not([data-theme]) #settings-modal .btn-test:hover,
 :root:not([data-theme]) #settings-modal .btn-test-run:hover,
-:root:not([data-theme]) #settings-modal .btn-save:hover {
+:root:not([data-theme]) #settings-modal .btn-save:hover,
+:root[data-theme="serekkr"] #settings-modal .wiz-btn:hover,
+:root[data-theme="serekkr"] #settings-modal .btn-test:hover,
+:root[data-theme="serekkr"] #settings-modal .btn-test-run:hover,
+:root[data-theme="serekkr"] #settings-modal .btn-save:hover {
   border-color: var(--accent);
 }
 
