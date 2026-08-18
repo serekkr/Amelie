@@ -112,13 +112,21 @@
   --text-1: #a3b6b4;
   --text-2: #6c8189;
   --text-3: #41565e;
-  --accent: #3fb950;
-  --accent-dim: #238636;
-  --accent-glow: rgba(63,185,80,0.13);
-  --active-bg: rgba(63,185,80,0.11);
-  --active-border: #3fb950;
+  /* The accent, picked in the app and brought back here (2026-08-18): a deeper green
+     than the #3fb950 this theme shipped with. ALL of it moves together — the picker had
+     only overridden accent/dim/glow, leaving --active-bg and --active-border on the old
+     brighter green, so the selected note and the active button were a different green
+     from everything else. */
+  --accent: #1fb6c1;
+  --accent-dim: #137178;
+  --accent-glow: rgba(31,182,193,0.13);
+  --active-bg: rgba(31,182,193,0.11);
+  --active-border: #1fb6c1;
   --red: #e5646d;
-  --green: #3fb950;
+  /* --green stays an actual GREEN: it is the success colour (a passing connection test,
+     a healthy status dot), not a synonym for the accent. It used to be the same value
+     only because the accent happened to be green. */
+  --green: #2f893b;
   --yellow: #d9a441;
   --h1: #57d68a;
   --h2: #3ec9a0;
