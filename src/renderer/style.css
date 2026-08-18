@@ -573,6 +573,15 @@ html.is-mac #titlebar { padding-left: 72px; }
 .tree-folder .tree-name { font-weight: 300; letter-spacing: .01em; color: var(--text-0); opacity: .9; }
 /* Note names: white, same size/weight/spacing as folders (just brighter) */
 .tree-note .tree-name { color: var(--text-0); font-weight: 300; letter-spacing: .01em; }
+/* Files that are NOT notes — drawings, PDFs, audio, video, images — sit one step down
+   the grey ladder (--text-2 against the notes' --text-0). They are things a note points
+   at rather than notes themselves, and at the same white the tree read as one flat list.
+   Hovering or opening one brings it back to full white, so the row you are on is never
+   the dim one. `:not([data-color])` leaves a colour you set on a file alone — that is a
+   deliberate mark and outranks this. */
+.tree-note[data-kind]:not([data-color]) .tree-name { color: var(--text-2); }
+.tree-note[data-kind]:not([data-color]):hover .tree-name,
+.tree-note[data-kind]:not([data-color]).active .tree-name { color: var(--text-0); }
 .tree-folder:hover .tree-name { opacity: 1; }
 
 /* Folder colors */

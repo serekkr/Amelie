@@ -2760,6 +2760,9 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   const el = document.createElement('div');
   const isActive = node.path === state.currentPath;
   el.className = 'tree-note' + (isActive ? ' active' : '');
+  // What KIND of file this row is (draw, pdf, audio, video, image) — notes carry no
+  // marker. Only the stylesheet uses it, to rank an attachment below a note.
+  if (node.type && node.type !== 'note') el.dataset.kind = node.type;
   const colorKey = noteColors[node.path];
   if (colorKey) el.dataset.color = colorKey;
   // Show the file extension explicitly for PDFs (since the icon has been
