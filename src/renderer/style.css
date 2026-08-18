@@ -672,20 +672,32 @@ kbd {
 .meta-label { color: var(--text-3); margin-right: 5px; text-transform: lowercase; letter-spacing: 0.02em; }
 .meta-sep { padding: 0 7px; color: var(--text-3); }
 .note-nav-btn {
-  width: 24px; height: 24px;
+  /* The sign alone, no box: the border and the hover fill drew a button around a
+     mark that reads perfectly well on its own. The 24px square stays as the click
+     target — invisible now, not gone — so the arrows are still as easy to hit.
+     Colour: readable without going white, halfway between the body text and the
+     muted grey, mixed from the theme's own colours so light themes darken instead.
+     Hover and press now speak through that colour alone (plus the accent green on
+     the default theme, see the html:not([data-theme]) block further down). */
+  /* 14 wide, not 24: with the box cropped to the sign (see the viewBox in
+     index.html) the two arrows now sit ~8px apart instead of ~23. Full 24px of
+     height kept, and the two targets are adjacent, so they are still easy to hit. */
+  width: 14px; height: 24px;
   display: inline-flex; align-items: center; justify-content: center;
-  /* Readable without going white: halfway between the body text and the muted
-     grey, mixed from the theme's own colours so light themes darken instead. */
-  background: transparent; border: 1px solid var(--text-3);
-  border-radius: 4px; color: var(--icon-strong); cursor: pointer;
-  margin-right: 4px; padding: 0; flex-shrink: 0;
-  transition: background .12s, color .12s, border-color .12s;
+  background: transparent; border: none;
+  color: var(--icon-strong); cursor: pointer;
+  margin-right: 0; padding: 0; flex-shrink: 0;
+  transition: color .12s;
 }
-.note-nav-btn svg { width: 13px; height: 13px; }
-.note-nav-btn:hover { background: var(--bg-3); color: var(--text-0); border-color: var(--text-3); }
-.note-nav-btn:active { background: var(--bg-4); }
+/* 7.5 × 18, matching the cropped 10 × 24 viewBox exactly (both are 1 : 2.4), so the
+   drawing scales by 0.75 in each direction and the chevron comes out 4.5 × 9 — the
+   same mark the 18 × 18 box drew, with the empty width around it gone. It replaced a
+   13 × 13 box, where the sign was only ~6px tall and you had to look for it. */
+.note-nav-btn svg { width: 7.5px; height: 18px; }
+.note-nav-btn:hover { color: var(--text-0); }
+.note-nav-btn:active { color: var(--text-1); }
 .note-nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.note-nav-btn:disabled:hover { background: transparent; color: var(--icon-strong); border-color: var(--text-3); }
+.note-nav-btn:disabled:hover { color: var(--icon-strong); }
 #btn-next-note { margin-right: 10px; }
 
 /* Rows 3-4: tags / source — only shown in edit mode when non-empty */

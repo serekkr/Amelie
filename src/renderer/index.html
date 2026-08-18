@@ -217,10 +217,14 @@
                 <!-- Row 1: title + Edit/View pills top-right -->
                 <div id="note-header-top">
                   <button id="btn-prev-note" class="note-nav-btn" title="Nota precedente" aria-label="Nota precedente" data-i18n-title="note.prev">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    <!-- viewBox cropped to the chevron (it is drawn at x 9→15, and the
+                         2-wide stroke reaches 8→16): the old 0 0 24 24 wrapped the sign
+                         in three times its own width of empty space, which is what held
+                         the two arrows apart. Same drawing, same size — smaller box. -->
+                    <svg viewBox="7 0 10 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                   </button>
                   <button id="btn-next-note" class="note-nav-btn" title="Nota successiva" aria-label="Nota successiva" data-i18n-title="note.next">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <svg viewBox="7 0 10 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                   </button>
                   <!-- Title input hidden: the clickable breadcrumb takes its place.
                        Kept in the DOM (display:none) so existing JS that reads/sets
