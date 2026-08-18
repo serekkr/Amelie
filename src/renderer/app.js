@@ -1762,8 +1762,10 @@ function setupViewWidth() {
 }
 
 // ─── Folder guide lines (sidebar indent guides on/off) ───────────────────────
-// 'on'  → vertical guide lines next to nested folders (default)
+// 'on'  → vertical guide lines next to nested folders
 // 'off' → uniform/flat look without the long indent lines
+// Which of the two a fresh profile gets is decided in loadFolderGuides, and stated
+// there only — this header used to name a default of its own, and the two disagreed.
 function applyFolderGuides(mode) {
   const m = (mode === 'off') ? 'off' : 'on';
   document.documentElement.setAttribute('data-folder-guides', m);
@@ -1774,8 +1776,10 @@ function applyFolderGuides(mode) {
 }
 
 function loadFolderGuides() {
-  // Default to the clean, line-free look (Obsidian/Notion-like).
-  try { return localStorage.getItem('inkwell-folder-guides') || 'off'; } catch(_) { return 'off'; }
+  // Guides ON for a fresh profile: they are what makes a deep tree readable at a
+  // glance, and they are a pale hairline now rather than the grey line they were.
+  // Anyone who prefers the flat, line-free look switches them off in Settings.
+  try { return localStorage.getItem('inkwell-folder-guides') || 'on'; } catch(_) { return 'on'; }
 }
 
 function setupFolderGuides() {

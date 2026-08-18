@@ -548,7 +548,7 @@ html.is-mac #titlebar { padding-left: 72px; }
    folder row highlights itself anyway, and a line that lights up as the mouse crosses
    the tree is movement where the whole point is a quiet hairline. */
 
-/* Uniform mode (default): no vertical guide lines — a clean, flat indent per
+/* Uniform mode (Settings → guides off): no vertical guide lines — a clean, flat indent per
    nesting level, like Obsidian/Notion. Matches the guided mode so a child
    note's text begins just after the first letter of the parent folder name
    (content start 29 + note pad 14 = 43px ≈ folder name 37 + one letter). */
