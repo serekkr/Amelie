@@ -876,7 +876,11 @@ function editorToolbarOn() {
 function applyEditorToolbar(on) {
   try { localStorage.setItem('inkwell-editor-toolbar', on ? '1' : '0'); } catch (_) {}
   const bar = document.getElementById('editor-toolbar');
-  if (bar) bar.style.display = on ? '' : 'none';
+  // A class, not display:none. The search lens lives in this row, so hiding the whole
+  // row took the search away with the formatting buttons — and the lens is the only way
+  // to reach it besides Ctrl+F. `.toolbar-off` keeps the row and hides everything in it
+  // EXCEPT the lens and the search field, exactly like `.reading-only` already does.
+  if (bar) { bar.classList.toggle('toolbar-off', !on); bar.style.display = ''; }
   const tgl = document.getElementById('cfg-editor-toolbar');
   if (tgl) tgl.checked = !!on;
 }

@@ -840,10 +840,15 @@ kbd {
 /* #note-search-bar is exempt too: it now lives in this row, and reading is exactly
    when you search a note. (Its own inline display would win regardless — spelling it
    out here so the rule reads as what it means.) */
-#editor-toolbar.reading-only #toolbar-buttons > *:not(#btn-note-search):not(.toolbar-spacer):not(#note-search-bar) { display: none; }
+#editor-toolbar.reading-only #toolbar-buttons > *:not(#btn-note-search):not(.toolbar-spacer):not(#note-search-bar),
+#editor-toolbar.toolbar-off  #toolbar-buttons > *:not(#btn-note-search):not(.toolbar-spacer):not(#note-search-bar) { display: none; }
 /* With one button left there is no row to draw: the strip loses its background and its
    rule, so what you see is the magnifier on its own over the note's own colour. */
-#editor-toolbar.reading-only {
+/* `.toolbar-off` is the same picture arrived at from the other side: Settings → the
+   formatting row switched off. It used to be display:none on the whole row, which took
+   the search lens with it — the row stays, holding the lens alone. */
+#editor-toolbar.reading-only,
+#editor-toolbar.toolbar-off {
   /* Padding stays as it is while editing: the search must sit at exactly the same
      height in both modes, not creep up when the strip loses its background. */
   background: transparent; border-bottom-color: transparent;
