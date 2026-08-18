@@ -715,13 +715,21 @@ kbd {
 
 /* Rows 3-4: tags / source — only shown in edit mode when non-empty */
 .note-meta-row {
-  display: flex; align-items: center; gap: 8px;
-  margin-top: 4px;
+  /* gap and margin match #note-header-meta's 5px above: these rows sit directly
+     under the created/last-edited line and read as the same block. */
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 5px;
 }
 .meta-field-label {
-  font-family: var(--editor-font); font-size: 11px;
-  color: var(--accent-dim); letter-spacing: .05em;
-  width: 40px; text-align: right; flex-shrink: 0;
+  /* The same label as .meta-label on the dates row above, down to the colour: 13px,
+     --text-3, .02em, flush with the left edge. It used to be 11px accent-green
+     inside a 40px right-aligned column, which lined "tags" up with "source" but
+     left both smaller than, indented from, and a different colour to the line they
+     hang under. That these two rows are editable is shown by the underline that
+     appears on focus, not by colouring their labels. */
+  font-family: var(--editor-font); font-size: 13px;
+  color: var(--text-3); letter-spacing: .02em;
+  flex-shrink: 0;
 }
 .meta-field-input {
   flex: 1; background: transparent; border: none; outline: none;
