@@ -718,11 +718,11 @@ kbd {
 /* Single Edit/View toggle: show its icon (its icon lives inside a <span>) */
 #btn-mode-toggle .mode-toggle-icon { display: inline-flex; align-items: center; }
 #btn-mode-toggle .mode-toggle-icon svg { display: inline-block; width: 16px; height: 16px; }
-/* The Edit/View toggle is the one that has to stand out; it used to do it with an
-   accent border, which is no longer there — the accent icon carries it alone. */
-#btn-mode-toggle { color: var(--accent); }
-/* It is accent already, so accent-on-hover would say nothing: this one brightens. */
-#btn-mode-toggle:hover { color: var(--text-0); }
+/* The Edit/View toggle behaves exactly like its neighbours: the same resting colour as
+   Export and Index, and the accent under the pointer. It used to be the reverse — accent
+   at rest, brightening on hover — from when it was the only one of the group with a
+   coloured border to lose. Standing out permanently made it the odd one in a row of
+   equals, and it is not a more important button than the others. */
 /* Index button active state follows the accent colour, like the other buttons. */
 #btn-toc.active { color: var(--accent); }
 
