@@ -3006,13 +3006,17 @@ ipcMain.handle('fs:searchNotes', async (_, query) => {
       }
       if (!matched) continue;
 
-      // Extract a snippet around the first term hit
+      // Extract a snippet around the first term hit. The lead-in is SHORT on purpose:
+      // the sidebar draws this on one line, ellipsised at roughly 45 characters, so with
+      // the old 40 characters of context the matched word landed exactly on the cut and
+      // you searched for something and saw no trace of it in the results. 12 in front is
+      // enough to show where the phrase starts and still leaves the match in view.
       const firstTerm = terms[0];
       const idx = lower.indexOf(firstTerm);
       let snippet = '';
       if (idx !== -1) {
-        const start = Math.max(0, idx - 40);
-        const end   = Math.min(content.length, idx + 120);
+        const start = Math.max(0, idx - 12);
+        const end   = Math.min(content.length, idx + 140);
         snippet = (start > 0 ? '…' : '') + content.slice(start, end).replace(/\n+/g, ' ').trim() + (end < content.length ? '…' : '');
       }
 

@@ -6741,8 +6741,13 @@ function renderSearchResults(results, query) {
       nameHtml = nameHtml.replace(re, '<mark>$1</mark>');
     });
 
+    // The second line is the FOLDER, not the full path: the file name is the title on the
+    // line above it, so printing the whole path repeated it (…/Recon/Network-Enumeration-
+    // Nmap.md under "Network-Enumeration-Nmap"). A note at the vault root has no folder
+    // and gets no line at all.
+    const dir = (r.path || '').split('/').slice(0, -1).join('/');
     item.innerHTML = `
-      <div class="sr-name">${nameHtml} <span class="sr-path">${escHtml(r.path)}</span></div>
+      <div class="sr-name">${nameHtml}${dir ? `<span class="sr-path">${escHtml(dir)}</span>` : ''}</div>
       ${snippet ? `<div class="sr-snippet">${snippet}</div>` : ''}
     `;
 

@@ -2466,11 +2466,32 @@ body.split-open .pane-flash::after {
 }
 .sr-item:last-child { border-bottom: none; }
 .sr-item:hover { background: var(--bg-3); }
+/* Three lines of fixed shape per result — title, path, snippet — each truncated with an
+   ellipsis. They used to be a flex ROW with the path beside the title: in a 249px sidebar
+   the name wrapped over two or three lines with the path threading between them, so every
+   result had a different height and the list read as broken. */
 .sr-name {
   font-size: 13px; color: var(--text-0); font-family: var(--ui-font);
-  margin-bottom: 3px; display: flex; align-items: center; gap: 6px;
+  margin-bottom: 3px;
+  display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.sr-path { font-size: 11px; color: var(--text-3); font-family: var(--editor-font); }
+.sr-path {
+  display: block; margin-top: 2px;
+  /* --text-2, not --text-3: the dimmest grey measured 2.2:1 on the dropdown's background
+     — visible only if you went looking for it. This is 4.1:1, readable while staying a
+     step below the title. */
+  font-size: 11px; color: var(--text-2); font-family: var(--editor-font);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* The tail is what identifies a note (…/Recon/Network-Enumeration-Nmap.md), so when a
+     path is too long it is the HEAD that goes: direction rtl flips which end is cut. */
+  direction: rtl; text-align: left;
+}
+/* The match inside the TITLE was unstyled, so it fell back to the browser's yellow
+   highlighter — the one loud thing in the panel. Same treatment as in the snippet. */
+.sr-name mark {
+  background: var(--accent-glow); color: var(--accent);
+  border-radius: 2px; padding: 0 2px;
+}
 .sr-snippet {
   font-size: 12px; color: var(--text-2); font-family: var(--editor-font);
   line-height: 1.5; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
