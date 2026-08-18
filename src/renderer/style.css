@@ -3615,7 +3615,8 @@ kbd {
    second line. Truncated with an ellipsis instead. */
 .notif-row .simple-name {
   font-size: 12.5px; line-height: 1.45;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: normal; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .simple-main { flex: 1; min-width: 0; cursor: pointer; }
 .simple-main .simple-name { display: block; }
@@ -3813,7 +3814,10 @@ html[data-theme="serekkr"] .notif-row:hover .simple-name
 #btn-notifications.has-notif { color: var(--accent); }
 
 #notif-popup {
-  position: fixed; z-index: 2000; width: 300px; max-height: 60vh; overflow-y: auto;
+  /* 360, not 300: at 300 the two standard messages — "Automatic backup completed with"
+     and "No changes: backup not needed" — ran a few pixels past the line and wrapped, so
+     every backup notification was three lines tall for the sake of one word. */
+  position: fixed; z-index: 2000; width: 360px; max-height: 60vh; overflow-y: auto;
   background: var(--bg-2); border: 1px solid var(--border-light); border-radius: 8px;
   box-shadow: 0 16px 50px rgba(0,0,0,.5); padding: 8px;
 }
@@ -3832,11 +3836,11 @@ html[data-theme="serekkr"] .notif-row:hover .simple-name
 .notif-dismiss:hover { background: var(--bg-4); color: var(--red); }
 .notif-row-title {
   font-size: 14px; color: var(--text-0); line-height: 1.45;
-  /* ONE line, cut with an ellipsis if it does not fit. It used to wrap over up to three
-     lines, and on a backup notification the word left over was the "with:" that hands
-     the sentence to the destination underneath — a line holding one preposition. A
-     truncated title still says what happened; a dangling connector says nothing. */
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* Wraps, up to 3 lines — nothing is cut. The orphaned "with:" that made this a single
+     clipped line for a while is handled where it belongs: a non-breaking space ties the
+     connector to the word before it (see the bell markup in app.js). */
+  white-space: normal; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
 .notif-row-due { font-family: var(--editor-font); font-size: 13px; color: var(--text-3); margin-top: 2px; }
 .notif-row.overdue .notif-row-due { color: var(--red); }
