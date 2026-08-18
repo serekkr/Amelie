@@ -850,7 +850,10 @@ function renderEditorGutter() {
 
 
 function loadLineNumbers() {
-  try { return localStorage.getItem('inkwell-line-numbers') === '1'; } catch (_) { return false; }
+  // ON for a fresh profile. Anything but an explicit '0' counts as on — the same shape
+  // editorToolbarOn() uses — so someone who has actually switched them OFF keeps them
+  // off, while a profile that never had the key gets them.
+  try { return localStorage.getItem('inkwell-line-numbers') !== '0'; } catch (_) { return true; }
 }
 function applyLineNumbers(on) {
   const pane = document.getElementById('editor-pane');
