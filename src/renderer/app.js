@@ -17472,15 +17472,15 @@ function switchSidebarView(view) {
 function renderNotificationsView() {
   const c = $('notifications-list'); if (!c) return; c.innerHTML = '';
   const items = _dueTodos();
-  // "Clear all" — mark everything shown as read, deadlines included (it used to appear
+  // "Clear all" — marks everything shown as read, deadlines included (it used to appear
   // only when there were backup/sync events, so a screen full of expired deadlines had
-  // no way out but one × at a time).
-  if (_eventNotifs.length || items.length) {
-    const bar = document.createElement('div'); bar.className = 'notif-clear-bar';
-    const btn = document.createElement('button'); btn.className = 'notif-clear-all';
-    btn.textContent = window.i18n.t('notif.clear_all');
-    btn.addEventListener('click', () => _clearAllNotifs());
-    bar.appendChild(btn); c.appendChild(bar);
+  // no way out but one × at a time). It lives on the title line now (index.html), so
+  // here it is only shown or hidden; `onclick` rather than addEventListener because this
+  // function runs on every change and listeners would stack up on the same button.
+  const clearBtn = $('notif-clear-all-btn');
+  if (clearBtn) {
+    clearBtn.style.display = (_eventNotifs.length || items.length) ? '' : 'none';
+    clearBtn.onclick = () => _clearAllNotifs();
   }
   // Event notifications (backup done, etc.) first, with their time.
   _eventNotifs.forEach(ev => {

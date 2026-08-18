@@ -3627,6 +3627,13 @@ kbd {
   font-family: var(--editor-font); font-size: 12px; text-transform: uppercase;
   letter-spacing: .08em; color: var(--text-3); padding: 12px 14px 8px;
 }
+/* A title that carries an action on the same line (Notifications + "Clear all").
+   The button keeps its own case — the uppercasing here is for the label. */
+.view-title-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding-right: 8px;
+}
+.view-title-bar .notif-clear-all { text-transform: none; letter-spacing: 0; }
 .simple-list, #todo-vault-list { overflow-y: auto; flex: 1; padding: 0 6px 12px; }
 .view-empty { color: var(--text-3); font-size: 15px; padding: 16px 14px; font-style: normal; }
 .simple-row {

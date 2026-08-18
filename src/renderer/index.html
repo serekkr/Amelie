@@ -168,7 +168,12 @@
 
         <!-- NOTIFICATIONS -->
         <div id="section-notifications" style="display:none">
-          <div class="view-title" data-i18n="titlebar.notifications">Notifiche</div>
+          <!-- "Clear all" sits ON the title line: as a bar of its own above the list it
+               cost a whole row of a narrow sidebar to hold one small button. -->
+          <div class="view-title view-title-bar">
+            <span data-i18n="titlebar.notifications">Notifiche</span>
+            <button id="notif-clear-all-btn" class="notif-clear-all" data-i18n="notif.clear_all" style="display:none">Svuota tutto</button>
+          </div>
           <div id="notifications-list" class="simple-list"></div>
         </div>
 
