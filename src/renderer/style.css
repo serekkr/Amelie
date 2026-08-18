@@ -2122,8 +2122,8 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   border-right: 1px solid var(--border);
   cursor: pointer; user-select: none;
   font-size: 14px; font-family: var(--ui-font);
-  /* Inactive tabs: lighter background + dimmer text so the active tab
-     (which uses the darker editor background) clearly stands out. */
+  /* Inactive tabs: back to --bg-2 with the dimmer --text-2 label they always had. The
+     open tab is the one that moves, a step DOWN the ladder (--bg-1 below). */
   background: var(--bg-2); color: var(--text-2);
   position: relative; transition: background .1s, color .15s;
   white-space: nowrap; overflow: hidden;
@@ -2139,14 +2139,19 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
    one. The fill now belongs to the active tab alone. */
 .note-tab:hover { color: var(--text-0); }
 .note-tab.active {
-  /* Distinct fixed shade (NOT the editor's --bg-0) so changing "Main background"
-     recolors only the writing area, never the active tab. */
-  background: var(--bg-3); color: var(--text-0);
+  /* Darker than the closed tabs, by one step: --bg-1 against their --bg-2. The white
+     label and the accent underline carry the rest of the distinction. Tried and rejected
+     on the way here: --bg-3, which was the very shade hover painted, so every tab looked
+     selected under the pointer; --bg-0, the page's own colour, too dark; --bg-4, lighter
+     than the others, too bright. */
+  background: var(--bg-1); color: var(--text-0);
   border-bottom-color: var(--accent);
 }
 .note-tab.active::after {
+  /* Covers the strip's bottom rule under this tab, so it has to be the tab's own
+     colour — not the page's, or a dark line would cut the tab off from its underline. */
   content: ''; position: absolute; bottom: -1px; left: 0; right: 0;
-  height: 1px; background: var(--bg-3);
+  height: 1px; background: var(--bg-1);
 }
 .note-tab.unsaved .tab-name::after {
   content: '●'; margin-left: 5px; color: var(--yellow); font-size: 11px;
