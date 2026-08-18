@@ -3153,11 +3153,13 @@ async function saveCurrentNote() {
     tab.isDirty = false;
     tab.isNew = false;
     state.currentPath = filePath;
+    tab.modified = Date.now();
     noteTitle.value = safeName;
     if (statusPath) statusPath.textContent = filePath;
     setSavedState(true);
     renderTabBar();
     await loadTree();
+    noteSaved(tab);   // a note born here has never been "opened": Recents wouldn't know it
     return;
   }
 
@@ -3169,9 +3171,33 @@ async function saveCurrentNote() {
   tab.content = editor.value;
   tab.isDirty = false;
   tab.modified = Date.now();
+  noteSaved(tab);
   updateNoteMeta(tab);
   setSavedState(true);
   renderTabBar();
+}
+
+// A save is the one moment a note's mtime changes while the tree is NOT reloaded:
+// the vault watcher deliberately ignores our own writes (main.js
+// `_internalWriteUntil`), so the node in `state.notes` — the only place the
+// Recents list reads its "Modified" date from — would keep the mtime photographed
+// at the last loadTree() for the rest of the session, and the note you just
+// edited would still be dated yesterday. Stamp it here, and let the note climb
+// back to the top of Recents: one you are writing in is recent whether or not you
+// happened to reopen it.
+function noteSaved(tab) {
+  if (!tab || !tab.path) return;
+  const when = new Date(tab.modified || Date.now()).toISOString();
+  const node = findNote(state.notes || [], tab.path);
+  const wasSameDay = !!(node && node.modified
+    && _fmtDateDMY(new Date(node.modified).getTime()) === _fmtDateDMY(new Date(when).getTime()));
+  if (node) node.modified = when;
+  // Autosave fires every few seconds while you type. Once the note is on top of
+  // Recents carrying today's date there is nothing left for a later save to
+  // change, and renderRecentView() walks the whole tree once per row — not work
+  // to repeat under the cursor.
+  if (wasSameDay && _lsGet(RECENT_KEY)[0]?.path === tab.path) return;
+  try { pushRecent(node || { path: tab.path, name: tab.name }); } catch (_) {}
 }
 
 function setSavedState(saved) {
@@ -8085,6 +8111,8 @@ function setupSplitView() {
       window.inkwell.writeNote(savePath, saveValue).then(() => {
         const tt = getTab(savePath);
         if (tt && tt.content === saveValue) tt.isDirty = false;
+        if (tt) tt.modified = Date.now();
+        noteSaved(tt || { path: savePath, name: _baseName(savePath), modified: Date.now() });
       }).catch(() => {});
     }, AUTOSAVE_DELAY_MS);
   });
