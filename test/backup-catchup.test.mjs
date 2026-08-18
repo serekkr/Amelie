@@ -321,6 +321,26 @@ const stampTwoway = (agoMin) => {
   await m.runBackup();
   check('but it does not repeat it every pass', m._status.length === 0, JSON.stringify(m._status));
 
+  // A skip has to move the clock as well. It used not to — only a real copy wrote
+  // lastBackupAt — so once the vault had been quiet for longer than the interval the
+  // recorded time froze, and EVERY start found the backup overdue, ran the catch-up,
+  // skipped, and filed one more "Backup skipped". Five launches in an hour, five lines,
+  // on an hourly schedule.
+  {
+    const stamp = () => { try { return JSON.parse(fs.readFileSync(statePath(), 'utf8')).lastBackupAt; } catch (_) { return null; } };
+    const before = stamp();
+    await sleep(1100);
+    const skip = await m.runBackup();
+    const after = stamp();
+    check('a skipped pass records that it ran', skip.skipped === true && after && after !== before,
+      JSON.stringify({ before, after }));
+    check('so the next start does not think a backup is overdue',
+      m._overdueBy('lastBackupAt', 60).overdue === false, JSON.stringify(m._overdueBy('lastBackupAt', 60)));
+    // …and it is only the TIME: what was copied, and where, still describes the real copy.
+    const raw = JSON.parse(fs.readFileSync(statePath(), 'utf8'));
+    check('without pretending a copy was made', !!raw.vaultSig && !!raw.artifacts, JSON.stringify(raw));
+  }
+
   m._status.length = 0;
   fs.writeFileSync(path.join(NOTES, 'd.md'), 'edited');   // work happens again
   await m.runBackup();

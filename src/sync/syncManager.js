@@ -540,6 +540,15 @@ class SyncManager {
         if (!manual) this._skipNotified = true;
         this._setStatus('ok', null, { op: 'backup', manual: !!manual, unchanged: true });
       }
+      // A skip IS a run that reached a conclusion, so it moves the clock. Only
+      // _recordBackupState used to, i.e. only a real copy — so once the vault had
+      // been quiet for longer than the interval, `lastBackupAt` froze at the last
+      // copy and EVERY app start found the backup overdue, ran the catch-up, found
+      // nothing to do and filed another "Backup skipped". Open the app five times
+      // in an hour and you got five of them, on an hourly schedule.
+      // Only the time is written: vaultSig, dests and artifacts still describe the
+      // last real copy, which is what "Back up now" goes and verifies.
+      this._updateSyncState({ lastBackupAt: new Date().toISOString() });
       return { success: true, skipped: true, unchanged: true };
     }
     this._skipNotified = false;
