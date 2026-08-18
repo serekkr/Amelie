@@ -1077,8 +1077,18 @@ kbd {
    The non-current hits sat at .30 alpha, which on a dark editor background sank
    into it; .48 makes every other match findable while the current one stays
    unmistakably brighter. */
-#cm-mount .cm-search-hit { background: rgba(64,238,158,.48); border-radius: 2px; }
-#cm-mount .cm-search-current { background: rgba(57,255,150,.85); color: #04120a; }
+/* A found word is OUTLINED, not filled: the green block hid the text it was supposed
+   to point at (and the current hit went further, repainting the letters near-black to
+   stay legible on it). `outline`, not `border` — a border would push the surrounding
+   text sideways by two pixels on every hit. The hit you are ON is a different COLOUR,
+   not just a thicker line: the accent green, against the --yellow of the ones still
+   ahead of you — so you can tell which one the counter points at without comparing
+   line weights. Green marks "this one" everywhere else in the app too. */
+#cm-mount .cm-search-hit {
+  background: transparent; border-radius: 2px;
+  outline: 1px solid color-mix(in srgb, var(--yellow) 70%, transparent);
+}
+#cm-mount .cm-search-current { background: transparent; outline: 2px solid var(--accent); }
 #cm-mount .cm-codeblock { background: rgba(255,255,255,.05); padding-left: 2ch; padding-right: 2ch; }
 /* Breathing above/below the fence lines = 0.3× the line height (the legacy inkGap),
    proportional so it stays right when the font is zoomed. */
@@ -3128,8 +3138,13 @@ body.split-open .pane-flash::after {
 /* Highlight matches in editor (preview mode) */
 /* Same pair for PREVIEW mode — kept in step with the edit-mode colours above,
    otherwise the highlight visibly changes when you toggle Edit/View. */
-.note-search-highlight { background: rgba(64,238,158,.42); border-radius: 2px; }
-.note-search-highlight.current { background: rgba(57,255,150,.85); color: #04120a; outline: 1px solid var(--accent); }
+/* Same treatment in the preview as in the editor (see .cm-search-hit): outlined, never
+   filled, and the text keeps its own colour. */
+.note-search-highlight {
+  background: transparent; border-radius: 2px;
+  outline: 1px solid color-mix(in srgb, var(--yellow) 70%, transparent);
+}
+.note-search-highlight.current { background: transparent; outline: 2px solid var(--accent); }
 
 /* ─── File drop overlay ─────────────────────────────────────── */
 /* ─── PDF overlay ───────────────────────────────────────────── */
