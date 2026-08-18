@@ -14,7 +14,6 @@ security-tools/
 install-amelie/
 release/
 RELEASE_NOTES.md
-docs/
 
 # OS / editor cruft
 .DS_Store
