@@ -3087,16 +3087,15 @@ body.split-open .pane-flash::after {
 /* A fixed 240px, not flex: 1 — in a strip of its own the field could take all the
    width there was, but in the toolbar row growing means shoving the formatting
    buttons off the line, so the width is chosen rather than taken. It may shrink
-   (0 1) when the row runs out of room, instead of forcing a wrap. The underline is
-   what says "type here" now that there is no strip around it, and it brightens
-   while the field has focus. */
+   (0 1) when the row runs out of room, instead of forcing a wrap.
+   No underline: it was added to say "type here", but the row it sits in already has a
+   rule along its bottom edge, so the two drew a double line under whatever you typed.
+   The field only ever appears with the caret already in it — nothing left to announce. */
 #note-search-input {
   flex: 0 1 240px; min-width: 120px; background: transparent; border: none; outline: none;
-  border-bottom: 1px solid var(--border);
   color: var(--text-0); font-family: var(--editor-font); font-size: 14px;
-  padding: 1px 0; transition: border-color .12s;
+  padding: 1px 0;
 }
-#note-search-input:focus { border-bottom-color: var(--border-light); }
 /* ── Search open (openNoteSearch adds .searching) ──
    The formatting buttons step aside and the field takes the whole row: a slot next
    to a full toolbar was never long enough for a phrase. The lens stays — it is what
