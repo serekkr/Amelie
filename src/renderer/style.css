@@ -1242,11 +1242,22 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #preview-content strong { color: var(--text-0); }
 
 /* ─── Status bar ────────────────────────────────────────────── */
+/* A small block in the bottom-right corner, not a bar. Taken OUT of the column's flow
+   (absolute) so the note gets that height back: as a flex row it reserved a strip
+   across the full width, and once it went transparent that strip read as the note
+   text being cut off at the bottom. Now the text runs the whole height and scrolls
+   under it, visible on the left the whole way; only this corner is covered.
+   --bg-0 is the editor's own background, so the block reads as part of the page and
+   the count stays legible over whatever line happens to scroll beneath it.
+   pointer-events: none — it is a readout, and it must not eat clicks meant for the
+   text it sits on. */
 #editor-statusbar {
-  display: flex; align-items: center; justify-content: flex-end; gap: 16px;
-  padding: 3px 16px; font-family: var(--editor-font); font-size: 12px;
-  color: var(--text-3); border-top: 1px solid var(--border);
-  background: var(--bg-1); flex-shrink: 0;
+  position: absolute; right: 12px; bottom: 5px; z-index: 4;
+  display: flex; align-items: center; gap: 16px;
+  padding: 2px 8px; border-radius: var(--radius);
+  font-family: var(--editor-font); font-size: 12px;
+  color: var(--text-3); background: var(--bg-0);
+  pointer-events: none;
 }
 #status-path { display: none; }
 #status-saved.unsaved { color: var(--yellow); }
@@ -2081,6 +2092,9 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   flex: 1; display: flex; overflow: hidden; min-height: 0;
 }
 #editor-column {
+  /* relative: the status bar hangs off this corner (position: absolute) instead of
+     taking a row of its own — see #editor-statusbar. */
+  position: relative;
   flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0;
 }
 #content-split {
