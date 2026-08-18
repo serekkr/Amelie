@@ -1482,7 +1482,13 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   color: var(--text-1); border-bottom: 2px solid transparent;
   margin-bottom: -1px; /* no transition: tab selection is instant */
 }
+/* The selected tab is marked by the accent underline under it. (A boxed version was
+   tried on 2026-08-18 — white labels with a border around the active one — and taken
+   back off.) */
 .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+/* Under the pointer, an unselected tab goes white: it says "this one is clickable"
+   without borrowing the accent, which here means "this is the tab you are on". */
+.tab-btn:not(.active):hover { color: var(--text-0); }
 .modal-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; }
 /* ONLY the General tab fills the body height, so the About info at the bottom
    (margin-top:auto) stays low. The other tabs must NOT have flex:1,
