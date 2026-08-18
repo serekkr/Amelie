@@ -535,14 +535,13 @@ html.is-mac #titlebar { padding-left: 72px; }
      aligned with the folder name's first letter (14+16+7=37). */
   margin-left: 22px;
   padding-left: 0;
-  /* A pale line with a hint of the accent in it — mostly grey, 20% colour. Plain
-     --text-2 was the same shade as the note icons and muted labels around it, so the
-     nesting levels vanished into the tree; full --accent-dim went the other way and
-     drew a coloured stripe down the sidebar. The tint is what separates it from those
-     greys now, so the grey itself can stay at --text-2: the line is 1px either way,
-     and the dimmer shade is what makes it READ as a hairline. Mixed from the theme's
-     own accent, so it stays a pale tint of whatever that theme's colour is. */
-  border-left: 1px solid color-mix(in srgb, var(--accent) 20%, var(--text-2));
+  /* A white hairline, at a third strength. No tint: the accent-green version drew a
+     coloured stripe down the sidebar, and plain --text-2 was the same shade as the
+     note icons and muted labels beside it, so the nesting levels vanished into the
+     tree. A faint white differs from both without belonging to either. Mixed from the
+     theme's text rather than written as `rgba(255,255,255,…)`, so on Light Paper the
+     same rule gives a faint DARK line instead of white on white. */
+  border-left: 1px solid color-mix(in srgb, var(--text-0) 32%, transparent);
 }
 /* No hover reaction. The guides used to brighten — both under the pointer and when the
    parent folder row was hovered — to show which folder you were about to enter; the
