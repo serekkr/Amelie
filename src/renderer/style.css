@@ -1485,7 +1485,10 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 /* The selected tab is marked by the accent underline under it. (A boxed version was
    tried on 2026-08-18 — white labels with a border around the active one — and taken
    back off.) */
-.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+/* White label, accent underline: the line alone says which tab you are on, so the text
+   does not have to change colour as well — and white keeps it the most readable of the
+   row rather than the most tinted. */
+.tab-btn.active { color: var(--text-0); border-bottom-color: var(--accent); }
 /* Under the pointer, an unselected tab goes white: it says "this one is clickable"
    without borrowing the accent, which here means "this is the tab you are on". */
 .tab-btn:not(.active):hover { color: var(--text-0); }
