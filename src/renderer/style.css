@@ -2922,33 +2922,48 @@ body.split-open .pane-flash::after {
 /* ─── Sidebar view buttons (graph + canvas) ─────────────────── */
 #sidebar-views {
   display: flex;
-  /* 10px, not the old 6: at the default sidebar width the five buttons were nearly
-     touching. The buttons shrink a little to pay for it (flex: 1 1 auto below) —
-     the icons inside are 16px, so they lose padding, not legibility. The row is NOT
-     stretched to the full width: with justify-content: space-between, any spare room
-     went into the gaps, and at a small icon size (70%) that left the five buttons
-     marooned far apart. Spare room now stays at the end of the row instead. */
+  /* 10px. The row is NOT stretched to the full width: with justify-content:
+     space-between, any spare room went into the gaps, and at a small icon size (70%)
+     that left the five buttons marooned far apart. Spare room stays at the end of the
+     row instead — which is why the icons sit together on the left rather than spread
+     across the sidebar. */
   gap: 10px;
   padding: 0 10px 8px; flex-shrink: 0;
 }
 .sidebar-view-btn {
-  /* Cap the width so the buttons stay square-ish and DON'T stretch into wide
-     rectangles when the sidebar is widened (the divider drag must not change
-     the icon aspect ratio). They still shrink to fit at the minimum width.
-     The cap is DIVIDED by the icon zoom: this row carries `zoom`, so a flat 38px
-     is 38 × zoom on screen — at 70% the buttons were capped at 27 real pixels and
-     could not take up the row, leaving the leftover to open gaps between them.
-     Dividing keeps the cap at 38 real pixels whatever the icon size. */
-  flex: 1 1 auto; max-width: calc(38px / var(--toolbar-zoom, 1));
+  /* Five equal shares of the row, no width cap: the buttons fill the sidebar and the
+     dividers land at even intervals, so the group reads as one uniform strip whatever
+     the sidebar's width. There USED to be a cap (38px, then 28) to stop the buttons
+     stretching into wide rectangles — that mattered while each one was a visible box;
+     now that they are bare icons, a wider share just means more air around the icon,
+     and the dividers are what set the rhythm. The trade-off is deliberate: drag the
+     sidebar wide and the icons do spread out, because filling the row is the point. */
+  flex: 1 1 0; max-width: none;
   display: flex; align-items: center; justify-content: center;
-  background: var(--bg-2); border: 1px solid var(--border);
-  border-radius: var(--radius); color: var(--text-1);
+  /* Icons on their own: no --bg-2 fill, no border, no rounded corner (as in the note
+     header and the search lens). */
+  background: transparent; border: none;
+  color: var(--text-1);
   padding: 7px 0; cursor: pointer;
-  transition: background .12s, border-color .12s, color .12s;
+  position: relative;                /* anchors the divider drawn below */
+  transition: color .12s;
 }
-.sidebar-view-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
-.sidebar-view-btn:hover { background: var(--bg-3); border-color: var(--accent-dim); color: var(--accent); }
-.sidebar-view-btn.active { background: var(--active-bg); border-color: var(--accent); color: var(--accent); }
+/* 18px: a bare icon carries less presence than one sitting in a box, and these have
+   room to spare now that the buttons share the whole row. */
+.sidebar-view-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+.sidebar-view-btn:hover { color: var(--accent); }
+.sidebar-view-btn.active { color: var(--accent); }
+/* A hairline between one icon and the next, now that no boxes separate them. Drawn as
+   a pseudo-element in the MIDDLE of the 10px gap (left: -5px), not as a border on the
+   button: a border would sit against the icon it belongs to and shrink its box by a
+   pixel. Only between — the `+` gives four lines for five buttons, none at the ends.
+   It is inside the zoomed row, so it scales with the icon-size setting like everything
+   else here. */
+.sidebar-view-btn + .sidebar-view-btn::before {
+  content: ''; position: absolute; left: -5px; top: 50%;
+  transform: translateY(-50%);
+  width: 1px; height: 16px; background: var(--border);
+}
 
 /* ─── In-note search bar ────────────────────────────────────── */
 /* Sits inside #toolbar-buttons, just left of the lens (see index.html), so opening
