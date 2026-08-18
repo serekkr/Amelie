@@ -752,26 +752,33 @@ kbd {
 .tool-btn.reading-off { opacity: .3; pointer-events: none; }
 /* …and in the note's own toolbar they are not shown at all — a row of controls that
    cannot do anything is just noise while reading. Only the search stays, at the right. */
-#editor-toolbar.reading-only #toolbar-buttons > *:not(#btn-note-search):not(.toolbar-spacer) { display: none; }
+/* #note-search-bar is exempt too: it now lives in this row, and reading is exactly
+   when you search a note. (Its own inline display would win regardless — spelling it
+   out here so the rule reads as what it means.) */
+#editor-toolbar.reading-only #toolbar-buttons > *:not(#btn-note-search):not(.toolbar-spacer):not(#note-search-bar) { display: none; }
 /* With one button left there is no row to draw: the strip loses its background and its
-   rule, so what you see is the search on its own, square, over the note's own colour. */
+   rule, so what you see is the magnifier on its own over the note's own colour. */
 #editor-toolbar.reading-only {
   /* Padding stays as it is while editing: the search must sit at exactly the same
      height in both modes, not creep up when the strip loses its background. */
   background: transparent; border-bottom-color: transparent;
 }
-#editor-toolbar.reading-only #btn-note-search {
-  border: 1px solid var(--border); background: var(--bg-1);
-}
-#editor-toolbar.reading-only #btn-note-search:hover { background: var(--bg-3); border-color: var(--text-3); }
 .tool-btn.danger:hover { color: var(--red); }
 .tool-btn.panel-toggle { font-size: 12px; gap: 4px; }
-/* The search is the same square in both modes — reading only adds the border, and
-   border-box keeps that from making it 2px bigger than the one you see while editing. */
+/* The magnifier on its own, in BOTH modes: no border and no fill, not while reading
+   (where it used to carry a --border outline on --bg-1) and not under the pointer.
+   The box drew a button around an icon that reads without one — same treatment as
+   the note arrows. The 26px square stays as the click target, invisible; box-sizing
+   keeps it 26 whatever else lands on the element. */
 #btn-note-search {
   box-sizing: border-box; width: 26px; height: 26px; padding: 0; justify-content: center;
 }
-.tool-btn.panel-toggle.active { color: var(--accent); background: var(--active-bg); }
+/* Colour only — no background. The generic .tool-btn:hover colour still applies, so
+   on the default theme the magnifier still turns accent green under the pointer. */
+#btn-note-search:hover { background: transparent; }
+/* Search panel open: the icon goes accent, without the filled square it used to sit
+   in. This rule matches #btn-note-search alone (#btn-toc is .mode-btn, not .tool-btn). */
+.tool-btn.panel-toggle.active { color: var(--accent); background: transparent; }
 .toolbar-sep { width: 1px; height: 16px; background: var(--border); margin: 0 3px; }
 
 /* tags-bar removed — tags/source now inline in note-header */
@@ -2931,20 +2938,42 @@ body.split-open .pane-flash::after {
 .sidebar-view-btn.active { background: var(--active-bg); border-color: var(--accent); color: var(--accent); }
 
 /* ─── In-note search bar ────────────────────────────────────── */
+/* Sits inside #toolbar-buttons, just left of the lens (see index.html), so opening
+   the search puts the field beside the icon on the same line. It used to be a strip
+   of its own below the toolbar, with its own --bg-1 background and bottom rule —
+   both gone, since the row it is in already draws them. */
 #note-search-bar {
   display: flex; align-items: center; gap: 7px;
-  padding: 5px 14px; background: var(--bg-1);
-  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  padding: 0; margin-right: 6px; background: transparent;
+  border: none; flex-shrink: 0;
 }
 /* `color: inherit` matters: the prev/next buttons set their own colour (and a
    brighter one on hover) and the icon has to follow it, not be pinned to a
    dim grey by this rule. */
 #note-search-bar svg { width: 14px; height: 14px; color: inherit; flex-shrink: 0; }
+/* A fixed 240px, not flex: 1 — in a strip of its own the field could take all the
+   width there was, but in the toolbar row growing means shoving the formatting
+   buttons off the line, so the width is chosen rather than taken. It may shrink
+   (0 1) when the row runs out of room, instead of forcing a wrap. The underline is
+   what says "type here" now that there is no strip around it, and it brightens
+   while the field has focus. */
 #note-search-input {
-  flex: 1; background: transparent; border: none; outline: none;
+  flex: 0 1 240px; min-width: 120px; background: transparent; border: none; outline: none;
+  border-bottom: 1px solid var(--border);
   color: var(--text-0); font-family: var(--editor-font); font-size: 14px;
-  padding: 0;
+  padding: 1px 0; transition: border-color .12s;
 }
+#note-search-input:focus { border-bottom-color: var(--border-light); }
+/* ── Search open (openNoteSearch adds .searching) ──
+   The formatting buttons step aside and the field takes the whole row: a slot next
+   to a full toolbar was never long enough for a phrase. The lens stays — it is what
+   closes the search again — and so does the spacer, whose inline `flex:1` competes
+   for the same slack; !important is the only way past an inline style, and without
+   it half the row would go to empty space. */
+#editor-toolbar.searching #toolbar-buttons > *:not(#note-search-bar):not(#btn-note-search):not(.toolbar-spacer) { display: none; }
+#editor-toolbar.searching .toolbar-spacer { flex: 0 0 0 !important; }
+#editor-toolbar.searching #note-search-bar { flex: 1 1 auto; margin-right: 8px; }
+#editor-toolbar.searching #note-search-input { flex: 1 1 auto; }
 #note-search-input::placeholder { color: var(--text-3); }
 /* The match counter ("3/17") was --text-3, the dimmest step in the palette —
    #4f4f4f here and #344d66 in the inkwell theme, effectively unreadable on the

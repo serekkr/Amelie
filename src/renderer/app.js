@@ -15599,6 +15599,11 @@ function toggleNoteSearch() {
 function openNoteSearch() {
   const bar = $('note-search-bar');
   bar.style.display = 'flex';
+  // Hands the whole toolbar row to the field (see #editor-toolbar.searching in
+  // style.css): while you are typing what to look for, the formatting buttons are
+  // not what you are reaching for, and sharing the row left the field too short for
+  // a phrase.
+  $('editor-toolbar')?.classList.add('searching');
   $('btn-note-search').classList.add('active');
   const input = $('note-search-input');
   input.value = '';
@@ -15609,6 +15614,7 @@ function openNoteSearch() {
 
 function closeNoteSearch() {
   $('note-search-bar').style.display = 'none';
+  $('editor-toolbar')?.classList.remove('searching');   // formatting buttons come back
   $('btn-note-search').classList.remove('active');
   // Clear highlights (both in-editor overlay and preview <mark>s)
   clearNoteSearchHighlights();
