@@ -15634,16 +15634,21 @@ function openNoteSearch() {
   input.focus();
 }
 
-function closeNoteSearch() {
-  $('note-search-bar').style.display = 'none';
-  $('editor-toolbar')?.classList.remove('searching');   // formatting buttons come back
-  $('btn-note-search').classList.remove('active');
-  // Clear highlights (both in-editor overlay and preview <mark>s)
+// Wipe every trace of a search: the preview's <mark>s AND the editor's own highlight,
+// which lives inside CodeMirror and does not come off with them.
+function clearNoteSearchMarks() {
   clearNoteSearchHighlights();
   _searchHL = { query: '', currentPos: -1 };
   if (_cmActive && _cmHandle) { try { _cmHandle.setSearchHighlight('', -1); } catch (_) {} }
   applyEditorHighlight();
   noteSearchMatches = []; noteSearchIdx = 0;
+}
+
+function closeNoteSearch() {
+  $('note-search-bar').style.display = 'none';
+  $('editor-toolbar')?.classList.remove('searching');   // formatting buttons come back
+  $('btn-note-search').classList.remove('active');
+  clearNoteSearchMarks();
 }
 
 // In split mode the search follows the SELECTED half: searching while the second pane is the
@@ -15655,7 +15660,11 @@ function runNoteSearch(query) {
   noteSearchMatches = []; noteSearchIdx = 0;
   const countEl = $('note-search-count');
 
-  if (!query.trim()) { countEl.textContent = ''; return; }
+  // Emptied field: clear EVERYTHING, not just the preview. clearNoteSearchHighlights()
+  // above only unwraps the preview's <mark>s; the editor's highlight is CodeMirror's and
+  // stayed lit on the last thing searched — delete a word down to one letter, then that
+  // letter, and the letter's own match kept glowing.
+  if (!query.trim()) { countEl.textContent = ''; clearNoteSearchMarks(); return; }
 
   const inHalf = _searchInSplitHalf();
 
