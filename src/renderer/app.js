@@ -5210,6 +5210,13 @@ function updatePreview() {
     .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) => {
       const t = target.trim();
       const display = (alias || target).trim();
+      // `[[#Heading]]` / `[[#Heading|Alias]]` aims at a heading INSIDE this note, not at
+      // another note, so resolveNoteLink can never match it: it used to come out as a
+      // dead link — text with a dotted underline, showing its own `[[…]]` in a tooltip
+      // on hover. It is not a link here, so it is not drawn as one; just the text it
+      // displays. The leading `#` goes with it, or a link at the start of a line would
+      // leave `#Heading` for the parser to read as a heading.
+      if (t.startsWith('#')) return display.replace(/^#+\s*/, '');
       return `<a class="note-link" data-note="${t.replace(/"/g, '&quot;')}" href="#">${display}</a>`;
     })
     .replace(/(!)\[([^\]]*)\]\(([^)]+)\)\{width=(\d+)\}/g,
@@ -7781,6 +7788,7 @@ function renderSplitPreview() {
     .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) => {
       const t = target.trim();
       const display = (alias || target).trim();
+      if (t.startsWith('#')) return display.replace(/^#+\s*/, '');   // heading anchor: plain text, see renderPreview
       return `<a class="note-link" data-note="${t.replace(/"/g, '&quot;')}" href="#">${display}</a>`;
     })
     .replace(/(!)\[([^\]]*)\]\(([^)]+)\)\{width=(\d+)\}/g,
