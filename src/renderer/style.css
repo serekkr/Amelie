@@ -1267,17 +1267,33 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 }
 #preview-content pre {
   position: relative;
-  background: var(--bg-2); border: 1px solid var(--border);
+  /* The SAME fill as edit mode's code block (#cm-mount .cm-codeblock): a 5% white wash
+     over the page, not the solid --bg-2 this used to be. --bg-2 read lighter than the
+     block you had just been typing in, so the same code changed colour on every
+     edit↔view toggle. Radius 7px to match it as well, and no frame — the edit-mode
+     block has none, by an old request. */
+  background: rgba(255,255,255,.05); border: none;
+  /* The note's font, stated HERE and not left to inheritance: the UA stylesheet says
+     `pre { font-family: monospace }`, and a declaration beats an inherited value — so
+     the block rendered in the system's monospace (DejaVu Sans Mono on this machine)
+     while the text around it was the note font. Same 15px, visibly bigger letters. */
+  font-family: var(--editor-font-family);
   /* The box spans the full width of the text column, aligned to the text
      margins (no overflow past the start/end edges). */
-  border-radius: var(--radius); padding: 16px 20px; overflow-x: auto;
+  border-radius: 7px; padding: 16px 20px; overflow-x: auto;
   margin: 1em 0;
 }
 #preview-content pre code {
   background: none; border: none; padding: 0; color: var(--text-0);
-  font-style: normal; font-family: var(--code-font);
-  /* .95em like inline code: 19 where the note text is 20. */
-  font-size: .95em;
+  font-style: normal;
+  /* No typeface or size of its own. Block code is TYPED in the editor's font at the
+     editor's size (the whole .cm-scroller is one font), so the rendered view uses the
+     same: the old `--code-font` at .95em made a block change both typeface and size the
+     moment you left edit mode. Inline `code` keeps its monospace chip — that one reads
+     as a chip inside a sentence, not as a block. Consequence to accept: pick a
+     proportional font for notes and view-mode code follows it, exactly as edit mode
+     already does. */
+  font-family: inherit; font-size: 1em; line-height: var(--editor-line-height);
 }
 #preview-content blockquote {
   border-left: 3px solid var(--accent-dim); margin: 1em 0;
