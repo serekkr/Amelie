@@ -2460,6 +2460,25 @@ function makeTodoTreeEntry() {
   return row;
 }
 
+// Show the whole name on hover, but ONLY when the row is too narrow to show it (the
+// names are clipped with an ellipsis). Measured on mouseover rather than at render:
+// reading scrollWidth forces layout, and a vault can hold thousands of rows — this way
+// the cost is one measurement, on the row you are actually pointing at.
+// `data-tip` and not `title`: the tooltip layer (setupTooltips) reads data-tip and would
+// otherwise have to convert the title first, on the very same event.
+function _tipWhenClipped(row, text) {
+  row.addEventListener('mouseover', () => {
+    const n = row.querySelector('.tree-name');
+    if (!n) return;
+    if (n.scrollWidth > n.clientWidth + 1) {
+      row.setAttribute('data-tip', text);
+      row.setAttribute('data-tip-side', 'right');   // beside the row, see place() in setupTooltips
+    } else {
+      row.removeAttribute('data-tip');
+    }
+  });
+}
+
 function renderTree() {
   // Live-refresh the graph if it's on screen and the tree structure changed
   // (move/rename/add/delete, incl. external vault edits — loadTree ends here,
@@ -2586,6 +2605,7 @@ function makeFolderEl(node, parentArray, folderPath = '') {
     <svg class="fi-dot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="4.5"/></svg>
     <svg class="fi-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" width="16" height="16"><polygon points="12 2.5 14.85 8.3 21.2 9.25 16.6 13.75 17.7 20.1 12 17.1 6.3 20.1 7.4 13.75 2.8 9.25 9.15 8.3"/></svg>
   </span><span class="tree-name">${escHtml(node.name)}</span>`;
+  _tipWhenClipped(row, node.name);
 
   const children = document.createElement('div');
   children.className = 'tree-folder-children';
@@ -2777,6 +2797,7 @@ function makeNoteEl(node, parentArray, folderPath = '') {
       ? (/\.pdf$/i.test(node.name) ? node.name : node.name + '.pdf')
       : node.name;
   el.innerHTML = `<span class="tree-name">${escHtml(displayName)}</span>`;
+  _tipWhenClipped(el, displayName);
   el.dataset.path = node.path;
 
   el.addEventListener('click', () => openNote(node));
@@ -6975,12 +6996,23 @@ function setupTooltips() {
     const r = el.getBoundingClientRect();
     const tw = tip.offsetWidth, th = tip.offsetHeight;
     const vw = window.innerWidth, vh = window.innerHeight;
-    // Prefer below the element, centered; flip above if no room.
-    let left = r.left + r.width / 2 - tw / 2;
-    let top = r.bottom + 6;
-    if (top + th + 4 > vh) top = r.top - th - 6;
+    let left, top;
+    if (el.getAttribute('data-tip-side') === 'right') {
+      // Beside the row, not under it. Used by the sidebar tree: a name is clipped
+      // BECAUSE the column is narrow, and the room it needs is the empty space to its
+      // right — under it sits the next file, which the bubble would cover while you
+      // read. Flips to the left edge only if the window leaves no room on the right.
+      left = r.right + 8;
+      top = r.top + r.height / 2 - th / 2;
+      if (left + tw + 4 > vw) left = r.left - tw - 8;
+    } else {
+      // Everywhere else: below the element, centred; flipped above if no room.
+      left = r.left + r.width / 2 - tw / 2;
+      top = r.bottom + 6;
+      if (top + th + 4 > vh) top = r.top - th - 6;
+    }
     left = Math.max(4, Math.min(left, vw - tw - 4));
-    top = Math.max(4, top);
+    top = Math.max(4, Math.min(top, vh - th - 4));
     tip.style.left = left + 'px';
     tip.style.top = top + 'px';
   };
