@@ -590,9 +590,8 @@ kbd {
 #note-title::placeholder { color: var(--text-3); }
 
 /* Edit/View pill — title row right, minimal text only */
-/* Right-side controls (Edit/View · Export · Index): separate, spaced square
-   buttons — same look as the left sidebar buttons (#sidebar-views), with a
-   green border + green icon on hover. Icon-only (tooltips explain each). */
+/* Right-side controls (Edit/View · Export · Index): spaced icons, no boxes, green
+   on hover. Icon-only (tooltips explain each). */
 /* `margin-left:auto` pins this group to the right on its own. It used to rely
    on the breadcrumb's `flex:1` to push it there — but renderBreadcrumb sets
    display:none whenever the tab has no path (an unsaved new note) or is a
@@ -602,25 +601,39 @@ kbd {
   display: flex; align-items: center; gap: 6px; flex-shrink: 0;
   margin-left: auto;
 }
+/* Icons on their own, no boxes: the --bg-2 fill, the border and the rounded corner
+   are gone (same treatment as the note arrows and the search lens). With the box no
+   longer setting the scale, the icons themselves grew 15 → 20px — they were sized to
+   leave room inside a 30px button, and without one that room was just air. The 30px
+   square stays as the click target, invisible. Hover and the active state now speak
+   through the accent colour alone. */
 .mode-btn {
   display: flex; align-items: center; justify-content: center;
   width: 30px; height: 30px; padding: 0;
-  background: var(--bg-2); border: 1px solid var(--border);
-  border-radius: var(--radius); color: var(--text-1); cursor: pointer;
-  transition: background .12s, border-color .12s, color .12s;
+  background: transparent; border: none;
+  color: var(--text-1); cursor: pointer;
+  transition: color .12s;
 }
-.mode-btn svg { display: inline-block; width: 15px; height: 15px; }
+/* One size for the whole group, set HERE and nowhere else: Export/Backup/Index/Rec/
+   Sync used to carry width:13px INLINE in index.html, which beats this rule, so they
+   stayed small while the Edit/View icon — built in JS with no inline size — followed
+   the stylesheet and looked like a different set. The inline sizes are gone; size
+   these icons here, not in the markup. 16px: without a box around them 15 read small
+   and 20 read oversized. */
+.mode-btn svg { display: inline-block; width: 16px; height: 16px; }
 .mode-btn > span { display: none; } /* icon-only: hide text labels */
-.mode-btn:hover { background: var(--bg-3); border-color: var(--accent-dim); color: var(--accent); }
-.mode-btn.active { background: var(--active-bg); border-color: var(--accent); color: var(--accent); }
+.mode-btn:hover { color: var(--accent); }
+.mode-btn.active { color: var(--accent); }
 /* Single Edit/View toggle: show its icon (its icon lives inside a <span>) */
 #btn-mode-toggle .mode-toggle-icon { display: inline-flex; align-items: center; }
-#btn-mode-toggle .mode-toggle-icon svg { display: inline-block; width: 15px; height: 15px; }
-/* Make the Edit/View toggle stand out: accent border + icon (theme-aware). */
-#btn-mode-toggle { border-color: var(--accent); color: var(--accent); }
-#btn-mode-toggle:hover { background: var(--accent-glow); }
+#btn-mode-toggle .mode-toggle-icon svg { display: inline-block; width: 16px; height: 16px; }
+/* The Edit/View toggle is the one that has to stand out; it used to do it with an
+   accent border, which is no longer there — the accent icon carries it alone. */
+#btn-mode-toggle { color: var(--accent); }
+/* It is accent already, so accent-on-hover would say nothing: this one brightens. */
+#btn-mode-toggle:hover { color: var(--text-0); }
 /* Index button active state follows the accent colour, like the other buttons. */
-#btn-toc.active { color: var(--accent); border-color: var(--accent); }
+#btn-toc.active { color: var(--accent); }
 
 /* Clickable breadcrumb path — now sits in the title row, taking the title's
    place. Grows to fill the available width like the old title input did. */
@@ -2202,7 +2215,7 @@ body.split-open .pane-flash::after {
 .media-embed .video-box .img-resize-handle { opacity: .25; }
 .media-embed .video-box:hover .img-resize-handle { opacity: 1; }
 /* Mic button while recording: red pulse + elapsed time as label */
-#btn-audio-rec.recording { color: #f85149; border-color: rgba(248,81,73,.6); }
+#btn-audio-rec.recording { color: #f85149; }   /* border dropped with the button's box */
 #btn-audio-rec.recording svg { animation: rec-pulse 1.2s ease-in-out infinite; }
 @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 /* Card shown when the embedded player can't decode the codec */
