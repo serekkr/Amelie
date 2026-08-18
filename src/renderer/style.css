@@ -1850,25 +1850,38 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .wdot.active { background: var(--accent); width: 18px; border-radius: 3px; }
 #vpn-enabled-status { display: flex; align-items: center; }
 
-/* ─── Highlight.js (github-dark-ish palette, NO italic) ─────── */
+/* ─── Highlight.js (view mode), painted with the EDIT mode's own --hl-* palette ───
+   These used to be fixed github-dark hexes, which meant the same code came out in
+   slightly different colours either side of the edit⇄view toggle (a comment was
+   #8b949e here and #7d8590 there, a built-in red here and orange there) — and on
+   Light Paper they stayed dark-theme colours, since a hex cannot follow a theme.
+   The variables are defined at :root for the dark themes and overridden by
+   [data-theme="light"], so both modes now move together. NO italic. */
 .hljs { background: transparent !important; }
 #preview-content pre code.hljs,
 #preview-content pre code.hljs * { font-style: normal !important; }
-.hljs-comment, .hljs-quote { color: #8b949e; }
-.hljs-keyword, .hljs-built_in, .hljs-type, .hljs-literal,
-.hljs-selector-tag, .hljs-doctag { color: #ff7b72; }
+.hljs-comment, .hljs-quote { color: var(--hl-comment); }
+.hljs-keyword, .hljs-literal,
+.hljs-selector-tag, .hljs-doctag { color: var(--hl-keyword); }
+/* Built-ins follow edit mode (orange), not the keyword red they used to share. */
+.hljs-built_in, .hljs-type { color: var(--hl-builtin); }
 .hljs-string, .hljs-attr, .hljs-template-tag, .hljs-addition,
-.hljs-regexp, .hljs-meta .hljs-string { color: #a5d6ff; }
-.hljs-number, .hljs-symbol, .hljs-bullet { color: #79c0ff; }
+.hljs-regexp, .hljs-meta .hljs-string { color: var(--hl-string); }
+.hljs-number, .hljs-symbol, .hljs-bullet { color: var(--hl-number); }
 .hljs-title, .hljs-section, .hljs-title.function_,
-.hljs-title.class_ { color: #d2a8ff; }
-.hljs-variable, .hljs-template-variable, .hljs-params { color: #ffa657; }
+.hljs-title.class_ { color: var(--hl-def); }
+.hljs-variable, .hljs-template-variable, .hljs-params { color: var(--hl-var2); }
 .hljs-tag, .hljs-name { color: #7ee787; }
 .hljs-attribute, .hljs-meta, .hljs-selector-id,
-.hljs-selector-class { color: #79c0ff; }
+.hljs-selector-class { color: var(--hl-property); }
 .hljs-deletion { color: #ffa198; }
 .hljs-emphasis { font-style: normal; }
 .hljs-strong { font-weight: 600; }
+/* Shell blocks only: the commands and the flags highlight.js's bash grammar leaves
+   untouched, marked afterwards by colourShellExtras() in app.js so a block of shell
+   reads the same in both modes. Same two variables the editor uses for them. */
+#preview-content pre .sh-cmd  { color: var(--hl-builtin); }
+#preview-content pre .sh-flag { color: var(--hl-property); }
 
 /* Code block copy button + language label (view mode) */
 #preview-content pre .code-copy-btn {

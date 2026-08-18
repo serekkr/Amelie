@@ -5189,6 +5189,58 @@ const PREVIEW_INCREMENTAL_MIN = 300 * 1024;
 // and in small idle-time batches — so even a code-heavy multi-MB note colours in
 // progressively without ever blocking the UI. `stillValid()` returns false once a
 // newer render supersedes this one, cutting the remaining work short.
+// The command words CodeMirror's legacy shell mode paints as builtins — copied from
+// `commonCommands` in the bundled mode (vendor/cm.bundle.js), not invented here, so a
+// shell block colours the same word for word in edit and in view.
+const _SHELL_CMDS = new Set(['ab','awk','bash','beep','cat','cc','cd','chown','chmod','chroot',
+  'clear','cp','curl','cut','diff','echo','find','gawk','gcc','get','git','grep','hg','kill',
+  'killall','ln','ls','make','mkdir','openssl','mv','nc','nl','node','npm','ping','ps','restart',
+  'rm','rmdir','sed','service','sh','shopt','shred','source','sort','sleep','ssh','start','stop',
+  'su','sudo','svn','tee','telnet','top','touch','vi','vim','wall','wc','wget','who','write',
+  'yes','zsh']);
+const _SHELL_LANG_RE = /^language-(bash|sh|shell|zsh|console|shell-session)$/;
+
+// highlight.js's bash grammar marks comments, strings, variables and keywords — and
+// nothing else, so a block of shell commands comes out almost entirely uncoloured
+// while the SAME block in edit mode has its commands orange and its flags blue
+// (measured: 5 spans vs 8 on the same note). This adds those two, and only those two,
+// on top of what highlight.js produced.
+function colourShellExtras(el) {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+    // Direct text children only: everything already inside a highlight.js span is its
+    // work and must not be touched or re-wrapped.
+    acceptNode: n => (n.parentElement === el ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+  });
+  const nodes = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n);
+  // A word starts a token only after whitespace or a shell separator — so `--port` in
+  // the middle of a URL, or `ls` inside `tools`, is left alone.
+  const re = /(^|[\s;|&(])(?:(--?[A-Za-z][\w-]*)|([a-z][a-z0-9_.-]*))/g;
+  for (const node of nodes) {
+    const text = node.nodeValue;
+    if (!/[a-z-]/.test(text)) continue;
+    let last = 0, m, frag = null;
+    re.lastIndex = 0;
+    while ((m = re.exec(text))) {
+      const isFlag = !!m[2];
+      const word = m[2] || m[3];
+      if (!isFlag && !_SHELL_CMDS.has(word)) continue;
+      const start = m.index + m[1].length;
+      frag = frag || document.createDocumentFragment();
+      if (start > last) frag.appendChild(document.createTextNode(text.slice(last, start)));
+      const span = document.createElement('span');
+      span.className = isFlag ? 'sh-flag' : 'sh-cmd';
+      span.textContent = word;
+      frag.appendChild(span);
+      last = start + word.length;
+    }
+    if (frag) {
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    }
+  }
+}
+
 function highlightCodeChunked(stillValid, els, i) {
   if (typeof hljs === 'undefined' || !stillValid()) return;
   const BATCH = 12;
@@ -5197,7 +5249,12 @@ function highlightCodeChunked(stillValid, els, i) {
     const el = els[i];
     // Highlight ONLY blocks with an explicit language (```bash, ```yaml…).
     // Without a language no auto-detect → plain text, no colour.
-    if ([...el.classList].some(c => c.startsWith('language-'))) hljs.highlightElement(el);
+    if ([...el.classList].some(c => c.startsWith('language-'))) {
+      hljs.highlightElement(el);
+      if ([...el.classList].some(c => _SHELL_LANG_RE.test(c))) {
+        try { colourShellExtras(el); } catch (_) {}
+      }
+    }
   }
   if (i < els.length) {
     (window.requestIdleCallback || requestAnimationFrame)(() => highlightCodeChunked(stillValid, els, i));
