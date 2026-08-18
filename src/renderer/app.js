@@ -17268,17 +17268,16 @@ function logSyncEventNotif(data) {
   if (data.status === 'ok' && data.unchanged) {
     // Nothing was copied because nothing had changed. Worth saying — silence here
     // reads exactly like a backup that failed to run — but it must not claim a copy
-    // was made, so it gets its own wording and names no destination.
-    addEventNotif(window.i18n.t('notif.backup_unchanged'), true);
+    // was made, so it gets its own wording.
+    // Two wordings: the scheduled pass says "Automatic backup skipped…", the one you
+    // asked for by pressing the button cannot claim to be automatic. Same situation,
+    // different sentence — `data.manual` already tells the two apart.
+    const unchangedKey = data.manual ? 'notif.backup_unchanged_manual' : 'notif.backup_unchanged';
+    addEventNotif(window.i18n.t(unchangedKey), true, '', unchangedKey);
   } else if (data.status === 'ok') {
-    // Name the destinations. "Backup completed" on its own reads as "everything
-    // you configured got a copy", which is wrong as soon as one destination is
-    // switched off — the local folder can succeed while the share never got
-    // written to. The engine reports which ones it actually wrote.
-    // The destination goes on the date line, not after a dash on the title. The
-    // title then stays one short sentence and stops wrapping, which is what left
-    // the dash hanging at the end of a line with nothing after it.
-    addEventNotif(label, true, _destNames(data.dests));
+    // The destinations the engine actually wrote are recorded on the entry (they are
+    // not shown: naming them read as noise on a local-only or WebDAV-only backup).
+    addEventNotif(label, true, data.dests, `notif.${data.op}_${key}`);
   } else {
     addEventNotif(`${label}: ${data.error || window.i18n.t('notif.unknown_error')}`, false);
   }
@@ -17289,19 +17288,44 @@ function logSyncEventNotif(data) {
 // Unknown keys pass through verbatim rather than vanishing.
 function _destNames(dests) {
   if (!Array.isArray(dests) || !dests.length) return '';
-  const k = { local: 'sync.local', samba: 'sync.transport_samba', webdav: 'sync.transport_webdav' };
-  return dests.map(d => (k[d] ? window.i18n.t(k[d]) : d)).join(', ');
+  // SHORT names here, not the settings labels. The Samba transport is called "VPN with
+  // Samba" in Settings, where it describes what the transport IS — but a notification
+  // puts it straight after "… completed with" and you read "with VPN with Samba". Here
+  // it is named by where the files landed, the share: "Samba". The VPN is how it was
+  // reached, not the destination. Samba and WebDAV are product names, identical in every
+  // language, so they need no translation; only "Local" does.
+  const SHORT = { samba: 'Samba', webdav: 'WebDAV' };
+  const k = { local: 'sync.local' };
+  return dests.map(d => SHORT[d] || (k[d] ? window.i18n.t(k[d]) : d)).join(', ');
 }
 
 // Add an event notification (e.g. "Backup completato") to the bell.
-// `where` is shown on the second line, beside the date — not glued to the title.
-function addEventNotif(text, ok = true, where = '') {
-  _eventNotifs.unshift({ text, ts: Date.now(), ok: !!ok, where: where || '' });
+// `dests` are the destination KEYS (['local','samba']), stored as keys and turned into
+// names only when the row is drawn — see _notifWhere. They used to be resolved here and
+// saved as a finished string, which froze both the wording and the LANGUAGE into the
+// entry: renaming a destination left every notification already in the bell saying the
+// old name, and switching the interface language left them in the previous one.
+// `key` is the i18n key of the message, when it has one. The row is TITLED from the key
+// at draw time and falls back to `text` — the two messages a backup files are fixed
+// sentences, and storing the finished string froze both the WORDING and the LANGUAGE
+// into the entry: rewriting a message left every notification already in the bell
+// saying the old thing, and switching language left them in the previous one. Entries
+// saved before this have no key and keep their text, which is the best that can be
+// done for them.
+function addEventNotif(text, ok = true, dests = '', key = '') {
+  _eventNotifs.unshift({ text, key: key || undefined, ts: Date.now(), ok: !!ok, dests: Array.isArray(dests) ? dests : undefined, where: Array.isArray(dests) ? '' : (dests || '') });
   _eventNotifs = _eventNotifs.slice(0, 30);
   _eventUnread++;
   _saveEventNotifs();
   updateNotifBell();
   if (_sidebarView === 'notifications') renderNotificationsView();
+}
+// The title to draw for a stored notification: from its key when it has one (so it
+// follows the current wording and the current language), otherwise the text it was
+// saved with.
+function _notifText(ev) {
+  if (ev.key) { try { const t = window.i18n.t(ev.key); if (t && t !== ev.key) return t; } catch (_) {} }
+  return ev.text || '';
 }
 function _markEventNotifsRead() { if (_eventUnread) { _eventUnread = 0; updateNotifBell(); } }
 
@@ -17337,11 +17361,10 @@ function toggleNotifPopup() {
   _eventNotifs.forEach(ev => {
     const row = document.createElement('div'); row.className = 'notif-row';
     const info = document.createElement('div'); info.className = 'notif-row-info';
-    // "… completed with:" and the destination are ONE sentence over TWO lines: the title
-    // keeps the connector, the destination gets the line below. The title never wraps
-    // (see .notif-row-title) — it used to, and the word that fell to the second line was
-    // "with:", left dangling between the two lines it was meant to join.
-    info.innerHTML = `<div class="notif-row-title">${ev.ok ? '✓' : '✗'} ${escHtml(ev.text)}${ev.where ? ' ' + escHtml(window.i18n.t('notif.with')) : ''}</div>${ev.where ? `<div class="notif-row-due notif-dest">${escHtml(ev.where)}</div>` : ''}<div class="notif-row-due">${_fmtNotifTime(ev.ts)}</div>`;
+    // Title and time, nothing else. The destination used to follow on a line of its own
+    // ("… completed with" / "Samba"); it is still recorded on the entry (ev.dests), just
+    // not shown — the message says what happened, and where it went is in the settings.
+    info.innerHTML = `<div class="notif-row-title">${ev.ok ? '✓' : '✗'} ${escHtml(_notifText(ev))}</div><div class="notif-row-due">${_fmtNotifTime(ev.ts)}</div>`;
     const dis = document.createElement('button'); dis.className = 'notif-dismiss'; dis.textContent = '×'; dis.title = window.i18n.t('todo.dismiss');
     dis.addEventListener('click', e => {
       e.stopPropagation(); _eventNotifs = _eventNotifs.filter(x => x !== ev); _saveEventNotifs(); updateNotifBell(); row.remove();
@@ -17426,7 +17449,7 @@ function renderNotificationsView() {
   _eventNotifs.forEach(ev => {
     const row = document.createElement('div'); row.className = 'simple-row notif-row';
     const info = document.createElement('div'); info.className = 'simple-main';
-    info.innerHTML = `<div class="simple-name">${ev.ok ? '✓' : '✗'} ${escHtml(ev.text)}${ev.where ? ' ' + escHtml(window.i18n.t('notif.with')) : ''}</div>${ev.where ? `<div class="simple-sub notif-dest">${escHtml(ev.where)}</div>` : ''}<div class="simple-sub">${_fmtNotifTime(ev.ts)}</div>`;
+    info.innerHTML = `<div class="simple-name">${ev.ok ? '✓' : '✗'} ${escHtml(_notifText(ev))}</div><div class="simple-sub">${_fmtNotifTime(ev.ts)}</div>`;
     const dis = document.createElement('button'); dis.className = 'simple-remove'; dis.textContent = '×'; dis.title = window.i18n.t('todo.dismiss');
     dis.addEventListener('click', e => { e.stopPropagation(); _eventNotifs = _eventNotifs.filter(x => x !== ev); _saveEventNotifs(); updateNotifBell(); renderNotificationsView(); });
     row.append(info, dis);
