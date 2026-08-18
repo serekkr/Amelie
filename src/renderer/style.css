@@ -496,12 +496,19 @@ html.is-mac #titlebar { padding-left: 72px; }
      aligned with the folder name's first letter (14+16+7=37). */
   margin-left: 22px;
   padding-left: 0;
-  border-left: 1px solid var(--text-2);
+  /* A pale line with a hint of the accent in it — mostly grey, 20% colour. Plain
+     --text-2 was the same shade as the note icons and muted labels around it, so the
+     nesting levels vanished into the tree; full --accent-dim went the other way and
+     drew a coloured stripe down the sidebar. The tint is what separates it from those
+     greys now, so the grey itself can stay at --text-2: the line is 1px either way,
+     and the dimmer shade is what makes it READ as a hairline. Mixed from the theme's
+     own accent, so it stays a pale tint of whatever that theme's colour is. */
+  border-left: 1px solid color-mix(in srgb, var(--accent) 20%, var(--text-2));
 }
-.tree-folder-children:hover { border-left-color: var(--text-1); }
-/* When the folder row is hovered, brighten the guide of its direct children
-   so it's obvious which folder you're about to enter. */
-.tree-folder:hover + .tree-folder-children { border-left-color: var(--text-1); }
+/* No hover reaction. The guides used to brighten — both under the pointer and when the
+   parent folder row was hovered — to show which folder you were about to enter; the
+   folder row highlights itself anyway, and a line that lights up as the mouse crosses
+   the tree is movement where the whole point is a quiet hairline. */
 
 /* Uniform mode (default): no vertical guide lines — a clean, flat indent per
    nesting level, like Obsidian/Notion. Matches the guided mode so a child
