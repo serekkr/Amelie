@@ -501,7 +501,10 @@ html.is-mac #titlebar { padding-left: 72px; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   color: var(--text-1); user-select: none; transition: background .1s;
 }
-.tree-folder:hover, .tree-note:hover { background: var(--bg-3); color: var(--text-0); }
+/* Hover changes the BACKGROUND, and only that: the text keeps whatever colour it has,
+   so a dimmed attachment stays dim and a coloured note keeps its colour. Recolouring the
+   label made the row jump twice — once for the fill, once for the letters. */
+.tree-folder:hover, .tree-note:hover { background: var(--bg-3); }
 .tree-note.active {
   background: var(--active-bg); color: var(--accent);
 }
@@ -603,8 +606,9 @@ html.is-mac #titlebar { padding-left: 72px; }
    the dim one. `:not([data-color])` leaves a colour you set on a file alone — that is a
    deliberate mark and outranks this. */
 .tree-note[data-kind]:not([data-color]) .tree-name { color: var(--text-2); }
-.tree-note[data-kind]:not([data-color]):hover .tree-name,
-.tree-note[data-kind]:not([data-color]).active .tree-name { color: var(--text-0); }
+/* Open: the accent, like any open note. HOVER is deliberately absent — the row lights
+   up behind the text and the name keeps its own colour, dim included. */
+.tree-note[data-kind]:not([data-color]).active .tree-name { color: var(--accent); }
 .tree-folder:hover .tree-name { opacity: 1; }
 
 /* Folder colors */
@@ -2121,7 +2125,11 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
      jump ~1px on each tab switch. */
   border-bottom: 2px solid transparent;
 }
-.note-tab:hover { background: var(--bg-3); color: var(--text-0); }
+/* Hover brightens the LABEL and nothing else. It used to also set --bg-3, which is
+   exactly the background of .note-tab.active below: pointing at any tab made it look
+   selected, so while the mouse was over the strip two tabs claimed to be the current
+   one. The fill now belongs to the active tab alone. */
+.note-tab:hover { color: var(--text-0); }
 .note-tab.active {
   /* Distinct fixed shade (NOT the editor's --bg-0) so changing "Main background"
      recolors only the writing area, never the active tab. */
@@ -3666,7 +3674,8 @@ kbd {
 }
 .simple-row:hover { background: var(--bg-3); }
 .simple-name { flex: 1; font-size: 14px; color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.simple-row:hover .simple-name { color: var(--text-0); }
+/* (The rule that also brightened .simple-name to white on hover was removed: the
+   background above is the whole feedback, and the label keeps its own colour.) */
 /* Notifications: smaller text, but ONE line — this is the same title as the bell's
    .notif-row-title and has to behave the same way. It wrapped over two lines here, so
    the "with:" that hands the sentence to the destination below it ended up alone on the
@@ -3711,39 +3720,25 @@ kbd {
    (not a theme var: --link/--accent aren't blue in every theme). */
 .md-tag, .cm-md-tag { color: #2f7ef2; }
 
-/* The two GREEN palettes: Green Dark (the default → no data-theme attribute, see
-   applyTheme) and Serekkr. Hovering a sidebar item turns its text the accent green.
-   Serekkr is listed explicitly rather than folded in with :where(), which carries no
-   specificity and would lose to the plain .sst:hover / .tree-name rules above. */
+/* Accent on hover for the ICONS of the two accent-coloured palettes — Green Dark (the
+   default → no data-theme attribute, see applyTheme) and Serekkr. Icons have no box and
+   no background of their own, so colour is the only feedback they can give.
+   TEXT rows are deliberately NOT here: a note, a tab, a tag or a notification lights up
+   behind the words and keeps the colour of its label, so the row does not change twice
+   at once. Serekkr is listed explicitly rather than folded in with :where(), which
+   carries no specificity and would lose to the plain .sst:hover rules above. */
 html:not([data-theme]) .sst:hover,
 html[data-theme="serekkr"] .sst:hover,
 html:not([data-theme]) .tool-btn:hover:not(.danger),
 html[data-theme="serekkr"] .tool-btn:hover:not(.danger),
 html:not([data-theme]) .note-nav-btn:hover:not(:disabled),
 html[data-theme="serekkr"] .note-nav-btn:hover:not(:disabled),
-html:not([data-theme]) .note-tab:hover,
-html[data-theme="serekkr"] .note-tab:hover,
-html:not([data-theme]) .note-tab:hover .tab-name,
-html[data-theme="serekkr"] .note-tab:hover .tab-name,
 html:not([data-theme]) #tab-new-btn:hover,
 html[data-theme="serekkr"] #tab-new-btn:hover,
 html:not([data-theme]) #btn-settings:hover,
 html[data-theme="serekkr"] #btn-settings:hover,
 html:not([data-theme]) #btn-focus-mode:hover,
-html[data-theme="serekkr"] #btn-focus-mode:hover,
-html:not([data-theme]) .tree-note:hover .tree-name,
-html[data-theme="serekkr"] .tree-note:hover .tree-name,
-html:not([data-theme]) .tree-folder:hover .tree-name,
-html[data-theme="serekkr"] .tree-folder:hover .tree-name,
-html:not([data-theme]) .simple-row:hover .simple-name,
-html[data-theme="serekkr"] .simple-row:hover .simple-name,
-html:not([data-theme]) .tag-row:hover .tag-chip,
-html[data-theme="serekkr"] .tag-row:hover .tag-chip,
-html:not([data-theme]) .notif-row:hover .notif-row-title,
-html[data-theme="serekkr"] .notif-row:hover .notif-row-title,
-html:not([data-theme]) .notif-row:hover .simple-name,
-html[data-theme="serekkr"] .notif-row:hover .simple-name
-{
+html[data-theme="serekkr"] #btn-focus-mode:hover {
   color: var(--accent);
 }
 
