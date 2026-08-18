@@ -401,11 +401,12 @@ html.is-mac #titlebar { padding-left: 72px; }
 
 /* ─── Sidebar ───────────────────────────────────────────────── */
 #sidebar {
-  /* min-width 235px: the width the user picked as the minimum. Keeps the top
-     icon row (Files · Recent · Bookmarks · Tags · Notifications) comfortably
-     visible. The divider must not drag narrower than this, in EVERY view
-     (notes/draw/mindmap/todo). */
-  width: 235px; min-width: 235px; max-width: 400px;
+  /* min-width 250px: the width the user set as the minimum — the divider stops here
+     in EVERY view (notes/draw/mindmap/todo). It was originally derived from the create
+     row (20 + 5×38 + 4×10 = 250), and the row has since been tightened to 172, so this
+     is now a chosen width rather than a computed one; setupResize()'s measureMinWidth
+     still raises the floor above it when a large icon size needs more room. */
+  width: 250px; min-width: 250px; max-width: 400px;
   background: var(--bg-1); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
 }

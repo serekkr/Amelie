@@ -12459,11 +12459,44 @@ function setupResize() {
   const sidebar = $('sidebar');
   if (!handle || !sidebar) return;
 
-  const MIN_W = 235, MAX_W = 480, DEFAULT_W = 235;
+  const FLOOR_W = 250, MAX_W = 480;   // 250 = the #sidebar min-width in style.css; keep the two in step
+  let MIN_W = FLOOR_W, DEFAULT_W = FLOOR_W;
 
-  // Restore saved width
+  // Where the drag has to stop. FLOOR_W is the width the user asked for; on top of it
+  // this measures what the create row (new note, new folder, draw, graph, todo) needs
+  // to show its buttons at their normal size — below that, flex-shrink squeezes them
+  // and further left they run off the edge, and the divider must not be able to take
+  // the icons away. Measured rather than hardcoded because the row carries
+  // `zoom: var(--toolbar-zoom)`: what it needs in REAL pixels moves with the icon-size
+  // setting, so at a large size the floor rises above FLOOR_W on its own. Same
+  // reasoning as syncSSTWidth below, opposite direction — that one fits the strip to
+  // the sidebar, this one keeps the sidebar wide enough for the row.
+  function measureMinWidth() {
+    const views = $('sidebar-views');
+    const btns = views ? views.querySelectorAll('.sidebar-view-btn') : [];
+    if (!btns.length) return FLOOR_W;
+    const z = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--toolbar-zoom')) || 1;
+    const cs = getComputedStyle(views);
+    const gap  = parseFloat(cs.columnGap) || 0;
+    const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    // Per button: its max-width cap if it has one — the size it is MEANT to be shown
+    // at, not the width it happens to have right now, which is already the squeezed
+    // one. The buttons now share the row equally with no cap (max-width: none →
+    // parseFloat gives NaN), so fall back to 26: an 18px icon plus a little air, the
+    // narrowest one should ever get before it starts looking clipped.
+    const cap = parseFloat(getComputedStyle(btns[0]).maxWidth) || 26;
+    const need = padX + btns.length * cap + gap * (btns.length - 1);
+    return Math.max(FLOOR_W, Math.ceil(need * z));
+  }
+  const clampW = w => Math.min(MAX_W, Math.max(MIN_W, w));
+
+  // Restore saved width — CLAMPED, not discarded: a width saved under an older,
+  // lower minimum (or a larger icon size) must come back as the nearest allowed one,
+  // otherwise the sidebar silently ignores the pref and sits at the CSS width.
   const saved = parseInt(localStorage.getItem('amelie-sidebar-w'));
-  if (saved && saved >= MIN_W && saved <= MAX_W) sidebar.style.width = saved + 'px';
+  MIN_W = measureMinWidth();
+  DEFAULT_W = MIN_W;
+  if (saved) sidebar.style.width = clampW(saved) + 'px';
 
   // Keep sidebar-section-tabs always the same width as the sidebar — DIVIDED by the icon
   // zoom. The strip carries `zoom: var(--toolbar-zoom)`, and a width in px is measured in
@@ -12474,6 +12507,12 @@ function setupResize() {
   const sst = $('sidebar-section-tabs');
   const SST_GAP = 7, SST_PAD_X = 8, SST_PAD_LEFT = 10;   // the CSS defaults
   syncSSTWidth = () => {
+    // Re-measured here because applyAppearance calls this on every icon-size change:
+    // a bigger icon raises the floor, and a sidebar already sitting under the new one
+    // has to be pushed back out rather than left with a clipped row.
+    MIN_W = measureMinWidth();
+    DEFAULT_W = MIN_W;
+    if (sidebar.offsetWidth < MIN_W) sidebar.style.width = MIN_W + 'px';
     if (!sst) return;
     const z = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--toolbar-zoom')) || 1;
     const avail = sidebar.offsetWidth / z;
