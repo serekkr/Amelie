@@ -1,7 +1,7 @@
 // Amelie ↔ CodeMirror 6 bridge. Bundled to src/renderer/vendor/cm.bundle.js
 // (see `npm run build:cm`). Exposes a small, textarea-like API on window.AmelieCM
 // so app.js can drive CodeMirror without importing ESM modules directly.
-import { EditorView, keymap, lineNumbers, drawSelection, highlightActiveLine, Decoration, ViewPlugin } from '@codemirror/view';
+import { EditorView, keymap, lineNumbers, gutter, GutterMarker, drawSelection, highlightActiveLine, Decoration, ViewPlugin } from '@codemirror/view';
 import { EditorState, Compartment, Transaction, RangeSetBuilder, StateField, StateEffect } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, indentWithTab, deleteCharBackward, deleteCharForward } from '@codemirror/commands';
 import { StringStream } from '@codemirror/language';
@@ -31,6 +31,73 @@ const FENCE_RE = /^\s*(```|~~~)/;
 // [fromPos, toPos]. We track POSITIONS (not line numbers) so the list can be mapped
 // through document changes incrementally — line numbers shift when lines are
 // inserted/deleted above, positions map cleanly via ChangeSet.mapPos.
+// ─── Line numbers that count VISUAL rows ─────────────────────────────────────
+// CodeMirror's own lineNumbers() numbers LOGICAL lines: a paragraph that wraps over
+// four rows shows its number on the first and leaves the other three blank. The user
+// asked for what you see to be numbered — every row on screen gets the next number.
+//
+// The consequence, stated because it is real: these numbers describe the SCREEN, not
+// the file. Widen the window and a paragraph that took four rows takes three, and every
+// number below it changes.
+//
+// How: a gutter marker per logical line whose DOM is a COLUMN of numbers, one per row
+// the line occupies. Both the row count and the starting number come from CodeMirror's
+// own height map (block.height and block.top over the height of one row), so wrapping,
+// scrolling and font changes are accounted for without measuring text here.
+class VisualLineNumbers extends GutterMarker {
+  constructor(first, rows) { super(); this.first = first; this.rows = rows; }
+  eq(other) { return other.first === this.first && other.rows === this.rows; }
+  toDOM() {
+    const wrap = document.createElement('div');
+    wrap.className = 'cm-vlnums';
+    for (let i = 0; i < this.rows; i++) {
+      const d = document.createElement('div');
+      d.textContent = String(this.first + i);
+      wrap.appendChild(d);
+    }
+    return wrap;
+  }
+}
+
+// The running row number for each line ON SCREEN, counted cumulatively. Deriving it
+// from block.top / rowHeight alone drifts: a code block carries a little padding above
+// and below (see .cm-cb-first/.cm-cb-last), a fraction of a row each, and after a few of
+// them the rounding slips by one — measured, a number was skipped in the middle of a
+// long note. Counting rows one line after the next inside the viewport cannot skip;
+// only the FIRST number is derived from the position, so any drift becomes a constant
+// offset instead of a hole in the middle of the screen.
+const visualRowNumbers = ViewPlugin.fromClass(class {
+  constructor(view) { this.first = new Map(); this.compute(view); }
+  update(u) { if (u.docChanged || u.viewportChanged || u.geometryChanged) this.compute(u.view); }
+  compute(view) {
+    const lh = view.defaultLineHeight || 1;
+    const blocks = view.viewportLineBlocks;
+    const map = new Map();
+    let n = blocks.length ? Math.round(blocks[0].top / lh) + 1 : 1;
+    for (const b of blocks) {
+      map.set(b.from, n);
+      n += Math.max(1, Math.round(b.height / lh));
+    }
+    this.first = map;
+  }
+});
+
+function visualLineNumbers() {
+  return [visualRowNumbers, gutter({
+    class: 'cm-lineNumbers cm-vlnums-gutter',
+    lineMarker(view, block) {
+      const lh = view.defaultLineHeight || 1;
+      const rows = Math.max(1, Math.round(block.height / lh));
+      const plugin = view.plugin(visualRowNumbers);
+      const first = plugin?.first.get(block.from) ?? (Math.round(block.top / lh) + 1);
+      return new VisualLineNumbers(first, rows);
+    },
+    // Recomputed when the geometry moves, not only when the text changes: a window
+    // resize rewraps everything and therefore renumbers everything.
+    lineMarkerChange: (u) => u.docChanged || u.viewportChanged || u.geometryChanged,
+  })];
+}
+
 function scanFencePositions(doc, fromPos, toPos) {
   const first = doc.lineAt(fromPos).number, last = doc.lineAt(toPos).number, out = [];
   for (let ln = first; ln <= last; ln++) { const l = doc.line(ln); if (FENCE_RE.test(l.text)) out.push(l.from); }
@@ -1023,7 +1090,7 @@ window.AmelieCM = {
       scrollToPos: (pos, where) => { try { view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: where || 'start', yMargin: 60 }) }); } catch (_) {} },
       getScrollTop: () => scroller.scrollTop,
       setScrollTop: (n) => { scroller.scrollTop = n; },
-      setLineNumbers: (on) => view.dispatch({ effects: lineNumbersComp.reconfigure(on ? lineNumbers() : []) }),
+      setLineNumbers: (on) => view.dispatch({ effects: lineNumbersComp.reconfigure(on ? visualLineNumbers() : []) }),
       destroy: () => view.destroy(),
     };
   },

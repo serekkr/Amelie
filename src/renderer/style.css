@@ -1061,6 +1061,12 @@ kbd {
    does NOT shift when the line count crosses 9→10→100→1000. Numbers right-align
    in the reserved space. */
 #editor-pane.line-numbers #cm-mount .cm-lineNumbers .cm-gutterElement { padding: 0 16px 0 6px; min-width: 3em; text-align: left; box-sizing: content-box; }
+/* The numbers are a COLUMN inside one gutter element (see visualLineNumbers in
+   cm-entry.js): a wrapped paragraph gets one number per row it takes on screen. Each
+   number is exactly one row tall — same line-height as the text — or the column would
+   drift away from the lines it counts. */
+#cm-mount .cm-vlnums { display: flex; flex-direction: column; }
+#cm-mount .cm-vlnums > div { line-height: var(--editor-line-height); }
 #cm-mount .cm-activeLine { background: transparent; }
 #cm-mount .cm-selectionBackground, #cm-mount .cm-content ::selection { background: rgba(100,180,255,.25) !important; }
 /* 2px, over CodeMirror's own 1.2: a hairline caret in a 15px proportional font is easy

@@ -2624,7 +2624,7 @@
   EditorState.transactionFilter = transactionFilter;
   EditorState.transactionExtender = transactionExtender;
   Compartment.reconfigure = /* @__PURE__ */ StateEffect.define();
-  function combineConfig(configs, defaults, combine = {}) {
+  function combineConfig(configs, defaults2, combine = {}) {
     let result = {};
     for (let config of configs)
       for (let key of Object.keys(config)) {
@@ -2637,9 +2637,9 @@
         else
           throw new Error("Config merge conflict for field " + key);
       }
-    for (let key in defaults)
+    for (let key in defaults2)
       if (result[key] === void 0)
-        result[key] = defaults[key];
+        result[key] = defaults2[key];
     return result;
   }
   var RangeValue = class {
@@ -12463,7 +12463,23 @@
   GutterMarker.prototype.point = true;
   var gutterLineClass = /* @__PURE__ */ Facet.define();
   var gutterWidgetClass = /* @__PURE__ */ Facet.define();
+  var defaults = {
+    class: "",
+    renderEmptyElements: false,
+    elementStyle: "",
+    markers: () => RangeSet.empty,
+    lineMarker: () => null,
+    widgetMarker: () => null,
+    lineMarkerChange: null,
+    initialSpacer: null,
+    updateSpacer: null,
+    domEventHandlers: {},
+    side: "before"
+  };
   var activeGutters = /* @__PURE__ */ Facet.define();
+  function gutter(config) {
+    return [gutters(), activeGutters.of({ ...defaults, ...config })];
+  }
   var unfixGutters = /* @__PURE__ */ Facet.define({
     combine: (values) => values.some((x) => x)
   });
@@ -12800,80 +12816,6 @@
       if (!a[i2].compare(b[i2]))
         return false;
     return true;
-  }
-  var lineNumberMarkers = /* @__PURE__ */ Facet.define();
-  var lineNumberWidgetMarker = /* @__PURE__ */ Facet.define();
-  var lineNumberConfig = /* @__PURE__ */ Facet.define({
-    combine(values) {
-      return combineConfig(values, { formatNumber: String, domEventHandlers: {} }, {
-        domEventHandlers(a, b) {
-          let result = Object.assign({}, a);
-          for (let event in b) {
-            let exists = result[event], add = b[event];
-            result[event] = exists ? (view, line, event2) => exists(view, line, event2) || add(view, line, event2) : add;
-          }
-          return result;
-        }
-      });
-    }
-  });
-  var NumberMarker = class extends GutterMarker {
-    constructor(number2) {
-      super();
-      this.number = number2;
-    }
-    eq(other) {
-      return this.number == other.number;
-    }
-    toDOM() {
-      return document.createTextNode(this.number);
-    }
-  };
-  function formatNumber(view, number2) {
-    return view.state.facet(lineNumberConfig).formatNumber(number2, view.state);
-  }
-  var lineNumberGutter = /* @__PURE__ */ activeGutters.compute([lineNumberConfig], (state) => ({
-    class: "cm-lineNumbers",
-    renderEmptyElements: false,
-    markers(view) {
-      return view.state.facet(lineNumberMarkers);
-    },
-    lineMarker(view, line, others) {
-      if (others.some((m) => m.toDOM))
-        return null;
-      return new NumberMarker(formatNumber(view, view.state.doc.lineAt(line.from).number));
-    },
-    widgetMarker: (view, widget, block) => {
-      for (let m of view.state.facet(lineNumberWidgetMarker)) {
-        let result = m(view, widget, block);
-        if (result)
-          return result;
-      }
-      return null;
-    },
-    lineMarkerChange: (update) => update.startState.facet(lineNumberConfig) != update.state.facet(lineNumberConfig),
-    initialSpacer(view) {
-      return new NumberMarker(formatNumber(view, maxLineNumber(view.state.doc.lines)));
-    },
-    updateSpacer(spacer, update) {
-      let max = formatNumber(update.view, maxLineNumber(update.view.state.doc.lines));
-      return max == spacer.number ? spacer : new NumberMarker(max);
-    },
-    domEventHandlers: state.facet(lineNumberConfig).domEventHandlers,
-    side: "before"
-  }));
-  function lineNumbers(config = {}) {
-    return [
-      lineNumberConfig.of(config),
-      gutters(),
-      lineNumberGutter
-    ];
-  }
-  function maxLineNumber(lines) {
-    let last = 9;
-    while (last < lines)
-      last = last * 10 + 9;
-    return last;
   }
 
   // node_modules/@lezer/common/dist/index.js
@@ -19357,6 +19299,61 @@
   var cbFirst = Decoration.line({ class: "cm-codeblock cm-cb-first" });
   var cbLast = Decoration.line({ class: "cm-codeblock cm-cb-last" });
   var FENCE_RE = /^\s*(```|~~~)/;
+  var VisualLineNumbers = class extends GutterMarker {
+    constructor(first, rows) {
+      super();
+      this.first = first;
+      this.rows = rows;
+    }
+    eq(other) {
+      return other.first === this.first && other.rows === this.rows;
+    }
+    toDOM() {
+      const wrap = document.createElement("div");
+      wrap.className = "cm-vlnums";
+      for (let i2 = 0; i2 < this.rows; i2++) {
+        const d = document.createElement("div");
+        d.textContent = String(this.first + i2);
+        wrap.appendChild(d);
+      }
+      return wrap;
+    }
+  };
+  var visualRowNumbers = ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.first = /* @__PURE__ */ new Map();
+      this.compute(view);
+    }
+    update(u) {
+      if (u.docChanged || u.viewportChanged || u.geometryChanged) this.compute(u.view);
+    }
+    compute(view) {
+      const lh = view.defaultLineHeight || 1;
+      const blocks = view.viewportLineBlocks;
+      const map = /* @__PURE__ */ new Map();
+      let n = blocks.length ? Math.round(blocks[0].top / lh) + 1 : 1;
+      for (const b of blocks) {
+        map.set(b.from, n);
+        n += Math.max(1, Math.round(b.height / lh));
+      }
+      this.first = map;
+    }
+  });
+  function visualLineNumbers() {
+    return [visualRowNumbers, gutter({
+      class: "cm-lineNumbers cm-vlnums-gutter",
+      lineMarker(view, block) {
+        const lh = view.defaultLineHeight || 1;
+        const rows = Math.max(1, Math.round(block.height / lh));
+        const plugin = view.plugin(visualRowNumbers);
+        const first = plugin?.first.get(block.from) ?? Math.round(block.top / lh) + 1;
+        return new VisualLineNumbers(first, rows);
+      },
+      // Recomputed when the geometry moves, not only when the text changes: a window
+      // resize rewraps everything and therefore renumbers everything.
+      lineMarkerChange: (u) => u.docChanged || u.viewportChanged || u.geometryChanged
+    })];
+  }
   function scanFencePositions(doc2, fromPos, toPos) {
     const first = doc2.lineAt(fromPos).number, last = doc2.lineAt(toPos).number, out = [];
     for (let ln = first; ln <= last; ln++) {
@@ -20249,7 +20246,7 @@
         setScrollTop: (n) => {
           scroller.scrollTop = n;
         },
-        setLineNumbers: (on) => view.dispatch({ effects: lineNumbersComp.reconfigure(on ? lineNumbers() : []) }),
+        setLineNumbers: (on) => view.dispatch({ effects: lineNumbersComp.reconfigure(on ? visualLineNumbers() : []) }),
         destroy: () => view.destroy()
       };
     }
