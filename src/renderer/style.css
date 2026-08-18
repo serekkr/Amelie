@@ -1339,7 +1339,9 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #preview-content td[contenteditable="true"]:focus {
   outline: 2px solid var(--accent); outline-offset: -2px;
 }
-#preview-content th { background: var(--bg-2); color: var(--text-0); font-weight: 500; }
+/* NOTE: overridden by the #preview-content th rule further down (equal specificity,
+   later in the file) — kept in step with it so the two never disagree. */
+#preview-content th { background: rgba(255,255,255,.05); color: var(--text-0); font-weight: 500; }
 #preview-content .col-resize-handle {
   position: absolute; top: 0; right: -3px;
   width: 6px; height: 100%;
@@ -2999,11 +3001,18 @@ body.split-open .pane-flash::after {
 #preview-content th {
   /* Header row: the SAME size as the cells below it (it used to be 12px against their 13,
      which just read as an odd shrunken line) and a lighter 600 instead of 700 — the tint
-     behind it already sets it apart, so it doesn't need to shout. */
-  background: var(--bg-3); color: var(--text-0); font-weight: 600;
+     behind it already sets it apart, so it doesn't need to shout.
+     The tint is the code block's own wash (5% white over the page) rather than --bg-3, a
+     lighter grey: a header and a code block are the same kind of surface, and on a dark
+     theme --bg-3 read as a pale band across the top of every table. */
+  background: rgba(255,255,255,.05); color: var(--text-0); font-weight: 600;
 }
 #preview-content tr:nth-child(even) td { background: var(--bg-2); }
-#preview-content tr:hover td { background: var(--bg-3); }
+/* Hover: the theme's accent wash (--active-bg, the same one the selected note and the
+   active buttons use), not --bg-3. That grey is a step on the background ladder, and on
+   the blue-leaning dark themes it lit the row up blue — a hover means "this one", so it
+   should speak in the colour that means that everywhere else in the app. */
+#preview-content tr:hover td { background: var(--active-bg); }
 
 /* Resizable images in preview */
 #preview-content img {
