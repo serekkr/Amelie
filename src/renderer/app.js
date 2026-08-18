@@ -17337,6 +17337,10 @@ function toggleNotifPopup() {
   _eventNotifs.forEach(ev => {
     const row = document.createElement('div'); row.className = 'notif-row';
     const info = document.createElement('div'); info.className = 'notif-row-info';
+    // "… completed with:" and the destination are ONE sentence over TWO lines: the title
+    // keeps the connector, the destination gets the line below. The title never wraps
+    // (see .notif-row-title) — it used to, and the word that fell to the second line was
+    // "with:", left dangling between the two lines it was meant to join.
     info.innerHTML = `<div class="notif-row-title">${ev.ok ? '✓' : '✗'} ${escHtml(ev.text)}${ev.where ? ' ' + escHtml(window.i18n.t('notif.with')) : ''}</div>${ev.where ? `<div class="notif-row-due notif-dest">${escHtml(ev.where)}</div>` : ''}<div class="notif-row-due">${_fmtNotifTime(ev.ts)}</div>`;
     const dis = document.createElement('button'); dis.className = 'notif-dismiss'; dis.textContent = '×'; dis.title = window.i18n.t('todo.dismiss');
     dis.addEventListener('click', e => {
