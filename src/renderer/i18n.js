@@ -623,6 +623,14 @@ const TRANSLATIONS = {
     'theme.clr_accent_name':    'Accento',
     'theme.clr_accent_desc':    'Cartelle, link, elementi selezionati',
     'theme.custom':             'Personalizzato',
+    'theme.accent_green': 'Verde',
+    'theme.accent_navy': 'Blu navy',
+    'theme.accent_petrol': 'Blu petrolio',
+    'theme.accent_cyan': 'Ciano',
+    'theme.accent_amber': 'Ambra',
+    'theme.accent_purple': 'Viola',
+    'common.show_hide': 'Mostra/nascondi',
+    'split.close': 'Chiudi vista affiancata',
 
     // Vault settings extra
     'vault_settings.enable_pass_label':  'Passphrase <small>(non recuperabile)</small>',
@@ -1476,6 +1484,14 @@ const TRANSLATIONS = {
     'theme.clr_accent_name':    'Accent',
     'theme.clr_accent_desc':    'Folders, links, selected items',
     'theme.custom':             'Custom',
+    'theme.accent_green': 'Green',
+    'theme.accent_navy': 'Navy blue',
+    'theme.accent_petrol': 'Petrol blue',
+    'theme.accent_cyan': 'Cyan',
+    'theme.accent_amber': 'Amber',
+    'theme.accent_purple': 'Purple',
+    'common.show_hide': 'Show/hide',
+    'split.close': 'Close split view',
 
     // Vault settings extra
     'vault_settings.enable_pass_label':  'Passphrase <small>(not recoverable)</small>',
@@ -2265,6 +2281,14 @@ const TRANSLATIONS = {
     'theme.clr_accent_name': 'Akzent',
     'theme.clr_accent_desc': 'Ordner, Links, ausgewählte Elemente',
     'theme.custom': 'Benutzerdefiniert',
+    'theme.accent_green': 'Grün',
+    'theme.accent_navy': 'Marineblau',
+    'theme.accent_petrol': 'Petrolblau',
+    'theme.accent_cyan': 'Cyan',
+    'theme.accent_amber': 'Bernstein',
+    'theme.accent_purple': 'Violett',
+    'common.show_hide': 'Ein-/ausblenden',
+    'split.close': 'Geteilte Ansicht schließen',
     'vault_settings.enable_pass_label': 'Passphrase <small>(nicht wiederherstellbar)</small>',
     'vault_settings.disable_pass_label': 'Aktuelle Passphrase <small>(zum Entschlüsseln der Dateien)</small>',
     'vault_settings.ph_passphrase': 'Passphrase…',
@@ -3024,6 +3048,14 @@ const TRANSLATIONS = {
     'theme.clr_accent_name': 'Acento',
     'theme.clr_accent_desc': 'Carpetas, enlaces, elementos seleccionados',
     'theme.custom': 'Personalizado',
+    'theme.accent_green': 'Verde',
+    'theme.accent_navy': 'Azul marino',
+    'theme.accent_petrol': 'Azul petróleo',
+    'theme.accent_cyan': 'Cian',
+    'theme.accent_amber': 'Ámbar',
+    'theme.accent_purple': 'Morado',
+    'common.show_hide': 'Mostrar/ocultar',
+    'split.close': 'Cerrar vista dividida',
     'vault_settings.enable_pass_label': 'Frase de contraseña <small>(no recuperable)</small>',
     'vault_settings.disable_pass_label': 'Frase de contraseña actual <small>(para descifrar los archivos)</small>',
     'vault_settings.ph_passphrase': 'Frase de contraseña…',
@@ -3783,6 +3815,14 @@ const TRANSLATIONS = {
     'theme.clr_accent_name': 'Accent',
     'theme.clr_accent_desc': 'Dossiers, liens, éléments sélectionnés',
     'theme.custom': 'Personnalisé',
+    'theme.accent_green': 'Vert',
+    'theme.accent_navy': 'Bleu marine',
+    'theme.accent_petrol': 'Bleu pétrole',
+    'theme.accent_cyan': 'Cyan',
+    'theme.accent_amber': 'Ambre',
+    'theme.accent_purple': 'Violet',
+    'common.show_hide': 'Afficher/masquer',
+    'split.close': 'Fermer la vue partagée',
     'vault_settings.enable_pass_label': 'Phrase secrète <small>(non récupérable)</small>',
     'vault_settings.disable_pass_label': 'Phrase secrète actuelle <small>(pour déchiffrer les fichiers)</small>',
     'vault_settings.ph_passphrase': 'Phrase secrète…',
@@ -4542,6 +4582,14 @@ const TRANSLATIONS = {
     'theme.clr_accent_name': 'Akcent',
     'theme.clr_accent_desc': 'Foldery, linki, wybrane elementy',
     'theme.custom': 'Niestandardowy',
+    'theme.accent_green': 'Zielony',
+    'theme.accent_navy': 'Granatowy',
+    'theme.accent_petrol': 'Petrolowy',
+    'theme.accent_cyan': 'Cyjan',
+    'theme.accent_amber': 'Bursztyn',
+    'theme.accent_purple': 'Fioletowy',
+    'common.show_hide': 'Pokaż/ukryj',
+    'split.close': 'Zamknij widok podzielony',
     'vault_settings.enable_pass_label': 'Hasło <small>(nie do odzyskania)</small>',
     'vault_settings.disable_pass_label': 'Bieżące hasło <small>(do odszyfrowania plików)</small>',
     'vault_settings.ph_passphrase': 'Hasło…',
@@ -5301,6 +5349,14 @@ const TRANSLATIONS = {
     'theme.clr_accent_name': 'Accent',
     'theme.clr_accent_desc': 'Foldere, legături, elemente selectate',
     'theme.custom': 'Personalizat',
+    'theme.accent_green': 'Verde',
+    'theme.accent_navy': 'Bleumarin',
+    'common.show_hide': 'Arată/ascunde',
+    'split.close': 'Închide vizualizarea divizată',
+    'theme.accent_petrol': 'Albastru petrol',
+    'theme.accent_cyan': 'Cyan',
+    'theme.accent_amber': 'Chihlimbar',
+    'theme.accent_purple': 'Violet',
     'vault_settings.enable_pass_label': 'Frază de acces <small>(nerecuperabilă)</small>',
     'vault_settings.disable_pass_label': 'Fraza de acces curentă <small>(pentru a decripta fișierele)</small>',
     'vault_settings.ph_passphrase': 'Frază de acces…',
@@ -5548,10 +5604,14 @@ function applyLanguage(lang) {
     if (val) el.placeholder = val;
   });
 
-  // Update [data-i18n-title]
+  // Update [data-i18n-title]. The aria-label goes with it when the element has one:
+  // it is the same sentence read out loud, and it was staying in the language the
+  // markup was written in while the visible tooltip changed.
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
     const val = t(el.dataset.i18nTitle);
-    if (val) el.title = val;
+    if (!val) return;
+    el.title = val;
+    if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', val);
   });
 
   // Highlight active language pill

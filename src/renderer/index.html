@@ -370,7 +370,7 @@
                   <!-- Only ✕ here: edit/view is the note's own toggle in the header, which now
                        applies to both halves at once. -->
                   <div id="split-b-actions">
-                    <button id="split-b-close" title="Chiudi vista affiancata">✕</button>
+                    <button id="split-b-close" title="Chiudi vista affiancata" data-i18n-title="split.close">✕</button>
                   </div>
                   <textarea id="markdown-editor-b" spellcheck="true"></textarea>
                   <div id="preview-pane-b" style="display:none">
@@ -896,7 +896,7 @@
                   </div>
                   <div class="field-group two-col" style="margin-top:10px">
                     <div><label data-i18n="sync.username">Username</label><input type="text" id="cfg-smb-user" autocomplete="off" /></div>
-                    <div><label data-i18n="sync.password">Password</label><div style="position:relative"><input type="text" id="cfg-smb-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="cfg-smb-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
+                    <div><label data-i18n="sync.password">Password</label><div style="position:relative"><input type="text" id="cfg-smb-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="cfg-smb-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
                   </div>
                   <div style="display:flex;justify-content:flex-end;margin-top:8px">
                     <button type="button" class="wiz-btn secondary samba-remove-btn" data-scope="backup" data-i18n="sync.wg_remove">Rimuovi</button>
@@ -948,7 +948,7 @@
                 </div>
                 <div class="field-group two-col">
                   <div><label data-i18n="sync.username">Username</label><input type="text" id="cfg-webdav-user" autocomplete="off" /></div>
-                  <div><label data-i18n="sync.webdav_pass">Password / App token</label><div style="position:relative"><input type="text" id="cfg-webdav-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="cfg-webdav-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
+                  <div><label data-i18n="sync.webdav_pass">Password / App token</label><div style="position:relative"><input type="text" id="cfg-webdav-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="cfg-webdav-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
                 </div>
                 <div class="field-group">
                   <label data-i18n="sync.remote_path">Percorso remoto</label>
@@ -1038,7 +1038,7 @@
               </div>
               <div class="field-group two-col">
                 <div><label data-i18n="sync.username">Username</label><input type="text" id="tw-webdav-user" autocomplete="off" /></div>
-                <div><label data-i18n="sync.webdav_pass">Password / App token</label><div style="position:relative"><input type="text" id="tw-webdav-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="tw-webdav-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
+                <div><label data-i18n="sync.webdav_pass">Password / App token</label><div style="position:relative"><input type="text" id="tw-webdav-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="tw-webdav-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
               </div>
               <div class="field-group">
                 <label data-i18n="sync.remote_folder">Cartella remota</label>
@@ -1173,7 +1173,7 @@
                 </div>
                 <div class="field-group two-col" style="margin-top:10px">
                   <div><label data-i18n="sync.username">Username</label><input type="text" id="tw-smb-user" autocomplete="off" /></div>
-                  <div><label data-i18n="sync.password">Password</label><div style="position:relative"><input type="text" id="tw-smb-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="tw-smb-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
+                  <div><label data-i18n="sync.password">Password</label><div style="position:relative"><input type="text" id="tw-smb-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="tw-smb-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
                 </div>
                 <div style="display:flex;justify-content:flex-end;margin-top:8px">
                   <button type="button" class="wiz-btn secondary samba-remove-btn" data-scope="sync" data-i18n="sync.wg_remove">Rimuovi</button>
@@ -1429,14 +1429,14 @@
                   <label data-i18n-html="vault_settings.enable_pass_label">Passphrase <small>(non recuperabile)</small></label>
                   <div style="position:relative">
                     <input type="text" id="sec-new-pass" placeholder="*****" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;font-family:'AmelieMask',monospace;letter-spacing:3px;padding-right:32px"/>
-                    <button type="button" id="sec-new-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button>
+                    <button type="button" id="sec-new-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button>
                   </div>
                 </div>
                 <div>
                   <label data-i18n="vault_settings.confirm_pass">Conferma</label>
                   <div style="position:relative">
                     <input type="text" id="sec-new-pass2" placeholder="*****" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;font-family:'AmelieMask',monospace;letter-spacing:3px;padding-right:32px"/>
-                    <button type="button" id="sec-new-pass2-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button>
+                    <button type="button" id="sec-new-pass2-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button>
                   </div>
                 </div>
               </div>
@@ -1454,7 +1454,7 @@
                 <label data-i18n-html="vault_settings.disable_pass_label">Passphrase corrente <small>(per decifrare i file)</small></label>
                 <div style="position:relative">
                   <input type="text" id="sec-disable-pass" placeholder="*****" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;font-family:'AmelieMask',monospace;letter-spacing:3px;padding-right:32px"/>
-                  <button type="button" id="sec-disable-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button>
+                  <button type="button" id="sec-disable-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button>
                 </div>
               </div>
               <div style="display:flex;gap:8px;align-items:stretch;max-width:420px">
@@ -1912,7 +1912,7 @@
       <div style="position:relative">
         <input id="input-modal-field" type="text"
           style="background:var(--bg-2);border:1px solid var(--border);border-radius:6px;color:var(--text-0);font-family:var(--editor-font);font-size:15px;padding:9px 12px;outline:none;width:100%;transition:border-color .2s"/>
-        <button type="button" id="input-modal-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;align-items:center;line-height:0">
+        <button type="button" id="input-modal-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;align-items:center;line-height:0">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
       </div>
@@ -2036,7 +2036,7 @@
       <div style="position:relative;width:100%">
         <input type="text" id="unlock-pass" placeholder="*****" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
           style="width:100%;background:var(--bg-2);border:1px solid var(--border);border-radius:6px;color:var(--text-0);font-family:'AmelieMask',monospace;letter-spacing:3px;text-indent:3px;font-size:15px;padding:11px 42px;outline:none;text-align:center"/>
-        <button id="unlock-eye" type="button" title="Mostra/nascondi" aria-label="Mostra/nascondi"
+        <button id="unlock-eye" type="button" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide"
           style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
