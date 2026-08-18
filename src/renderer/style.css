@@ -1094,18 +1094,30 @@ kbd {
    proportional so it stays right when the font is zoomed. */
 #cm-mount .cm-cb-first { border-top-left-radius: 7px; border-top-right-radius: 7px; padding-top: calc(0.14 * var(--editor-line-height) * 1em); }
 #cm-mount .cm-cb-last  { border-bottom-left-radius: 7px; border-bottom-right-radius: 7px; padding-bottom: calc(0.14 * var(--editor-line-height) * 1em); }
-/* ── Code-block syntax colours (edit mode only). Comments get their own muted grey.
-   Palette below is for the dark themes; the light theme overrides it. ─────────── */
+/* ── Code syntax colours, GREEN + YELLOW (2026-08-18, user's choice — the palette was
+   github-dark's red/orange/blue/purple). Two hues over eight roles would be mush, so
+   they are split by MEANING: green for what IS code (keywords, commands, definitions),
+   yellow for what code CARRIES (strings, numbers, variables, flags). Within each family
+   the shade separates the roles. Comments keep their muted grey — a comment that shouts
+   in one of the two hues competes with the code it explains.
+   These drive BOTH modes: #cm-mount .cm-hl-* while writing and the .hljs-* rules in the
+   preview, so a block looks the same either side of the toggle. Dark themes here, the
+   light theme overrides below with darker greens and browner yellows — the bright ones
+   are unreadable on paper. ──────────────────────────────────────────────────────── */
 :root {
-  --hl-comment: #7d8590; --hl-keyword: #ff7b72; --hl-string: #a5d6ff; --hl-number: #79c0ff;
-  --hl-def: #d2a8ff; --hl-builtin: #ffa657; --hl-meta: #ff7b72; --hl-property: #79c0ff;
-  --hl-type: #ffa657; --hl-var2: #ffa657; --hl-atom: #79c0ff;
+  --hl-comment: #7d8590;
+  --hl-keyword: #56d364; --hl-builtin: #7ee787; --hl-def: #3fb950; --hl-type: #7ee787;
+  --hl-meta: #56d364;
+  --hl-string: #e3b341; --hl-number: #f0c674; --hl-property: #f0c674;
+  --hl-var2: #e3b341;   --hl-atom: #f0c674;
   --md-link: #58a6ff;
 }
 [data-theme="light"] {
-  --hl-comment: #6e7781; --hl-keyword: #cf222e; --hl-string: #0a3069; --hl-number: #0550ae;
-  --hl-def: #8250df; --hl-builtin: #953800; --hl-meta: #cf222e; --hl-property: #0550ae;
-  --hl-type: #953800; --hl-var2: #953800; --hl-atom: #0550ae;
+  --hl-comment: #6e7781;
+  --hl-keyword: #1a7f37; --hl-builtin: #2da44e; --hl-def: #116329; --hl-type: #2da44e;
+  --hl-meta: #1a7f37;
+  --hl-string: #9a6700; --hl-number: #7d4e00; --hl-property: #7d4e00;
+  --hl-var2: #9a6700;   --hl-atom: #7d4e00;
   --md-link: #0969da;
 }
 /* Blue markdown/wiki/attachment links in edit mode. */
