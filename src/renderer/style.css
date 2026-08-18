@@ -996,8 +996,8 @@ kbd {
 #editor-code-bg-inner { position: relative; width: 100%; }
 .editor-code-rect {
   position: absolute;
-  background: rgba(255,255,255,.05);
-  border: none;                 /* no outer frame — just the grey fill (user request) */
+  background: var(--code-bg);
+  border: none;                 /* no outer frame — just the fill (user request) */
   box-sizing: border-box;
   border-radius: 7px;
   z-index: -1;   /* behind the letters of the text overlay */
@@ -1123,7 +1123,7 @@ kbd {
   outline: 1px solid color-mix(in srgb, var(--yellow) 70%, transparent);
 }
 #cm-mount .cm-search-current { background: transparent; outline: 2px solid var(--accent); }
-#cm-mount .cm-codeblock { background: rgba(255,255,255,.05); padding-left: 2ch; padding-right: 2ch; }
+#cm-mount .cm-codeblock { background: var(--code-bg); padding-left: 2ch; padding-right: 2ch; }
 /* Breathing above/below the fence lines = 0.3× the line height (the legacy inkGap),
    proportional so it stays right when the font is zoomed. */
 #cm-mount .cm-cb-first { border-top-left-radius: 7px; border-top-right-radius: 7px; padding-top: calc(0.14 * var(--editor-line-height) * 1em); }
@@ -1145,6 +1145,14 @@ kbd {
   --hl-string: #e3b341; --hl-number: #f0c674; --hl-property: #f0c674;
   --hl-var2: #e3b341;   --hl-atom: #f0c674;
   --md-link: #58a6ff;
+  /* The surface a code block sits on, in BOTH modes, and under a table header. Built
+     from the theme's own link blue over its page colour, so it belongs to the palette —
+     the flat white wash it replaced read as a grey patch belonging to nothing. The blue
+     is DARKENED first (45% of it, the rest black) and only then laid on at 30%: mixing
+     the bright link straight in gave a lit-up panel, and what a code block wants is a
+     deep navy that sits BELOW the page. One variable because the editor, the preview and
+     the tables have to agree: they drifted apart once already. */
+  --code-bg: color-mix(in srgb, color-mix(in srgb, var(--link) 40%, #000) 28%, var(--bg-0));
 }
 [data-theme="light"] {
   --hl-comment: #6e7781;
@@ -1318,7 +1326,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
      block you had just been typing in, so the same code changed colour on every
      edit↔view toggle. Radius 7px to match it as well, and no frame — the edit-mode
      block has none, by an old request. */
-  background: rgba(255,255,255,.05); border: none;
+  background: var(--code-bg); border: none;
   /* The note's font, stated HERE and not left to inheritance: the UA stylesheet says
      `pre { font-family: monospace }`, and a declaration beats an inherited value — so
      the block rendered in the system's monospace (DejaVu Sans Mono on this machine)
@@ -1375,7 +1383,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 }
 /* NOTE: overridden by the #preview-content th rule further down (equal specificity,
    later in the file) — kept in step with it so the two never disagree. */
-#preview-content th { background: rgba(255,255,255,.05); color: var(--text-0); font-weight: 500; }
+#preview-content th { background: var(--code-bg); color: var(--text-0); font-weight: 500; }
 #preview-content .col-resize-handle {
   position: absolute; top: 0; right: -3px;
   width: 6px; height: 100%;
@@ -3064,7 +3072,7 @@ body.split-open .pane-flash::after {
      The tint is the code block's own wash (5% white over the page) rather than --bg-3, a
      lighter grey: a header and a code block are the same kind of surface, and on a dark
      theme --bg-3 read as a pale band across the top of every table. */
-  background: rgba(255,255,255,.05); color: var(--text-0); font-weight: 600;
+  background: var(--code-bg); color: var(--text-0); font-weight: 600;
 }
 #preview-content tr:nth-child(even) td { background: var(--bg-2); }
 /* Hover: the theme's accent wash (--active-bg, the same one the selected note and the
