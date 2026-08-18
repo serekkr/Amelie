@@ -363,6 +363,21 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Text selection, everywhere. A DEEP blue, darker than the sky blue this used to be
+   (rgba(100,180,255,.25)) — and stated here once, because the editor had its own fixed
+   blue while the preview fell back to whatever Chromium picks, a violet on a dark page:
+   the same selection looked like two different things depending on the pane. OPAQUE, not
+   a translucent wash: a wash takes the colour of whatever is under it, so one selection
+   running from a paragraph through a code block came out in two shades. Only the
+   background is replaced — the letters keep their own colour, syntax colours included. */
+::selection { background: #142c4b; }
+
+/* Native widgets draw with the browser's OWN accent — a blue that belongs to Chromium,
+   not to the theme: the highlighted row in an open <select>, a checkbox tick, a radio
+   dot. `accent-color` is the one property that redirects them, and it inherits, so
+   stating it here covers every control in the app. */
+html { accent-color: var(--accent); }
+
 html, body {
   height: 100%; overflow: hidden;
   background: var(--bg-0); color: var(--text-0);
@@ -1029,7 +1044,7 @@ kbd {
   box-sizing: border-box; overflow-y: scroll; overflow-x: hidden;
 }
 #markdown-editor::placeholder { color: var(--text-3); }
-#markdown-editor::selection { background: rgba(100,180,255,.25); }
+#markdown-editor::selection { background: #142c4b; }
 /* CodeMirror editor mount (experimental engine, behind the amelie-cm flag) */
 #cm-mount { position: relative; z-index: 2; flex: 1; min-height: 0; overflow: hidden; }
 /* Opaque background: the CM editor sits at z-index 2 over the legacy overlay layers
@@ -1076,7 +1091,8 @@ kbd {
 #cm-mount .cm-vlnums { display: flex; flex-direction: column; }
 #cm-mount .cm-vlnums > div { line-height: var(--editor-line-height); }
 #cm-mount .cm-activeLine { background: transparent; }
-#cm-mount .cm-selectionBackground, #cm-mount .cm-content ::selection { background: rgba(100,180,255,.25) !important; }
+/* !important: CodeMirror ships its own selection layer and would win otherwise. */
+#cm-mount .cm-selectionBackground, #cm-mount .cm-content ::selection { background: #142c4b !important; }
 /* 2px, over CodeMirror's own 1.2: a hairline caret in a 15px proportional font is easy
    to lose in the text, and it was the accent colour that used to make it findable. */
 #cm-mount .cm-cursor { border-left-color: var(--text-0); border-left-width: 2px; }
@@ -4323,6 +4339,9 @@ html[data-theme="serekkr"] .notif-row:hover .simple-name
   padding: 7px 9px; cursor: pointer; outline: none;
 }
 .export-select:focus { border-color: var(--accent); }
+/* The rows of an open <select>: Chromium draws this popup itself on Linux and honours
+   these, so the list reads in the app's colours instead of the desktop's. */
+.export-select option, .field-group select option { background: var(--bg-2); color: var(--text-0); }
 
 /* ─── About: Mr Robot-style green terminal reveal (TWO alternating phrases) ──
    Phrase 1 "Hello friend!" slides in left→right, holds, vanishes; then phrase 2
