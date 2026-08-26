@@ -389,20 +389,14 @@ async function switchTab(idx) {
       if (tab.attachmentName && el.dataset.loaded !== tab.attachmentName) {
         const rel = tab.attachmentName;
         el.dataset.loaded = rel;
-        // Through the localhost media server, like the players inside a note — NOT
-        // inkwell://. That protocol answers a whole-file buffer and cannot serve real
-        // ranged requests, which is why the media server exists at all (see it in
-        // main.js); a video opened from the sidebar loaded over it and then sat there
-        // frozen, unable to seek, while the SAME file played fine embedded in a note.
-        // inkwell:// stays as the fallback for when no base URL comes back.
-        Promise.resolve((window.inkwell.mediaBaseUrl && window.inkwell.mediaBaseUrl()) || '')
-          .catch(() => '')
-          .then(base => {
+        // Same resolver as the players inside a note. This used to load over
+        // inkwell://, which hands back a whole-file buffer and cannot serve ranged
+        // requests: the video sat frozen and a seek never completed.
+        _mediaPlaybackUrl(rel, 'inkwell://attachments/' + rel.split('/').map(encodeURIComponent).join('/'))
+          .then(u => {
             // A fast tab switch can resolve this after another file was loaded.
-            if (el.dataset.loaded !== rel) return;
-            el.src = base
-              ? base + encodeURIComponent(rel)
-              : 'inkwell://attachments/' + rel.split('/').map(encodeURIComponent).join('/');
+            if (el.dataset.loaded !== rel || !u) return;
+            el.src = u;
           });
       }
     }
@@ -4597,6 +4591,22 @@ function _attachmentTarget(name) {
 // can't play" turned out to be the old protocol's broken Range support (fixed
 // in v210) — Electron DOES ship the H.264/AAC codecs. A failing player gets
 // one silent retry, then a card that opens the system player.
+// The URL a player should load: Chromium's own file loader when it can read the file
+// (see attachment:localUrl in main.js — it serves ranges, so seeking works, and it
+// keeps working while this thread is busy), the localhost media server only when the
+// attachment is encrypted at rest and nobody but us can read the bytes.
+async function _mediaPlaybackUrl(rel, fallbackHref) {
+  try {
+    const local = await window.inkwell.attachmentLocalUrl(rel);
+    if (local) return local;
+  } catch (_) {}
+  try {
+    const base = await window.inkwell.mediaBaseUrl();
+    if (base) return base + encodeURIComponent(rel);
+  } catch (_) {}
+  return fallbackHref || null;
+}
+
 // Vault-relative path of an attachment href, or null. Accepts BOTH formats:
 // legacy `inkwell://attachments/…` and clean `attachments/…`.
 function _attRel(href) {
@@ -4653,9 +4663,7 @@ function embedMediaPlayers(root, opts = {}) {
     const rel = _attRel(href) || clean;
     // The media server starts on this call, so the base URL arrives a tick later;
     // src is set when it lands (Promise.resolve also swallows a sync '' answer).
-    Promise.resolve((window.inkwell.mediaBaseUrl && window.inkwell.mediaBaseUrl()) || '')
-      .catch(() => '')
-      .then(base => { el.src = base ? base + encodeURIComponent(rel) : href; });
+    _mediaPlaybackUrl(rel, href).then(u => { if (u) el.src = u; });
     // One silent retry on error (load hiccups self-heal), then the card.
     el.addEventListener('error', () => {
       if (!el.dataset.retried) {

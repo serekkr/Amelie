@@ -208,11 +208,15 @@ function render(raw) {
     el.controls = true;
     el.preload = 'metadata';
     const relMedia = clean.startsWith('inkwell://attachments/') ? clean.slice('inkwell://attachments/'.length) : clean.replace(/^attachments\//, '');
-    // Playback through the localhost media server (real HTTP ranges), which this
-    // call starts — hence the URL arriving asynchronously.
-    Promise.resolve((window.inkwell.mediaBaseUrl && window.inkwell.mediaBaseUrl()) || '')
-      .catch(() => '')
-      .then(mediaBase => { el.src = mediaBase ? mediaBase + encodeURIComponent(relMedia) : href; });
+    // Chromium's own file loader when it can read the file, the media server only for
+    // an attachment that is encrypted at rest (see _mediaPlaybackUrl in app.js — this
+    // window loads its own scripts and shares nothing with it).
+    (async () => {
+      let u = null;
+      try { u = await window.inkwell.attachmentLocalUrl(relMedia); } catch (_) {}
+      if (!u) { try { const b = await window.inkwell.mediaBaseUrl(); if (b) u = b + encodeURIComponent(relMedia); } catch (_) {} }
+      el.src = u || href;
+    })();
     if (isVideo && width) el.style.width = width + 'px';
     el.addEventListener('error', () => {
       // One silent retry first — transient load errors self-heal.

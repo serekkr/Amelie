@@ -4045,6 +4045,34 @@ ipcMain.handle('attachment:removeUnusedMedia', async (_, apply) => {
 });
 
 // Rename an image and return the new name; also patch all open notes
+// A `file://` URL for a PLAINTEXT attachment, or null when the bytes on disk are
+// ciphertext (only we can read those). This is what lets a player need no server at
+// all: Chromium opens the file itself — the same thing Obsidian does, visible as a
+// plain file descriptor on its process — and its own loader answers the ranged
+// requests a seek is made of.
+//
+// Measured, because two other routes looked right and were not: streaming the file
+// from this process through a custom protocol seeks in isolation but breaks the player
+// in a real note (the renderer is busy colouring a long code block and the load is
+// aborted), and `net.fetch(file://)` relayed through protocol.handle loads but cannot
+// seek at all — currentTime stays at 0. A plain file:// URL seeks even with the main
+// thread deliberately blocked for two seconds.
+ipcMain.handle('attachment:localUrl', async (_, rel) => {
+  try {
+    if (!rel || !ATTACHMENTS_DIR) return null;
+    const full = path.resolve(ATTACHMENTS_DIR, String(rel));
+    if (!full.startsWith(path.resolve(ATTACHMENTS_DIR) + path.sep)) return null;
+    const onDisk = encDisk(full);                       // <name> or <name>.enc
+    if (!fs.existsSync(onDisk)) return null;
+    _assertRealInside(ATTACHMENTS_DIR, onDisk);         // no symlink out of the vault
+    // Encrypted at rest → there is nothing at that path a player could read. Checked
+    // on the BYTES, not on whether a key is loaded: a locked vault must not hand out a
+    // path to ciphertext either.
+    if (isEncryptedAttachment(onDisk)) return null;
+    return pathToFileURL(onDisk).toString();
+  } catch (_) { return null; }
+});
+
 ipcMain.handle('attachment:rename', async (_, oldName, newName) => {
   // Confine the SOURCE to ATTACHMENTS_DIR. oldName carries the subfolder prefix
   // and was previously unchecked, so `../../…` escaped the vault → arbitrary

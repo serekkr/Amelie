@@ -1,10 +1,16 @@
-// A video opened from the SIDEBAR plays and can be seeked.
+// A video opened from the SIDEBAR plays, SEEKS, and needs no socket to do it.
 //
-// The player in a media tab loaded over `inkwell://`, the custom protocol that answers
-// a whole-file buffer and cannot serve real ranged requests — which is the very reason
-// the localhost media server exists. So the same file played fine embedded in a note
-// and sat there frozen when opened from the sidebar: MEDIA_ERR_NETWORK, and a seek that
-// never completed. Measured on the old path: readyState 4, error 2, seek timed out.
+// Three transports were measured for this. `inkwell://` (a whole-file buffer from our
+// own process) left the player frozen: MEDIA_ERR_NETWORK, seek never completed. The
+// same protocol with real 206 streaming seeks in isolation but fails in a real note,
+// where the renderer is busy colouring a long code block and the load is aborted. And
+// `net.fetch(file://)` relayed through protocol.handle loads yet cannot seek at all —
+// currentTime stays at 0. A plain `file://` URL, which is what Obsidian hands its
+// player, does everything: it seeks even with the main thread deliberately blocked,
+// and Chromium opens the file itself so nothing listens on a port.
+//
+// A vault encrypted at rest has no readable path, and only there does the localhost
+// media server still come into play.
 //
 //   run: npm run test:mediatab      (uses xvfb-run when installed, else $DISPLAY)
 import fs from 'node:fs';
@@ -60,23 +66,34 @@ const results=[]; const check=(n,p,d)=>{results.push(p);console.log(`${p?'ok  ':
 await ev(`(async () => { const n = (state.notes||[]).find(x => x.type === 'video'); await openNote(n); })()`);
 await sleep(3000);
 const src = await ev(`(document.getElementById('video-view-content')||{}).src || '(no player)'`);
-check('the sidebar player loads over the media server, not inkwell://',
-  /^http:\/\/127\.0\.0\.1:\d+\//.test(src), src);
+check('the player is handed the file itself (file://), no server', /^file:\/\/\//.test(src), src);
 const st = await ev(`(() => { const v = document.getElementById('video-view-content');
   return v ? JSON.stringify({ readyState: v.readyState, error: v.error && v.error.code, duration: Math.round(v.duration || 0) }) : 'none'; })()`);
 console.log('  player state:', st);
 check('it has metadata (not stuck at readyState 0)', /"readyState":[1-4]/.test(st), st);
 check('no media error', /"error":null/.test(st), st);
 // The thing inkwell:// could not do: seek.
+// The position must LAND, not merely fire an event: a 'seeked' can arrive for the
+// initial seek to 0 while the real one never completes.
 const seek = await ev(`(async () => {
   const v = document.getElementById('video-view-content'); if (!v) return 'no player';
-  return await new Promise(res => {
-    const t = setTimeout(() => res('TIMEOUT — seek never completed (this is the frozen case)'), 8000);
-    v.addEventListener('seeked', () => { clearTimeout(t); res('seeked to ' + Math.round(v.currentTime) + 's'); }, { once: true });
-    v.addEventListener('error', () => { clearTimeout(t); res('ERROR ' + (v.error && v.error.code)); }, { once: true });
-    v.currentTime = 30;
-  });
+  v.currentTime = 30;
+  for (let i = 0; i < 80; i++) {
+    await new Promise(r => setTimeout(r, 100));
+    if (v.error) return 'ERROR ' + v.error.code;
+    if (v.currentTime > 25 && !v.seeking) return 'seeked to ' + Math.round(v.currentTime) + 's';
+  }
+  return 'TIMEOUT — seek never landed (stuck at ' + Math.round(v.currentTime) + 's)';
 })()`);
 check('and it can SEEK — a real ranged request', /^seeked to (29|30|31)s$/.test(seek), seek);
+// Nothing may listen — not before, not after a video has played and seeked.
+const listeners = (() => {
+  const tree = [String(child.pid), ...execSync(`pgrep -P ${child.pid} || true`).toString().split('\n').filter(Boolean)];
+  return execSync('ss -tlnp 2>/dev/null || true').toString().split('\n')
+    .filter(l => l.includes('127.0.0.1') && tree.some(p => l.includes(`pid=${p},`)) && !l.includes(`:${PORT} `))
+    .map(l => (l.match(/127\.0\.0\.1:(\d+)/) || [])[1]).filter(Boolean);
+})();
+check('and no port was opened for any of it', listeners.length === 0, 'ports: ' + listeners.join(', '));
+
 console.log(`\n${results.every(Boolean)?`all ${results.length}`:`${results.filter(Boolean).length}/${results.length}`} passed`);
 process.exit(results.every(Boolean)?0:1);

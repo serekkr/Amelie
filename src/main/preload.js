@@ -105,6 +105,9 @@ contextBridge.exposeInMainWorld('inkwell', {
   compressPdf: (name, level, label) => ipcRenderer.invoke('pdf:compress', name, level, label),
   openAttachmentDialog: () => ipcRenderer.invoke('attachment:openDialog'),
   renameAttachment: (oldName, newName) => ipcRenderer.invoke('attachment:rename', oldName, newName),
+  // file:// URL of a plaintext attachment (null when encrypted at rest) — lets a
+  // player be served by Chromium itself instead of by a localhost socket.
+  attachmentLocalUrl: (rel) => ipcRenderer.invoke('attachment:localUrl', rel),
   deleteAttachment: (name) => ipcRenderer.invoke('attachment:delete', name),
   removeUnusedMedia: (apply) => ipcRenderer.invoke('attachment:removeUnusedMedia', apply),
 
