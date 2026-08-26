@@ -1,6 +1,6 @@
 {
   "name": "amelie",
-  "version": "1.0.33",
+  "version": "1.0.34",
   "description": "Amelie — Your data, private by default",
   "main": "src/main/main.js",
   "scripts": {
@@ -23,6 +23,8 @@
     "test:paste": "node test/paste-fidelity.cdp.mjs",
     "test:temps": "node test/attachment-temps-hidden.cdp.mjs",
     "test:drop": "node test/sidebar-media-drop.cdp.mjs",
+    "test:rename": "node test/attachment-rename.cdp.mjs",
+    "test:mediatab": "node test/media-tab-plays.cdp.mjs",
     "test:nav": "node test/note-nav.cdp.mjs"
   },
   "dependencies": {
