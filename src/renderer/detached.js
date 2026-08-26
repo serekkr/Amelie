@@ -118,17 +118,39 @@ async function navNote(dir) {
 document.getElementById('det-prev')?.addEventListener('click', () => navNote(-1));
 document.getElementById('det-next')?.addEventListener('click', () => navNote(1));
 
+// Apply `fn` only to the parts of the note that are NOT code: outside fenced
+// blocks and outside inline `code` spans. Kept in step with _rewriteOutsideCode
+// in app.js — this window loads its own scripts and shares nothing with it.
+function _rewriteOutsideCode(body, fn) {
+  const lines = body.split('\n');
+  let fence = null;
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^\s*(```+|~~~+)/.exec(lines[i]);
+    if (fence) {
+      if (m && m[1][0] === fence[0] && m[1].length >= fence.length) fence = null;
+      continue;
+    }
+    if (m) { fence = m[1]; continue; }
+    lines[i] = lines[i].split(/(`+[^`]*`+)/).map((part, k) => (k % 2 ? part : fn(part))).join('');
+  }
+  return lines.join('\n');
+}
+
 function render(raw) {
   if (typeof marked === 'undefined') { previewContent.textContent = raw; return; }
   marked.setOptions({ breaks: true, gfm: true });
   const body = stripFrontmatter(raw);
-  const processed = body
+  // OUTSIDE code only — the same reason as the main window (see
+  // _rewriteOutsideCode in app.js): bash's `[[ … ]]` looks exactly like a wiki
+  // link, and rewriting it inside a fence printed an <a> tag, &quot; and all,
+  // into the middle of a shell script.
+  const processed = _rewriteOutsideCode(body, seg => seg
     // [[note links]] → clickable span (navigates inside this window)
     .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) =>
       `<span class="note-link" data-note="${target.trim().replace(/"/g, '&quot;')}">${(alias || target).trim()}</span>`)
     .replace(/(!)\[([^\]]*)\]\(([^)]+)\)\{width=(\d+)\}/g,
       (_, bang, alt, url, w) => `<img src="${url}" alt="${alt}" width="${w}" style="width:${w}px;height:auto">`)
-    .replace(/==([^=\n]+?)==/g, '<mark class="md-highlight">$1</mark>');
+    .replace(/==([^=\n]+?)==/g, '<mark class="md-highlight">$1</mark>'));
   // Sanitize before inserting: no script/handler in a note can run (anti-XSS).
   const _rawHtml = marked.parse(processed).replace(/(src=")attachments\//g, '$1inkwell://attachments/');
   previewContent.innerHTML = (typeof DOMPurify !== 'undefined')
@@ -186,9 +208,11 @@ function render(raw) {
     el.controls = true;
     el.preload = 'metadata';
     const relMedia = clean.startsWith('inkwell://attachments/') ? clean.slice('inkwell://attachments/'.length) : clean.replace(/^attachments\//, '');
-    // Playback through the localhost media server (real HTTP ranges).
-    const mediaBase = (window.inkwell.mediaBaseUrl && window.inkwell.mediaBaseUrl()) || '';
-    el.src = mediaBase ? mediaBase + encodeURIComponent(relMedia) : href;
+    // Playback through the localhost media server (real HTTP ranges), which this
+    // call starts — hence the URL arriving asynchronously.
+    Promise.resolve((window.inkwell.mediaBaseUrl && window.inkwell.mediaBaseUrl()) || '')
+      .catch(() => '')
+      .then(mediaBase => { el.src = mediaBase ? mediaBase + encodeURIComponent(relMedia) : href; });
     if (isVideo && width) el.style.width = width + 'px';
     el.addEventListener('error', () => {
       // One silent retry first — transient load errors self-heal.

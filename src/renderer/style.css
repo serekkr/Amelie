@@ -1265,6 +1265,33 @@ kbd {
    10px scroller pad + 22px gutter padding. (Sibling selector: editor-pane precedes
    preview-pane under #content-split; 2 IDs+1 class beats the base #preview-pane padding.) */
 #editor-pane.line-numbers ~ #preview-pane { padding-left: calc(3 * var(--editor-font-size) + 32px); }
+/* ── Line numbers in reading mode ────────────────────────────────────────────
+   Same promise as edit mode: every ROW YOU SEE gets the next number. Rendered
+   HTML has no lines to count, so renderPreviewGutter measures the real line
+   boxes (Range rects) and drops one absolutely-positioned number on each. The
+   gutter sits in the left padding the rule above already reserves, so the text
+   column does not move; it is a child of #preview-pane, which IS the scroller,
+   so it scrolls with the content instead of being synced to it.
+   Rows are content rows: the gaps BETWEEN blocks are margins, not rows, and get
+   no number — a paragraph that follows a heading is the next number, not the
+   number after next. */
+#preview-gutter {
+  position: absolute; left: 0; top: 0; width: calc(3 * var(--editor-font-size) + 32px);
+  pointer-events: none; -webkit-user-select: none; user-select: none;
+  font-family: 'AmelieWideTick', var(--editor-font-family);
+  font-size: var(--editor-font-size); font-weight: 300;
+  color: var(--text-3); font-variant-numeric: tabular-nums;
+}
+#preview-gutter > div {
+  position: absolute; left: 0; width: 100%;
+  /* 16px = CodeMirror's own gutter offset in edit mode (.cm-scroller's 10px of
+     padding plus the 6px on .cm-gutterElement), left-aligned like it is, so the
+     numbers stay put when you toggle edit ⇄ view instead of sliding sideways. */
+  padding-left: 16px; box-sizing: border-box;
+  /* Centred on its row: a number beside a big heading sits level with it rather
+     than riding the top of the row. */
+  display: flex; align-items: center; justify-content: flex-start;
+}
 
 /* ── View width: readable line length (Obsidian-style) ──────────────
    Wide (default): editor + preview fill the full pane width, with equal

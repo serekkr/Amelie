@@ -19781,13 +19781,19 @@
     }
     build(view) {
       const builder = new RangeSetBuilder();
+      const doc2 = view.state.doc;
+      let fences = null;
+      try {
+        fences = view.state.field(fenceField);
+      } catch (_) {
+      }
       for (const { from, to } of view.visibleRanges) {
-        const text = view.state.doc.sliceString(from, to);
+        const text = doc2.sliceString(from, to);
         LINK_RE.lastIndex = 0;
         let m;
         while (m = LINK_RE.exec(text)) {
           const s = from + m.index;
-          builder.add(s, s + m[0].length, mdLinkMark);
+          if (!_posInFencedCode(s, fences, doc2)) builder.add(s, s + m[0].length, mdLinkMark);
           if (LINK_RE.lastIndex === m.index) LINK_RE.lastIndex++;
         }
       }
@@ -19796,7 +19802,7 @@
   }, { decorations: (v) => v.decorations });
   var mdTagMark = Decoration.mark({ class: "cm-md-tag" });
   var TAG_RE = /(^|\s)(#[A-Za-z][\w-]*)/g;
-  function _tagInCode(pos, fences, doc2) {
+  function _posInFencedCode(pos, fences, doc2) {
     if (!fences || fences.length < 2) return false;
     for (let i2 = 0; i2 + 1 < fences.length; i2 += 2) {
       if (pos >= fences[i2] && pos <= doc2.lineAt(fences[i2 + 1]).to) return true;
@@ -19825,7 +19831,7 @@
         while (m = TAG_RE.exec(text)) {
           const s = from + m.index + m[1].length;
           const e = s + m[2].length;
-          if (!_tagInCode(s, fences, doc2)) builder.add(s, e, mdTagMark);
+          if (!_posInFencedCode(s, fences, doc2)) builder.add(s, e, mdTagMark);
           if (TAG_RE.lastIndex === m.index) TAG_RE.lastIndex++;
         }
       }

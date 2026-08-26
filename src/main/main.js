@@ -1235,48 +1235,20 @@ function readNoteContent(relPath) {
   _assertRealInside(NOTES_DIR, filePath);   // reject a note that symlinks outside the vault
   const raw = fs.readFileSync(filePath, 'utf8');
   const text = ENCRYPTION_KEY ? decryptContent(raw, ENCRYPTION_KEY) : raw;
-  // Show fenced code indented (2-space inner margin) right away — even for notes
-  // whose file isn't normalized yet (it becomes so on the next save). Idempotent.
-  return relPath.endsWith('.md') ? indentFenceContent(stripNoteFrontmatter(text)) : text;
+  // The note reaches the editor as the bytes on disk (frontmatter aside). Fenced
+  // code used to be re-indented to a 2-space inner margin here and on save; that
+  // margin is CSS now (#cm-mount .cm-codeblock), so nothing rewrites the text.
+  return relPath.endsWith('.md') ? stripNoteFrontmatter(text) : text;
 }
 
-// Normalize fenced code-block CONTENT so the least-indented non-blank line has
-// exactly 2 leading spaces (relative indentation preserved). Idempotent — once
-// the min is 2 it never changes again, so re-saving doesn't pile up spaces. The
-// ``` fence lines and everything outside fences are left untouched. This makes
-// the code sit a couple spaces inside the grey box in the editor (matching the
-// preview), at the cost of 2 real leading spaces on code lines in the file.
-function indentFenceContent(text) {
-  const lines = text.split('\n');
-  const out = lines.slice();
-  let i = 0;
-  while (i < lines.length) {
-    if (/^\s*(```|~~~)/.test(lines[i])) {
-      let j = i + 1;
-      while (j < lines.length && !/^\s*(```|~~~)/.test(lines[j])) j++;
-      // Indent the whole block (fences + content) to 2 spaces so the edit-mode
-      // grey box hugs it. DRIFT-PROOF: shift by a delta from the OPENING fence's
-      // own indent (stable base), NOT the min over all lines — a stray column-0
-      // line would otherwise drag the min to 0 and push the block +2 each save
-      // (4,6,8…). Idempotent (opening fence already at 2 → delta 0 → no change);
-      // relative indentation preserved. Must match the renderer's _indentFences2.
-      const last = (j < lines.length) ? j : j - 1;
-      const base = lines[i].match(/^ */)[0].length;
-      const delta = 2 - base;
-      for (let k = i; k <= last; k++) {
-        if (lines[k].trim() === '') continue;
-        const cur = lines[k].match(/^ */)[0].length;
-        // Shift by the fence delta (keeps relative indent, drift-proof) AND keep
-        // every code line at least at the fence's 2-space level.
-        let ni = Math.max(0, cur + delta);
-        if (ni < 2) ni = 2;
-        if (ni !== cur) out[k] = ' '.repeat(ni) + lines[k].slice(cur);
-      }
-      i = (j < lines.length) ? j + 1 : j;
-    } else i++;
-  }
-  return out.join('\n');
-}
+// Fenced code is NOT re-indented on read or write. It used to be normalized to a
+// 2-space inner margin (fences included) so the editor's grey box hugged it —
+// but those were real spaces in the file, so code pasted into a note came back
+// out shifted: a heredoc terminator (`  PY`) stopped matching, embedded Python
+// hit an IndentationError, a Makefile tab got spaces in front of it. The margin
+// is drawn in CSS instead (#cm-mount .cm-codeblock), and what you paste is what
+// the file holds. A fence indented on purpose (inside a list item) keeps its own
+// indent for the same reason: the text is nobody else's to rewrite.
 
 // SAFETY NET (v1.0.984). Last line of defence against ANY editor-side truncation:
 // before a save SLASHES a note's body, stash the current on-disk version under
@@ -1330,8 +1302,9 @@ function writeNoteContent(relPath, content, keepModified) {
   const filePath = noteFilePath(relPath);
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  // Indent fenced code-block content (2-space inner margin, idempotent) for .md.
-  const body = relPath.endsWith('.md') ? indentFenceContent(content) : content;
+  // Written exactly as the editor holds it: nothing re-indents fenced code (the
+  // note under readNoteContent says why).
+  const body = content;
   let toWrite = body;
   if (relPath.endsWith('.md')) {
     // Preserve `created` from the existing file's frontmatter; always bump `modified`.
@@ -1718,11 +1691,35 @@ app.whenReady().then(async () => {
       try { res.writeHead(500); res.end(); } catch (_) {}
     }
   });
-  mediaServer.listen(0, '127.0.0.1');
-  ipcMain.on('media:base-url', (e) => {
-    const addr = mediaServer.address();
-    e.returnValue = addr ? `http://127.0.0.1:${addr.port}/${MEDIA_TOKEN}/` : '';
-  });
+  // STARTED ON DEMAND, not at boot: the socket exists only once a note actually
+  // embeds an audio/video file. A vault with no media never opens a port at all —
+  // there is nothing to serve, so there is nothing to listen on. The first caller
+  // waits for 'listening' (the reason this IPC is async, not sendSync); every
+  // caller after it gets the cached URL. A bind failure resolves to '' and lets a
+  // later attempt try again, rather than wedging playback for the whole session.
+  let _mediaBase = null;      // cached base URL, once listening
+  let _mediaStarting = null;  // the in-flight start, shared by concurrent callers
+  const mediaBaseUrl = () => {
+    if (_mediaBase) return Promise.resolve(_mediaBase);
+    if (!_mediaStarting) {
+      _mediaStarting = new Promise((resolve) => {
+        const onErr = (err) => {
+          console.error('[media-server] listen failed:', err && err.message);
+          _mediaStarting = null;
+          resolve('');
+        };
+        mediaServer.once('error', onErr);
+        mediaServer.listen(0, '127.0.0.1', () => {
+          mediaServer.removeListener('error', onErr);
+          const addr = mediaServer.address();
+          _mediaBase = addr ? `http://127.0.0.1:${addr.port}/${MEDIA_TOKEN}/` : '';
+          resolve(_mediaBase);
+        });
+      });
+    }
+    return _mediaStarting;
+  };
+  ipcMain.handle('media:base-url', () => mediaBaseUrl());
 
   const appCfg = readAppConfig();
 

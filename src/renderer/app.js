@@ -627,7 +627,7 @@ function _applyMdHighlight(html) {
 }
 
 // The CodeMirror engine owns rendering entirely, so the legacy textarea-overlay
-// pipeline (highlight/masks/gutter/reindent/sync) is skipped — CM does it
+// pipeline (highlight/masks/gutter/sync) is skipped — CM does it
 // virtualized. CM is now the ONLY editor (always on); the legacy pipeline functions
 // remain but are dormant (each early-returns while `_cmActive`).
 let _cmActive = false;
@@ -861,11 +861,15 @@ function applyLineNumbers(on) {
   try { localStorage.setItem('inkwell-line-numbers', on ? '1' : '0'); } catch (_) {}
   const tgl = document.getElementById('cfg-line-numbers');
   if (tgl) tgl.checked = !!on;
+  // Reading mode has its own measured gutter, and the CM branch below returns
+  // early — so ask for it before that, not after.
+  try { schedulePreviewGutter(); } catch (_) {}
   // CM engine: use its native gutter instead of the legacy overlay gutter.
   if (_cmActive && _cmHandle) { try { _cmHandle.setLineNumbers(!!on); } catch (_) {} return; }
   try { renderEditorGutter(); } catch (_) {}
 }
 function setupLineNumbers() {
+  try { watchPreviewGutter(); } catch (_) {}
   applyLineNumbers(loadLineNumbers());
   document.getElementById('cfg-line-numbers')?.addEventListener('change', e => applyLineNumbers(e.target.checked));
 }
@@ -1037,13 +1041,10 @@ function decorateEditorCodeBlocks() {
 
   const padL = parseFloat(cs.paddingLeft) || 48;
   const padR = parseFloat(cs.paddingRight) || 48;
-  // The code block is indented 2 spaces in the file (indentFenceContent), so the
-  // grey box HUGS that indent: its left edge sits `innerPad` px before the code's
-  // actual leading indent, and its right edge is flush with the wrap column. This
-  // makes the box narrower than the paragraph column on the left (the code is
-  // shifted right) and tight on the right. Computed PER-BLOCK from the block's
-  // real indent so it always tracks the code — even a freshly-typed block at
-  // col 0 (before save normalizes it to 2) gets a box that hugs it, no mismatch.
+  // The grey box HUGS the block's own indent: its left edge sits `innerPad` px
+  // before the code's actual leading indent, and its right edge is flush with the
+  // wrap column. Computed PER-BLOCK from the real indent, so it tracks the code
+  // whatever column it starts at — nothing normalizes that column any more.
   const innerPad = 8;
   // Width of one space in the editor font, to convert the code's leading-space
   // count into pixels (proportional fonts → measure, don't assume).
@@ -1095,7 +1096,6 @@ function decorateEditorCodeBlocks() {
     // code's 2-space indent (that left the caret outside the box on the left), and
     // not the extra innerPad to the left of the column (that made the box look too
     // wide). Flush with the text column = caret at col 0 sits on the box edge.
-    // The code text inside stays indented (indentFenceContent).
     const bLeft = Math.max(0, padL);
     const bWidth = Math.max(40, boxRight - bLeft);
     // The rectangle lives INSIDE #editor-highlight, the same container as the
@@ -1112,110 +1112,14 @@ function decorateEditorCodeBlocks() {
   }
 }
 
-// ─── Live code-fence indentation ─────────────────────────────────────────────
-// Keep code blocks indented to 2 spaces WHILE typing (same rule as main's
-// indentFenceContent), so a freshly-typed block looks like an existing one
-// instead of staying flush at column 0 until save/reopen. Only COMPLETE (closed)
-// blocks are touched — an unclosed ``` (still being typed) is left alone so we
-// never indent the rest of the note.
-function _indentFences2(text) {
-  const lines = text.split('\n');
-  const out = lines.slice();
-  let i = 0;
-  while (i < lines.length) {
-    if (/^\s*(```|~~~)/.test(lines[i])) {
-      let j = i + 1;
-      while (j < lines.length && !/^\s*(```|~~~)/.test(lines[j])) j++;
-      if (j >= lines.length) {
-        // Unclosed block (still being typed): indent ONLY the opening fence line
-        // to 2 so the block starts indented right away (Enter-auto-indent keeps
-        // the lines you type next aligned) — no jump when you later close it.
-        // The lines AFTER it are left untouched (could be unrelated text below a
-        // stray fence; the real content typed next is indented as you go).
-        if (lines[i].trim() !== '') out[i] = '  ' + lines[i].replace(/^ */, '');
-        break;
-      }
-      // DRIFT-PROOF: shift the block by a delta derived from the OPENING fence's
-      // own indent (which is stable — always the block's base), NOT the min over
-      // all lines. With the min, a single freshly-added column-0 line would drag
-      // the min to 0 and shift the whole block +2 every pass (4,6,8…). Anchoring
-      // to the opening fence makes it idempotent: already-at-2 → delta 0 → no-op.
-      // Relative indentation is preserved (every non-blank line shifts equally).
-      const base = lines[i].match(/^ */)[0].length;
-      const delta = 2 - base;
-      for (let k = i; k <= j; k++) {
-        if (lines[k].trim() === '') continue;
-        const cur = lines[k].match(/^ */)[0].length;
-        // Shift by the fence delta (keeps relative indent, drift-proof) AND keep
-        // every code line at least at the fence's 2-space level so a line typed
-        // flush at column 0 doesn't stick out left of the rest of the block.
-        let ni = Math.max(0, cur + delta);
-        if (ni < 2) ni = 2;
-        if (ni !== cur) out[k] = ' '.repeat(ni) + lines[k].slice(cur);
-      }
-      i = j + 1;
-    } else i++;
-  }
-  return out.join('\n');
-}
+// ─── Code fences are never re-indented ───────────────────────────────────────
+// A code block used to be shifted to a 2-space indent while typing, matching the
+// same normalizing pass in main. Both are gone: the inner margin is CSS, and text
+// pasted into a fence has to survive the round trip byte for byte.
 
-// Map a caret offset from the old text to the normalized text by (line, column):
-// the caret's line only changed by its leading-indent delta.
-function _remapCaretAfterIndent(oldText, newText, pos) {
-  const before = oldText.slice(0, pos);
-  const line = before.split('\n').length - 1;
-  const col = pos - (before.lastIndexOf('\n') + 1);
-  const oldLines = oldText.split('\n');
-  const newLines = newText.split('\n');
-  if (line >= newLines.length) return newText.length;
-  const oldInd = (oldLines[line].match(/^ */) || [''])[0].length;
-  const newInd = (newLines[line].match(/^ */) || [''])[0].length;
-  let newCol = col + (newInd - oldInd);
-  if (newCol < newInd) newCol = newInd;     // don't land inside the new indent
-  if (newCol < 0) newCol = 0;
-  if (newCol > newLines[line].length) newCol = newLines[line].length;
-  let abs = 0;
-  for (let k = 0; k < line; k++) abs += newLines[k].length + 1;
-  return abs + newCol;
-}
-
-// INSTANT (synchronous, no debounce) so a finished block snaps to 2 spaces the
-// moment it's closed — the user explicitly didn't want a delayed "shift after a
-// pause". A re-entry guard stops the execCommand-fired input from recursing.
-let _reindenting = false;
-function scheduleFenceReindent() {
-  if (_cmActive) return;   // CM handles code blocks natively; no textarea reindent
-  if (_reindenting) return;
-  if (!editor || state.viewMode !== 'edit') return;
-  const cur = editor.value;
-  const norm = _indentFences2(cur);
-  if (norm === cur) return;   // idempotent → no-op
-  // SURGICAL: rewrite ONLY the minimal changed span, not the whole textarea. A
-  // full rewrite (select-all + insert the entire 38 KB note) froze the app on a
-  // big paste. Since reindent only tweaks leading spaces of the changed block,
-  // the diff is tiny — replace just cur[p..sc) with norm[p..sn).
-  let p = 0;
-  const maxP = Math.min(cur.length, norm.length);
-  while (p < maxP && cur[p] === norm[p]) p++;
-  let sc = cur.length, sn = norm.length;
-  while (sc > p && sn > p && cur[sc - 1] === norm[sn - 1]) { sc--; sn--; }
-  const replacement = norm.slice(p, sn);
-  const pos = editor.selectionStart;
-  const newPos = _remapCaretAfterIndent(cur, norm, pos);
-  _reindenting = true;
-  try {
-    editor.focus();
-    editor.setSelectionRange(p, sc);
-    // execCommand keeps it as ONE undo step (integrated with native undo).
-    const ok = document.execCommand('insertText', false, replacement);
-    if (!ok) { editor.value = norm; editor.dispatchEvent(new Event('input', { bubbles: true })); }
-    editor.setSelectionRange(newPos, newPos);
-  } finally { _reindenting = false; }
-}
-
-// Enter inside a code fence keeps the new line at the block's indent (so blocks
-// never collect a column-0 line that the min-based normalize would then shift
-// the WHOLE block by — that was the drift / misaligned-fence look).
+// Enter inside a code fence keeps the new line at the block's own indent — the
+// fence's, whatever it is (0 at top level, deeper inside a list item). Nothing
+// normalizes it afterwards, so this is the only thing setting the column.
 function _isInsideFence(val, caretPos) {
   // Count fences UP TO AND INCLUDING the caret's current line. Including the
   // current line is what makes pressing Enter ON the opening ``` enter the block
@@ -1235,7 +1139,7 @@ function handleFenceEnterIndent(e) {
   const nlIdx = val.indexOf('\n', pos);
   const lineEnd = nlIdx === -1 ? val.length : nlIdx;
   const fullLine = val.slice(lineStart, lineEnd);
-  const indent = (fullLine.match(/^ */) || ['  '])[0] || '  ';
+  const indent = (fullLine.match(/^ */) || [''])[0];
 
   // Manual ``` → same as the toolbar Code button: pressing Enter at the END of an
   // OPENING fence that has no closer yet auto-adds the closing ``` below and drops
@@ -1246,10 +1150,10 @@ function handleFenceEnterIndent(e) {
     const hasCloserBelow = /\n[ \t]*(```|~~~)/.test(val.slice(lineEnd));
     if (!hasCloserBelow) {
       e.preventDefault();
-      const openLineIdx = val.slice(0, pos).split('\n').length - 1;   // stays stable across reindent
+      const openLineIdx = val.slice(0, pos).split('\n').length - 1;
       document.execCommand('insertText', false, '\n' + indent + '\n' + indent + '```');
-      // Caret on the FINAL text (fence-reindent may have shifted indents): end of
-      // the line right after the opening fence = the empty middle line.
+      // Caret on the FINAL text: end of the line right after the opening fence,
+      // i.e. the empty middle line.
       const vlines = editor.value.split('\n');
       let off = 0;
       for (let k = 0; k <= openLineIdx; k++) off += vlines[k].length + 1;
@@ -3981,12 +3885,6 @@ function setupEditor() {
     updateWordCount();
     updateSelectionCount();
     scheduleAutosave();
-    // Re-indent code fences to 2 spaces (incl. on paste, so pasted code blocks
-    // get normalized like the rest and their masks line up). Skip only undo/redo:
-    // re-normalizing the just-reverted text would make Ctrl+Z look like a no-op.
-    if (e.inputType !== 'historyUndo' && e.inputType !== 'historyRedo') {
-      scheduleFenceReindent();
-    }
     checkNoteLinkTrigger();
     try { syncSplitFromMain(); } catch(_) {}
     // The caret-visibility auto-scroll (and any scrollbar appearance) happens
@@ -4526,21 +4424,15 @@ function handleToolbarCmd(cmd) {
       // Inline for a single selected word; otherwise a fenced block with an
       // empty line in the middle and the cursor placed there, ready to type.
       if (text && !text.includes('\n')) { insert = `\`${text}\``; break; }
-      // Empty block → the middle line carries the block's 2-space indent so the
-      // caret lands at the CODE column (aligned under the fences), exactly like
-      // the manual "``` + Enter" path — no 2-space jump on the first keystroke.
-      const body = text ? text : '  ';
-      // Line index of the opening fence BEFORE the insert (stays stable across the
-      // fence-reindent that runs synchronously inside insertAtCursor).
+      // Empty block → an empty middle line with the caret on it. The fences sit
+      // at column 0 like any other line; the code's inset is drawn, not typed.
+      const body = text ? text : '';
+      // Line index of the opening fence BEFORE the insert.
       const openLineIdx = editor.value.slice(0, sel.s).split('\n').length - 1;
       const bodyLineCount = body.split('\n').length;
-      // Insert the fences ALREADY at the 2-space indent so the live reindent is a
-      // no-op (norm === cur). That avoids a nested execCommand inside insertAtCursor's
-      // input event, which used to corrupt the undo stack (Ctrl+Z did nothing).
-      insertAtCursor('  ```\n' + body + '\n  ```', sel.s, sel.e);
-      // Caret on the FINAL text (reindent may have shifted indents): end of the
-      // last content line = the empty middle line for an empty block. Same robust
-      // method as the manual "``` + Enter" path.
+      insertAtCursor('```\n' + body + '\n```', sel.s, sel.e);
+      // Caret on the FINAL text: end of the last content line = the empty middle
+      // line for an empty block. Same robust method as the manual "``` + Enter" path.
       const vlines = editor.value.split('\n');
       const lastIdx = openLineIdx + bodyLineCount;
       let off = 0;
@@ -4732,8 +4624,11 @@ function embedMediaPlayers(root, opts = {}) {
     // Playback goes through the localhost media server (real HTTP ranges);
     // the markdown keeps a portable attachments/… (or legacy inkwell://) link.
     const rel = _attRel(href) || clean;
-    const base = (window.inkwell.mediaBaseUrl && window.inkwell.mediaBaseUrl()) || '';
-    el.src = base ? base + encodeURIComponent(rel) : href;
+    // The media server starts on this call, so the base URL arrives a tick later;
+    // src is set when it lands (Promise.resolve also swallows a sync '' answer).
+    Promise.resolve((window.inkwell.mediaBaseUrl && window.inkwell.mediaBaseUrl()) || '')
+      .catch(() => '')
+      .then(base => { el.src = base ? base + encodeURIComponent(rel) : href; });
     // One silent retry on error (load hiccups self-heal), then the card.
     el.addEventListener('error', () => {
       if (!el.dataset.retried) {
@@ -5289,6 +5184,57 @@ function highlightCodeChunked(stillValid, els, i) {
   }
 }
 
+// ── Amelie's markdown extras, applied OUTSIDE code only ─────────────────────
+// [[wiki links]], ==highlight==, :emoji: and {width=N} on an image are string
+// rewrites that run BEFORE marked parses, which used to mean they ran over the
+// WHOLE note — fenced blocks and inline spans included. Bash's `[[ … ]]` is
+// indistinguishable from a wiki link that way: `if [[ "$c" == */* ]]; then` came
+// out of the reading view as a printed <a> tag, quotes and all, with a literal
+// &quot; where each " had been. Measured on a real 303-line script: 2 lines
+// mangled, 4 &quot; on screen. Code is code — it is left exactly as written, and
+// the extras apply to prose.
+function _rewriteOutsideCode(body, fn) {
+  const lines = body.split('\n');
+  let fence = null;                 // the marker that opened the block we are inside
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^\s*(```+|~~~+)/.exec(lines[i]);
+    if (fence) {
+      // A closing fence uses the same character and is at least as long.
+      if (m && m[1][0] === fence[0] && m[1].length >= fence.length) fence = null;
+      continue;                     // inside a block: untouched, fence lines included
+    }
+    if (m) { fence = m[1]; continue; }
+    // Outside a block, an inline `code` span is code too: split on the spans and
+    // rewrite only what lies between them (odd indices are the spans themselves).
+    lines[i] = lines[i].split(/(`+[^`]*`+)/).map((part, k) => (k % 2 ? part : fn(part))).join('');
+  }
+  return lines.join('\n');
+}
+
+function _preprocessMarkdown(body) {
+  return _rewriteOutsideCode(body, seg => seg
+    // [[note links]] → clickable anchors
+    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) => {
+      const t = target.trim();
+      const display = (alias || target).trim();
+      // `[[#Heading]]` / `[[#Heading|Alias]]` aims at a heading INSIDE this note, not at
+      // another note, so resolveNoteLink can never match it: it used to come out as a
+      // dead link — text with a dotted underline, showing its own `[[…]]` in a tooltip
+      // on hover. It is not a link here, so it is not drawn as one; just the text it
+      // displays. The leading `#` goes with it, or a link at the start of a line would
+      // leave `#Heading` for the parser to read as a heading.
+      if (t.startsWith('#')) return display.replace(/^#+\s*/, '');
+      return `<a class="note-link" data-note="${t.replace(/"/g, '&quot;')}" href="#">${display}</a>`;
+    })
+    // ![alt](url){width=N} → <img width="N">
+    .replace(/(!)\[([^\]]*)\]\(([^)]+)\)\{width=(\d+)\}/g,
+      (_, bang, alt, url, w) => `<img src="${url}" alt="${alt}" width="${w}" style="width:${w}px;height:auto">`)
+    // ==text== → highlighted span (gentle yellow).
+    .replace(/==([^=\n]+?)==/g, '<mark class="md-highlight">$1</mark>')
+    // :shortcode: → emoji (only the known ones; unknown ones stay unchanged).
+    .replace(/:([a-z0-9_+-]+):/g, (m, name) => EMOJI_MAP[name] || m));
+}
+
 function updatePreview() {
   if (typeof marked === 'undefined') return;
   // Default: no scroll to restore. setViewMode sets _pendingPreviewScrollFrac
@@ -5303,27 +5249,7 @@ function updatePreview() {
   // render; remember widths positionally to re-apply to each table.
   const { cleanedBody, widthsByTable } = extractTableWidthMarkers(body);
 
-  // Pre-process: [[note links]] → clickable spans
-  // Pre-process: ![alt](url){width=N} → <img width="N">
-  const processedBody = cleanedBody
-    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) => {
-      const t = target.trim();
-      const display = (alias || target).trim();
-      // `[[#Heading]]` / `[[#Heading|Alias]]` aims at a heading INSIDE this note, not at
-      // another note, so resolveNoteLink can never match it: it used to come out as a
-      // dead link — text with a dotted underline, showing its own `[[…]]` in a tooltip
-      // on hover. It is not a link here, so it is not drawn as one; just the text it
-      // displays. The leading `#` goes with it, or a link at the start of a line would
-      // leave `#Heading` for the parser to read as a heading.
-      if (t.startsWith('#')) return display.replace(/^#+\s*/, '');
-      return `<a class="note-link" data-note="${t.replace(/"/g, '&quot;')}" href="#">${display}</a>`;
-    })
-    .replace(/(!)\[([^\]]*)\]\(([^)]+)\)\{width=(\d+)\}/g,
-      (_, bang, alt, url, w) => `<img src="${url}" alt="${alt}" width="${w}" style="width:${w}px;height:auto">`)
-    // ==text== → highlighted span (gentle yellow). Skips code spans/blocks.
-    .replace(/==([^=\n]+?)==/g, '<mark class="md-highlight">$1</mark>')
-    // :shortcode: → emoji (only the known ones; unknown ones stay unchanged).
-    .replace(/:([a-z0-9_+-]+):/g, (m, name) => EMOJI_MAP[name] || m);
+  const processedBody = _preprocessMarkdown(cleanedBody);
 
   let html = marked.parse(processedBody);
   // Clean relative image refs resolve through the inkwell protocol.
@@ -5422,6 +5348,117 @@ function highlightInlineTags(root) {
     if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
     node.parentNode.replaceChild(frag, node);
   }
+}
+
+// ── Line numbers in reading mode ─────────────────────────────────────────────
+// Edit mode numbers the rows you SEE (visualLineNumbers, build/cm-entry.js), and
+// reading mode has to say the same thing about the same note. Rendered HTML has
+// no lines to count, so they are measured: a Range over each text node returns
+// one client rect per visual row, and a replaced box (an image, a video player)
+// occupies a row of its own. Rects sharing a top are ONE row — a code line
+// coloured into a dozen spans, or a table row's cells, must not count a dozen
+// times.
+//
+// What differs from edit mode, said plainly: the gaps between blocks are margins,
+// not rows, so they get no number. In the editor a blank line in the file is a
+// real row and takes one. So the two columns agree on how many rows of TEXT
+// there are, not on the numbers beside any given one.
+const _ROW_BOX_TAGS = new Set(['IMG', 'VIDEO', 'AUDIO', 'IFRAME', 'HR', 'CANVAS', 'SVG']);
+const _PREVIEW_ROW_TOL = 3;      // px: rects within this of each other are one row
+// Beyond this many rows the column is not readable anyway and the DOM cost stops
+// being worth it, so it is left off rather than half-drawn (a note that long is
+// already streaming in incrementally). Nothing silently truncates: no numbers.
+const _PREVIEW_ROW_MAX = 8000;
+
+function _previewRowBoxes(root, originY) {
+  const rows = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
+    acceptNode(n) {
+      if (n.nodeType === 3) {
+        return (n.nodeValue && n.nodeValue.trim()) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+      // Amelie's own furniture on a block (the copy button, the language label,
+      // a resize handle) is not content: skip it and everything under it.
+      const cl = n.classList;
+      if (cl && (cl.contains('code-copy-btn') || cl.contains('code-lang') || cl.contains('img-resize-handle'))) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return _ROW_BOX_TAGS.has(String(n.tagName).toUpperCase())
+        ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+    },
+  });
+  const range = document.createRange();
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    let rects;
+    if (n.nodeType === 3) { range.selectNodeContents(n); rects = range.getClientRects(); }
+    else rects = [n.getBoundingClientRect()];
+    for (const r of rects) {
+      if (r.height <= 0 || r.width <= 0) continue;
+      rows.push({ top: r.top - originY, height: r.height });
+    }
+  }
+  rows.sort((a, b) => a.top - b.top);
+  // Merge the rects that share a row, keeping the tallest extent: an inline image
+  // or a bigger inline span makes the row taller than the text beside it.
+  const out = [];
+  for (const r of rows) {
+    const prev = out[out.length - 1];
+    if (prev && r.top - prev.top <= _PREVIEW_ROW_TOL) {
+      prev.height = Math.max(prev.height, r.top + r.height - prev.top);
+    } else {
+      out.push({ top: r.top, height: r.height });
+    }
+  }
+  return out;
+}
+
+function renderPreviewGutter() {
+  const pane = $('preview-pane');
+  const gutter = $('preview-gutter');
+  if (!pane || !gutter || !previewContent) return;
+  const on = $('editor-pane')?.classList.contains('line-numbers');
+  // offsetParent is null while the pane is display:none — i.e. in edit mode, where
+  // the editor's own gutter is the one on screen.
+  if (!on || !pane.offsetParent) { gutter.textContent = ''; return; }
+  // The gutter is an absolutely positioned child of the SCROLLER, so its tops are
+  // in unscrolled content coordinates: undo the current scroll when converting
+  // from viewport rects, and it then scrolls with the text for free.
+  const paneRect = pane.getBoundingClientRect();
+  const originY = paneRect.top + pane.clientTop - pane.scrollTop;
+  const rows = _previewRowBoxes(previewContent, originY);
+  gutter.textContent = '';
+  if (rows.length > _PREVIEW_ROW_MAX) return;
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < rows.length; i++) {
+    const d = document.createElement('div');
+    d.style.top = rows[i].top + 'px';
+    d.style.height = rows[i].height + 'px';
+    d.textContent = String(i + 1);
+    frag.appendChild(d);
+  }
+  gutter.appendChild(frag);
+}
+
+// Debounced, not per-frame: the render pipeline, a window resize, a late-loading
+// image and a font swap can all ask at once, and a measure is not free — 2000
+// rows of code cost ~50ms (measured). Per frame that would stutter a resize drag
+// on a big note; a column that lands 60ms after the drag stops is imperceptible.
+let _previewGutterTimer = 0;
+function schedulePreviewGutter() {
+  clearTimeout(_previewGutterTimer);
+  _previewGutterTimer = setTimeout(() => {
+    requestAnimationFrame(() => { try { renderPreviewGutter(); } catch (_) {} });
+  }, 60);
+}
+
+// Anything that changes the preview's height changes where the rows are: an image
+// finishing its load, the editor font arriving, the window being resized, a big
+// note streaming its blocks in. One observer covers all of them.
+let _previewGutterObs = null;
+function watchPreviewGutter() {
+  if (_previewGutterObs || typeof ResizeObserver === 'undefined' || !previewContent) return;
+  _previewGutterObs = new ResizeObserver(() => schedulePreviewGutter());
+  _previewGutterObs.observe(previewContent);
 }
 
 function enhancePreviewContent(token, widthsByTable) {
@@ -5573,6 +5610,10 @@ function enhancePreviewContent(token, widthsByTable) {
     // One more frame so the browser has reflowed after the last DOM mutations.
     requestAnimationFrame(() => { if (token === _previewRenderToken) _applyScrollFrac(_pv, _f); });
   }
+
+  // Line numbers for what is now on screen (no-op unless the option is on and
+  // this is reading mode).
+  schedulePreviewGutter();
 }
 
 // ─── Table column resize (persisted via HTML comment markers) ────────────────
@@ -7899,17 +7940,7 @@ function renderSplitPreview() {
   marked.setOptions({ breaks: true, gfm: true });
   const body = _previewBody(edB.value);
   const { cleanedBody } = extractTableWidthMarkers(body);
-  const processedBody = cleanedBody
-    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) => {
-      const t = target.trim();
-      const display = (alias || target).trim();
-      if (t.startsWith('#')) return display.replace(/^#+\s*/, '');   // heading anchor: plain text, see renderPreview
-      return `<a class="note-link" data-note="${t.replace(/"/g, '&quot;')}" href="#">${display}</a>`;
-    })
-    .replace(/(!)\[([^\]]*)\]\(([^)]+)\)\{width=(\d+)\}/g,
-      (_, bang, alt, url, w) => `<img src="${url}" alt="${alt}" width="${w}" style="width:${w}px;height:auto">`)
-    .replace(/==([^=\n]+?)==/g, '<mark class="md-highlight">$1</mark>')
-    .replace(/:([a-z0-9_+-]+):/g, (m, name) => EMOJI_MAP[name] || m);
+  const processedBody = _preprocessMarkdown(cleanedBody);
   pvB.innerHTML = sanitizeNoteHtml(marked.parse(processedBody).replace(/(src=")attachments\//g, '$1inkwell://attachments/'));
   // Colours kept, but chunked over idle time (see highlightCodeChunked) so live
   // split view stays responsive while typing on a big document. Each render bumps
@@ -15319,11 +15350,8 @@ editor.addEventListener('keydown', handleLinkPopupKey);
 const _isFenceLine = l => /^\s*(```|~~~)/.test(l);
 
 // Auto-close a code fence: typing the 3rd backtick of "```" at the start of a
-// line (not already inside a block) replaces it with a complete, ALREADY
-// 2-space-indented empty block, caret on the indented middle line so the first
-// code line is aligned. Inserting it pre-indented means the live re-indent is a
-// no-op here (otherwise it would shift the fences +2 and the old absolute caret
-// would land after the 2nd backtick). execCommand keeps undo/redo intact.
+// line (not already inside a block) replaces it with a complete empty block, at
+// column 0, caret on the empty middle line. execCommand keeps undo/redo intact.
 editor.addEventListener('beforeinput', e => {
   if (e.inputType !== 'insertText' || e.data !== '`') return;
   if (editor.selectionStart !== editor.selectionEnd) return;
@@ -15335,8 +15363,8 @@ editor.addEventListener('beforeinput', e => {
   if (text.slice(lineStart, pos) === '``' && atLineEnd && fencesBefore % 2 === 0) {
     e.preventDefault();
     editor.setSelectionRange(lineStart, pos);                // select the "``"
-    document.execCommand('insertText', false, '  ```\n  \n  ```');
-    const caret = lineStart + 8;                             // end of the indented middle line ("  ```\n  ")
+    document.execCommand('insertText', false, '```\n\n```');
+    const caret = lineStart + 4;                             // the empty middle line ("```\n")
     editor.setSelectionRange(caret, caret);
   }
 });

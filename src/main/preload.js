@@ -91,8 +91,9 @@ contextBridge.exposeInMainWorld('inkwell', {
   openAttachmentFile: (name) => ipcRenderer.invoke('attachment:openFile', name),
   // Synchronous: copied file paths as the OS clipboard really sees them.
   readClipboardFilePaths: () => ipcRenderer.sendSync('clipboard:file-paths'),
-  // Base URL of the localhost media server (audio/video playback).
-  mediaBaseUrl: () => ipcRenderer.sendSync('media:base-url'),
+  // Base URL of the localhost media server (audio/video playback). Async: the
+  // server is started by this very call, so the first one waits for the port.
+  mediaBaseUrl: () => ipcRenderer.invoke('media:base-url'),
   readAttachment: (name) => ipcRenderer.invoke('attachment:readBinary', name),
   bakePdfAnnotations: (name, annots, formB64) => ipcRenderer.invoke('pdf:bakeAnnotations', name, annots, formB64),
   bakePdfAnnotationsAsNew: (name, annots, suffix, formB64) => ipcRenderer.invoke('pdf:bakeAnnotationsAsNew', name, annots, suffix, formB64),

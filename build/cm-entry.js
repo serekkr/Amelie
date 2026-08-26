@@ -519,6 +519,11 @@ const codeHighlightPlugin = ViewPlugin.fromClass(class {
 // the visible ranges → O(viewport), no perceptible latency and no effect on note
 // opening. Matches: [text](url), ![alt](url) (images), [📎/🎵/🎬 name](attachments/…),
 // and [[Note]] / [[Note|alias]].
+//
+// SKIPPED inside fenced code blocks, for the same reason the reading view skips it
+// (see _rewriteOutsideCode in app.js): bash's `[[ … ]]` matches the wiki-link half
+// of this pattern, so `if [[ "$c" == */* ]]; then` came out painted blue as though
+// a shell test were a link to a note.
 const mdLinkMark = Decoration.mark({ class: 'cm-md-link' });
 const LINK_RE = /!?\[[^\]\n]*\]\([^)\n]*\)|\[\[[^\]\n]*\]\]/g;
 const linkColorPlugin = ViewPlugin.fromClass(class {
@@ -526,13 +531,15 @@ const linkColorPlugin = ViewPlugin.fromClass(class {
   update(u) { if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view); }
   build(view) {
     const builder = new RangeSetBuilder();
+    const doc = view.state.doc;
+    let fences = null; try { fences = view.state.field(fenceField); } catch (_) {}
     for (const { from, to } of view.visibleRanges) {
-      const text = view.state.doc.sliceString(from, to);
+      const text = doc.sliceString(from, to);
       LINK_RE.lastIndex = 0;
       let m;
       while ((m = LINK_RE.exec(text))) {
         const s = from + m.index;
-        builder.add(s, s + m[0].length, mdLinkMark);
+        if (!_posInFencedCode(s, fences, doc)) builder.add(s, s + m[0].length, mdLinkMark);
         if (LINK_RE.lastIndex === m.index) LINK_RE.lastIndex++;   // zero-length safety
       }
     }
@@ -543,11 +550,12 @@ const linkColorPlugin = ViewPlugin.fromClass(class {
 // ── Inline #tag colouring (edit mode) ───────────────────────────────────────
 // Colour `#tag` blue so tags read as tags while writing. Viewport-scoped (cheap,
 // like linkColorPlugin) and SKIPPED inside fenced code blocks (so `#include`,
-// `#!/bin/sh`, etc. stay plain). Same match rule as the sidebar Tags parser:
+// `#!/bin/sh`, etc. stay plain) — _posInFencedCode is shared with the link
+// colouring, which needs the same exemption. Same match rule as the sidebar Tags parser:
 // a `#` at line start or after whitespace, then a letter and word chars/hyphens.
 const mdTagMark = Decoration.mark({ class: 'cm-md-tag' });
 const TAG_RE = /(^|\s)(#[A-Za-z][\w-]*)/g;
-function _tagInCode(pos, fences, doc) {
+function _posInFencedCode(pos, fences, doc) {
   if (!fences || fences.length < 2) return false;
   for (let i = 0; i + 1 < fences.length; i += 2) {
     if (pos >= fences[i] && pos <= doc.lineAt(fences[i + 1]).to) return true;
@@ -568,7 +576,7 @@ const tagColorPlugin = ViewPlugin.fromClass(class {
       while ((m = TAG_RE.exec(text))) {
         const s = from + m.index + m[1].length;   // start of '#'
         const e = s + m[2].length;
-        if (!_tagInCode(s, fences, doc)) builder.add(s, e, mdTagMark);
+        if (!_posInFencedCode(s, fences, doc)) builder.add(s, e, mdTagMark);
         if (TAG_RE.lastIndex === m.index) TAG_RE.lastIndex++;   // zero-length safety
       }
     }
