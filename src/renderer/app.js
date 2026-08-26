@@ -4556,6 +4556,18 @@ function isSupportedAttachmentFile(file) {
   if (isSupportedAttachmentName(file.name)) return true;
   return SUPPORTED_ATTACH_MIME.has((file.type || '').toLowerCase());
 }
+// A media file dropped on the SIDEBAR is a file of its own, not one note's image, so
+// it goes where the tree actually surfaces media: images/ for a photo. The attachments
+// ROOT is where a note's own inline images live, and those are deliberately not listed
+// (they belong to their note) — sending a sidebar drop there is what made a dropped
+// photo vanish.
+function _sidebarMediaTarget(name) {
+  if (/\.pdf$/i.test(name)) return 'pdf/' + name;
+  if (VIDEO_EXT_RE.test(name)) return 'videos/' + name;
+  if (AUDIO_EXT_RE.test(name)) return 'audio/' + name;
+  return 'images/' + name;
+}
+
 function _attachmentTarget(name) {
   if (/\.pdf$/i.test(name)) return 'pdf/' + name;
   if (VIDEO_EXT_RE.test(name)) return 'videos/' + name;
@@ -5428,11 +5440,16 @@ function renderPreviewGutter() {
   const rows = _previewRowBoxes(previewContent, originY);
   gutter.textContent = '';
   if (rows.length > _PREVIEW_ROW_MAX) return;
+  // A number is centred on its row so it sits level with a big heading. A media box
+  // is a row too, and 600px tall: centring left the number floating in the middle of
+  // the video, pointing at nothing. Tall rows get the number at their TOP instead,
+  // beside where the block begins — the height is capped, not the position.
+  const lh = parseFloat(getComputedStyle(previewContent).lineHeight) || 24;
   const frag = document.createDocumentFragment();
   for (let i = 0; i < rows.length; i++) {
     const d = document.createElement('div');
     d.style.top = rows[i].top + 'px';
-    d.style.height = rows[i].height + 'px';
+    d.style.height = Math.min(rows[i].height, lh * 2) + 'px';
     d.textContent = String(i + 1);
     frag.appendChild(d);
   }
@@ -16223,7 +16240,95 @@ function setupFileDrop() {
         showToast(`${window.i18n.t(tot.notes === 1 ? 'toast.note_imported' : 'toast.notes_imported', { n: tot.notes })} · ${tot.images} img · ${tot.pdfs} pdf`);
         return;
       }
+      // ── Loose MEDIA (photo, video, audio) dropped OUTSIDE the editor ─────────
+      // The editor's own handler owns a drop on the text and stops propagation, so
+      // reaching here means the sidebar (or any other chrome). Images, video and audio
+      // were not in the importable list below, so such a drop was discarded in SILENCE:
+      // nothing stored, nothing in the tree, no message. They are stored as files of
+      // their own now and appear in the tree beside the notes.
+      //
+      // A PDF is deliberately NOT taken here — it already has a working path further
+      // down (imported and opened in a tab), and stealing it would change that.
+      // The error/size helpers used by the editor's handler are local to setupEditor(),
+      // so the checks are inlined rather than reached for across scopes.
+      const _isDroppedMedia = (name) => isSupportedAttachmentName(name) && !/\.pdf$/i.test(name || '');
+      const _mediaErrToast = (err) => {
+        const m = err?.message || String(err || '');
+        if (/ATTACHMENT_TOO_LARGE/.test(m)) showToast(window.i18n.t('attach.too_large'));
+        else if (/Unsupported attachment type/.test(m)) showToast(window.i18n.t('attach.unsupported_format'));
+        else if (/ATTACHMENT_CONTENT_MISMATCH/.test(m)) showToast(window.i18n.t('attach.content_mismatch'));
+      };
+      // An identical file already in the vault is reused by the importer (same bytes →
+      // same copy), so the only honest way to tell "added" from "you already have this"
+      // is whether the tree actually grew.
+      const _rootMediaCount = () => (state.notes || [])
+        .filter(n => ['image', 'video', 'audio', 'pdf'].includes(n.type)).length;
+      const _reportMedia = async (before, failed, droppedOnFolder) => {
+        await loadTree();
+        const added = _rootMediaCount() - before;
+        if (added > 0) {
+          showToast(window.i18n.t(added === 1 ? 'toast.media_added' : 'toast.media_added_many', { n: added }));
+          // Media lives under attachments/ and the tree surfaces it at the ROOT only, so
+          // a drop aimed at a folder does not land inside it. Say so, rather than leave
+          // the user hunting in the folder they aimed at.
+          if (droppedOnFolder) showToast(window.i18n.t('toast.media_at_root'), 4000);
+        } else if (!failed) {
+          showToast(window.i18n.t('toast.media_already_there'), 4000);
+        }
+      };
+      const mediaPaths = _paths.filter(_isDroppedMedia);
+      if (mediaPaths.length) {
+        e.stopPropagation();
+        const droppedOnFolder = !!_extDropTarget;
+        _clearExtDropTarget();
+        const before = _rootMediaCount();
+        let failed = 0;
+        for (const p of mediaPaths) {
+          try { await window.inkwell.importAttachmentPath(p, _sidebarMediaTarget(p.split('/').pop())); }
+          catch (err) { failed++; console.error('Sidebar media import failed:', p, err); _mediaErrToast(err); }
+        }
+        await _reportMedia(before, failed, droppedOnFolder);
+        return;
+      }
       // Not a folder → fall through to the loose-file logic below.
+    }
+
+    // Same media handling when the drag carried File objects but no usable path
+    // (getPathForFile can come back empty): store from the bytes instead. Kept outside
+    // the block above, which only runs when paths WERE resolved.
+    const _isDroppedMediaFile = (name) => isSupportedAttachmentName(name) && !/\.pdf$/i.test(name || '');
+    const mediaFiles = flat.filter(f => f && _isDroppedMediaFile(f.name) && f.size > 0);
+    const noteLikeInDrop = flat.some(f => f && /\.(md|markdown|txt|draw)$/i.test(f.name));
+    if (!_paths.length && !noteLikeInDrop && mediaFiles.length && !entries.some(en => en.isDirectory)) {
+      e.preventDefault(); e.stopPropagation();
+      const droppedOnFolder = !!_extDropTarget;
+      _clearExtDropTarget();
+      const _rootMediaCount = () => (state.notes || [])
+        .filter(n => ['image', 'video', 'audio', 'pdf'].includes(n.type)).length;
+      const before = _rootMediaCount();
+      let failed = 0;
+      for (const file of mediaFiles) {
+        try {
+          const buf = await file.arrayBuffer();
+          await window.inkwell.saveAttachment(_sidebarMediaTarget(file.name), new Uint8Array(buf));
+        } catch (err) {
+          failed++;
+          console.error('Sidebar media save failed:', file.name, err);
+          const m = err?.message || String(err || '');
+          if (/ATTACHMENT_TOO_LARGE/.test(m)) showToast(window.i18n.t('attach.too_large'));
+          else if (/Unsupported attachment type/.test(m)) showToast(window.i18n.t('attach.unsupported_format'));
+          else if (/ATTACHMENT_CONTENT_MISMATCH/.test(m)) showToast(window.i18n.t('attach.content_mismatch'));
+        }
+      }
+      await loadTree();
+      const added = _rootMediaCount() - before;
+      if (added > 0) {
+        showToast(window.i18n.t(added === 1 ? 'toast.media_added' : 'toast.media_added_many', { n: added }));
+        if (droppedOnFolder) showToast(window.i18n.t('toast.media_at_root'), 4000);
+      } else if (!failed) {
+        showToast(window.i18n.t('toast.media_already_there'), 4000);
+      }
+      return;
     }
 
     const hasDir = entries.some(en => en.isDirectory);

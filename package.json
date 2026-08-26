@@ -1,6 +1,6 @@
 {
   "name": "amelie",
-  "version": "1.0.32",
+  "version": "1.0.33",
   "description": "Amelie — Your data, private by default",
   "main": "src/main/main.js",
   "scripts": {
@@ -22,6 +22,7 @@
     "test:media-lazy": "node test/media-server-lazy.cdp.mjs",
     "test:paste": "node test/paste-fidelity.cdp.mjs",
     "test:temps": "node test/attachment-temps-hidden.cdp.mjs",
+    "test:drop": "node test/sidebar-media-drop.cdp.mjs",
     "test:nav": "node test/note-nav.cdp.mjs"
   },
   "dependencies": {
