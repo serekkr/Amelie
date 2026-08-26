@@ -1,10 +1,15 @@
-// Clicking a photo, recording or video in the sidebar opens the NOTE that links it.
+// Clicking a photo, recording or video in the sidebar opens THE FILE.
 //
-// The sidebar lists media as files of their own, which is what makes them searchable —
-// but such a file almost always belongs to a note, so finding one means "where do I use
-// this?". The answer must be that note, with the link on screen. Only a file no note
-// links to opens on its own in the player/viewer. PDFs are excluded by design: a PDF is
-// a document in its own right, not note media.
+// It used to open the note that links it instead: the sidebar lists media as files of
+// their own, and the reasoning was that finding one means "where do I use this?". In
+// practice a video sitting in the root is a thing you want to watch — and when its note
+// was already the active tab and the media already in view, the click did visibly
+// nothing at all (measured: same tab, same mode, scrollTop 0 before and after).
+//
+// "Where do I use this?" moved to the right-click menu, which can also say when several
+// notes link the same copy — something the click could not do, it just took the first
+// owner in silence. The IPC behind it (attachment:usedBy) is still asserted here,
+// because the menu entry is built on it.
 //
 //   run: npm run test:media     (needs xvfb-run: dnf install xorg-x11-server-Xvfb)
 import fs from 'node:fs';
@@ -12,9 +17,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, execSync } from 'node:child_process';
 
-for (const bin of ['xvfb-run']) {
-  try { execSync(`command -v ${bin}`, { stdio: 'ignore' }); }
-  catch { console.log(`SKIP: ${bin} not installed (dnf install xorg-x11-server-Xvfb)`); process.exit(0); }
+// xvfb-run when it is installed, the current display otherwise — the test needs a
+// screen, not specifically a virtual one.
+let xvfb = true;
+try { execSync('command -v xvfb-run', { stdio: 'ignore' }); }
+catch {
+  xvfb = false;
+  if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) {
+    console.log('SKIP: no xvfb-run and no display (dnf install xorg-x11-server-Xvfb)');
+    process.exit(0);
+  }
 }
 
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -58,9 +70,13 @@ fs.writeFileSync(`${VAULT}/attachments/videos/orphan.mp4`, Buffer.concat([Buffer
 fs.writeFileSync(`${HOME}/.local/share/amelie/amelie.json`, JSON.stringify({ vaultPath: VAULT, encryption: { enabled: false } }));
 fs.writeFileSync(`${HOME}/.local/share/amelie/settings.json`, JSON.stringify({ autoSaveSeconds: 30, sync: { enabled: false } }));
 
-child = spawn('xvfb-run', ['-a', '-s', '-screen 0 1400x900x24', `${REPO}/node_modules/.bin/electron`, '.',
-  '--ozone-platform=x11', `--remote-debugging-port=${PORT}`, '--no-sandbox', '--password-store=basic', '--disable-gpu'],
-  { cwd: REPO, env: { ...process.env, HOME, XDG_SESSION_TYPE: 'x11', WAYLAND_DISPLAY: '' }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+const ELECTRON = `${REPO}/node_modules/electron/dist/electron`;
+const eargs = ['.', `--remote-debugging-port=${PORT}`, '--no-sandbox', '--password-store=basic'];
+child = xvfb
+  ? spawn('xvfb-run', ['-a', '-s', '-screen 0 1400x900x24', ELECTRON, ...eargs, '--ozone-platform=x11', '--disable-gpu'],
+      { cwd: REPO, env: { ...process.env, HOME, XDG_SESSION_TYPE: 'x11', WAYLAND_DISPLAY: '', ELECTRON_RUN_AS_NODE: undefined }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  : spawn(ELECTRON, eargs,
+      { cwd: REPO, env: { ...process.env, HOME, ELECTRON_RUN_AS_NODE: undefined }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
 let appErr = '';
 child.stderr.on('data', (d) => { appErr += d; });
 
@@ -127,21 +143,43 @@ const click = (file, mode) => ev(`(async () => {
 })()`);
 
 let r = await click('attachments/audio/talk.mp3', 'edit');
-check('clicking a linked recording opens its note, not a player',
-  r.tabType === 'note' && r.tabPath === 'diary/interview.md' && r.player === 'none', JSON.stringify(r));
-check('and the caret lands on the link', r.atCaret === 'attachments/', JSON.stringify(r));
+check('clicking a LINKED recording opens the player, not its note',
+  r.tabType === 'audio' && r.tabPath === 'attachments/audio/talk.mp3' && r.player === 'flex', JSON.stringify(r));
 
 r = await click('attachments/images/beach.png', 'edit');
-check('clicking a photo used twice opens the most recently edited note',
-  r.tabType === 'note' && r.tabPath === 'trip.md' && r.viewer === 'none', JSON.stringify(r));
+check('clicking a photo used by two notes opens the photo',
+  r.tabType === 'image' && r.tabPath === 'attachments/images/beach.png' && r.viewer === 'flex', JSON.stringify(r));
 
 r = await click('attachments/videos/orphan.mp4', 'edit');
-check('a video no note links still opens in the player',
+check('a video no note links opens in the player too — no special case left',
   r.tabType === 'video' && r.tabPath === 'attachments/videos/orphan.mp4' && r.player === 'flex', JSON.stringify(r));
 
 r = await click('attachments/audio/talk.mp3', 'view');
-check('the same holds in reading view, where the note plays it inline',
-  r.tabType === 'note' && r.tabPath === 'diary/interview.md' && r.player === 'none', JSON.stringify(r));
+check('and reading view makes no difference',
+  r.tabType === 'audio' && r.player === 'flex', JSON.stringify(r));
+
+// The menu entry that took over the old job.
+const menu = await ev(`(async () => {
+  const walk = (a) => { for (const n of a || []) { if (n.path === 'attachments/audio/talk.mp3') return n; const c = n.children && walk(n.children); if (c) return c; } return null; };
+  const node = walk(state.notes);
+  showContextMenu(new MouseEvent('contextmenu'), node);
+  const shown = getComputedStyle(document.getElementById('ctx-used-by')).display !== 'none';
+  document.getElementById('ctx-used-by').click();
+  await new Promise(r2 => setTimeout(r2, 1200));
+  const t = tabs[activeTabIdx];
+  return { shown, tabPath: t && t.path, tabType: t && t.type ? t.type : 'note' };
+})()`);
+check('"go to the note that uses it" is offered for media', menu.shown === true, JSON.stringify(menu));
+check('and it lands on the note', menu.tabType === 'note' && menu.tabPath === 'diary/interview.md', JSON.stringify(menu));
+
+const pdfMenu = await ev(`(() => {
+  const walk = (a) => { for (const n of a || []) { if (n.type === 'pdf') return n; const c = n.children && walk(n.children); if (c) return c; } return null; };
+  const node = walk(state.notes);
+  if (!node) return 'no pdf node';
+  showContextMenu(new MouseEvent('contextmenu'), node);
+  return getComputedStyle(document.getElementById('ctx-used-by')).display;
+})()`);
+check('but not for a PDF, which is a document of its own', pdfMenu === 'none' || pdfMenu === 'no pdf node', String(pdfMenu));
 
 const failed = results.filter((x) => !x.pass).length;
 console.log(failed ? `\n${failed} of ${results.length} FAILED` : `\nall ${results.length} checks passed`);

@@ -7528,6 +7528,26 @@ function setupContextMenu() {
     menu.style.display = 'none';
   });
 
+  // "Where do I use this?" — the question the click itself used to answer. One note
+  // opens straight away; several are offered in a picker, which the old behaviour
+  // could not do (it silently took the first owner).
+  $('ctx-used-by')?.addEventListener('click', async () => {
+    const n = state.contextTarget;
+    menu.style.display = 'none';
+    if (!n?.attachmentName) return;
+    let owners = [];
+    try { owners = (await window.inkwell.attachmentUsedBy(n.attachmentName)) || []; } catch (_) {}
+    if (!owners.length) { showToast(window.i18n.t('ctx.used_by_none'), 3500); return; }
+    // Several notes can link the same file — one copy is the point. The first one
+    // opens and the count is said out loud, rather than picking one in silence the way
+    // the old click did.
+    const owner = findNote(state.notes, owners[0]);
+    if (owners.length > 1) showToast(window.i18n.t('ctx.used_by_many', { n: owners.length }), 4000);
+    if (!owner) { showToast(window.i18n.t('ctx.used_by_none'), 3500); return; }
+    await openNote(owner);
+    _revealAttachmentInNote(n.attachmentName);
+  });
+
   $('ctx-sort-name').addEventListener('click', () => {
     sortFolderChildren(state.contextTarget, 'name-asc');
     menu.style.display = 'none';
@@ -7565,6 +7585,11 @@ function showContextMenu(e, node) {
   const ctxExt = $('ctx-open-external');
   if (ctxExt) ctxExt.style.display =
     (hasTarget && isAttachNode(node) && node.attachmentName) ? '' : 'none';
+  // "Where do I use this?" — the question a click used to answer, for media only
+  // (a PDF is a document in its own right, not a note's media).
+  const ctxUsed = $('ctx-used-by');
+  if (ctxUsed) ctxUsed.style.display =
+    (hasTarget && isAttachNode(node) && node.type !== 'pdf' && node.attachmentName) ? '' : 'none';
   const ctxBm = $('ctx-bookmark');
   if (ctxBm) {
     ctxBm.style.display = (hasTarget && !isFolder) ? '' : 'none';
@@ -12961,16 +12986,11 @@ function openImageFile(node, activate = true) {
 // own in the viewer/player. PDFs never come through here: a PDF is a document in its own
 // right, not note media, so it always opens in its viewer.
 async function openAttachmentNode(node, activate = true) {
-  const attachmentName = node.attachmentName
-    || (node.path ? node.path.replace(/^attachments\//, '') : node.name);
-  let owners = [];
-  try { owners = (await window.inkwell.attachmentUsedBy(attachmentName)) || []; } catch (_) {}
-  const owner = owners.length ? findNote(state.notes, owners[0]) : null;
-  if (owner) {
-    await openNote(owner);            // a note node: no way back into this branch
-    _revealAttachmentInNote(attachmentName);
-    return;
-  }
+  // A click opens THE FILE. It used to open the note that links it instead — the idea
+  // being that finding a file in the tree means "where do I use this?" — but a video
+  // sitting in the root is a thing you want to watch, and when its note was already the
+  // active tab the click did visibly nothing at all. "Where do I use this?" moved to the
+  // right-click menu, where the answer can also be more than one note.
   if (node.type === 'image') openImageFile(node, activate);
   else openMediaFile(node, activate);
 }
