@@ -4056,14 +4056,22 @@ ipcMain.handle('attachment:rename', async (_, oldName, newName) => {
   // video keeps it in its folder instead of moving it to the attachments/ root.
   const dir = path.dirname(oldName);
   const subPrefix = (dir && dir !== '.') ? dir.replace(/\\/g, '/') + '/' : '';
-  let safeLeaf = path.basename(newName).replace(/[^a-zA-Z0-9_\-]/g, '_');
-  if (!safeLeaf.endsWith(ext)) safeLeaf += ext;
+  // Sanitize the STEM ONLY and keep the file's own extension. Sanitizing the whole
+  // leaf turned the dot into an underscore, and since the result then no longer ended
+  // in the extension it was appended again: the rename box is pre-filled with the full
+  // name, so editing `clip.mp4` into `gain-summit.mp4` stored `gain-summit_mp4.mp4`.
+  // Every rename made through the UI mangled the name that way. A rename never changes
+  // the type either, so the ORIGINAL extension is the one that is kept.
+  const inLeaf = path.basename(newName);
+  const inExt = path.extname(inLeaf);
+  const stem = inExt ? inLeaf.slice(0, -inExt.length) : inLeaf;
+  const safeStem = stem.replace(/[^a-zA-Z0-9_\-]/g, '_') || 'file';
 
   // Avoid collisions (against both the plain and .enc on-disk forms)
-  let finalName = subPrefix + safeLeaf;
+  let finalName = subPrefix + safeStem + ext;
   let c = 1;
   while (attachmentTaken(path.join(ATTACHMENTS_DIR, finalName)) && finalName !== oldName) {
-    finalName = subPrefix + safeLeaf.replace(ext, `-${c}${ext}`);
+    finalName = subPrefix + `${safeStem}-${c}${ext}`;
     c++;
   }
 

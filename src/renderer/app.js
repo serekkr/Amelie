@@ -387,8 +387,23 @@ async function switchTab(idx) {
       // Only (re)load on a DIFFERENT file: coming back to the tab must keep the
       // position you were at, not restart from zero.
       if (tab.attachmentName && el.dataset.loaded !== tab.attachmentName) {
-        el.dataset.loaded = tab.attachmentName;
-        el.src = 'inkwell://attachments/' + tab.attachmentName.split('/').map(encodeURIComponent).join('/');
+        const rel = tab.attachmentName;
+        el.dataset.loaded = rel;
+        // Through the localhost media server, like the players inside a note — NOT
+        // inkwell://. That protocol answers a whole-file buffer and cannot serve real
+        // ranged requests, which is why the media server exists at all (see it in
+        // main.js); a video opened from the sidebar loaded over it and then sat there
+        // frozen, unable to seek, while the SAME file played fine embedded in a note.
+        // inkwell:// stays as the fallback for when no base URL comes back.
+        Promise.resolve((window.inkwell.mediaBaseUrl && window.inkwell.mediaBaseUrl()) || '')
+          .catch(() => '')
+          .then(base => {
+            // A fast tab switch can resolve this after another file was loaded.
+            if (el.dataset.loaded !== rel) return;
+            el.src = base
+              ? base + encodeURIComponent(rel)
+              : 'inkwell://attachments/' + rel.split('/').map(encodeURIComponent).join('/');
+          });
       }
     }
     renderTabBar();
