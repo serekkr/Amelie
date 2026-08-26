@@ -2688,6 +2688,15 @@ function _rewriteAttachmentLinksInNotes(pairs, key) {
 // to match. Runs on unlock (key available → can rewrite .enc notes; in plaintext-
 // while-open mode files are already plaintext and key is null). New imports already
 // land in videos/ (renderer _attachmentTarget), so on a tidy vault this is a no-op.
+// A dot-prefixed name inside attachments/ is never a file the user put there: it is
+// one of ours mid-flight — `.amelie-import-<pid>-<ts>.mp4` while a media file is being
+// stored (temp first, so faststart can rewrite it and the dedup can compare the bytes
+// that would actually be stored), or `.amelie-enc-tmp` while one is re-encrypted. They
+// carry a REAL extension, so the extension tests below matched them and a tree refresh
+// landing mid-import listed the temp in the sidebar as a video of its own. Hidden names
+// are skipped wherever attachments are surfaced or moved.
+const isOwnTempOrHidden = (name) => name.startsWith('.');
+
 const VIDEO_EXT_RE = /\.(mp4|webm|mkv|mov|m4v|avi|wmv|mpeg)$/i;
 function migrateVideosToVideosFolder(key) {
   if (!ATTACHMENTS_DIR || !fs.existsSync(ATTACHMENTS_DIR)) return 0;
@@ -2704,7 +2713,7 @@ function migrateVideosToVideosFolder(key) {
     if (!fs.existsSync(abs)) continue;
     let items; try { items = fs.readdirSync(abs, { withFileTypes: true }); } catch (_) { continue; }
     for (const it of items) {
-      if (!it.isFile()) continue;
+      if (!it.isFile() || isOwnTempOrHidden(it.name)) continue;
       const onDiskName = it.name;                                   // may end .enc/.amd
       const logical = onDiskName.replace(/\.(enc|amd)$/, '');
       if (!VIDEO_EXT_RE.test(logical)) continue;
@@ -2763,7 +2772,7 @@ function migrateAudioToAudioFolder(key) {
     if (!fs.existsSync(abs)) continue;
     let items; try { items = fs.readdirSync(abs, { withFileTypes: true }); } catch (_) { continue; }
     for (const it of items) {
-      if (!it.isFile()) continue;
+      if (!it.isFile() || isOwnTempOrHidden(it.name)) continue;
       const onDiskName = it.name;                                   // may end .enc/.amd
       const logical = onDiskName.replace(/\.(enc|amd)$/, '');
       if (!AUDIO_EXT_RE.test(logical)) continue;
@@ -5038,7 +5047,7 @@ function listNotesRecursive(dir, base = '') {
     for (const src of pdfSources) {
       if (!fs.existsSync(src.dir)) continue;
       for (const item of fs.readdirSync(src.dir, { withFileTypes: true })) {
-        if (!item.isFile()) continue;
+        if (!item.isFile() || isOwnTempOrHidden(item.name)) continue;
         const logical = stripEnc(item.name);   // drop the at-rest .enc marker
         if (!logical.toLowerCase().endsWith('.pdf')) continue;
         const stat = fs.statSync(path.join(src.dir, item.name));
@@ -5059,7 +5068,7 @@ function listNotesRecursive(dir, base = '') {
     const imgDir = path.join(attachDir, 'images');
     if (fs.existsSync(imgDir)) {
       for (const item of fs.readdirSync(imgDir, { withFileTypes: true })) {
-        if (!item.isFile()) continue;
+        if (!item.isFile() || isOwnTempOrHidden(item.name)) continue;
         const logical = stripEnc(item.name);   // drop the at-rest .enc marker
         if (!/\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(logical)) continue;
         const stat = fs.statSync(path.join(imgDir, item.name));
@@ -5086,7 +5095,7 @@ function listNotesRecursive(dir, base = '') {
     for (const src of avSources) {
       if (!fs.existsSync(src.dir)) continue;
       for (const item of fs.readdirSync(src.dir, { withFileTypes: true })) {
-        if (!item.isFile()) continue;
+        if (!item.isFile() || isOwnTempOrHidden(item.name)) continue;
         const logical = stripEnc(item.name);   // drop the at-rest .enc marker
         if (!src.re.test(logical)) continue;
         const stat = fs.statSync(path.join(src.dir, item.name));

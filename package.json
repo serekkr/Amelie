@@ -21,6 +21,7 @@
     "test:media": "node test/media-opens-note.cdp.mjs",
     "test:media-lazy": "node test/media-server-lazy.cdp.mjs",
     "test:paste": "node test/paste-fidelity.cdp.mjs",
+    "test:temps": "node test/attachment-temps-hidden.cdp.mjs",
     "test:nav": "node test/note-nav.cdp.mjs"
   },
   "dependencies": {
