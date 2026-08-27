@@ -3348,11 +3348,28 @@ ipcMain.handle('attachment:save', async (_, originalName, buffer) => {
 // Unlike the sweep, a note that cannot be read (vault locked, unreadable file) is SKIPPED
 // rather than aborting: the cost of missing one here is opening the file on its own, not
 // deleting something.
+// What "linked" MEANS, in one place. Three passes ask the question — this
+// lookup, the unused-media sweep, and the sidebar's folder placement — and they
+// must never disagree: a file the sweep calls unused must not be sitting inside
+// a folder because the placement thought some note used it.
+// `inkwell://attachments/x` needs no case of its own — it contains
+// `attachments/x`. Returns the LOGICAL names, the form links always carry.
+const ATT_REF_RE = /attachments\/([^)\s"'<>\]]+)/g;
+function attachmentRefsIn(content) {
+  const out = new Set();
+  let m; ATT_REF_RE.lastIndex = 0;
+  while ((m = ATT_REF_RE.exec(content)) !== null) {
+    const ref = m[1].replace(/\{[^}]*\}$/, '').replace(/#.*$/, '')   // drop {width=…}/#frag
+      .split('/').map(s => { try { return decodeURIComponent(s); } catch (_) { return s; } }).join('/');
+    if (ref) out.add(ref);
+  }
+  return out;
+}
+
 ipcMain.handle('attachment:usedBy', async (_, attachmentName) => {
   const want = String(attachmentName || '').replace(/^attachments\//, '');
   if (!want || !NOTES_DIR) return [];
   const out = [];
-  const decodeSeg = (s) => { try { return decodeURIComponent(s); } catch (_) { return s; } };
   const walk = (dir, base) => {
     let items;
     try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
@@ -3375,14 +3392,7 @@ ipcMain.handle('attachment:usedBy', async (_, attachmentName) => {
         const raw = fs.readFileSync(abs, 'utf8');
         content = encrypted ? decryptContent(raw, ENCRYPTION_KEY) : raw;
       } catch (_) { continue; }
-      const re = /attachments\/([^)\s"'<>\]]+)/g;
-      let m, hit = false;
-      while (!hit && (m = re.exec(content)) !== null) {
-        let ref = m[1].replace(/\{[^}]*\}$/, '').replace(/#.*$/, '');   // drop {width=…}/#frag
-        ref = ref.split('/').map(decodeSeg).join('/');
-        if (ref === want) hit = true;
-      }
-      if (hit) {
+      if (attachmentRefsIn(content).has(want)) {
         let mtime = 0;
         try { mtime = fs.statSync(abs).mtimeMs; } catch (_) {}
         out.push({ p: base ? `${base}/${logical}` : logical, mtime });
@@ -3974,7 +3984,6 @@ ipcMain.handle('attachment:removeUnusedMedia', async (_, apply) => {
 
   // 1) Every `attachments/…` reference across all notes (.md + encrypted notes).
   const referenced = new Set();
-  const decodeSeg = (s) => { try { return decodeURIComponent(s); } catch (_) { return s; } };
   const walkNotes = (dir) => {
     let items;
     try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
@@ -3997,13 +4006,7 @@ ipcMain.handle('attachment:removeUnusedMedia', async (_, apply) => {
       } catch (_) {
         throw new Error('unreadable'); // can't inspect a note → abort, don't delete
       }
-      const re = /attachments\/([^)\s"'<>\]]+)/g;
-      let m;
-      while ((m = re.exec(content)) !== null) {
-        let ref = m[1].replace(/\{[^}]*\}$/, '').replace(/#.*$/, ''); // drop {width=…}/#frag
-        ref = ref.split('/').map(decodeSeg).join('/');
-        if (ref) referenced.add(ref);
-      }
+      for (const ref of attachmentRefsIn(content)) referenced.add(ref);
     }
   };
   walkNotes(NOTES_DIR);
@@ -5026,7 +5029,86 @@ function countNotesRecursive(dir) {
   return n;
 }
 
-function listNotesRecursive(dir, base = '') {
+// ── Which folder does a media file belong to? ───────────────────────────────
+// Every attachment lives in one flat place on disk (attachments/{videos,images,
+// audio,pdf}/) and used to be listed only at the ROOT of the sidebar, so a vault
+// with folders piled every recording, photo and PDF at the bottom of the tree,
+// far from the notes they belong to. Nothing moves on disk — the sidebar now
+// shows an attachment inside the folder whose notes link to it (in each of them
+// when several do), and keeps at the root the ones nobody links.
+//
+// Reading every note on every tree refresh would be far too much work, so a
+// note's links are cached against its size+mtime: after a save, exactly one
+// note is read again.
+const _noteLinkCache = new Map();   // note abs path → { mtimeMs, size, links }
+
+function _noteAttachmentLinks(abs, stat, encrypted) {
+  const hit = _noteLinkCache.get(abs);
+  if (hit && hit.mtimeMs === stat.mtimeMs && hit.size === stat.size) return hit.links;
+  let links = new Set();
+  try {
+    const raw  = fs.readFileSync(abs, 'utf8');
+    const body = (encrypted && ENCRYPTION_KEY) ? decryptContent(raw, ENCRYPTION_KEY) : raw;
+    links = attachmentRefsIn(body);       // the one shared rule — see attachmentRefsIn
+  } catch (_) { /* unreadable or still locked → no links → listed at the root */ }
+  if (_noteLinkCache.size > 5000) _noteLinkCache.clear();   // renamed/deleted notes
+  _noteLinkCache.set(abs, { mtimeMs: stat.mtimeMs, size: stat.size, links });
+  return links;
+}
+
+// logical attachment name ('videos/clip.mp4') → the folders that link to it.
+function _attachmentUsage() {
+  const map = new Map();
+  const walk = (dir, base) => {
+    let items; try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+    for (const it of items) {
+      if (it.isDirectory()) {
+        if (it.name === 'attachments' && !base) continue;
+        walk(path.join(dir, it.name), base ? `${base}/${it.name}` : it.name);
+        continue;
+      }
+      // Notes AND drawings, in both forms — a drawing embeds an attachments/
+      // image too, and the same file test is what attachment:usedBy uses.
+      const isEnc = it.name.endsWith(ENC_EXT) || it.name.endsWith(LEGACY_ENC_EXT);
+      if (isEnc ? !ENCRYPTION_KEY
+                : !(it.name.endsWith('.md') || it.name.endsWith('.draw'))) continue;
+      const abs = path.join(dir, it.name);
+      let stat; try { stat = fs.statSync(abs); } catch (_) { continue; }
+      for (const rel of _noteAttachmentLinks(abs, stat, isEnc)) {
+        let set = map.get(rel);
+        if (!set) map.set(rel, set = new Set());
+        set.add(base);
+      }
+    }
+  };
+  walk(NOTES_DIR, '');
+  return map;
+}
+
+// folder rel path ('' = vault root) → the attachment nodes to list there.
+// Built ONCE per tree walk and handed down the recursion.
+function _attachmentPlacement() {
+  const byFolder = new Map();
+  const nodes = _collectAttachmentNodes();
+  if (!nodes.length) return byFolder;                 // no attachments → don't read a single note
+  const usage = _attachmentUsage();
+  const add = (folder, node) => {
+    let arr = byFolder.get(folder);
+    if (!arr) byFolder.set(folder, arr = []);
+    arr.push(node);
+  };
+  for (const node of nodes) {
+    const folders = usage.get(node.attachmentName);
+    if (!folders || !folders.size) { add('', node); continue; }
+    // A file used from two folders is shown in both — same file behind each.
+    let first = true;
+    for (const f of folders) { add(f, first ? node : { ...node }); first = false; }
+  }
+  return byFolder;
+}
+
+function listNotesRecursive(dir, base = '', place = null) {
+  if (!place) place = _attachmentPlacement();
   const entries = [];
   const items = fs.readdirSync(dir, { withFileTypes: true });
   for (const item of items) {
@@ -5037,7 +5119,7 @@ function listNotesRecursive(dir, base = '') {
         type: 'folder',
         name: item.name,
         path: relPath,
-        children: listNotesRecursive(path.join(dir, item.name), relPath),
+        children: listNotesRecursive(path.join(dir, item.name), relPath, place),
       });
     } else {
       // A note (.md) or draw (.draw) — and, when the vault is unlocked, the
@@ -5071,10 +5153,29 @@ function listNotesRecursive(dir, base = '') {
       }
     }
   }
-  // At vault root, surface PDFs stored in attachments/ as sidebar nodes.
-  // New PDFs go to attachments/pdf/; legacy ones at the attachments root keep
-  // working — both locations are scanned.
-  if (!base) {
+  for (const node of place.get(base) || []) entries.push(node);
+  // Order: folders (alphabetical) → notes/draws (oldest → newest) → attachments
+  // (PDFs, photos, audio, video — oldest → newest). Sorting notes/attachments by
+  // creation time ascending means newly imported items land at the bottom.
+  const ATTACH_KINDS = ['pdf', 'image', 'audio', 'video'];
+  const rank = t => t === 'folder' ? 0 : ATTACH_KINDS.includes(t) ? 2 : 1;
+  const ts = n => new Date(n.created || n.modified || 0).getTime();
+  return entries.sort((a, b) => {
+    const ra = rank(a.type), rb = rank(b.type);
+    if (ra !== rb) return ra - rb;
+    if (a.type === 'folder') return a.name.localeCompare(b.name);
+    return ts(a) - ts(b);
+  });
+}
+
+// Every attachment in the vault, as sidebar nodes. Where each one is SHOWN is
+// _attachmentPlacement's business; this only says what exists.
+function _collectAttachmentNodes() {
+  const entries = [];
+  if (!ATTACHMENTS_DIR) return entries;
+  {
+    // PDFs: new ones go to attachments/pdf/; legacy ones sit at the attachments
+    // root and keep working — both locations are scanned.
     const attachDir = ATTACHMENTS_DIR;   // <vault>/attachments
     const pdfSources = [
       { dir: attachDir, sub: '' },
@@ -5147,16 +5248,5 @@ function listNotesRecursive(dir, base = '') {
       }
     }
   }
-  // Order: folders (alphabetical) → notes/draws (oldest → newest) → attachments
-  // (PDFs, photos, audio, video — oldest → newest). Sorting notes/attachments by
-  // creation time ascending means newly imported items land at the bottom.
-  const ATTACH_KINDS = ['pdf', 'image', 'audio', 'video'];
-  const rank = t => t === 'folder' ? 0 : ATTACH_KINDS.includes(t) ? 2 : 1;
-  const ts = n => new Date(n.created || n.modified || 0).getTime();
-  return entries.sort((a, b) => {
-    const ra = rank(a.type), rb = rank(b.type);
-    if (ra !== rb) return ra - rb;
-    if (a.type === 'folder') return a.name.localeCompare(b.name);
-    return ts(a) - ts(b);
-  });
+  return entries;
 }

@@ -5199,23 +5199,106 @@ function colourShellExtras(el) {
   }
 }
 
+// ── Syntax highlighting: grammar in a worker, DOM on a time budget ──────────
+// The grammar runs in highlight-worker.js (see the note there); what is left
+// here is the part that genuinely needs the main thread — dropping the
+// resulting HTML into the block. That is done ONE block at a time against a
+// real deadline, not twelve in a synchronous loop: a single 300-line block
+// costs 16–43 ms of DOM work on its own. Measured end to end on a note of
+// twelve long bash blocks (test/highlight-worker.cdp.mjs), the worst the main
+// thread goes missing fell from 243-258 ms to 53-114 ms.
+let _hlWorker = null, _hlWorkerDead = false, _hlSeq = 0;
+const _hlJobs  = new Map();   // id → job awaiting the worker's answer
+const _hlReady = [];          // answers awaiting a slice of the main thread
+let _hlDraining = false;
+
+function _highlightWorker() {
+  if (_hlWorker || _hlWorkerDead) return _hlWorker;
+  try {
+    _hlWorker = new Worker('highlight-worker.js');
+    _hlWorker.onmessage = (e) => {
+      const { id, html } = e.data || {};
+      const job = _hlJobs.get(id);
+      if (!job) return;
+      _hlJobs.delete(id);
+      _hlReady.push({ job, html });
+      _drainHighlights();
+    };
+    // A worker that fails to start (or dies) must not cost the colours: fall
+    // back to the old on-thread path for everything still queued, for good.
+    _hlWorker.onerror = () => {
+      _hlWorkerDead = true;
+      try { _hlWorker.terminate(); } catch (_) {}
+      _hlWorker = null;
+      for (const job of _hlJobs.values()) _hlReady.push({ job, onThread: true });
+      _hlJobs.clear();
+      _drainHighlights();
+    };
+  } catch (_) { _hlWorkerDead = true; _hlWorker = null; }
+  return _hlWorker;
+}
+
+const _hlLang = (el) => {
+  // Highlight ONLY blocks with an explicit language (```bash, ```yaml…).
+  // Without a language no auto-detect → plain text, no colour.
+  const cls = [...el.classList].find(c => c.startsWith('language-'));
+  return cls ? cls.slice('language-'.length) : null;
+};
+
+// What hljs.highlightElement does once the grammar has run, minus the grammar.
+function _applyHighlight(job, html) {
+  const el = job.el;
+  if (!job.stillValid() || !el.isConnected || el.dataset.highlighted) return;
+  if (html != null) el.innerHTML = html;   // null = language hljs doesn't know
+  el.classList.add('hljs');
+  el.dataset.highlighted = 'yes';
+  if (job.shell) { try { colourShellExtras(el); } catch (_) {} }
+}
+
+function _highlightOnThread(job) {
+  if (typeof hljs === 'undefined' || !job.stillValid() || !job.el.isConnected) return;
+  if (job.el.dataset.highlighted) return;
+  hljs.highlightElement(job.el);
+  if (job.shell) { try { colourShellExtras(job.el); } catch (_) {} }
+}
+
+function _drainHighlights() {
+  if (_hlDraining) return;
+  _hlDraining = true;
+  const schedule = (fn) => (window.requestIdleCallback
+    ? requestIdleCallback(fn, { timeout: 250 })   // timeout: never starved
+    : requestAnimationFrame(fn));
+  const step = (deadline) => {
+    const started = performance.now();
+    while (_hlReady.length) {
+      const item = _hlReady.shift();
+      // onThread = no worker (or it died): the grammar runs here too, still
+      // one block per turn so the thread is handed back between blocks.
+      try { item.onThread ? _highlightOnThread(item.job) : _applyHighlight(item.job, item.html); }
+      catch (_) {}
+      // One block can overshoot on its own (nothing splits a single
+      // innerHTML), so the budget decides whether to take ANOTHER one.
+      const left = deadline && deadline.timeRemaining ? deadline.timeRemaining()
+                                                      : 8 - (performance.now() - started);
+      if (left <= 1) break;
+    }
+    if (_hlReady.length) schedule(step); else _hlDraining = false;
+  };
+  schedule(step);
+}
+
 function highlightCodeChunked(stillValid, els, i) {
   if (typeof hljs === 'undefined' || !stillValid()) return;
-  const BATCH = 12;
-  const end = Math.min(i + BATCH, els.length);
-  for (; i < end; i++) {
+  const worker = _highlightWorker();
+  for (; i < els.length; i++) {
     const el = els[i];
-    // Highlight ONLY blocks with an explicit language (```bash, ```yaml…).
-    // Without a language no auto-detect → plain text, no colour.
-    if ([...el.classList].some(c => c.startsWith('language-'))) {
-      hljs.highlightElement(el);
-      if ([...el.classList].some(c => _SHELL_LANG_RE.test(c))) {
-        try { colourShellExtras(el); } catch (_) {}
-      }
-    }
-  }
-  if (i < els.length) {
-    (window.requestIdleCallback || requestAnimationFrame)(() => highlightCodeChunked(stillValid, els, i));
+    const lang = _hlLang(el);
+    if (!lang || el.dataset.highlighted) continue;
+    const job = { el, stillValid, shell: [...el.classList].some(c => _SHELL_LANG_RE.test(c)) };
+    if (!worker) { _hlReady.push({ job, onThread: true }); _drainHighlights(); continue; }
+    const id = ++_hlSeq;
+    _hlJobs.set(id, job);
+    worker.postMessage({ id, code: el.textContent, lang });
   }
 }
 
