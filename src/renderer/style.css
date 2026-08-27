@@ -2166,11 +2166,10 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   -webkit-app-region: drag;
 }
 /* `flex: 1 1 auto`: the strip claims the width available to it, so the tabs
-   inside can GROW into it. With `0 1 auto` the list was only ever as wide as
-   its tabs' own titles, which is what made a tab a fixed size: one tab measured
-   128px with 769px of bar sitting empty beside it, and tabs only began to
-   narrow from the eighth onwards. The empty part of the strip is still a drag
-   handle (below), so nothing is lost by giving it the room. */
+   inside can GROW into it and share it evenly. With `0 1 auto` the list is only
+   as wide as its tabs' own titles — every tab a different width, and short names
+   giving stubby little tabs. That was tried and rejected: the tabs are meant to
+   read as one uniform strip. The empty part after them is still a drag handle. */
 #tab-list {
   display: flex; align-items: stretch; overflow-x: auto;
   scrollbar-width: none; flex: 1 1 auto; min-width: 0;
@@ -2199,13 +2198,13 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   /* Tabs SHARE the strip: wide while there are few, narrower as they multiply —
      what a tab strip is expected to do, and what this did not do (every tab came
      out the width of its own title, whatever the room beside it).
-     max-width 240px so a single tab becomes a usable label, not a banner across
+     max-width 200px so a single tab becomes a usable label, not a banner across
      the window; min-width 58px is kept SMALL on purpose: the close ✕ must stay
      visible even with lots of tabs (seeing just the ✕ beats seeing neither), and
      a small min lets more tabs fit before the strip has to scroll, which would
      clip the last tab's ✕. 58px = padding+gap+✕(16) + a couple of title chars.
      The name truncates with an ellipsis; the ✕ never shrinks (flex-shrink:0). */
-  flex: 1 1 0; min-width: 58px; max-width: 240px;
+  flex: 1 1 0; min-width: 58px; max-width: 200px;
   border-right: 1px solid var(--border);
   cursor: pointer; user-select: none;
   /* 13px, the size the sidebar tree uses — the two strips frame the same note

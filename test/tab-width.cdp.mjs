@@ -7,7 +7,7 @@
 // wide as its tabs asked to be, and the tabs had nothing to grow into.
 //
 // Now the strip claims the width available to it and each tab is `flex: 1 1 0`
-// between 58 px and 240 px: full width up to three tabs, then narrowing.
+// between 58 px and 200 px: full width while they fit, then narrowing.
 // #tab-drag-space no longer competes for that width either — splitting the bar
 // with it squeezed three tabs to 206 px while 280 px sat empty beside them. The
 // window still drags by the empty stretch after the last tab, which belongs to
@@ -88,14 +88,14 @@ const w = Object.fromEntries(sample.map(s => [s.n, s.w]));
 // Few tabs: a tab is a proper label, not the width of its own title. Before the
 // change one tab measured 128 px with the rest of the bar empty.
 check(`one tab is wide (${w[1]}px — it was 128px with 769px of empty strip beside it)`,
-  w[1] >= 220, `${w[1]}px`);
-check(`two tabs are still wide (${w[2]}px, was 135px)`, w[2] >= 220, `${w[2]}px`);
+  w[1] >= 180, `${w[1]}px`);
+check(`two tabs are still wide (${w[2]}px, was 135px)`, w[2] >= 180, `${w[2]}px`);
 
-// Up to three they all fit at full width; from the fourth on every new tab
+// Up to four they all fit at full width; after that every new tab
 // makes them all narrower — the half the old strip never did.
-check(`three tabs still fit at full width (${w[3]}px)`, w[3] >= 220, `${w[3]}px`);
-const shrinks = [4, 5, 6, 7, 8, 9, 10].every(n => w[n] < w[n - 1]);
-check('from the fourth on, each further tab makes them all narrower', shrinks,
+check(`four tabs still fit at full width (${w[4]}px)`, w[4] >= 180, `${w[4]}px`);
+const shrinks = [5, 6, 7, 8, 9, 10].every(n => w[n] < w[n - 1]);
+check('once they no longer fit, each further tab makes them all narrower', shrinks,
   sample.map(s => `${s.n}:${s.w}`).join(' '));
 check(`ten tabs are much narrower than two (${w[10]}px vs ${w[2]}px)`,
   w[10] < w[2] * 0.5, `${w[10]} vs ${w[2]}`);
