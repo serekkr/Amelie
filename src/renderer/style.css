@@ -2042,7 +2042,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 }
 
 /* ─── Font dropdown ─────────────────────────────────────────── */
-.font-dd { position: relative; margin-top: 2px; max-width: 280px; }
+.font-dd { position: relative; margin-top: 2px; max-width: 240px; }
 .font-dd-btn {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   width: 100%; padding: 8px 12px; cursor: pointer;
@@ -2161,11 +2161,15 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   background: var(--bg-1); overflow: hidden;
   -webkit-app-region: drag;
 }
-/* `flex: 0 1 auto` (not `1`): the list grows with its tabs but stops at the
-   space left over by #tab-drag-space, instead of claiming the whole bar. */
+/* `flex: 1 1 auto`: the strip claims the width available to it, so the tabs
+   inside can GROW into it. With `0 1 auto` the list was only ever as wide as
+   its tabs' own titles, which is what made a tab a fixed size: one tab measured
+   128px with 769px of bar sitting empty beside it, and tabs only began to
+   narrow from the eighth onwards. The empty part of the strip is still a drag
+   handle (below), so nothing is lost by giving it the room. */
 #tab-list {
   display: flex; align-items: stretch; overflow-x: auto;
-  scrollbar-width: none; flex: 0 1 auto; min-width: 0;
+  scrollbar-width: none; flex: 1 1 auto; min-width: 0;
   -webkit-app-region: drag;
 }
 /* Takes the slack while the tabs are few, and gives ALL of it up when they are many, so a
@@ -2174,8 +2178,13 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
    draggable pixel and the window could not be moved. That handle now lives in
    #titlebar-actions (the band around the dividers and the gear), which is always there
    whatever the tabs do. */
+/* No longer COMPETES for width: with `flex: 1 1 0` it split the bar evenly with
+   the tab strip, so three tabs were squeezed to 206px while 280px of bar sat
+   empty beside them. The tabs get the room first; what they leave over stays
+   inside #tab-list, which is itself a drag region, so the window can still be
+   moved by the empty stretch after the last tab. */
 #tab-drag-space {
-  flex: 1 1 0; min-width: 0; align-self: stretch;
+  flex: 0 1 0; min-width: 0; align-self: stretch;
   -webkit-app-region: drag;
 }
 #tab-list::-webkit-scrollbar { display: none; }
@@ -2183,16 +2192,21 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .note-tab {
   display: flex; align-items: center; gap: 6px;
   padding: 0 10px 0 12px;
-  /* Shrink to share the available width when there are many tabs. The minimum is
-     kept SMALL on purpose: the close ✕ must stay visible even with lots of tabs
-     (the user prefers seeing just the ✕ over the title when crammed), and a small
-     min lets more tabs fit before the strip has to scroll (which would clip the
-     last tab's ✕). 58px = padding+gap+✕(16) + a couple of title chars. The name
-     truncates with an ellipsis; the ✕ never shrinks (flex-shrink:0 below). */
-  flex: 1 1 0; min-width: 58px; max-width: 200px;
+  /* Tabs SHARE the strip: wide while there are few, narrower as they multiply —
+     what a tab strip is expected to do, and what this did not do (every tab came
+     out the width of its own title, whatever the room beside it).
+     max-width 240px so a single tab becomes a usable label, not a banner across
+     the window; min-width 58px is kept SMALL on purpose: the close ✕ must stay
+     visible even with lots of tabs (seeing just the ✕ beats seeing neither), and
+     a small min lets more tabs fit before the strip has to scroll, which would
+     clip the last tab's ✕. 58px = padding+gap+✕(16) + a couple of title chars.
+     The name truncates with an ellipsis; the ✕ never shrinks (flex-shrink:0). */
+  flex: 1 1 0; min-width: 58px; max-width: 240px;
   border-right: 1px solid var(--border);
   cursor: pointer; user-select: none;
-  font-size: 14px; font-family: var(--ui-font);
+  /* 13px, the size the sidebar tree uses — the two strips frame the same note
+     and were a pixel apart for no reason. */
+  font-size: 13px; font-family: var(--ui-font);
   /* Inactive tabs: back to --bg-2 with the dimmer --text-2 label they always had. The
      open tab is the one that moves, a step DOWN the ladder (--bg-1 below). */
   background: var(--bg-2); color: var(--text-2);
@@ -3227,6 +3241,13 @@ body.split-open .pane-flash::after {
      across the sidebar. */
   gap: 10px;
   padding: 0 10px 8px; flex-shrink: 0;
+  /* A rule under the row, so the actions stop reading as the first entries of
+     the note list: the icons sat straight on top of the tree with nothing
+     between them, and at a glance the strip and the first notes were one block.
+     Same --border as the hairlines between the icons, and inside the same
+     zoomed row, so it follows the icon-size setting like they do. */
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
 }
 .sidebar-view-btn {
   /* Five equal shares of the row, no width cap: the buttons fill the sidebar and the
@@ -4399,7 +4420,7 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 /* ─── Custom tooltip (in-theme replacement for native title="" bubbles) ─────── */
 #app-tooltip {
   position: fixed; z-index: 99999; pointer-events: none;
-  display: none; max-width: 280px;
+  display: none; max-width: 240px;
   background: var(--bg-3); color: #fff;
   border: 1px solid var(--border-light); border-radius: 6px;
   padding: 5px 9px; font-family: var(--ui-font); font-size: 13px;
