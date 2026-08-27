@@ -48,7 +48,12 @@ app.commandLine.appendSwitch('disable-gpu-compositing');
 //      the wallet ("The application 'xdg-desktop-portal' has requested to open the
 //      wallet"). Disable that feature so no portal-secret request is ever made.
 // Baked in code (not just the launcher) so it holds no matter how the app is
-// started (wrapper, .desktop, a KDE-cached exec line). Cost: the "remember
+// started (wrapper, .desktop, a KDE-cached exec line) — and ONLY here: the
+// launcher used to repeat it on the command line, which changed nothing except
+// putting "--password-store=basic" in `ps aux`/htop, where it reads as "the app
+// keeps a password in the clear". Measured with it removed from the launcher:
+// the selected backend is still basic_text and the switch still reads as set.
+// Cost: the "remember
 // password" passkey is protected by a weak key — acceptable; the wallet is
 // unusable/annoying on this box anyway. See notes on the kwallet startup hang.
 // No OS keyring, on any distro. 'basic' = plaintext os_crypt key (no kwallet/
