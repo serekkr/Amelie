@@ -486,7 +486,11 @@ html.is-mac #titlebar { padding-left: 72px; }
   background: var(--bg-1); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
 }
-#search-wrap { padding: 8px 10px 6px; }
+/* 22px above, not 8: the field sat almost against the rule under the section
+   tabs. The strip of icons below does NOT move with it — its padding is
+   computed against the note toolbar (alignSidebarStrip), so the extra air here
+   comes out of the strip's own and the two bottom rules stay level. */
+#search-wrap { padding: 22px 10px 6px; }
 #tags-search-wrap, #bookmarks-search-wrap { padding: 0 10px 8px; }
 #search-input, #tags-search-input, #bookmarks-search-input {
   width: 100%; background: var(--bg-2); border: 1px solid var(--border);

@@ -30,7 +30,8 @@
     "test:hl": "node test/highlight-worker.cdp.mjs",
     "test:newfolder": "node test/new-folder-rename.cdp.mjs",
     "test:drawcpu": "node test/draw-idle-cpu.cdp.mjs",
-    "test:tabs": "node test/tab-width.cdp.mjs"
+    "test:tabs": "node test/tab-width.cdp.mjs",
+    "test:align": "node test/strip-align.cdp.mjs"
   },
   "dependencies": {
     "hash-wasm": "^4.12.0",

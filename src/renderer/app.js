@@ -1458,6 +1458,57 @@ function applyAppearance(prefs = {}) {
   updateNumberDdCurrent('tbsize-dd', tbZoom,   '%');
   updateDrawLocationPills(drawLoc);
   updateNoteLocationPills(noteLoc);
+  // The icon size just moved both stacks by different amounts — realign.
+  try { requestAnimationFrame(alignSidebarStrip); } catch (_) {}
+}
+
+// ── Line the sidebar's action strip up with the note's toolbar ──────────────
+// The two columns are different stacks — search box + icon row on the left,
+// title + dates + formatting tools on the right — so their bottom rules landed
+// at different heights and the top of the window read as crooked. Measured: 20px
+// apart at the default icon size, 16 at 70% and 28 at 130%, so the gap MOVES
+// with the icon-size setting and no fixed padding can hold it.
+//
+// The strip's padding is therefore computed: clear it, measure how far short it
+// falls, and add that much — SPLIT EVENLY above and below, so the icons sit in
+// the middle of the strip instead of riding at its top with all the new space
+// dumped underneath them. Splitting does not move the bottom edge: only the
+// total of the two paddings decides where the strip ends, so the rules stay
+// level while the icons centre. `zoom` on the strip means its own padding is in
+// pre-zoom pixels while the measurement is in viewport ones, hence the division.
+// Recomputed whenever either side changes shape — an icon size, a note whose
+// header carries a tags row, a window resize.
+let _stripAlignObs = null;
+function alignSidebarStrip() {
+  const strip = document.getElementById('sidebar-views');
+  const toolbar = document.getElementById('editor-toolbar');
+  if (!strip || !toolbar) return;
+  strip.style.paddingTop = strip.style.paddingBottom = '';   // back to the authored values
+  const tb = toolbar.getBoundingClientRect();
+  if (!tb.height) return;                                    // no note open — leave it alone
+  const cs = getComputedStyle(strip);
+  const baseTop = parseFloat(cs.paddingTop) || 0;
+  const baseBottom = parseFloat(cs.paddingBottom) || 0;
+  const zoom = parseFloat(cs.zoom) || 1;
+  const delta = (tb.bottom - strip.getBoundingClientRect().bottom) / zoom;
+  if (delta <= 0.5) return;
+  const half = (baseTop + baseBottom + delta) / 2;
+  strip.style.paddingTop = half + 'px';
+  strip.style.paddingBottom = half + 'px';
+}
+function watchSidebarStripAlign() {
+  if (_stripAlignObs || typeof ResizeObserver === 'undefined') return;
+  const toolbar = document.getElementById('editor-toolbar');
+  const header  = document.getElementById('note-header');
+  if (!toolbar || !header) return;
+  // Observing both: the toolbar changes size with the icon zoom, and the header
+  // above it changes height when a note brings a tags or source row, which
+  // moves the toolbar without resizing it.
+  _stripAlignObs = new ResizeObserver(() => requestAnimationFrame(alignSidebarStrip));
+  _stripAlignObs.observe(toolbar);
+  _stripAlignObs.observe(header);
+  window.addEventListener('resize', () => requestAnimationFrame(alignSidebarStrip));
+  alignSidebarStrip();
 }
 
 // New notes / new drawings location is a toggle: ON = current folder, OFF = vault root.
@@ -2254,6 +2305,7 @@ async function init() {
   setupTheme();
   setupViewWidth();
   setupLineNumbers();
+  try { watchSidebarStripAlign(); } catch (_) {}
   setupEditorToolbarToggle();
   setupFolderGuides();
   setupAudioRecording();
