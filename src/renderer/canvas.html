@@ -68,6 +68,7 @@
         suppressChange++;
         api.updateScene({ elements: data.elements || [] });
         if (data.files && Object.keys(data.files).length) api.addFiles(Object.values(data.files));
+        window.__tickCompositor?.();   // a whole scene just arrived — repaint it
         // Release the guard after React has flushed the resulting onChange.
         setTimeout(() => { suppressChange = Math.max(0, suppressChange - 1); }, 0);
       } catch (e) {
@@ -95,6 +96,9 @@
         // throw means edits stop reaching the parent and the drawing is not being
         // saved, which has to be visible.
         onChange: (elements, appState, files) => {
+          // The scene moved: make sure the frame on screen is redrawn from it
+          // (the tick is idle unless something like this asks for it).
+          window.__tickCompositor?.();
           if (suppressChange > 0) return;
           try {
             const json = serializeAsJSON(elements, appState, files || {}, 'local');
@@ -133,6 +137,7 @@
           label: { text, fontSize: 16, textAlign: 'left', verticalAlign: 'top' },
         }]);
         api.updateScene({ elements: [...api.getSceneElements(), ...added] });
+        window.__tickCompositor?.();
       }
 
       if (msg?.type === 'SAVE_REQUEST') {
@@ -141,20 +146,46 @@
     });
   </script>
   <script>
-    // Keep the iframe compositor layer dirty every frame so the software
-    // compositor always re-reads the canvas content instead of a stale frame.
-    (function() {
+    // Keep the iframe compositor layer dirty so the software compositor re-reads
+    // the canvas instead of showing a stale frame.
+    //
+    // This used to run every frame FOREVER, and with GPU compositing disabled
+    // (see main.js) each of those frames is a full software recomposite of the
+    // drawing: measured at 108% of a core with a drawing merely OPEN, untouched,
+    // against 4% with the tick off — the whole cost was here, not in Excalidraw.
+    //
+    // It now runs only while something can actually have changed: a pointer or a
+    // key in the canvas, a scene change, a load, a resize — each of those kicks
+    // it, and it stops itself a moment after the last one. A frame can only be
+    // "stale" against content that has changed; when nothing changes, the frame
+    // already on screen is the right one.
+    window.__tickCompositor = (function() {
       const tc = document.getElementById('__compositor_tick__');
       const ctx = tc.getContext('2d');
-      let t = 0;
+      const LINGER = 600;          // keep ticking this long after the last event
+      let t = 0, until = 0, running = false;
       function tick() {
         const v = (t++ & 1) ? 22 : 23;
         ctx.fillStyle = 'rgb(22,27,' + v + ')';
         ctx.fillRect(0, 0, 2, 2);
-        requestAnimationFrame(tick);
+        if (performance.now() < until) requestAnimationFrame(tick);
+        else running = false;
       }
-      requestAnimationFrame(tick);
+      return function kick() {
+        until = performance.now() + LINGER;
+        if (!running) { running = true; requestAnimationFrame(tick); }
+      };
     })();
+    // Anything that can change what the canvas shows.
+    for (const ev of ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'keydown', 'touchstart', 'touchmove']) {
+      window.addEventListener(ev, () => window.__tickCompositor(), { passive: true, capture: true });
+    }
+    window.addEventListener('resize', () => window.__tickCompositor());
+    // The window regaining focus, or the tab being shown again, both mean the
+    // surface may have to be recomposited from scratch.
+    window.addEventListener('focus', () => window.__tickCompositor());
+    document.addEventListener('visibilitychange', () => window.__tickCompositor());
+    window.__tickCompositor();   // and once for the first paint
   </script>
 </body>
 </html>

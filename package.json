@@ -28,7 +28,8 @@
     "test:notemedia": "node test/note-media-plays.cdp.mjs",
     "test:nav": "node test/note-nav.cdp.mjs",
     "test:hl": "node test/highlight-worker.cdp.mjs",
-    "test:newfolder": "node test/new-folder-rename.cdp.mjs"
+    "test:newfolder": "node test/new-folder-rename.cdp.mjs",
+    "test:drawcpu": "node test/draw-idle-cpu.cdp.mjs"
   },
   "dependencies": {
     "hash-wasm": "^4.12.0",
