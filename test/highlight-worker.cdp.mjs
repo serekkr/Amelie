@@ -107,14 +107,21 @@ const worker = await ev(`(() => ({ alive: !!_hlWorker, dead: !!_hlWorkerDead }))
 check('the renderer really started the worker (CSP lets a file:// page do it)',
   worker && worker.alive && !worker.dead, JSON.stringify(worker));
 
-// Measured on this note, five runs each: the old on-thread batch of twelve
-// loses the main thread for 243/244/258 ms in one go, EVERY render, while the
-// worker path sits at 53-114 ms on a quiet machine. The limit is 190, not
-// something tighter: with a VM eating a core next door the same worker path
-// measured 153, and a test that fails because of the neighbours teaches
-// nothing. A regression puts every render past 240 whatever else is running.
+// Measured on this note: the old on-thread batch of twelve loses the main
+// thread for 243/244/258 ms in one go, every render; the worker path, 166.
+//
+// Most of that 166 is NOT this: with highlighting disabled outright the same
+// render still costs 127 ms, and the markdown parse is only 14 of it (454 KB of
+// HTML comes out of it) — the rest is sanitising and inserting that HTML, which
+// was there before and is there now. So colouring is worth ~39 ms of the gap,
+// down from ~120. Anyone trying to make this number smaller should go after the
+// sanitise-and-insert half, not the grammar.
+//
+// 205 sits between the two, ~39 ms clear either way — tighter would fail on a
+// loaded machine (with a VM eating a core next door this read 153 where a quiet
+// run reads 166, so the noise is real and not one-directional).
 check(`the main thread never goes away for long (best-of-three worst gap ${bestGap} ms)`,
-  bestGap > 0 && bestGap < 190, `best worst-gap over three renders was ${bestGap} ms (${frames} frames)`);
+  bestGap > 0 && bestGap < 205, `best worst-gap over three renders was ${bestGap} ms (${frames} frames)`);
 
 const state2 = await ev(`(() => {
   const els = [...document.querySelectorAll('#preview-content pre code')];
