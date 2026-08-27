@@ -2400,6 +2400,15 @@ function _tipWhenClipped(row, text) {
 }
 
 function renderTree() {
+  // NEVER redraw over an inline rename in progress: rebuilding the rows throws
+  // away the very input being typed into. Three things can ask for a redraw at
+  // that moment — loadTree(), which paints on the NEXT animation frame, so the
+  // frame it scheduled lands just after a new folder has opened its rename; the
+  // vault watcher, when a sync or a file manager touches the vault mid-typing;
+  // and a drag-move. The redraw is HELD and run when the rename closes.
+  // (Waiting for that frame before renaming is not an option: an occluded
+  // window gets no animation frames at all, and the rename would never start.)
+  if (_inlineRenameOpen) { _treeRefreshHeld = true; return; }
   // Live-refresh the graph if it's on screen and the tree structure changed
   // (move/rename/add/delete, incl. external vault edits — loadTree ends here,
   // and drag-moves call renderTree directly). No-op otherwise.
@@ -3492,14 +3501,18 @@ async function createNewNote(folder = '') {
 
 async function createNewFolder(parent = '') {
   if (typeof parent !== 'string') parent = '';
-  // No name prompt: create the folder right away named with today's date
-  // day-month-year (with suffix (1), (2)… if it already exists). Stays renamable.
-  // "-" not "/" — the slash is a path separator and is blocked in folder names.
-  const d = new Date();
-  const base = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+  // The folder is created and goes STRAIGHT into its inline rename with the name
+  // selected: type, press Enter. That is what Finder, Explorer, VS Code and
+  // Obsidian all do. It used to be created already named with today's date —
+  // a decision the app made for you, and then a second pass to undo it. (A NOTE
+  // still takes the date: for a note of the day that name is the point.)
+  // Esc, or clicking away, leaves the default name, so nothing is half-created.
+  // The default reuses the "New folder" label — the same words, already
+  // translated in every locale, so the name follows the app's language.
+  const base = (window.i18n && window.i18n.t('sidebar.new_folder')) || 'New folder';
   let finalName = base;
   let counter = 1;
-  while (anyFolderAtPath(state.notes, parent ? `${parent}/${finalName}` : finalName)) {
+  while (folderNodeAtPath(state.notes, parent ? `${parent}/${finalName}` : finalName)) {
     finalName = `${base} (${counter++})`;
   }
   const folderPath = parent ? `${parent}/${finalName}` : finalName;
@@ -3507,17 +3520,24 @@ async function createNewFolder(parent = '') {
   // Keep the parent (and the new folder itself) expanded so it appears nested.
   openFolderAncestors(folderPath);
   await loadTree();
+  // renameNote() draws the tree itself before looking for the row, so it does
+  // not matter that loadTree() has not painted yet; the frame it scheduled is
+  // held by renderTree while the rename is open.
+  const node = folderNodeAtPath(state.notes, folderPath);
+  if (node) await renameNote(node);
 }
 
-// True if a folder node with exactly this path exists anywhere in the tree.
-function anyFolderAtPath(nodes, targetPath) {
+// The folder node with exactly this path, or null. (Was anyFolderAtPath, which
+// answered only yes/no; creating a folder needs the node itself to rename it.)
+function folderNodeAtPath(nodes, targetPath) {
   for (const n of nodes) {
     if (n.type === 'folder') {
-      if (n.path === targetPath) return true;
-      if (anyFolderAtPath(n.children, targetPath)) return true;
+      if (n.path === targetPath) return n;
+      const hit = folderNodeAtPath(n.children, targetPath);
+      if (hit) return hit;
     }
   }
-  return false;
+  return null;
 }
 
 async function deleteNote(node) {
@@ -3607,6 +3627,11 @@ async function commitRename(node, newName) {
   await _applyRename(node, newName);
 }
 
+// Set while an inline rename input is on screen — renderTree() refuses to draw
+// over it and remembers that a redraw is owed. See the note in renderTree.
+let _inlineRenameOpen = false;
+let _treeRefreshHeld = false;
+
 // Inline rename — no popup. Reveals the node in the tree, turns its label into
 // an editable input (Obsidian/VS Code style). Enter or blur confirms, Esc cancels.
 async function renameNote(node) {
@@ -3644,15 +3669,21 @@ async function renameNote(node) {
   input.addEventListener('click', e => e.stopPropagation());
   input.addEventListener('mousedown', e => e.stopPropagation());
 
+  _inlineRenameOpen = true;
   let done = false;
   const finish = async (commit) => {
     if (done) return; done = true;
     const val = input.value.trim();
     input.remove();
     nameEl.style.display = '';
+    _inlineRenameOpen = false;
     if (commit && val && val !== node.name) {
-      await commitRename(node, val);
+      await commitRename(node, val);      // redraws the tree itself
+    } else if (_treeRefreshHeld) {
+      _treeRefreshHeld = false;
+      try { await loadTree(); } catch (_) {}
     }
+    _treeRefreshHeld = false;
   };
 
   input.addEventListener('keydown', (e) => {
@@ -7722,7 +7753,7 @@ async function duplicateNode(node) {
 
   if (node.type === 'folder') {
     const folderExists = (p) => flat.some(x => x.type === 'folder' && x.path === p)
-      || anyFolderAtPath(state.notes, p);
+      || !!folderNodeAtPath(state.notes, p);
     const { path: newFolderPath } = uniqueName(node.name, parent, true, folderExists);
     await window.inkwell.createFolder(newFolderPath);
     // Recursively copy all notes contained in the source folder.
@@ -12502,6 +12533,7 @@ function setupSync() {
   // Refresh the sidebar tree when notes/folders are added, deleted or renamed on disk
   // from OUTSIDE the app (file manager, external sync) — no restart needed. loadTree()
   // re-reads the vault; the note open in the editor is left untouched. Debounced in main.
+  // (A redraw landing on top of an inline rename is held — see renderTree.)
   window.inkwell.onVaultChanged?.(() => { try { loadTree(); } catch (_) {} });
 }
 

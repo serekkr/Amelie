@@ -503,8 +503,16 @@ html.is-mac #titlebar { padding-left: 72px; }
 }
 /* Hover changes the BACKGROUND, and only that: the text keeps whatever colour it has,
    so a dimmed attachment stays dim and a coloured note keeps its colour. Recolouring the
-   label made the row jump twice — once for the fill, once for the letters. */
-.tree-folder:hover, .tree-note:hover { background: var(--bg-3); }
+   label made the row jump twice — once for the fill, once for the letters.
+   The fill is a lift of the row's OWN background, not the fixed --bg-3 it used to be:
+   --bg-3 is a value of its own per theme and it landed right on top of the selected
+   row's accent tint in half of them (Rosé Pine ΔE 0.9, Navy 2.1, Serekkr 3.1 — under
+   about 2.3 the eye cannot separate two colours at all), so hovering read as selecting.
+   Mixing the text colour in lifts a dark theme and deepens a light one: always a step
+   away from the plain row, in every theme, whatever the accent happens to be. */
+.tree-folder:hover, .tree-note:hover {
+  background: color-mix(in srgb, var(--text-1) 10%, transparent);
+}
 .tree-note.active {
   background: var(--active-bg); color: var(--accent);
 }
@@ -514,9 +522,13 @@ html.is-mac #titlebar { padding-left: 72px; }
   0%, 30% { background: var(--accent); color: #fff; }
   100%    { background: transparent; }
 }
-/* Folder selected as the target for a new note */
+/* Folder selected as the target for a new note. It takes the accent LABEL as well
+   as the tint, the way an active note does: a tint is a fill, and a fill is what
+   hover uses too — with some accents the two land within ΔE 4 of each other no
+   matter how they are tuned (Solarized Dark, Nord). The letters are the signal
+   hover never gives, so the two states can never be read for one another. */
 .tree-folder.selected {
-  background: var(--active-bg);
+  background: var(--active-bg); color: var(--accent);
 }
 .tree-folder-icon { display: flex; align-items: center; color: var(--accent); flex-shrink: 0; }
 /* Folder style uses ONE shape (the closed folder) that fills with the accent
