@@ -1425,7 +1425,7 @@ function applyAppearance(prefs = {}) {
   const root = document.documentElement;
   const edSize    = prefs.editorFontSize  ?? 15;
   const treePy    = prefs.treeSpacing     ?? 3;
-  const treeSize  = prefs.treeFontSize    ?? 14;
+  const treeSize  = prefs.treeFontSize    ?? 13;
   // An unknown key (a font that has since been removed — Mr Robot was one) falls back to
   // the default instead of leaving the editor on a family that no longer exists and the
   // dropdown showing a blank label.
@@ -1561,7 +1561,7 @@ function setupFontDropdown() {
 const NUMBER_DROPDOWNS = [
   { ddId: 'edsize-dd', key: 'editorFontSize', min: 9,  max: 22,  step: 1, unit: 'px', def: 15  },
   { ddId: 'treesp-dd', key: 'treeSpacing',    min: 1,  max: 10,  step: 1, unit: 'px', def: 3   },
-  { ddId: 'treesz-dd', key: 'treeFontSize',   min: 11, max: 18,  step: 1, unit: 'px', def: 14  },
+  { ddId: 'treesz-dd', key: 'treeFontSize',   min: 11, max: 18,  step: 1, unit: 'px', def: 13  },
   { ddId: 'tbsize-dd', key: 'toolbarZoom',    min: 70, max: 160, step: 5, unit: '%',  def: 100 },
 ];
 
@@ -1879,14 +1879,24 @@ function loadAppearance() {
         if ((prefs.editorFont     ?? 'noto') === 'noto') prefs.editorFont = DEFAULT_FONT;
         localStorage.setItem('amelie.defaults-helvetica-15-v1', '1');
       }
+      // v1.0.39: the sidebar goes back to 13px — 14 reads heavy next to the
+      // editor. Same rule as every migration above: only a profile still sitting
+      // on 14, the size it was GIVEN, is realigned. Any other value is a size
+      // someone chose, and stays theirs. (This one runs after the bump to 14
+      // just above, so a profile that was on 13 ends up back at 13.)
+      if (!localStorage.getItem('amelie.tree-13-v2')) {
+        if ((prefs.treeFontSize ?? 14) === 14) prefs.treeFontSize = 13;
+        localStorage.setItem('amelie.tree-13-v2', '1');
+      }
     } else {
       // Fresh install: mark all migrations done so they never bump this profile;
       // the empty prefs then fall back to the defaults (Helvetica, editor 15px,
-      // sidebar 14px — DEFAULT_FONT and the `??` values in applyAppearance).
+      // sidebar 13px — DEFAULT_FONT and the `??` values in applyAppearance).
       localStorage.setItem('inkwell-fontsize-bump-v1', '1');
       localStorage.setItem('inkwell-editorsize-15-v1', '1');
       localStorage.setItem('inkwell-treesize-13-v1', '1');
       localStorage.setItem('amelie.defaults-helvetica-15-v1', '1');
+      localStorage.setItem('amelie.tree-13-v2', '1');
     }
     return prefs;
   } catch(_) { return {}; }
@@ -12140,7 +12150,7 @@ async function openSettings() {
   const ap = loadAppearance();
   const edSize   = ap.editorFontSize ?? 15;
   const treePy   = ap.treeSpacing    ?? 3;
-  const treeSize = ap.treeFontSize   ?? 14;
+  const treeSize = ap.treeFontSize   ?? 13;
   const fontKey  = ap.editorFont     ?? DEFAULT_FONT;
   const tbZoom   = ap.toolbarZoom     ?? 100;
   updateNumberDdCurrent('edsize-dd', edSize,   'px');
