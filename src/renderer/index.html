@@ -662,6 +662,7 @@
               <div class="field-group">
                 <label data-i18n="settings.backup_freq">Frequenza backup</label>
                 <select id="cfg-local-interval" class="export-select">
+                  <option value="0.5" data-i18n="settings.freq_30s">Ogni 30 secondi</option>
                   <option value="60" data-i18n="settings.freq_hourly">Ogni ora</option>
                   <option value="1440" selected data-i18n="settings.freq_daily">Giornaliero</option>
                   <option value="custom" data-i18n="settings.interval_custom">Custom</option>
@@ -1046,7 +1047,7 @@
             <div class="field-group">
               <label data-i18n="sync.twoway_freq">Frequenza</label>
               <select id="cfg-twoway-interval" class="export-select">
-                <option value="realtime" data-i18n="sync.twoway_realtime_opt">Tempo reale (ad ogni modifica)</option>
+                <option value="0.5" data-i18n="settings.freq_30s">Ogni 30 secondi</option>
                 <option value="15" selected>15 min</option>
                 <option value="60" data-i18n="settings.freq_hourly">Ogni ora</option>
                 <option value="1440" data-i18n="settings.freq_daily">Giornaliero</option>

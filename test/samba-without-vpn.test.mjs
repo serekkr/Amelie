@@ -159,6 +159,87 @@ const T = (tw) => SyncManager._twowayTransport(tw);
     `useWireGuard=${vpn._twowaySambaConn()?.useWireGuard}`);
 }
 
+// ── The Samba method must get a sync TIMER, or the other machine never pulls ─
+// Both the timer condition and _twowayConfigured() used to look only at
+// twoway.smb, so a Samba (LAN) sync got no timer at all: the machine that
+// edited pushed on its own debounce, and the other one sat there until someone
+// pressed sync by hand. "Realtime" pushes your edits; the interval is what
+// pulls everyone else's.
+{
+  const conn = { ip: '192.168.30.10', host: '192.168.30.10', share: 'saturn', remoteSubPath: 'amelie/sync' };
+  const lan = mgr({ sync: { twoway: { enabled: true, transport: 'samba', useWireGuard: false, smbLan: conn } } });
+  check('a Samba (LAN) two-way sync counts as configured', lan._twowayConfigured() === true,
+    `_twowayConfigured()=${lan._twowayConfigured()}`);
+  check('and its remote folder is found', SyncManager._twowayRemoteFolder(lan.config.sync.twoway) === 'amelie/sync',
+    SyncManager._twowayRemoteFolder(lan.config.sync.twoway));
+}
+{
+  // Unchanged for the other two methods.
+  const vpn = mgr({ sync: { twoway: { enabled: true, transport: 'vpn', useWireGuard: true,
+    smb: { ip: '10.8.0.2', share: 'saturn', remoteSubPath: 'amelie/sync' } } } });
+  check('the VPN method still gets one', vpn._twowayConfigured() === true, `${vpn._twowayConfigured()}`);
+  const wd = mgr({ sync: { twoway: { enabled: true, transport: 'webdav', webdav: { url: 'https://dav.example' } } } });
+  check('and so does WebDAV', wd._twowayConfigured() === true, `${wd._twowayConfigured()}`);
+  const none = mgr({ sync: { twoway: { enabled: true, transport: 'samba', useWireGuard: false, smbLan: { ip: '1.2.3.4', share: 's' } } } });
+  check('but a connection with no remote folder does not', none._twowayConfigured() === false,
+    `${none._twowayConfigured()}`);
+}
+
+// ── A 30-second pass must be cheap, and silent ──────────────────────────────
+// The "realtime" option is gone: the frequency itself goes down to 30 seconds.
+// At that cadence a full pass every tick would keep the share busy for nothing,
+// so the tick asks two cheap questions first — did the vault change, did the
+// remote folder change — and only then does the work. And it must not narrate
+// itself: a line in the bell twice a minute is noise.
+{
+  const CONN = { ip: '192.168.30.10', host: '192.168.30.10', share: 'saturn', remoteSubPath: 'amelie/sync' };
+  const cfg = (intervalMinutes) => ({ sync: { twoway: { enabled: true, intervalMinutes,
+    transport: 'samba', useWireGuard: false, smbLan: CONN } } });
+
+  check('half a minute survives being read back', mgr(cfg(0.5))._twowayIntervalMinutes() === 0.5,
+    `${mgr(cfg(0.5))._twowayIntervalMinutes()}`);
+  check('and nothing shorter is accepted', mgr(cfg(0.01))._twowayIntervalMinutes() === 0.5,
+    `${mgr(cfg(0.01))._twowayIntervalMinutes()}`);
+  check('an hourly setting is untouched', mgr(cfg(60))._twowayIntervalMinutes() === 60,
+    `${mgr(cfg(60))._twowayIntervalMinutes()}`);
+
+  // The tick: nothing changed on either side → no pass at all.
+  {
+    const m = mgr(cfg(0.5));
+    let ran = 0;
+    m.runTwoway = async () => { ran++; return { success: true }; };
+    m._vaultSignature = () => 'V1';
+    m._smbListRecursive = async () => ({ 'notes/a.md': 1000 });
+    await m._twowayTick();                    // first tick: no baseline yet → runs
+    const first = ran;
+    await m._twowayTick();                    // second: both sides unchanged → skips
+    check('an unchanged pair of sides costs one listing and no pass', first === 1 && ran === 1,
+      `passate=${ran}`);
+
+    m._smbListRecursive = async () => ({ 'notes/a.md': 1000, 'notes/b.md': 2000 });
+    await m._twowayTick();
+    check('a file appearing on the share triggers one', ran === 2, `passate=${ran}`);
+
+    m._vaultSignature = () => 'V2';
+    await m._twowayTick();
+    check('and so does a change in the vault', ran === 3, `passate=${ran}`);
+  }
+
+  // Quiet: the meta the engine emits is what the bell reads.
+  const metaOf = (m, manual) => {
+    const seen = [];
+    m._setStatus = function (status, error, meta) { seen.push(meta); };
+    m._syncTwoway = async () => { throw new Error('stop here'); };
+    return m.runTwoway({ manual }).then(() => seen[0]);
+  };
+  const fast = await metaOf(mgr(cfg(0.5)), false);
+  check('a 30-second pass is marked quiet', fast && fast.quiet === true, JSON.stringify(fast));
+  const pressed = await metaOf(mgr(cfg(0.5)), true);
+  check('but one the user pressed is not', pressed && pressed.quiet === false && pressed.manual === true, JSON.stringify(pressed));
+  const hourly = await metaOf(mgr(cfg(60)), false);
+  check('and neither is an hourly one', hourly && hourly.quiet === false, JSON.stringify(hourly));
+}
+
 // ── Report ───────────────────────────────────────────────────────────────────
 let failed = 0;
 for (const r of results) {

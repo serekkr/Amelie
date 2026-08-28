@@ -11081,6 +11081,13 @@ function setupTwowaySetup() {
       const key = (!vpnLoaded && !sambaLoaded) ? 'sync.vpn_samba_missing' : (!vpnLoaded ? 'sync.vpn_missing' : 'sync.samba_missing');
       res.style.display = 'block'; res.className = 'test-summary fail'; res.textContent = '✗ ' + window.i18n.t(key); return;
     }
+    // Two-way sync REFUSES to run without a remote folder. Testing without one
+    // wrote to the share root and passed, so the setup looked finished and every
+    // sync afterwards failed with "indica la cartella remota".
+    if (!String(smb.path || '').trim()) {
+      res.style.display = 'block'; res.className = 'test-summary fail';
+      res.textContent = '✗ ' + window.i18n.t('sync.remote_folder_missing'); return;
+    }
     if (!isValidSmbHost(smb.ip))       { res.style.display = 'block'; res.className = 'test-summary fail'; res.textContent = '✗ ' + window.i18n.t('sync.invalid_ip'); return; }
     Object.values(twRowByKey).forEach(id => {
       const row = $(id); if (!row) return;
@@ -12434,12 +12441,11 @@ async function openSettings() {
   // Restore two-way frequency: Real-time, a preset, or Custom.
   const twSel = $('cfg-twoway-interval');
   if (twSel) {
-    if (cfg.sync?.twoway?.realtime) {
-      twSel.value = 'realtime';
-      if ($('twoway-custom-wrap')) $('twoway-custom-wrap').style.display = 'none';
-    } else {
-      const twMin = parseInt(cfg.sync?.twoway?.intervalMinutes) || 15;
-      const presets = ['15', '60', '1440'];
+    {
+      // A profile saved with the old "realtime" option lands on the shortest
+      // interval there is now — the closest thing to what it used to do.
+      const twMin = cfg.sync?.twoway?.realtime ? 0.5 : (parseFloat(cfg.sync?.twoway?.intervalMinutes) || 15);
+      const presets = ['0.5', '15', '60', '1440'];
       if (presets.includes(String(twMin))) {
         twSel.value = String(twMin);
         if ($('twoway-custom-wrap')) $('twoway-custom-wrap').style.display = 'none';
@@ -12596,7 +12602,7 @@ async function saveSettings() {
           intervalMinutes: (() => {
             const v = $('cfg-local-interval')?.value;
             if (v === 'custom') return (parseInt($('cfg-local-interval-custom')?.value) || 2) * 1440; // days → minutes
-            return parseInt(v) || 1440;
+            return parseFloat(v) || 1440;   // parseFloat: the shortest choice is 0.5 (30 s)
           })(),
           keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
         };
@@ -12649,12 +12655,13 @@ async function saveSettings() {
         // wins). Deletions ALWAYS propagate, regardless of this toggle.
         conflictCopies: !!$('cfg-twoway-fullsync')?.checked,
         propagateDeletes: true,
-        realtime: $('cfg-twoway-interval')?.value === 'realtime',
+        // The old "realtime" option is gone: the frequency itself goes down to
+        // 30 seconds (0.5 minutes), and the engine's tick asks the share what
+        // changed before doing any work. parseFloat, or 0.5 truncates to 0.
         intervalMinutes: (() => {
           const v = $('cfg-twoway-interval')?.value;
-          if (v === 'realtime') return 15;   // backstop interval (also pulls other devices' changes)
           if (v === 'custom') return parseInt($('cfg-twoway-interval-custom')?.value) || 15;
-          return parseInt(v) || 15;
+          return parseFloat(v) || 15;
         })(),
       },
     }
@@ -12879,6 +12886,10 @@ async function runSyncSambaLanTest() {
   const ip = $('tw-sb-ip')?.value.trim() || '', share = $('tw-sb-share')?.value.trim() || '';
   if (!ip || !share)       return fail(window.i18n.t('sync.samba_missing'));
   if (!isValidSmbHost(ip)) return fail(window.i18n.t('sync.invalid_ip'));
+  // Two-way sync REFUSES to run without a remote folder (_syncTwoway throws
+  // "indica la cartella remota"). Testing without one wrote to the share root
+  // and passed, so the setup looked good and every later sync failed.
+  if (!($('tw-sb-path')?.value.trim())) return fail(window.i18n.t('sync.remote_folder_missing'));
   const rows = { reach: 'tw-sb-tc-reach', write: 'tw-sb-tc-write' };
   Object.values(rows).forEach(id => {
     const r = $(id); if (!r) return;
@@ -18096,6 +18107,11 @@ function _fmtNotifTime(ts) {
 function logSyncEventNotif(data) {
   if (!data || !data.op) return;                       // untagged/legacy event
   if (data.status !== 'ok' && data.status !== 'error') return;   // 'syncing'/'idle' aren't outcomes
+  // A pass on a very short interval (30 s, a minute) would put a line in the
+  // bell twice a minute. Those stay silent when they succeed; passes an hour or
+  // a day apart, the ones the user presses, and every FAILURE are announced —
+  // silence on a failure reads as "it worked".
+  if (data.quiet && !data.manual && data.status === 'ok') return;
   const key = data.manual ? 'manual' : 'auto';
   const label = window.i18n.t(`notif.${data.op}_${key}`);
   // No time in the text: every row already prints the full date and time
@@ -18114,7 +18130,14 @@ function logSyncEventNotif(data) {
     // not shown: naming them read as noise on a local-only or WebDAV-only backup).
     addEventNotif(label, true, data.dests, `notif.${data.op}_${key}`);
   } else {
-    addEventNotif(`${label}: ${data.error || window.i18n.t('notif.unknown_error')}`, false);
+    // NOT the "completed" label: it produced lines like "Manual sync completed:
+    // two-way: name the remote folder" — an announcement of success carrying its
+    // own failure. Each operation has a failure wording; an unknown op falls
+    // back to the old text rather than printing a raw key.
+    const failKey = `notif.${data.op}_failed`;
+    let head = window.i18n.t(failKey);
+    if (!head || head === failKey) head = label;
+    addEventNotif(`${head}: ${data.error || window.i18n.t('notif.unknown_error')}`, false);
   }
 }
 

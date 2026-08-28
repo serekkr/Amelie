@@ -112,24 +112,46 @@ class SyncManager {
   // which is why it reads oddly when, as here, the local folder is switched off
   // and the share is the one being written. Read in ONE place so the interval
   // timer and the startup catch-up can never disagree about the frequency.
+  // parseFloat, not parseInt: the shortest choice is HALF a minute (30 s), and
+  // parseInt truncated it to 0 and fell back to the default. `_MIN_INTERVAL` is
+  // the floor for both — a tick shorter than that would spend more time asking
+  // than working.
+  static _MIN_INTERVAL = 0.5;
+  static _readInterval(v, fallback) {
+    const min = parseFloat(v);
+    return (Number.isFinite(min) && min > 0) ? Math.max(min, SyncManager._MIN_INTERVAL) : fallback;
+  }
   _backupIntervalMinutes() {
-    const min = parseInt(this.config?.sync?.local?.intervalMinutes, 10);
-    return (Number.isFinite(min) && min > 0) ? min : 60;
+    return SyncManager._readInterval(this.config?.sync?.local?.intervalMinutes, 60);
   }
 
   // The two-way sync's own frequency, read in one place for the same reason.
   _twowayIntervalMinutes() {
-    const min = parseInt(this.config?.sync?.twoway?.intervalMinutes, 10);
-    return (Number.isFinite(min) && min > 0) ? min : 15;
+    return SyncManager._readInterval(this.config?.sync?.twoway?.intervalMinutes, 15);
   }
+
+  // A pass this short must not announce itself: at 30 s it would put a line in
+  // the notifications bell twice a minute. Scheduled passes an hour or a day
+  // apart still do, and so do the ones the user presses and every failure.
+  _quietInterval(min) { return min < 5; }
 
   // Whether the two-way sync has somewhere to sync WITH — the same condition
   // _startAutoSync uses to decide it deserves a timer at all.
   _twowayConfigured() {
-    const tw = this.config?.sync?.twoway || {};
-    const hasFolder = tw.smb?.remoteSubPath || tw.subPath || tw.path
-      || (tw.transport === 'webdav' && tw.webdav?.url);
-    return !!(tw.enabled && hasFolder);
+    return !!(this.config?.sync?.twoway?.enabled && SyncManager._twowayRemoteFolder(this.config?.sync?.twoway));
+  }
+
+  /**
+   * The remote folder two-way sync writes to, whichever method is chosen — the
+   * ONE definition of "has somewhere to sync with". The Samba (LAN) method keeps
+   * its folder in `smbLan`; leaving it out of this test meant its timer was
+   * never created, so that machine only ever pulled when the user pressed sync
+   * by hand while the other one pushed happily.
+   */
+  static _twowayRemoteFolder(tw) {
+    if (!tw) return '';
+    if (SyncManager._twowayTransport(tw) === 'webdav') return tw.webdav?.url || '';
+    return tw.smbLan?.remoteSubPath || tw.smb?.remoteSubPath || tw.subPath || tw.path || '';
   }
 
   // When each of the two last succeeded. Kept beside the settings rather than
@@ -459,11 +481,10 @@ class SyncManager {
     }
     // Two-way sync timer on its own (shorter) frequency. The remote folder comes
     // from the connection (smb.remoteSubPath) or a legacy local path/subPath.
-    const twHasFolder = s.twoway?.smb?.remoteSubPath || s.twoway?.subPath || s.twoway?.path
-      || (s.twoway?.transport === 'webdav' && s.twoway?.webdav?.url);
+    const twHasFolder = SyncManager._twowayRemoteFolder(s.twoway);
     if (s.twoway?.enabled && twHasFolder) {
       const min = this._twowayIntervalMinutes();
-      this._twowayTimer = setInterval(() => this.runTwoway(), min * 60 * 1000);
+      this._twowayTimer = setInterval(() => this._twowayTick(), min * 60 * 1000);
       console.log(`[Sync] Two-way sync every ${min} min`);
     }
   }
@@ -481,15 +502,50 @@ class SyncManager {
     return false;
   }
 
-  scheduleSync() {
-    if (this._plaintextOpen) return;   // no realtime push while the vault is plaintext
-    // The two-way Sync always runs on its interval timer. It ALSO syncs on each
-    // edit (debounced) ONLY when the "realtime" option is on — otherwise it does
-    // NOT trigger on note creation / edits / folder drops.
+  /**
+   * Was the debounced push behind the old "realtime" option, which is gone: the
+   * frequency now goes down to 30 seconds, and _twowayTick() is what carries
+   * changes both ways at that cadence. Kept as a no-op because the main process
+   * calls it from every edit, media drop and folder change.
+   */
+  scheduleSync() { /* no-op — see _twowayTick() */ }
+
+  /**
+   * One two-way tick. At 30 seconds a FULL pass every time would keep the share
+   * busy for nothing, so this asks two cheap questions first — did the vault
+   * change, and did the remote folder change — and only runs the pass when one
+   * of them says yes. The remote question is a single recursive listing, which
+   * the pass itself would do first thing anyway.
+   *
+   * WebDAV has no equivalent cheap listing here, so it keeps running the pass.
+   */
+  async _twowayTick() {
     const tw = this.config.sync?.twoway;
-    if (!tw?.enabled || !tw?.realtime) return;
-    if (this._debounceTimer) clearTimeout(this._debounceTimer);
-    this._debounceTimer = setTimeout(() => this.runTwoway(), 8000);
+    if (!tw?.enabled || this._plaintextOpen || this._busy()) return;
+    const transport = SyncManager._twowayTransport(tw);
+    if (transport !== 'samba' && transport !== 'vpn') return void this.runTwoway({ manual: false });
+
+    const smb = this._twowaySambaConn();
+    const base = String(smb?.remoteSubPath || tw.subPath || '').trim();
+    if (!smb || !base) return;
+    const localSig = this._vaultSignature();
+    let remoteSig;
+    try { remoteSig = this._remoteSignature(await this._smbListRecursive(smb, base)); }
+    catch (_) { return; }                       // share unreachable → try again next tick
+    if (localSig === this._twLocalSig && remoteSig === this._twRemoteSig) return;   // nothing moved
+
+    await this.runTwoway({ manual: false });
+    // Re-baseline AFTER the pass: our own upload changed the remote, and without
+    // this every tick would see a difference and sync again forever.
+    this._twLocalSig = this._vaultSignature();
+    try { this._twRemoteSig = this._remoteSignature(await this._smbListRecursive(smb, base)); }
+    catch (_) { this._twRemoteSig = undefined; }
+  }
+
+  /** Stable fingerprint of a remote listing: every path with its mtime. */
+  _remoteSignature(map) {
+    const keys = Object.keys(map || {}).sort();
+    return keys.length + '|' + keys.map(k => k + ':' + map[k]).join('|');
   }
 
   // Scheduled backup (one-way: local → remote, plus WireGuard/WebDAV).
@@ -557,7 +613,10 @@ class SyncManager {
 
   /** The copy itself, shared by a normal run and by one the verification forced. */
   async _doBackup(sig, { manual = false, forced = false, reason = null } = {}) {
-    const meta = { op: 'backup', manual: !!manual };
+    // Same rule as the two-way pass: a backup running every half minute must
+    // not narrate itself in the bell. Manual runs and failures always do.
+    const meta = { op: 'backup', manual: !!manual,
+                   quiet: !manual && this._quietInterval(this._backupIntervalMinutes()) };
     this._setStatus('syncing', null, meta);
     console.log('[Sync] Backup run...', forced ? '(forced)' : (reason === 'missing' ? '(copy was missing)' : ''));
     try {
@@ -690,7 +749,11 @@ class SyncManager {
     if (this._syncPausedPlaintext()) return { success: false, skipped: true, plaintextOpen: true, error: 'Cifratura a riposo disattivata: sync in pausa per non esporre i file in chiaro sullo share. Attiva "Cifra i file a riposo" nelle impostazioni Vault per sincronizzare.' };
     if (this._busy()) return { success: false, error: 'Already syncing' };
     if (!this.config.sync?.twoway?.enabled) return { success: false, error: 'Two-way disabled' };
-    const meta = { op: 'twoway', manual: !!manual };
+    // `quiet` rides along so the renderer can keep the bell shut for passes that
+    // run every half minute — a line twice a minute is noise. An hourly pass, or
+    // one the user asked for, is worth saying. A FAILING run always speaks.
+    const meta = { op: 'twoway', manual: !!manual,
+                   quiet: !manual && this._quietInterval(this._twowayIntervalMinutes()) };
     this._setStatus('syncing', null, meta);
     console.log('[Sync] Two-way run...');
     try {
@@ -2093,6 +2156,8 @@ class SyncManager {
       lastSync: this.lastSync,
       op: meta && meta.op ? meta.op : null,
       manual: !!(meta && meta.manual),
+      // A pass frequent enough that announcing it would be noise.
+      quiet: !!(meta && meta.quiet),
       // Destinations actually written (backup only) → named in the notification.
       dests: Array.isArray(meta && meta.dests) ? meta.dests : null,
       // A pass that found nothing to copy: reported, but worded as the no-op it is.
