@@ -713,7 +713,8 @@
               <div class="draw-loc-pills" id="bk-transport-pills">
                 <button type="button" class="dlp active" data-bktransport="local" data-i18n="sync.local">Local</button>
                 <button type="button" class="dlp" data-bktransport="webdav" data-i18n="sync.transport_webdav">WebDAV</button>
-                <button type="button" class="dlp" data-bktransport="vpn" data-i18n="sync.transport_samba">VPN with Samba</button>
+                <button type="button" class="dlp" data-bktransport="samba" data-i18n="sync.transport_samba_only">Samba</button>
+                <button type="button" class="dlp" data-bktransport="vpn" data-i18n="sync.transport_vpn">VPN</button>
               </div>
               <!-- ALWAYS-VISIBLE list of the destinations the backup will write
                    to. The pills above show one section at a time and hide the
@@ -761,12 +762,65 @@
               </div>
             </div><!-- sync-section local -->
 
+            <!-- ── Section: Samba share on the LAN (no VPN) ───────────────
+                 Same share, no tunnel: for when the server sits on the network
+                 you are already on. The VPN section below is the same thing
+                 PLUS a tunnel for when you are away. Kept as its own
+                 destination (own toggle, own connection) so neither setup
+                 depends on the other. -->
+            <div class="sync-section" id="bksec-samba">
+              <div class="sync-section-header" id="ssh-samba">
+                <div class="sync-section-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                  <span data-i18n="sync.transport_samba_only">Samba</span>
+                </div>
+                <div class="sync-section-right">
+                  <label class="toggle"><input type="checkbox" id="cfg-samba-enabled" /><span class="slider"></span></label>
+                  <span class="sync-section-chevron" id="chevron-samba">›</span>
+                </div>
+              </div>
+              <div class="sync-section-body" id="ssb-samba" style="display:none">
+                <p class="wstep-desc" data-i18n="sync.samba_lan_desc">Share Samba raggiungibile direttamente sulla rete, senza VPN.</p>
+                <!-- Collapsed summary once configured — fields appear via "Modifica". -->
+                <div class="smb-preview" id="smb-preview-sblan" style="display:none;color:var(--green);align-items:center;gap:8px;flex-wrap:wrap">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                  <span id="smb-summary-sblan" style="color:var(--text-1)"></span>
+                  <span style="flex:1"></span>
+                  <button type="button" class="wiz-btn secondary" id="sb-reconfigure" data-i18n="sync.smb_modify" style="white-space:nowrap">Modifica</button>
+                </div>
+                <div id="smb-form-sblan">
+                  <div class="field-group">
+                    <label data-i18n="sync.smb_ip">Indirizzo server</label>
+                    <span class="ip-group" data-ip="cfg-sb-ip"><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="1" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="2" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="3" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="4" /></span><input type="hidden" id="cfg-sb-ip" />
+                  </div>
+                  <div class="field-group two-col" style="margin-top:10px">
+                    <div><label data-i18n="sync.smb_share_name">Nome share</label><input type="text" id="cfg-sb-share" /></div>
+                    <div><label data-i18n="sync.remote_folder">Cartella remota</label><input type="text" id="cfg-sb-path" placeholder="amelie/backup" /></div>
+                  </div>
+                  <div class="field-group two-col" style="margin-top:10px">
+                    <div><label data-i18n="sync.username">Username</label><input type="text" id="cfg-sb-user" autocomplete="off" /></div>
+                    <div><label data-i18n="sync.password">Password</label><div style="position:relative"><input type="text" id="cfg-sb-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="cfg-sb-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
+                  </div>
+                </div>
+                <!-- Write test — two rows only: no VPN step to report here. -->
+                <div class="test-checklist" id="sb-test-checklist" style="margin-top:12px">
+                  <div class="tc-row" id="sb-tc-reach"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_reach">Samba share raggiungibile</span><span class="tc-result"></span></div>
+                  <div class="tc-row" id="sb-tc-write"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_write_folder">Scrittura nella cartella</span><span class="tc-result"></span></div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:8px">
+                  <button type="button" class="wiz-btn secondary" id="btn-sb-remove" data-i18n="sync.wg_remove">Rimuovi</button>
+                  <button class="btn-test-run" id="btn-sb-run-test"><span data-i18n="sync.test_connection_btn">Testa connessione</span></button>
+                </div>
+                <div id="sb-test-summary" class="test-summary" style="display:none;margin-top:8px"></div>
+              </div>
+            </div><!-- sync-section samba -->
+
             <!-- ── Section: WireGuard with Remote Share ──────────────────── -->
             <div class="sync-section" id="bksec-vpn">
               <div class="sync-section-header" id="ssh-vpn">
                 <div class="sync-section-title">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                  <span data-i18n="sync.wg_remote_share">VPN with Samba share</span>
+                  <span data-i18n="sync.transport_vpn">VPN</span>
                 </div>
                 <div class="sync-section-right">
                   <label class="toggle"><input type="checkbox" id="cfg-vpn-enabled" /><span class="slider"></span></label>
@@ -986,30 +1040,9 @@
                  master toggle (#cfg-twoway-enabled) and transport selector
                  (#tw-transport-pills) are kept HIDDEN and DERIVED from these toggles,
                  so all existing save/validation/panel logic keeps working unchanged. -->
-            <div class="field-group toggle-row">
-              <label class="sync-opt-label" data-i18n="sync.twoway_title">Sincronizzazione a due vie</label>
-            </div>
-            <div class="field-group toggle-row sync-method-box">
-              <label class="sync-opt-label" data-i18n="sync.transport_webdav">WebDAV</label>
-              <label class="toggle"><input type="checkbox" id="cfg-tw-webdav-enabled" /><span class="slider"></span></label>
-            </div>
-            <div class="field-group toggle-row sync-method-box">
-              <label class="sync-opt-label" data-i18n="sync.transport_samba">VPN with Samba</label>
-              <label class="toggle"><input type="checkbox" id="cfg-tw-samba-enabled" /><span class="slider"></span></label>
-            </div>
-            <!-- Error shown when the user tries to enable both methods at once. -->
-            <div id="tw-method-error" class="test-result fail" style="display:none;margin-top:6px" data-i18n="sync.twoway_one_only">Puoi attivare un solo metodo di sync alla volta: WebDAV oppure VPN with Samba.</div>
-
-            <!-- Hidden: derived master enable + transport selector (driven by the two
-                 toggles above; read by saveSettings/updateTwowayConnView). -->
-            <input type="checkbox" id="cfg-twoway-enabled" style="display:none" />
-            <div class="draw-loc-pills" id="tw-transport-pills" style="display:none">
-              <button type="button" class="dlp" data-transport="webdav" data-i18n="sync.transport_webdav">WebDAV</button>
-              <button type="button" class="dlp active" data-transport="samba" data-i18n="sync.transport_samba">VPN with Samba</button>
-            </div>
-
-            <!-- Frequency + Conflict copies — GENERAL two-way settings, right under
-                 the on/off toggle (not tied to the chosen connection type). -->
+            <!-- Frequency and Conflict copies come FIRST: they are global to
+                 two-way sync — how it syncs, not where — so they stay put
+                 whichever method is chosen. -->
             <div class="field-group">
               <label data-i18n="sync.twoway_freq">Frequenza</label>
               <select id="cfg-twoway-interval" class="export-select">
@@ -1029,8 +1062,33 @@
               <label class="toggle"><input type="checkbox" id="cfg-twoway-fullsync" checked /><span class="slider"></span></label>
             </div>
 
-            <p class="wstep-desc" data-i18n="sync.twoway_desc">Sincronizza a due vie una cartella sulla share WireGuard+Samba (riusa la connessione del backup). Le modifiche fatte da altri PC tornano nel vault; la copia locale non viene mai sovrascritta da una più vecchia.</p>
+            <!-- Connection type — the same shape as Backup: the pills show ONE method
+                 section at a time, and that section's own toggle turns it on. -->
+            <div class="field-group">
+              <label data-i18n="sync.transport">Tipo di connessione</label>
+              <div class="draw-loc-pills" id="tw-transport-pills">
+                <button type="button" class="dlp" data-transport="webdav" data-i18n="sync.transport_webdav">WebDAV</button>
+                <button type="button" class="dlp" data-transport="samba" data-i18n="sync.transport_samba_only">Samba</button>
+                <button type="button" class="dlp active" data-transport="vpn" data-i18n="sync.transport_vpn">VPN</button>
+              </div>
+            </div>
 
+            <div id="tw-method-error" class="test-result fail" style="display:none;margin-top:6px" data-i18n="sync.twoway_one_only">Puoi attivare un solo metodo di sync alla volta: WebDAV, Samba oppure VPN.</div>
+
+            <!-- Hidden: derived master enable (driven by the section toggles). -->
+            <input type="checkbox" id="cfg-twoway-enabled" style="display:none" />
+
+            <div class="sync-section" id="twsec-webdav">
+              <div class="sync-section-header" id="twsh-webdav">
+                <div class="sync-section-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
+                  <span data-i18n="sync.transport_webdav">WebDAV</span>
+                </div>
+                <div class="sync-section-right">
+                  <label class="toggle"><input type="checkbox" id="cfg-tw-webdav-enabled" /><span class="slider"></span></label>
+                </div>
+              </div>
+              <div class="sync-section-body" id="twsb-webdav" style="display:flex">
             <!-- WebDAV two-way panel (shown when transport = webdav) -->
             <div class="wizard-panel" id="tw-webdav-panel" style="display:none">
               <div class="field-group">
@@ -1052,6 +1110,67 @@
               <div id="tw-webdav-result" class="test-result" style="display:none"></div>
             </div>
 
+              </div>
+            </div><!-- sync-section webdav -->
+
+            <div class="sync-section" id="twsec-samba">
+              <div class="sync-section-header" id="twsh-samba">
+                <div class="sync-section-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                  <span data-i18n="sync.transport_samba_only">Samba</span>
+                </div>
+                <div class="sync-section-right">
+                  <label class="toggle"><input type="checkbox" id="cfg-tw-lan-enabled" /><span class="slider"></span></label>
+                </div>
+              </div>
+              <div class="sync-section-body" id="twsb-samba" style="display:flex">
+            <!-- Samba two-way panel (shown when transport = samba): the share
+                 fields and nothing else. No VPN to import — the server is on a
+                 network this machine already reaches. Its own fields rather than
+                 the VPN wizard's, so neither method can disturb the other. -->
+            <div class="wizard-panel" id="tw-samba-panel" style="display:none">
+              <div class="wstep-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                <span data-i18n="sync.samba_share">Samba share</span>
+              </div>
+              <p class="wstep-desc" data-i18n="sync.samba_lan_desc">Share Samba raggiungibile direttamente sulla rete, senza VPN.</p>
+              <div class="field-group">
+                <label data-i18n="sync.smb_ip">Indirizzo server</label>
+                <span class="ip-group" data-ip="tw-sb-ip"><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="1" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="2" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="3" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="4" /></span><input type="hidden" id="tw-sb-ip" />
+              </div>
+              <div class="field-group two-col" style="margin-top:10px">
+                <div><label data-i18n="sync.smb_share_name">Nome share</label><input type="text" id="tw-sb-share" /></div>
+                <div><label data-i18n="sync.remote_folder">Cartella remota</label><input type="text" id="tw-sb-path" placeholder="amelie/sync" /></div>
+              </div>
+              <div class="field-group two-col" style="margin-top:10px">
+                <div><label data-i18n="sync.username">Username</label><input type="text" id="tw-sb-user" autocomplete="off" /></div>
+                <div><label data-i18n="sync.password">Password</label><div style="position:relative"><input type="text" id="tw-sb-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="tw-sb-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
+              </div>
+              <div class="test-checklist" id="tw-sb-checklist" style="margin-top:12px">
+                <div class="tc-row" id="tw-sb-tc-reach"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_reach">Samba share raggiungibile</span><span class="tc-result"></span></div>
+                <div class="tc-row" id="tw-sb-tc-write"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_write_folder">Scrittura nella cartella</span><span class="tc-result"></span></div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:8px">
+                <button type="button" class="wiz-btn secondary" id="tw-sb-remove" data-i18n="sync.wg_remove">Rimuovi</button>
+                <button class="btn-test-run" id="tw-sb-test"><span data-i18n="sync.test_connection_btn">Testa connessione</span></button>
+              </div>
+              <div id="tw-sb-result" class="test-summary" style="display:none;margin-top:8px"></div>
+            </div>
+
+              </div>
+            </div><!-- sync-section samba -->
+
+            <div class="sync-section" id="twsec-vpn">
+              <div class="sync-section-header" id="twsh-vpn">
+                <div class="sync-section-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                  <span data-i18n="sync.transport_vpn">VPN</span>
+                </div>
+                <div class="sync-section-right">
+                  <label class="toggle"><input type="checkbox" id="cfg-tw-samba-enabled" /><span class="slider"></span></label>
+                </div>
+              </div>
+              <div class="sync-section-body" id="twsb-vpn" style="display:flex">
             <!-- IDENTICAL view to Backup: configured summary + wizard. -->
             <!-- Configured/active summary — shown once setup is complete -->
             <div id="twoway-conn-ok" style="display:none;flex-direction:column;gap:10px">
@@ -1201,6 +1320,9 @@
                 </div>
                 <div id="tw-setup-result" class="test-summary" style="display:none"></div>
               </div>
+              </div>
+            </div><!-- sync-section vpn -->
+
             </div>
 
           </div><!-- tab-twoway -->
@@ -1516,6 +1638,15 @@
               <label class="toggle"><input type="checkbox" id="cfg-hide-syncbackup" /><span class="slider"></span></label>
             </div>
 
+            <!-- Notifications: hides the bell in the sidebar strip AND stops
+                 recording notifications behind it. Off means off — a hidden bell
+                 that kept a backlog would hand it all over the moment it came
+                 back. Stored with the appearance prefs, like the rows below. -->
+            <div class="field-group toggle-row">
+              <label><span data-i18n="theme.hide_notif_name">Nascondi notifiche</span> <small data-i18n="theme.hide_notif_desc">(On = nasconde l'icona nella barra e non mostra nessuna notifica)</small></label>
+              <label class="toggle"><input type="checkbox" id="cfg-hide-notif" /><span class="slider"></span></label>
+            </div>
+
             <!-- Where new items are created — same toggle-row layout as below -->
             <div class="field-group toggle-row">
               <label><span data-i18n="theme.note_loc_name">Nuove note</span> <small>(On = cartella corrente · Off = radice del vault)</small></label>
@@ -1682,6 +1813,7 @@
                     </div>
                   </div>
               </div>
+
 
 
 

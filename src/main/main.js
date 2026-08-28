@@ -257,9 +257,11 @@ const { encSecret, decSecret } = require('./credCrypto');
 const _SEC_PATHS = [
   ['sync', 'vpn', 'smb', 'password'],
   ['sync', 'twoway', 'smb', 'password'],
+  ['sync', 'twoway', 'smbLan', 'password'],
   ['sync', 'twoway', 'webdav', 'password'],
   ['sync', 'webdav', 'password'],
   ['sync', 'samba', 'password'],
+  ['sync', 'sambaLan', 'password'],
 ];
 // Return a deep clone of `cfg` with every known secret path mapped through `fn`.
 function mapConfigSecrets(cfg, fn) {
@@ -4762,7 +4764,10 @@ ipcMain.handle('wg:saveSyncConnection', async (_, smbConfig) => {
     if (fs.existsSync(CONFIG_FILE)) vaultCfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
     vaultCfg.sync = vaultCfg.sync || {};
     vaultCfg.sync.twoway = vaultCfg.sync.twoway || {};
-    vaultCfg.sync.twoway.useWireGuard = true;
+    // Do NOT touch useWireGuard/transport here. This handler saves a CONNECTION,
+    // not a method: the Sync tab's method choice owns those two, and forcing the
+    // flag turned a Samba (LAN) setup back into a VPN one the moment its share
+    // fields were saved.
     vaultCfg.sync.twoway.smb = {
       host:          smbConfig.ip,
       ip:            smbConfig.ip,

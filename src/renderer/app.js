@@ -1421,6 +1421,15 @@ const FONT_ORDER = [
 let syncSSTWidth = null;
 
 // Apply appearance vars to :root
+// Whether the notification bell — and everything behind it — is switched off in
+// Appearance. Read straight from storage here so it is already right for any
+// notification raised before the first applyAppearance() runs; applyAppearance
+// keeps it up to date afterwards.
+let _notifHidden = (() => {
+  try { return !!JSON.parse(localStorage.getItem('inkwell-appearance') || '{}').hideNotifications; }
+  catch (_) { return false; }
+})();
+
 function applyAppearance(prefs = {}) {
   const root = document.documentElement;
   const edSize    = prefs.editorFontSize  ?? 15;
@@ -1435,6 +1444,8 @@ function applyAppearance(prefs = {}) {
   const noteLoc   = prefs.noteLocation    ?? 'current';
   // Global size of the top toolbar icons, as a percentage (100 = default).
   const tbZoom    = prefs.toolbarZoom     ?? 100;
+  // Notifications off: no bell, and nothing recorded behind it (see below).
+  const hideNotif = !!(prefs.hideNotifications ?? false);
   root.style.setProperty('--editor-font-size',   edSize   + 'px');
   root.style.setProperty('--tree-item-py',        treePy   + 'px');
   root.style.setProperty('--tree-font-size',      treeSize + 'px');
@@ -1449,8 +1460,21 @@ function applyAppearance(prefs = {}) {
   // The strip's width is written in px and `zoom` scales it, so it has to be recomputed
   // for the new zoom — otherwise it keeps the previous size until the sidebar is resized.
   try { if (syncSSTWidth) syncSSTWidth(); } catch (_) {}
+  // Notifications: hide the bell (the unread badge lives inside it), close the
+  // popup if it is open, and leave the notifications sidebar view — staying on
+  // a list that can no longer be reached from anywhere would trap the user.
+  _notifHidden = hideNotif;
+  { const nb = $('btn-notifications'); if (nb) nb.style.display = hideNotif ? 'none' : ''; }
+  if (hideNotif) {
+    const pop = $('notif-popup'); if (pop) pop.style.display = 'none';
+    if (_sidebarView === 'notifications') { try { switchSidebarView('files'); } catch (_) {} }
+  }
+  { const cb = $('cfg-hide-notif'); if (cb) cb.checked = hideNotif; }
+  // The strip lays its icons out from the visible ones, so it has to be
+  // re-measured when one appears or disappears.
+  try { alignSidebarStrip(); } catch (_) {}
   // persist
-  try { localStorage.setItem('inkwell-appearance', JSON.stringify({ editorFontSize: edSize, treeSpacing: treePy, treeFontSize: treeSize, editorFont: fontKey, drawLocation: drawLoc, noteLocation: noteLoc, toolbarZoom: tbZoom })); } catch(_) {}
+  try { localStorage.setItem('inkwell-appearance', JSON.stringify({ editorFontSize: edSize, treeSpacing: treePy, treeFontSize: treeSize, editorFont: fontKey, drawLocation: drawLoc, noteLocation: noteLoc, toolbarZoom: tbZoom, hideNotifications: hideNotif })); } catch(_) {}
   updateFontDropdownCurrent(fontKey);
   updateNumberDdCurrent('edsize-dd', edSize,   'px');
   updateNumberDdCurrent('treesp-dd', treePy,   'px');
@@ -1544,6 +1568,19 @@ function setupDrawLocation() {
       const prefs = loadAppearance();
       prefs.noteLocation = nt.checked ? 'current' : 'root';
       applyAppearance(prefs);
+    });
+  }
+  // Notifications off: same pattern, and applyAppearance does the rest (hides
+  // the bell, closes the popup, leaves the notifications view).
+  const hn = document.getElementById('cfg-hide-notif');
+  if (hn && !hn.dataset.wired) {
+    hn.dataset.wired = '1';
+    hn.addEventListener('change', () => {
+      const prefs = loadAppearance();
+      prefs.hideNotifications = !!hn.checked;
+      applyAppearance(prefs);
+      // Turning it back on: redraw the bell with whatever is due now.
+      try { updateNotifBell(); } catch (_) {}
     });
   }
 }
@@ -10045,7 +10082,8 @@ function setupSettings() {
         // entry — drop any open Riconfigura/expanded form so switching tabs
         // doesn't keep a half-edited wizard around.
         if (btn.dataset.tab === 'sync')   { _smbExpanded.backup = false; try { updateWgConfiguredView(); } catch (_) {} applySmbCollapse('backup'); }
-        if (btn.dataset.tab === 'twoway') { _smbExpanded.sync   = false; try { updateTwowayConnView(); }   catch (_) {} applySmbCollapse('sync'); }
+        // Opening Sync shows ONE method — the pill's — like opening Backup does.
+        if (btn.dataset.tab === 'twoway') { _smbExpanded.sync   = false; try { updateTwowayConnView(); } catch (_) {} applySmbCollapse('sync'); }
       });
     });
   });
@@ -10117,8 +10155,10 @@ function setupSettings() {
       if ($('cfg-twoway-enabled')) $('cfg-twoway-enabled').checked = false;
     if ($('cfg-tw-webdav-enabled')) $('cfg-tw-webdav-enabled').checked = false;
     if ($('cfg-tw-samba-enabled'))  $('cfg-tw-samba-enabled').checked  = false;
+    if ($('cfg-tw-lan-enabled'))    $('cfg-tw-lan-enabled').checked    = false;
       if ($('cfg-tw-webdav-enabled')) $('cfg-tw-webdav-enabled').checked = false;
       if ($('cfg-tw-samba-enabled'))  $('cfg-tw-samba-enabled').checked  = false;
+      if ($('cfg-tw-lan-enabled'))    $('cfg-tw-lan-enabled').checked    = false;
       // Reset the in-form fields.
       ['cfg-smb-ip','cfg-smb-share','cfg-smb-path','cfg-smb-user','cfg-smb-pass'].forEach(id => { const el = $(id); if (el) el.value = ''; });
       const wgConf = $('cfg-wg-conf'); if (wgConf) wgConf.value = '';
@@ -10190,6 +10230,7 @@ function setupSettings() {
     if ($('cfg-twoway-enabled')) $('cfg-twoway-enabled').checked = false;
     if ($('cfg-tw-webdav-enabled')) $('cfg-tw-webdav-enabled').checked = false;
     if ($('cfg-tw-samba-enabled'))  $('cfg-tw-samba-enabled').checked  = false;
+    if ($('cfg-tw-lan-enabled'))    $('cfg-tw-lan-enabled').checked    = false;
     // A fresh import means reconfiguring → the Samba form must be visible.
     setSmbPanelsVisible(true);
     updateVpnModeWarn();
@@ -10216,6 +10257,34 @@ function setupSettings() {
     $(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }));
   // Server Address = 4-group IP input (auto-dot after 3 digits, clickable groups).
   initIpGroup('cfg-smb-ip');
+
+  // ── Samba destination without VPN (own fields, own test) ──────────────
+  initIpGroup('cfg-sb-ip');
+  const _SB_FIELDS = ['cfg-sb-ip', 'cfg-sb-share', 'cfg-sb-path', 'cfg-sb-user', 'cfg-sb-pass'];
+  _SB_FIELDS.forEach(id => {
+    // Editing the connection invalidates the passed test: a share that was
+    // proven writable is not evidence about the one just typed in its place.
+    $(id)?.addEventListener('input', () => {
+      state._sambaLanTested = null;
+      const t = $('cfg-samba-enabled');
+      if (t && t.checked) { t.checked = false; try { updateActionNowButtons(); } catch (_) {} }
+    });
+    $(id)?.addEventListener('blur', () => { saveSettings().catch(() => {}); });
+    $(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
+  });
+  $('btn-sb-run-test')?.addEventListener('click', () => runSambaLanTest());
+  $('sb-reconfigure')?.addEventListener('click', () => { _sbExpanded = true; applySambaLanCollapse(); });
+  // No confirm dialog — same convention as the other Remove buttons here.
+  $('btn-sb-remove')?.addEventListener('click', async () => {
+    _SB_FIELDS.forEach(id => { const el = $(id); if (el) { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); } });
+    state._sambaLanTested = null;
+    const t = $('cfg-samba-enabled'); if (t) t.checked = false;
+    _sbExpanded = true;
+    resetSambaLanChecklist();
+    applySambaLanCollapse();
+    await saveSettings().catch(() => {});
+    updateActionNowButtons();
+  });
   // The former "Salva configurazione" is now "Remove": wipe the (shared) VPN +
   // Samba params in both tabs.
   $('btn-vpn-save-config')?.addEventListener('click', () => _removeWgCompletely());
@@ -10224,7 +10293,7 @@ function setupSettings() {
   $('cfg-vpn-folder')?.addEventListener('change', updateVpnModeWarn);
   $('cfg-vpn-archive')?.addEventListener('change', updateVpnModeWarn);
   // Show/hide the "now" action buttons as the destination toggles change.
-  ['cfg-local-enabled', 'cfg-vpn-enabled', 'cfg-webdav-enabled', 'cfg-twoway-enabled'].forEach(id =>
+  ['cfg-local-enabled', 'cfg-samba-enabled', 'cfg-vpn-enabled', 'cfg-webdav-enabled', 'cfg-twoway-enabled'].forEach(id =>
     $(id)?.addEventListener('change', updateActionNowButtons));
   $('cfg-vpn-enabled')?.addEventListener('change', e => {
     // Gate: can't enable VPN+Samba backup until the Samba connection test passed.
@@ -10238,14 +10307,16 @@ function setupSettings() {
       showToast('✗ ' + window.i18n.t('sync.vpn_need_mode'));
     }
   });
-  // Backup: WebDAV and VPN-with-Samba are mutually exclusive REMOTE methods —
-  // only one remote at a time. Local is independent (can stay on with either).
-  // Trying to enable the second remote shows an error and reverts it.
+  // ONE remote backup destination at a time. Samba (LAN) and VPN both write to
+  // an SMB share and the engine resolves a single Samba config, so they are
+  // exclusive with each other as well as with WebDAV. Local is not remote and
+  // may run alongside any of them.
+  const _BK_REMOTES = ['webdav', 'vpn', 'samba'];
   function backupRemoteExclusiveGuard(which) {
-    const wd = $('cfg-webdav-enabled'), vp = $('cfg-vpn-enabled');
-    const me = which === 'webdav' ? wd : vp;
-    const other = which === 'webdav' ? vp : wd;
-    if (me && me.checked && other && other.checked) {
+    const box = (k) => $('cfg-' + k + '-enabled');
+    const me = box(which);
+    const other = _BK_REMOTES.filter(k => k !== which).map(box).find(el => el && el.checked);
+    if (me && me.checked && other) {
       me.checked = false;
       showToast('✗ ' + window.i18n.t('sync.backup_one_remote'));
       try { updateActionNowButtons(); } catch (_) {}
@@ -10255,6 +10326,23 @@ function setupSettings() {
   }
   $('cfg-webdav-enabled')?.addEventListener('change', () => backupRemoteExclusiveGuard('webdav'));
   $('cfg-vpn-enabled')?.addEventListener('change', () => backupRemoteExclusiveGuard('vpn'));
+  $('cfg-samba-enabled')?.addEventListener('change', () => backupRemoteExclusiveGuard('samba'));
+  // Gate: the Samba destination can't be switched on until its write test passed
+  // — same rule the WebDAV toggle follows, so an unusable share can't sit
+  // "enabled" and fail silently at backup time.
+  $('cfg-samba-enabled')?.addEventListener('change', e => {
+    if (e.target.checked && !sambaLanTested()) {
+      e.target.checked = false;
+      showToast('✗ ' + window.i18n.t('sync.test_first'));
+      return;
+    }
+    // Same rule as the VPN destination: with BOTH formats off there is nothing
+    // to write, so refuse to switch the destination on.
+    if (e.target.checked && !$('cfg-backup-normal')?.checked && !$('cfg-backup-archived')?.checked) {
+      e.target.checked = false;
+      showToast('✗ ' + window.i18n.t('sync.vpn_need_mode'));
+    }
+  });
   // Gate: can't enable WebDAV backup until the connection test passed.
   $('cfg-webdav-enabled')?.addEventListener('change', e => {
     if (e.target.checked && !backupWebdavTested()) {
@@ -10369,16 +10457,19 @@ function setupSettings() {
   // Eye toggle to reveal the Samba password in clear (Backup + Sync tabs), plus
   // the WebDAV password / app-token.
   [['cfg-smb-pass', 'cfg-smb-pass-eye'], ['tw-smb-pass', 'tw-smb-pass-eye'],
+   ['cfg-sb-pass', 'cfg-sb-pass-eye'],
    ['cfg-webdav-pass', 'cfg-webdav-pass-eye'], ['tw-webdav-pass', 'tw-webdav-pass-eye']].forEach(([i, e]) =>
     wirePasswordSecEye($(i), $(e)));
 
-  // Sync transport chooser (WireGuard+Samba ↔ WebDAV) + WebDAV test.
+  // Sync connection-type chooser — exactly like Backup's: it only picks WHICH
+  // method you are looking at. What actually runs is the method whose own toggle
+  // is on, so clicking a pill must NOT switch the transport out from under a
+  // working setup. Persisted separately, as Backup persists backupTransport.
   document.querySelectorAll('#tw-transport-pills .dlp').forEach(b => b.addEventListener('click', async () => {
-    document.querySelectorAll('#tw-transport-pills .dlp').forEach(x => x.classList.toggle('active', x === b));
     state.config = state.config || {}; state.config.sync = state.config.sync || {}; state.config.sync.twoway = state.config.sync.twoway || {};
-    state.config.sync.twoway.transport = b.dataset.transport;
+    state.config.sync.twoway.transportView = b.dataset.transport;
+    try { updateTwowayConnView(); } catch (_) {}
     try { await saveSettings(); } catch (_) {}
-    try { await updateTwowayConnView(); } catch (_) {}
     try { updateSyncButtonVisibility(); } catch (_) {}
   }));
   $('tw-webdav-test')?.addEventListener('click', async () => {
@@ -10729,42 +10820,83 @@ function setupSettings() {
   // Two activation toggles (WebDAV / WireGuard+Samba), mutually exclusive. They
   // DRIVE the hidden master toggle + transport selector that the rest of the code
   // reads, so two-way sync still runs with a single transport.
+  // Toggle id ↔ transport. The VPN one keeps the id it has always had, so every
+  // other flow that clears `cfg-tw-samba-enabled` keeps working untouched.
+  const _TW_METHODS = { webdav: 'cfg-tw-webdav-enabled', samba: 'cfg-tw-lan-enabled', vpn: 'cfg-tw-samba-enabled' };
   function applyTwowayMethodToggle(changed) {
-    const w = $('cfg-tw-webdav-enabled'), s = $('cfg-tw-samba-enabled');
-    if (!w || !s) return;
-    const enabled = w.checked || s.checked;
-    const transport = w.checked ? 'webdav' : (s.checked ? 'samba' : (state.config?.sync?.twoway?.transport || 'samba'));
+    const on = (k) => !!$(_TW_METHODS[k])?.checked;
+    const enabled = on('webdav') || on('samba') || on('vpn');
+    const picked = on('webdav') ? 'webdav' : on('samba') ? 'samba' : on('vpn') ? 'vpn' : null;
     const master = $('cfg-twoway-enabled'); if (master) master.checked = enabled;
-    document.querySelectorAll('#tw-transport-pills .dlp').forEach(b => b.classList.toggle('active', b.dataset.transport === transport));
     state.config = state.config || {}; state.config.sync = state.config.sync || {}; state.config.sync.twoway = state.config.sync.twoway || {};
     state.config.sync.twoway.enabled = enabled;
-    state.config.sync.twoway.transport = transport;
-    if (transport === 'samba') state.config.sync.twoway.useWireGuard = true;
+    // Every method off → leave the recorded transport alone. Overwriting it
+    // would rewrite a setup no toggle represents (the legacy mounted folder).
+    if (picked) {
+      state.config.sync.twoway.transport = picked;
+      // The flag is what tells a tunnel apart from a share we can already
+      // reach — and what keeps an OLD config ('samba' meant WireGuard) readable.
+      state.config.sync.twoway.useWireGuard = (picked === 'vpn');
+    }
+    // Switching a method ON also selects it — you just chose it.
+    if (picked) state.config.sync.twoway.transportView = picked;
+    try { updateTwowayConnView(); } catch (_) {}
   }
-  // Reflect the saved config onto the two visible toggles (called on load and after
-  // any flow that flips the master enable).
+  // Reflect the saved config onto the three visible toggles (called on load and
+  // after any flow that flips the master enable).
   window._refreshTwowayMethodToggles = function () {
     const tw = state.config?.sync?.twoway || {};
-    const on = !!tw.enabled, tr = tw.transport || 'samba';
-    if ($('cfg-tw-webdav-enabled')) $('cfg-tw-webdav-enabled').checked = on && tr === 'webdav';
-    if ($('cfg-tw-samba-enabled'))  $('cfg-tw-samba-enabled').checked  = on && tr !== 'webdav';
+    const on = !!tw.enabled, tr = twowayTransportOf(tw);
+    Object.entries(_TW_METHODS).forEach(([k, id]) => { const el = $(id); if (el) el.checked = on && tr === k; });
+    // The panels follow the selection, not the toggles; refresh them so the
+    // freshly loaded method shows its own.
+    try { updateTwowayConnView(); } catch (_) {}
   };
-  ['webdav', 'samba'].forEach(which => {
-    $('cfg-tw-' + which + '-enabled')?.addEventListener('change', async () => {
-      const w = $('cfg-tw-webdav-enabled'), s = $('cfg-tw-samba-enabled');
-      const me = which === 'webdav' ? w : s;
-      const other = which === 'webdav' ? s : w;
+  // Samba (LAN) sync panel: its own fields, its own test, no VPN anywhere.
+  initIpGroup('tw-sb-ip');
+  ['tw-sb-ip', 'tw-sb-share', 'tw-sb-path', 'tw-sb-user', 'tw-sb-pass'].forEach(id => {
+    $(id)?.addEventListener('input', () => {
+      state._twSambaLanTested = null;            // edited → the proof is stale
+      const t = $('cfg-tw-lan-enabled'); if (t && t.checked) { t.checked = false; applyTwowayMethodToggle('samba'); }
+    });
+    $(id)?.addEventListener('blur', () => { saveSettings().catch(() => {}); });
+    $(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
+  });
+  $('tw-sb-test')?.addEventListener('click', () => runSyncSambaLanTest());
+  $('tw-sb-remove')?.addEventListener('click', async () => {
+    ['tw-sb-ip', 'tw-sb-share', 'tw-sb-path', 'tw-sb-user', 'tw-sb-pass'].forEach(id => {
+      const el = $(id); if (el) { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); }
+    });
+    const g = document.querySelector('.ip-group[data-ip="tw-sb-ip"]');
+    if (g) g.querySelectorAll('.ip-oct').forEach(o => (o.value = ''));
+    state._twSambaLanTested = null;
+    const t = $('cfg-tw-lan-enabled'); if (t) t.checked = false;
+    applyTwowayMethodToggle('samba');
+    await saveSettings().catch(() => {});
+  });
+
+  Object.keys(_TW_METHODS).forEach(which => {
+    $(_TW_METHODS[which])?.addEventListener('change', async () => {
+      const me = $(_TW_METHODS[which]);
+      // Clicking a method SELECTS it first: its panel comes up even if the
+      // enable is refused below, so it can be filled in and tested at all.
+      updateTwowaySelection(which);
+      const other = Object.keys(_TW_METHODS).filter(k => k !== which).map(k => $(_TW_METHODS[k])).find(el => el && el.checked);
       // You can enable only ONE method (the engine syncs with a single source).
-      // Trying to turn the second one on shows an error and reverts it — instead
+      // Trying to turn a second one on shows an error and reverts it — instead
       // of silently switching — so the choice is explicit.
-      if (me.checked && other && other.checked) {
+      if (me.checked && other) {
         me.checked = false;
         const err = $('tw-method-error');
         if (err) { err.style.display = 'block'; err.textContent = window.i18n.t('sync.twoway_one_only'); }
         return;
       }
-      // Gate: can't enable a two-way method until its connection test has passed.
-      if (me.checked && !(which === 'webdav' ? syncWebdavTested() : syncSmbTested())) {
+      // Gate: can't enable a two-way method until ITS OWN connection test has
+      // passed — the Samba method answers for its own share, not the VPN's.
+      const tested = which === 'webdav' ? syncWebdavTested()
+        : which === 'samba' ? syncSambaLanTested()
+        : syncSmbTested();
+      if (me.checked && !tested) {
         me.checked = false;
         const err = $('tw-method-error');
         if (err) { err.style.display = 'block'; err.textContent = window.i18n.t('sync.test_first'); }
@@ -10828,8 +10960,10 @@ function setupSettings() {
       if ($('cfg-twoway-enabled')) $('cfg-twoway-enabled').checked = false;
     if ($('cfg-tw-webdav-enabled')) $('cfg-tw-webdav-enabled').checked = false;
     if ($('cfg-tw-samba-enabled'))  $('cfg-tw-samba-enabled').checked  = false;
+    if ($('cfg-tw-lan-enabled'))    $('cfg-tw-lan-enabled').checked    = false;
       if ($('cfg-tw-webdav-enabled')) $('cfg-tw-webdav-enabled').checked = false;
       if ($('cfg-tw-samba-enabled'))  $('cfg-tw-samba-enabled').checked  = false;
+      if ($('cfg-tw-lan-enabled'))    $('cfg-tw-lan-enabled').checked    = false;
       ['tw-smb-ip','tw-smb-share','tw-smb-path','tw-smb-user','tw-smb-pass'].forEach(id => { const el = $(id); if (el) el.value = ''; });
       // Reset the WG import affordance (the .conf was fully removed).
       _twHasSavedConf = false;
@@ -10932,6 +11066,8 @@ function setupTwowaySetup() {
     // With WireGuard a .conf is required (new or already saved); with OpenVPN the
     // just-loaded .ovpn or an already-imported connection is enough (as in Backup).
     // Say EXACTLY what's missing: VPN not loaded and/or Samba fields empty.
+    // This wizard belongs to the VPN method alone — the Samba method has its own
+    // panel and its own test — so a VPN config IS required here, as it always was.
     let vpnLoaded;
     if (_vpnType === 'openvpn') {
       vpnLoaded = !!_ovpnContent;
@@ -10951,7 +11087,9 @@ function setupTwowaySetup() {
       const dot = row.querySelector('.tc-dot'); if (dot) dot.className = 'tc-dot pending';
       const r = row.querySelector('.tc-result'); if (r) { r.textContent = '…'; r.style.color = ''; }
     });
-    // Label of the first entry based on the active VPN type.
+    // Label of the first entry based on the active VPN type. The row stays for
+    // both methods: with no tunnel the backend reports it as "reachable
+    // directly (LAN) · no tunnel needed", which is worth seeing.
     const twWgLbl = $('tw-tc-wg')?.querySelector('.tc-label');
     if (twWgLbl) twWgLbl.textContent = _vpnType === 'openvpn'
       ? window.i18n.t('sync.tc_ovpn_conn') : window.i18n.t('sync.tc_wg_conn');
@@ -11075,6 +11213,7 @@ async function _removeWgCompletely() {
     if ($('cfg-twoway-enabled')) $('cfg-twoway-enabled').checked = false;
     if ($('cfg-tw-webdav-enabled')) $('cfg-tw-webdav-enabled').checked = false;
     if ($('cfg-tw-samba-enabled'))  $('cfg-tw-samba-enabled').checked  = false;
+    if ($('cfg-tw-lan-enabled'))    $('cfg-tw-lan-enabled').checked    = false;
     _twHasSavedConf = false;
     // OpenVPN side (the removal deletes the .ovpn + NM connection too): drop the
     // pending content, clear credentials and show the drop zones again.
@@ -11106,12 +11245,17 @@ async function _removeWebdav(scope) {
   state._webdavSaved[scope] = { url: '', username: '', password: '', remotePath: '' };
   if (scope === 'sync') {
     if ($('cfg-tw-webdav-enabled')) $('cfg-tw-webdav-enabled').checked = false;
-    // Keep the hidden master enable in sync with the two method toggles.
-    const stillOn = !!$('cfg-tw-samba-enabled')?.checked;
+    // Keep the hidden master enable in sync with the method toggles.
+    const vpnOn = !!$('cfg-tw-samba-enabled')?.checked;
+    const lanOn = !!$('cfg-tw-lan-enabled')?.checked;
+    const stillOn = vpnOn || lanOn;
     if ($('cfg-twoway-enabled')) $('cfg-twoway-enabled').checked = stillOn;
     state.config = state.config || {}; state.config.sync = state.config.sync || {}; state.config.sync.twoway = state.config.sync.twoway || {};
     state.config.sync.twoway.enabled = stillOn;
-    if (stillOn) state.config.sync.twoway.transport = 'samba';
+    if (stillOn) {
+      state.config.sync.twoway.transport = lanOn ? 'samba' : 'vpn';
+      state.config.sync.twoway.useWireGuard = !lanOn;
+    }
   } else if ($('cfg-webdav-enabled')) {
     $('cfg-webdav-enabled').checked = false;
   }
@@ -11165,7 +11309,9 @@ async function _removeSambaOnly(scope) {
     if (ipGroup) ipGroup.querySelectorAll('.ip-oct').forEach(o => (o.value = ''));
     const prev = $(scope === 'sync' ? 'smb-preview-sync' : 'smb-preview-backup'); if (prev) prev.style.display = 'none';
     const form = $(scope === 'sync' ? 'smb-form-sync' : 'smb-form-backup'); if (form) form.style.display = '';
+    // Both SMB methods lose their connection here — neither may stay enabled.
     if (scope === 'sync' && $('cfg-tw-samba-enabled')) $('cfg-tw-samba-enabled').checked = false;
+    if (scope === 'sync' && $('cfg-tw-lan-enabled'))   $('cfg-tw-lan-enabled').checked   = false;
     try { updateActionNowButtons(); } catch (_) {}
   } catch (e) { console.error('removeSambaOnly failed:', e); }
 }
@@ -11571,7 +11717,12 @@ function updateActionNowButtons() {
   const backupTested = !!(smbConn && (smbConn.host || smbConn.ip) && smbConn.share);
   const modeOk = (s.vpn?.folder !== false) || !!s.vpn?.archive;
   const vpnReady = !!s.vpn?.enabled && modeOk && backupTested;
-  const anyBackup = !!(s.local?.enabled || s.webdav?.enabled || vpnReady);
+  // Same three conditions for the VPN-less Samba destination, against its own
+  // saved connection and its own format flags.
+  const sl = s.sambaLan;
+  const sambaReady = !!sl?.enabled && ((sl.folder !== false) || !!sl.archive)
+    && !!((sl.host || sl.ip) && sl.share);
+  const anyBackup = !!(s.local?.enabled || s.webdav?.enabled || vpnReady || sambaReady);
   // Whole manual-backup block (label + hint + button) appears only with a backup.
   const topBlock = $('manual-backup-block'); if (topBlock) topBlock.style.display = anyBackup ? 'flex' : 'none';
   // Sync ready = toggle saved + its OWN connection saved by "Salva connessione"
@@ -11600,11 +11751,15 @@ function updateBackupDestSummary() {
   const v = (id) => { const el = $(id); return el && typeof el.value === 'string' ? el.value.trim() : ''; };
   const on = (id) => !!$(id)?.checked;
   const smbShare = v('cfg-smb-share'), smbPath = v('cfg-smb-path');
+  const sbShare  = v('cfg-sb-share'),  sbPath  = v('cfg-sb-path');
   const wdUrl = v('cfg-webdav-url') || state._webdavSaved?.backup?.url || state.config?.sync?.webdav?.url || '';
   const dests = [
     { key: 'sync.local', enabled: on('cfg-local-enabled'), target: v('cfg-local-path'),
       configured: !!v('cfg-local-path') },
-    { key: 'sync.transport_samba', enabled: on('cfg-vpn-enabled'),
+    { key: 'sync.transport_samba_only', enabled: on('cfg-samba-enabled'),
+      target: sbShare ? sbShare + (sbPath ? '/' + sbPath : '') : '',
+      configured: !!(v('cfg-sb-ip') && sbShare) },
+    { key: 'sync.transport_vpn', enabled: on('cfg-vpn-enabled'),
       target: smbShare ? smbShare + (smbPath ? '/' + smbPath : '') : '',
       configured: !!(v('cfg-smb-ip') && smbShare) },
     { key: 'sync.transport_webdav', enabled: on('cfg-webdav-enabled'), target: wdUrl,
@@ -11997,6 +12152,99 @@ async function runConnectionTest() {
   $('btn-run-test').disabled = false;
 }
 
+// ── Samba destination, no VPN ────────────────────────────────────────────
+// The share sits on the network you are already on, so there is no tunnel to
+// report and nothing to import first: the backend write test already answers
+// "reachable directly (LAN) · no tunnel needed" in that case. Only the VPN
+// destination's precondition ("import a .conf/.ovpn before testing") stood in
+// the way, and it does not apply here.
+let _sbExpanded = false;
+
+function resetSambaLanChecklist() {
+  ['sb-tc-reach', 'sb-tc-write'].forEach(id => {
+    const row = $(id); if (!row) return;
+    const dot = row.querySelector('.tc-dot');   if (dot) dot.className = 'tc-dot idle';
+    const res = row.querySelector('.tc-result'); if (res) { res.textContent = ''; res.style.color = ''; }
+  });
+  const sm = $('sb-test-summary'); if (sm) { sm.style.display = 'none'; sm.textContent = ''; }
+}
+
+// Configured and not being edited → collapse the fields to a one-line summary,
+// like the VPN destination's Samba form does.
+function applySambaLanCollapse() {
+  const form = $('smb-form-sblan'), prev = $('smb-preview-sblan'), lbl = $('smb-summary-sblan');
+  if (!form || !prev) return;
+  const ip    = $('cfg-sb-ip')?.value.trim()    || '';
+  const share = $('cfg-sb-share')?.value.trim() || '';
+  const path  = $('cfg-sb-path')?.value.trim()  || '';
+  const collapse = !!(ip && share) && !_sbExpanded;
+  form.style.display = collapse ? 'none' : '';
+  prev.style.display = collapse ? 'flex' : 'none';
+  if (lbl) lbl.textContent = ip + ' · ' + share + (path ? '/' + path : '');
+}
+
+async function runSambaLanTest() {
+  const btn = $('btn-sb-run-test'), summary = $('sb-test-summary');
+  const fail = (msg) => {
+    if (summary) { summary.style.display = 'block'; summary.className = 'test-summary fail'; summary.textContent = '✗ ' + msg; }
+    if (btn) btn.disabled = false;
+  };
+  const ip = $('cfg-sb-ip')?.value.trim() || '', share = $('cfg-sb-share')?.value.trim() || '';
+  if (!ip || !share)        return fail(window.i18n.t('sync.samba_missing'));
+  if (!isValidSmbHost(ip))  return fail(window.i18n.t('sync.invalid_ip'));
+
+  const rowByKey = { reach: 'sb-tc-reach', write: 'sb-tc-write' };
+  Object.values(rowByKey).forEach(id => {
+    const row = $(id); if (!row) return;
+    const dot = row.querySelector('.tc-dot');   if (dot) dot.className = 'tc-dot pending';
+    const res = row.querySelector('.tc-result'); if (res) { res.textContent = '…'; res.style.color = ''; }
+  });
+  if (summary) { summary.style.display = 'block'; summary.className = 'test-summary'; summary.textContent = window.i18n.t('sync.tw_testing'); }
+  if (btn) btn.disabled = true;
+
+  const smbConfig = {
+    ip, share,
+    path:     $('cfg-sb-path')?.value.trim() || '',
+    username: $('cfg-sb-user')?.value        || '',
+    password: $('cfg-sb-pass')?.value        || '',
+  };
+  let result;
+  try { result = await window.inkwell.wg.testSmbWrite(smbConfig, 'backup'); }
+  catch (e) { return fail(e?.message || window.i18n.t('sync.test_failed')); }
+
+  const byKey = Object.fromEntries((result.steps || []).map(s => [s.key, s]));
+  // A failed "wg" step here means only: not reachable, and no tunnel could
+  // stand in. With no VPN in play that IS the reachability verdict, so show it
+  // on the reachability row instead of a step the user never asked for.
+  const reachStep = (byKey.wg && !byKey.wg.ok) ? { ...byKey.wg, key: 'reach' } : byKey.reach;
+  [reachStep, byKey.write].forEach(step => {
+    if (!step) return;
+    const row = $(rowByKey[step.key]); if (!row) return;
+    const dot = row.querySelector('.tc-dot');
+    const res = row.querySelector('.tc-result');
+    if (dot) dot.className = 'tc-dot ' + (step.ok ? 'ok' : 'fail');
+    if (res) {
+      const d = vpnStepDetail(step);
+      res.textContent = step.ok ? '✓' + (d ? ' ' + d : '') : '✗ ' + (d || window.i18n.t('status.error'));
+      res.style.color = step.ok ? 'var(--green)' : 'var(--red)';
+    }
+  });
+
+  if (result.ok) {
+    state._sambaLanTested = smbConfig;
+    if (summary) { summary.className = 'test-summary ok'; summary.textContent = '✓ ' + window.i18n.t('sync.test_ok_now_save'); }
+    _sbExpanded = false;
+    applySambaLanCollapse();
+    await saveSettings().catch(() => {});
+  } else {
+    state._sambaLanTested = null;
+    const failed = (result.steps || []).find(s => !s.ok);
+    if (summary) { summary.className = 'test-summary fail'; summary.textContent = '✗ ' + window.i18n.t('sync.test_failed'); }
+    if (failed) { try { addEventNotif(window.i18n.t('sync.smbtest_title') + ': ' + vpnStepLabel(failed) + (vpnStepDetail(failed) ? ' — ' + vpnStepDetail(failed) : ''), false); } catch (_) {} }
+  }
+  if (btn) btn.disabled = false;
+}
+
 // Null-safe reads: the WireGuard/Samba wizard UI was simplified over time, so
 // some legacy inputs no longer exist. Reading `.value` off a missing element
 // used to throw and silently abort the whole saveSettings() — never do that.
@@ -12050,6 +12298,20 @@ async function openSettings() {
     setVal('cfg-smb-path',  vpn.smb?.path     || vpn.remotePath || cfg.sync?.samba?.remoteSubPath || 'amelie/backup');
     setVal('cfg-smb-user',  vpn.smb?.username || '');
     setVal('cfg-smb-pass',  vpn.smb?.password || '');
+  }
+  // Samba destination without VPN — its own saved connection.
+  {
+    const sb = cfg.sync?.sambaLan;
+    const setSb = (id, v) => { const el = $(id); if (el) el.value = v || ''; };
+    setSb('cfg-sb-ip',    sb?.ip || sb?.host);
+    setSb('cfg-sb-share', sb?.share);
+    setSb('cfg-sb-path',  sb?.remoteSubPath);
+    setSb('cfg-sb-user',  sb?.username);
+    setSb('cfg-sb-pass',  sb?.password);
+    const t = $('cfg-samba-enabled'); if (t) t.checked = !!sb?.enabled;
+    _sbExpanded = false;
+    resetSambaLanChecklist();
+    applySambaLanCollapse();
   }
   // Backup server fields empty but a Sync connection exists → prefill the
   // SERVER part from it (same shared connection); the folder stays empty
@@ -12249,6 +12511,7 @@ function closeSettings() {
     if ($('cfg-twoway-enabled')) $('cfg-twoway-enabled').checked = false;
     if ($('cfg-tw-webdav-enabled')) $('cfg-tw-webdav-enabled').checked = false;
     if ($('cfg-tw-samba-enabled'))  $('cfg-tw-samba-enabled').checked  = false;
+    if ($('cfg-tw-lan-enabled'))    $('cfg-tw-lan-enabled').checked    = false;
     window.inkwell.wg.removeSyncConnection().then(async () => {
       try { state.config = await window.inkwell.readConfig(); } catch (_) {}
       updateVpnConfiguredBadge();
@@ -12265,6 +12528,7 @@ async function saveSettings() {
     autoSaveSeconds: parseInt($('cfg-autosave').value) || 3,
     sync: {
       enabled: !!$('cfg-vpn-enabled')?.checked || $('cfg-webdav-enabled').checked
+        || !!$('cfg-samba-enabled')?.checked
         || !!$('cfg-local-enabled').checked || !!$('cfg-twoway-enabled')?.checked,
       // Which backup destination tab is shown (Local / WireGuard+Samba / WebDAV).
       backupTransport: (document.querySelector('#bk-transport-pills .dlp.active')?.dataset.bktransport)
@@ -12281,6 +12545,28 @@ async function saveSettings() {
           ? { host: t.ip, share: t.share, remoteSubPath: t.path || '', username: t.username, password: t.password, useWireGuard: true }
           : prev;
         return { ...base, enabled: !!$('cfg-vpn-enabled')?.checked };
+      })(),
+      // Samba destination WITHOUT a VPN. Its own key on purpose: sync.samba is
+      // the VPN destination's connection mirror, and the two must be able to
+      // point at different servers without overwriting each other.
+      sambaLan: (() => {
+        const v = (id) => { const el = $(id); return el && typeof el.value === 'string' ? el.value.trim() : ''; };
+        const ip = v('cfg-sb-ip');
+        const wantArchive = !!$('cfg-backup-archived')?.checked;
+        const wantFolder  = !!$('cfg-backup-normal')?.checked;
+        return {
+          enabled: !!$('cfg-samba-enabled')?.checked,
+          host: ip, ip,
+          share:         v('cfg-sb-share'),
+          remoteSubPath: v('cfg-sb-path'),
+          username:      v('cfg-sb-user'),
+          password:      $('cfg-sb-pass')?.value || '',
+          useWireGuard:  false,          // never raise a tunnel for this one
+          folder: wantFolder,
+          archive: wantArchive,
+          archiveOnly: wantArchive && !wantFolder,
+          keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
+        };
       })(),
       webdav: {
         enabled: $('cfg-webdav-enabled').checked,
@@ -12318,10 +12604,25 @@ async function saveSettings() {
       // Two-way sync (read remote + update local + push). Separate from backup.
       twoway: {
         enabled: !!$('cfg-twoway-enabled')?.checked,
-        useWireGuard: true,
-        // Transport: 'samba' (WireGuard+Samba, default) or 'webdav'.
-        transport: (document.querySelector('#tw-transport-pills .dlp.active')?.dataset.transport)
-          || state.config?.sync?.twoway?.transport || 'samba',
+        // Transport: 'samba' (share on a network we already reach), 'vpn' (the
+        // same share through a tunnel) or 'webdav'. `useWireGuard` follows it,
+        // and is also what tells an OLD config's 'samba' — which meant VPN —
+        // apart from the new one. A config no method toggle represents (the
+        // legacy mounted folder) keeps its stored value verbatim: writing a
+        // transport here would reroute a working setup.
+        ...(() => {
+          const on = (id) => !!$(id)?.checked;
+          const picked = on('cfg-tw-webdav-enabled') ? 'webdav'
+            : on('cfg-tw-lan-enabled') ? 'samba'
+            : on('cfg-tw-samba-enabled') ? 'vpn' : null;
+          const stored = state.config?.sync?.twoway;
+          if (!picked) return { transport: stored?.transport, useWireGuard: stored?.useWireGuard };
+          return { transport: picked, useWireGuard: picked !== 'samba' };
+        })(),
+        // Which method's section the Sync tab shows on open — a view preference,
+        // like Backup's backupTransport. Never drives what actually syncs.
+        transportView: (document.querySelector('#tw-transport-pills .dlp.active')?.dataset.transport)
+          || state.config?.sync?.twoway?.transportView,
         // WebDAV two-way connection (used when transport === 'webdav'). STAGED:
         // persisted ONLY by "Salva configurazione" (state._webdavSaved.sync).
         webdav: {
@@ -12334,6 +12635,15 @@ async function saveSettings() {
         // verify" — it lives only in config (no form field), so rebuilding the
         // config here would otherwise wipe it and break syncing.
         smb: state.config?.sync?.twoway?.smb,
+        // The Samba (LAN) method's own connection, kept apart from `smb` above
+        // so the two methods never overwrite each other's server.
+        smbLan: (() => {
+          const v = (id) => { const el = $(id); return el && typeof el.value === 'string' ? el.value.trim() : ''; };
+          const ip = v('tw-sb-ip');
+          if (!ip && !v('tw-sb-share')) return state.config?.sync?.twoway?.smbLan;
+          return { host: ip, ip, share: v('tw-sb-share'), remoteSubPath: v('tw-sb-path'),
+                   username: v('tw-sb-user'), password: $('tw-sb-pass')?.value || '' };
+        })(),
         subPath: $('cfg-twoway-subpath')?.value.trim() || '',
         // Single toggle = conflict handling only (On = keep both, Off = latest
         // wins). Deletions ALWAYS propagate, regardless of this toggle.
@@ -12386,9 +12696,9 @@ function updateBackupTransportView(transport) {
     || (document.querySelector('#bk-transport-pills .dlp.active')?.dataset.bktransport)
     || 'local';
   document.querySelectorAll('#bk-transport-pills .dlp').forEach(b => b.classList.toggle('active', b.dataset.bktransport === t));
-  const sec = { local: 'bksec-local', vpn: 'bksec-vpn', webdav: 'bksec-webdav' };
-  const body = { local: 'ssb-local', vpn: 'ssb-vpn', webdav: 'ssb-webdav' };
-  const chev = { local: 'chevron-local', vpn: 'chevron-vpn', webdav: 'chevron-webdav' };
+  const sec = { local: 'bksec-local', samba: 'bksec-samba', vpn: 'bksec-vpn', webdav: 'bksec-webdav' };
+  const body = { local: 'ssb-local', samba: 'ssb-samba', vpn: 'ssb-vpn', webdav: 'ssb-webdav' };
+  const chev = { local: 'chevron-local', samba: 'chevron-samba', vpn: 'chevron-vpn', webdav: 'chevron-webdav' };
   Object.entries(sec).forEach(([k, id]) => { const el = $(id); if (el) el.style.display = (k === t) ? 'block' : 'none'; });
   const b = $(body[t]); if (b) b.style.display = 'flex';          // tab = expanded
   const c = $(chev[t]); if (c) c.classList.add('open');
@@ -12398,17 +12708,34 @@ function updateBackupTransportView(transport) {
 }
 
 async function updateTwowayConnView(forceEdit = false) {
-  // Transport chooser: Samba (WireGuard) vs WebDAV. With WebDAV we hide the whole
-  // Samba wizard/summary and show the WebDAV panel instead.
-  const transport = state.config?.sync?.twoway?.transport || 'samba';
+  // Panels follow the pill you are LOOKING at, as in Backup — so a method can
+  // be set up before it is switched on. With WebDAV we hide the whole Samba
+  // wizard/summary and show the WebDAV panel instead; Samba and VPN share the
+  // same wizard, and differ only in whether a tunnel may be raised.
+  const transport = twowayView();
+  // The Samba and VPN methods show the SAME wizard, unchanged: VPN type
+  // selector, import panels and the three-row checklist all stay put. Hiding
+  // them for Samba was tried and taken back out — what Samba actually needs is
+  // not to be BLOCKED on a VPN (see the lanOnly gate in the setup test), not to
+  // have those panels taken away.
+  // One method section visible at a time, the pill saying which — the same
+  // shape the Backup tab uses for its destinations. Each section carries its own
+  // enable toggle in its header.
   document.querySelectorAll('#tw-transport-pills .dlp').forEach(b => b.classList.toggle('active', b.dataset.transport === transport));
-  const webPanel = $('tw-webdav-panel');
+  Object.entries({ webdav: 'twsec-webdav', samba: 'twsec-samba', vpn: 'twsec-vpn' })
+    .forEach(([k, id]) => { const el = $(id); if (el) el.style.display = (k === transport) ? '' : 'none'; });
+  const webPanel = $('tw-webdav-panel'), sbPanel = $('tw-samba-panel');
   // Show as FLEX (not block) so the .wizard-panel column `gap` actually applies —
   // with display:block the 18px gap between fields is ignored and they crowd.
   if (webPanel) webPanel.style.display = transport === 'webdav' ? 'flex' : 'none';
-  if (transport === 'webdav') {
+  if (sbPanel)  sbPanel.style.display  = transport === 'samba'  ? 'flex' : 'none';
+  // WebDAV and Samba each own their panel; only the VPN method uses the wizard
+  // below (import + share + three-step test), so for the other two it is hidden
+  // along with its configured-summary twin.
+  if (transport === 'webdav' || transport === 'samba') {
     if ($('twoway-conn-ok')) $('twoway-conn-ok').style.display = 'none';
     if ($('twoway-conn-missing')) $('twoway-conn-missing').style.display = 'none';
+    if (transport === 'samba') applySyncSambaLanFields();
     return;
   }
   const tw = state.config?.sync?.twoway?.smb;
@@ -12418,7 +12745,13 @@ async function updateTwowayConnView(forceEdit = false) {
   // backup's one must not make this tab look configured (and vice versa).
   const host = tw && (tw.ip || tw.host);
   const share = tw && tw.share;
-  const configured = !!(host && share) && !forceEdit;
+  // …and this is the VPN method, so a saved share is only half of it: without an
+  // imported .conf/.ovpn there is nothing to reach that share THROUGH. A leftover
+  // share alone used to show the collapsed "Modifica" summary on a section that
+  // had no VPN at all, hiding the very panel needed to import one.
+  let vpnOnDisk = false;
+  try { const c = await window.inkwell.wg.getConf(); vpnOnDisk = !!(c && (c.exists || c.ovpnExists)); } catch (_) {}
+  const configured = !!(host && share) && vpnOnDisk && !forceEdit;
   const ok = $('twoway-conn-ok'), missing = $('twoway-conn-missing'), shareEl = $('twoway-conn-share');
   if (ok) ok.style.display = configured ? 'flex' : 'none';
   if (missing) missing.style.display = configured ? 'none' : 'block';
@@ -12484,9 +12817,114 @@ function backupSmbTested() {
 function backupWebdavTested() {
   return !!state._backupWebdavTested || !!state.config?.sync?.webdav?.url;
 }
+// Which transport two-way sync uses: 'webdav' | 'samba' (a share on a network we
+// can already reach) | 'vpn' (the same share through a tunnel). Configs written
+// before the two were split stored the VPN one under the name 'samba' — the name
+// the LAN transport now carries — so they are told apart by the flag those
+// configs always saved next to it. Must agree with SyncManager._twowayTransport.
+function twowayTransportOf(tw) {
+  const t = (tw && tw.transport) || '';
+  if (t === 'webdav') return 'webdav';
+  if (t === 'vpn')    return 'vpn';
+  if (t === 'samba')  return (tw && tw.useWireGuard === false) ? 'samba' : 'vpn';
+  // Nothing recorded: an early WireGuard setup, or the legacy mounted-folder
+  // mode, which no method toggle represents.
+  return (tw && tw.useWireGuard) ? 'vpn' : 'legacy';
+}
+// Which method the Sync tab is SHOWING. Like Backup's backupTransport this is a
+// view preference — what you are looking at, not what runs. Falls back to the
+// method actually configured, and never to 'legacy': no pill stands for a
+// mounted folder.
+function twowayView() {
+  const tw = state.config?.sync?.twoway;
+  const v = tw?.transportView;
+  if (v === 'webdav' || v === 'samba' || v === 'vpn') return v;
+  const t = twowayTransportOf(tw);
+  return t === 'legacy' ? 'vpn' : t;
+}
+
+// The Sync tab keeps its original shape: three method toggles, always visible,
+// and the panels below follow whichever method is SELECTED. Selecting is what
+// clicking a toggle does first — the panel comes up even when the enable itself
+// is refused for want of a passing test, so the method can be filled in.
+function updateTwowaySelection(which) {
+  state.config = state.config || {}; state.config.sync = state.config.sync || {};
+  state.config.sync.twoway = state.config.sync.twoway || {};
+  state.config.sync.twoway.transportView = which;
+  document.querySelectorAll('#tw-transport-pills .dlp').forEach(b => b.classList.toggle('active', b.dataset.transport === which));
+  try { updateTwowayConnView(); } catch (_) {}
+}
+
+// Has the Samba (LAN) sync method got a connection proven good? Its own, never
+// the VPN method's — the two keep separate share settings.
+function syncSambaLanTested() {
+  const c = state.config?.sync?.twoway?.smbLan;
+  return !!state._twSambaLanTested || !!(c && (c.ip || c.host) && c.share);
+}
+
+// Fill the Samba (LAN) sync panel from its saved connection. Called whenever the
+// panel is shown, so it never comes up blank over a connection that exists.
+function applySyncSambaLanFields() {
+  const c = state.config?.sync?.twoway?.smbLan || {};
+  const set = (id, v) => { const el = $(id); if (el && document.activeElement !== el) el.value = v || ''; };
+  set('tw-sb-ip', c.ip || c.host); set('tw-sb-share', c.share);
+  set('tw-sb-path', c.remoteSubPath); set('tw-sb-user', c.username); set('tw-sb-pass', c.password);
+}
+
+// Write test for the Samba (LAN) sync method: reachability + write, no VPN step
+// and no VPN precondition. Same backend call the VPN method uses.
+async function runSyncSambaLanTest() {
+  const btn = $('tw-sb-test'), out = $('tw-sb-result');
+  const fail = (msg) => { if (out) { out.style.display = 'block'; out.className = 'test-summary fail'; out.textContent = '✗ ' + msg; } if (btn) btn.disabled = false; };
+  const ip = $('tw-sb-ip')?.value.trim() || '', share = $('tw-sb-share')?.value.trim() || '';
+  if (!ip || !share)       return fail(window.i18n.t('sync.samba_missing'));
+  if (!isValidSmbHost(ip)) return fail(window.i18n.t('sync.invalid_ip'));
+  const rows = { reach: 'tw-sb-tc-reach', write: 'tw-sb-tc-write' };
+  Object.values(rows).forEach(id => {
+    const r = $(id); if (!r) return;
+    const d = r.querySelector('.tc-dot'); if (d) d.className = 'tc-dot pending';
+    const s = r.querySelector('.tc-result'); if (s) { s.textContent = '…'; s.style.color = ''; }
+  });
+  if (out) { out.style.display = 'block'; out.className = 'test-summary'; out.textContent = window.i18n.t('sync.tw_testing'); }
+  if (btn) btn.disabled = true;
+  const smb = { ip, share, path: $('tw-sb-path')?.value.trim() || '', username: $('tw-sb-user')?.value || '', password: $('tw-sb-pass')?.value || '' };
+  let res;
+  try { res = await window.inkwell.wg.testSmbWrite(smb, 'sync'); }
+  catch (e) { return fail(e?.message || window.i18n.t('sync.test_failed')); }
+  const byKey = Object.fromEntries((res.steps || []).map(s => [s.key, s]));
+  // With no VPN in play a failed "wg" step just means unreachable — say it on
+  // the row that means that, rather than on a step the user never asked for.
+  const reach = (byKey.wg && !byKey.wg.ok) ? { ...byKey.wg, key: 'reach' } : byKey.reach;
+  [reach, byKey.write].forEach(step => {
+    if (!step) return;
+    const r = $(rows[step.key]); if (!r) return;
+    const d = r.querySelector('.tc-dot'); if (d) d.className = 'tc-dot ' + (step.ok ? 'ok' : 'fail');
+    const s = r.querySelector('.tc-result');
+    if (s) { const t = vpnStepDetail(step); s.textContent = step.ok ? '✓' + (t ? ' ' + t : '') : '✗ ' + (t || window.i18n.t('status.error')); s.style.color = step.ok ? 'var(--green)' : 'var(--red)'; }
+  });
+  if (res.ok) {
+    state._twSambaLanTested = smb;
+    if (out) { out.className = 'test-summary ok'; out.textContent = '✓ ' + window.i18n.t('sync.test_ok_now_save'); }
+    await saveSettings().catch(() => {});
+  } else {
+    state._twSambaLanTested = null;
+    if (out) { out.className = 'test-summary fail'; out.textContent = '✗ ' + window.i18n.t('sync.test_failed'); }
+  }
+  if (btn) btn.disabled = false;
+}
+
+// Same rule for the VPN-less Samba destination, against its OWN saved config
+// (sync.sambaLan) — never sync.samba, which mirrors the VPN destination.
+function sambaLanTested() {
+  const sb = state.config?.sync?.sambaLan;
+  return !!state._sambaLanTested || !!(sb && (sb.ip || sb.host) && sb.share);
+}
 function syncSmbTested() {
   const tw = state.config?.sync?.twoway?.smb;
-  return !!_twHasSavedConf || !!(tw && (tw.ip || tw.host) && tw.share);
+  // The VPN method needs BOTH halves: a share to write to and a tunnel to reach
+  // it through. A leftover share on its own used to be enough to switch the
+  // method on, with no VPN imported anywhere.
+  return !!_twHasSavedConf && !!(tw && (tw.ip || tw.host) && tw.share);
 }
 function syncWebdavTested() {
   return !!state._twWebdavTested || !!state.config?.sync?.twoway?.webdav?.url;
@@ -17710,6 +18148,10 @@ function _destNames(dests) {
 // saved before this have no key and keep their text, which is the best that can be
 // done for them.
 function addEventNotif(text, ok = true, dests = '', key = '') {
+  // Switched off in Appearance: record NOTHING. Merely hiding the bell would
+  // keep a backlog piling up behind it, to be dumped on the user the moment the
+  // setting came back on — and an unread count with nowhere to show it.
+  if (_notifHidden) return;
   _eventNotifs.unshift({ text, key: key || undefined, ts: Date.now(), ok: !!ok, dests: Array.isArray(dests) ? dests : undefined, where: Array.isArray(dests) ? '' : (dests || '') });
   _eventNotifs = _eventNotifs.slice(0, 30);
   _eventUnread++;
@@ -17728,6 +18170,13 @@ function _markEventNotifsRead() { if (_eventUnread) { _eventUnread = 0; updateNo
 
 function updateNotifBell() {
   const badge = $('notif-badge'); if (!badge) return;
+  // Off in Appearance: no count, no highlight. Due to-dos would otherwise light
+  // the badge up even with the event log empty.
+  if (_notifHidden) {
+    badge.style.display = 'none';
+    $('btn-notifications')?.classList.remove('has-notif');
+    return;
+  }
   const n = _dueTodos().length + _eventUnread;
   badge.textContent = n; badge.style.display = n ? '' : 'none';
   $('btn-notifications')?.classList.toggle('has-notif', n > 0);
@@ -17737,6 +18186,7 @@ function updateNotifBell() {
 
 let _notifToggleTs = 0;
 function toggleNotifPopup() {
+  if (_notifHidden) return;          // no bell to click, and nothing to show
   const pop = $('notif-popup'); if (!pop) return;
   // The button is in a drag zone (.sst): pointerup→click + native click can
   // arrive together. Ignore the second one within 280ms to avoid reopen/reclose.

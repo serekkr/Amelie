@@ -83,7 +83,7 @@ class SyncManager {
   /** True when at least one backup destination is enabled. */
   _anyBackupDestination() {
     const s = this.config?.sync || {};
-    return !!(s.local?.enabled || s.vpn?.enabled || s.samba?.enabled || s.webdav?.enabled);
+    return !!(s.local?.enabled || s.vpn?.enabled || s.samba?.enabled || s.sambaLan?.enabled || s.webdav?.enabled);
   }
 
   // Settings are autosaved on every toggle and every keystroke, so setting a
@@ -451,7 +451,7 @@ class SyncManager {
     const s = this.config.sync || {};
     // Backup timer (one-way: local / WireGuard+Samba / WebDAV) on the backup
     // frequency (default hourly — a sensible backup cadence).
-    const backupOn = s.local?.enabled || s.vpn?.enabled || s.samba?.enabled || s.webdav?.enabled;
+    const backupOn = s.local?.enabled || s.vpn?.enabled || s.samba?.enabled || s.sambaLan?.enabled || s.webdav?.enabled;
     if (backupOn) {
       const min = this._backupIntervalMinutes();
       this._backupTimer = setInterval(() => this.runBackup(), min * 60 * 1000);
@@ -508,7 +508,7 @@ class SyncManager {
     if (!anyEnabled) {
       this._setStatus('idle');
       return { success: false, noDestination: true,
-        error: 'Nessuna destinazione di backup attiva: attiva "VPN with Samba share" (o Locale/WebDAV) nelle impostazioni Backup.' };
+        error: 'Nessuna destinazione di backup attiva: attivane una (Locale, Samba, VPN o WebDAV) nelle impostazioni Backup.' };
     }
     const sig = this._vaultSignature();
     if (!force && this._lastBackupSig && sig === this._lastBackupSig) {
@@ -604,6 +604,7 @@ class SyncManager {
   _backupDestSignature(cfg) {
     const s = (cfg && cfg.sync) || {};
     const l = s.local || {}, w = s.webdav || {}, v = s.vpn || {}, sa = s.samba || {};
+    const sl = s.sambaLan || {};
     const smb = v.smb || {};
     const fmt = (d) => [d.folder !== false, !!d.archive, !!d.archiveOnly];
     return JSON.stringify([
@@ -611,6 +612,7 @@ class SyncManager {
       !!w.enabled, w.url || '', w.remotePath || '', fmt(w),
       !!v.enabled, smb.ip || v.peerIp || '', smb.share || '', smb.path || v.remotePath || '', fmt(v),
       !!sa.enabled, sa.host || sa.ip || '', sa.share || '', sa.remoteSubPath || '',
+      !!sl.enabled, sl.host || sl.ip || '', sl.share || '', sl.remoteSubPath || '', fmt(sl),
     ]);
   }
 
@@ -626,8 +628,10 @@ class SyncManager {
     const out = [];
     const fmt = (d) => `folder=${d.folder !== false}:archive=${!!d.archive}:only=${!!d.archiveOnly}`;
     const l = s.local || {}, w = s.webdav || {}, v = s.vpn || {}, sa = s.samba || {};
+    const sl = s.sambaLan || {};
     if (l.enabled) out.push(`local|${l.path || ''}|${fmt(l)}`);
     if (w.enabled) out.push(`webdav|${w.url || ''}|${w.remotePath || ''}|${fmt(w)}`);
+    if (sl.enabled) out.push(`samba|${sl.host || sl.ip || ''}|${sl.share || ''}|${sl.remoteSubPath || ''}|${fmt(sl)}`);
     if (v.enabled) {
       const smb = v.smb || {};
       out.push(`samba|${smb.ip || v.peerIp || ''}|${smb.share || ''}|${smb.path || v.remotePath || ''}|${fmt(v)}`);
@@ -719,13 +723,36 @@ class SyncManager {
    *                  connection (NM autoconnect usually already did it).
    *   - option OFF → bring the Amelie NM connection down.
    */
+  /**
+   * Which transport two-way sync uses: 'webdav' | 'samba' (a share on a network
+   * we can already reach — no tunnel, ever) | 'vpn' (the same share through a
+   * WireGuard/OpenVPN tunnel).
+   *
+   * Configs written before the two were split stored the VPN transport under
+   * the name 'samba' — the name the LAN transport now carries. They are told
+   * apart by `useWireGuard`, which those configs always saved alongside it, so
+   * an existing VPN setup keeps its tunnel instead of quietly losing it.
+   * The renderer's twowayTransportOf() must agree with this.
+   */
+  static _twowayTransport(tw) {
+    const t = (tw && tw.transport) || '';
+    if (t === 'webdav') return 'webdav';
+    if (t === 'vpn')    return 'vpn';
+    if (t === 'samba')  return (tw && tw.useWireGuard === false) ? 'samba' : 'vpn';
+    // Nothing recorded: the oldest shapes. Either an early WireGuard setup that
+    // only ever set the flag, or the bidirectional rsync against a mounted
+    // folder — which must keep taking its own path, not be read as a share.
+    return (tw && tw.useWireGuard) ? 'vpn' : 'legacy';
+  }
+
   async ensureVpnTunnel() {
     const scfg = this._sambaConfig();
     const tw = this.config.sync?.twoway;
     // The tunnel should be up whenever EITHER the backup WG flag OR the two-way
     // sync flag (with a WG+Samba connection) is on — toggling the flag is what
     // activates the tunnel.
-    const twoWantsUp = !!(tw && tw.enabled && tw.useWireGuard && tw.transport !== 'webdav' && this._twowaySambaConn());
+    // Only the VPN transport wants a tunnel — the LAN one must never raise one.
+    const twoWantsUp = !!(tw && tw.enabled && SyncManager._twowayTransport(tw) === 'vpn' && this._twowaySambaConn());
     // A backup destination with BOTH formats off has nothing to write — don't
     // bring the tunnel up just for it (only two-way sync would, above).
     const backupHasContent = !!(scfg && !(scfg.folder === false && !scfg.archive && !scfg.archiveOnly));
@@ -759,6 +786,18 @@ class SyncManager {
 
   _sambaConfig() {
     const s = this.config.sync || {};
+    // Samba destination WITHOUT a VPN (own settings section): the share is on a
+    // network we can already reach, so no tunnel is ever raised for it —
+    // `useWireGuard: false` sends _runBackupInner straight to _syncSamba, and
+    // keeps ensureVpnTunnel from bringing a tunnel up on its behalf. Checked
+    // FIRST: only one remote destination can be enabled at a time.
+    if (s.sambaLan && s.sambaLan.enabled) {
+      const r = { ...s.sambaLan, useWireGuard: false };
+      r.host = r.host || r.ip;
+      r.ip   = r.ip   || r.host;
+      r.password = this._decSecret(r.password);
+      return r;
+    }
     // The legacy `sync.samba` mirror holds only the connection — the backup
     // MODE prefs (folder snapshot / .tar.gz archive) live under sync.vpn.
     // Merge them in, or the toggles would be silently ignored on this path.
@@ -796,7 +835,10 @@ class SyncManager {
   _twowaySambaConn() {
     const s = this.config.sync || {};
     const tw = s.twoway || {};
-    const cand = tw.smb
+    // The Samba (LAN) method keeps its OWN share (twoway.smbLan) so it and the
+    // VPN method can point at different servers. Everything else is unchanged.
+    const cand = (SyncManager._twowayTransport(tw) === 'samba' && tw.smbLan && (tw.smbLan.host || tw.smbLan.ip) ? tw.smbLan : null)
+      || tw.smb
       || (s.samba && (s.samba.host || s.samba.ip) ? s.samba : null)
       || (s.vpn && s.vpn.smb ? { ...s.vpn.smb, host: s.vpn.smb.ip || s.vpn.peerIp, ip: s.vpn.smb.ip || s.vpn.peerIp } : null);
     if (!cand) return null;
@@ -805,7 +847,8 @@ class SyncManager {
     if (!host || !share) return null;
     return {
       enabled:       true,
-      useWireGuard:  true,
+      // Follows the chosen transport: the LAN method never travels a tunnel.
+      useWireGuard:  SyncManager._twowayTransport(tw) === 'vpn',
       host, ip: host, share,
       username:      cand.username,
       password:      this._decSecret(cand.password),
@@ -866,34 +909,38 @@ class SyncManager {
     return results;
   }
 
-  // Two-way sync. Two modes:
-  //  - useWireGuard: reuse the SAME WireGuard+Samba connection as the backup and
-  //    two-way sync a DIFFERENT folder on the share (via smbclient, no mount).
+  // Two-way sync. Three modes:
+  //  - 'webdav': a WebDAV server (e.g. Nextcloud).
+  //  - 'samba' / 'vpn': the SAME smbclient path over a Samba share (no mount) —
+  //    they differ only in whether a tunnel may be raised to reach it.
   //  - legacy: a local/mounted folder path (bidirectional rsync engine).
   async _syncTwoway() {
     const cfg = this.config.sync?.twoway;
     if (!cfg || !cfg.enabled) throw new Error('Two-way: disabilitato');
+    const transport = SyncManager._twowayTransport(cfg);
 
-    // WebDAV transport (e.g. Nextcloud) — independent of WireGuard/Samba.
-    if (cfg.transport === 'webdav' && cfg.webdav && cfg.webdav.url) {
+    // WebDAV transport (e.g. Nextcloud) — independent of Samba.
+    if (transport === 'webdav' && cfg.webdav && cfg.webdav.url) {
       const out = await this._twowayWebdav(cfg.webdav);
       console.log('[Two-way] WebDAV', out);
       return out;
     }
 
-    if (cfg.useWireGuard) {
-      // Two-way uses its OWN WireGuard+Samba connection, independent of the
-      // backup: you can sync WITHOUT enabling any backup. Falls back to the
-      // backup's Samba connection if a dedicated one isn't set (legacy setups).
+    if (transport === 'samba' || transport === 'vpn') {
+      // Two-way uses its OWN Samba connection, independent of the backup: you
+      // can sync WITHOUT enabling any backup. Falls back to the backup's Samba
+      // connection if a dedicated one isn't set (legacy setups).
       const smb = this._twowaySambaConn();
-      if (!smb || !(smb.host || smb.ip) || !smb.share) throw new Error('Two-way: WireGuard+Samba non configurato (configuralo qui nel tab Sync).');
+      if (!smb || !(smb.host || smb.ip) || !smb.share) throw new Error('Two-way: Samba non configurato (configuralo qui nel tab Sync).');
       // The sync folder is the connection's own remote folder (the "Cartella
       // remota" entered in setup). Legacy configs may still carry cfg.subPath.
       const sub = String(smb.remoteSubPath || cfg.subPath || '').trim();
       if (!sub) throw new Error('Two-way: indica la cartella remota nella connessione.');
-      // Fastest path: direct if the share is reachable without the tunnel (e.g.
-      // on its LAN at home), otherwise bring the tunnel up. Same logic as backup.
-      try { const { WireGuardManager } = require('./wireguardManager'); const wg = new WireGuardManager(); const mode = await wg.ensureBestPath(smb.host || smb.ip); console.log('[Two-way] Path →', mode); } catch (_) {}
+      // Only the VPN method may raise a tunnel, and even then only when the
+      // share isn't reachable directly. The LAN method never goes near one.
+      if (transport === 'vpn') {
+        try { const { WireGuardManager } = require('./wireguardManager'); const wg = new WireGuardManager(); const mode = await wg.ensureBestPath(smb.host || smb.ip); console.log('[Two-way] Path →', mode); } catch (_) {}
+      }
       // Refuse a folder already claimed by Backup.
       if (await this._smbHasFile(smb, sub, SyncManager._MARK_BACKUP) || await this._smbHasFile(smb, sub, 'amelie-backup')) throw new Error('Two-way: questa cartella è usata per il BACKUP — scegline un\'altra o elimina il file ".amelie-backup".');
       const out = await this._twowaySamba(smb, sub);
