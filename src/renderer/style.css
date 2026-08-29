@@ -398,6 +398,13 @@ html, body {
   border: 3px solid transparent; background-clip: padding-box; cursor: default;
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-light); background-clip: padding-box; }
+/* The little square where a horizontal and a vertical scrollbar meet. The track
+   above is transparent but the CORNER is a separate part, and left alone
+   Chromium paints it its default WHITE — a bright block against every dark
+   surface in the app. It only appears when BOTH scrollbars are up, which is why
+   it went unnoticed: an image zoomed past 100% is one of the few places that
+   happens. Transparent, like the track, so the element's own background shows. */
+::-webkit-scrollbar-corner { background: transparent; }
 /* The textarea has a text cursor: over its scrollbar we want the normal
    arrow, not the I-beam. */
 #markdown-editor::-webkit-scrollbar,
