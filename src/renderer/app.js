@@ -12710,12 +12710,25 @@ async function saveSettings() {
 function _fmtSyncResult(r) {
   const up = (typeof r?.uploaded === 'number') ? r.uploaded : null;
   const dn = (typeof r?.downloaded === 'number') ? r.downloaded : null;
-  if (up === null && dn === null) return '✓ ' + window.i18n.t('toast.sync_ok');
-  if ((up || 0) === 0 && (dn || 0) === 0) return '✓ ' + window.i18n.t('toast.sync_nochange');
+  const cf = (typeof r?.conflicts === 'number') ? r.conflicts : 0;
+  // Conflict copies. The engine has always counted them and nothing ever said so,
+  // which made the feature depend on you NOTICING a new "(conflitto …)" file in
+  // the tree — the one outcome of a sync that asks you to do something.
+  //
+  // Mentioned only when there ARE some: a "0 conflicts" on every routine pass
+  // teaches you to stop reading the line, and this is the half worth reading.
+  // Today a conflict is only ever counted alongside an upload or a download, so
+  // the "no changes" branch cannot hide one — it is checked FIRST regardless, so
+  // that stays true whatever the engine does later.
+  const conflictTail = cf > 0
+    ? ' · ⚠ ' + window.i18n.t(cf === 1 ? 'toast.sync_conflict_one' : 'toast.sync_conflicts').replace('{n}', cf)
+    : '';
+  if (up === null && dn === null) return '✓ ' + window.i18n.t('toast.sync_ok') + conflictTail;
+  if ((up || 0) === 0 && (dn || 0) === 0 && !conflictTail) return '✓ ' + window.i18n.t('toast.sync_nochange');
   const counts = window.i18n.t('toast.sync_counts')
     .replace('{up}', up ?? 0)
     .replace('{down}', dn ?? 0);
-  return '✓ ' + window.i18n.t('toast.sync_done') + ' — ' + counts;
+  return '✓ ' + window.i18n.t('toast.sync_done') + ' — ' + counts + conflictTail;
 }
 
 // Mirrors updateWgConfiguredView (Backup) but for the Sync tab. Shows the
