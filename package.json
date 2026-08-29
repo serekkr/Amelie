@@ -1,6 +1,6 @@
 {
   "name": "amelie",
-  "version": "1.0.46",
+  "version": "1.0.47",
   "description": "Amelie — Your data, private by default",
   "main": "src/main/main.js",
   "scripts": {
