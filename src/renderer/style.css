@@ -4380,9 +4380,9 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
   width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
   background: var(--green); align-self: center;
 }
-.bk-dest-summary .bkd-off .bkd-dot { background: var(--text-3); }
+/* Only ENABLED destinations are listed, so there is no off-state to style: the
+   dot is always the live green and the name always full white. */
 .bk-dest-summary .bkd-name { color: var(--text-0); }
-.bk-dest-summary .bkd-off .bkd-name { color: var(--text-2); text-decoration: line-through; }
 /* The target (path / share / URL) is secondary info — dim and breakable so a long
    path can't push the settings panel into horizontal scrolling. */
 .bk-dest-summary .bkd-target { color: var(--text-2); word-break: break-all; }

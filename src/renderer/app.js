@@ -11746,8 +11746,15 @@ function updateActionNowButtons() {
 // time and hide the rest, so an enabled destination can sit invisible in a
 // collapsed section — which is exactly how a local folder backup ran for weeks
 // while the user was looking at the (configured but switched-off) Samba panel.
-// This line always states all three: enabled ones with their target, and
-// configured-but-off ones struck through, whatever pill is selected.
+// It lists the ENABLED destinations with their target, whatever pill is
+// selected — and only those. A configured-but-switched-off destination used to
+// be listed struck through, which put the loudest thing on screen under
+// "Backup destinations" on rows that are not destinations at all: a share you
+// set up months ago and turned off is not somewhere your backup goes.
+//
+// The red line below survives that, and has to: with every destination off, a
+// scheduled backup reports "completed" having written nowhere. That is worth
+// saying precisely BECAUSE nothing is listed above it.
 //
 // Reads the LIVE form, not the saved config: every toggle change autosaves
 // immediately (the settings-modal 'change' listener), so the DOM is the truth
@@ -11772,27 +11779,26 @@ function updateBackupDestSummary() {
     { key: 'sync.transport_webdav', enabled: on('cfg-webdav-enabled'), target: wdUrl,
       configured: !!wdUrl },
   ];
-  const shown = dests.filter(d => d.enabled || d.configured);
+  const shown = dests.filter(d => d.enabled);
   const t = (k) => window.i18n.t(k);
   box.innerHTML = '';
-  // Nothing configured at all → say nothing (a fresh install shouldn't scold).
-  if (!shown.length) return;
-  const head = document.createElement('div');
-  head.className = 'bkd-row bkd-state';
-  head.textContent = t('sync.dests_label');
-  box.appendChild(head);
+  // Nothing set up at all → say nothing (a fresh install shouldn't scold). This
+  // still counts the switched-off ones: they earn no row, but having some is
+  // what separates "not set up yet" from "set up and all turned off", and only
+  // the second deserves the warning at the end.
+  if (!dests.some(d => d.enabled || d.configured)) return;
+  if (shown.length) {
+    const head = document.createElement('div');
+    head.className = 'bkd-row bkd-state';
+    head.textContent = t('sync.dests_label');
+    box.appendChild(head);
+  }
   shown.forEach(d => {
     const row = document.createElement('div');
-    row.className = 'bkd-row' + (d.enabled ? '' : ' bkd-off');
+    row.className = 'bkd-row';
     const dot = document.createElement('span'); dot.className = 'bkd-dot';
     const name = document.createElement('span'); name.className = 'bkd-name'; name.textContent = t(d.key);
     row.append(dot, name);
-    // State BEFORE the target: a long path wraps, and "(off)" sitting after it ended up
-    // stranded on a line of its own, far from the name it belongs to.
-    if (!d.enabled) {
-      const st = document.createElement('span'); st.className = 'bkd-state'; st.textContent = '(' + t('sync.dest_off') + ')';
-      row.appendChild(st);
-    }
     if (d.target) {
       const tg = document.createElement('span'); tg.className = 'bkd-target'; tg.textContent = '— ' + d.target;
       row.appendChild(tg);
@@ -11801,7 +11807,7 @@ function updateBackupDestSummary() {
   });
   // Configured destinations but every one switched off: the scheduled backup
   // would report "completed" having written nowhere. Say so, in red.
-  if (!dests.some(d => d.enabled)) {
+  if (!shown.length) {
     const w = document.createElement('div');
     w.className = 'bkd-row bkd-warn';
     w.textContent = t('sync.dests_none');
