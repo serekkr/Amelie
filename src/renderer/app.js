@@ -12403,11 +12403,20 @@ async function openSettings() {
   }
   if ($('cfg-backup-archived')) $('cfg-backup-archived').checked = wantArchive;
   if ($('cfg-backup-normal'))   $('cfg-backup-normal').checked   = wantFolder;
-  // Restore backup frequency: preset (60 / 1440) or Custom (in days).
-  const blMin = parseInt(cfg.sync?.local?.intervalMinutes) || 1440;
+  // Restore backup frequency: a preset (30 s / hourly / daily) or Custom (in days).
+  //
+  // parseFloat, not parseInt — the same rule the SAVE side already follows, and
+  // the same one the engine's _readInterval follows. The shortest choice is 0.5
+  // (30 s), which parseInt truncated to 0; 0 is falsy, so it fell through to the
+  // daily default. The dropdown then read "Giornaliero" over a config that said
+  // thirty seconds, and the next save — any save, this screen rewrites the whole
+  // block — made that true and threw the choice away.
+  // The preset list must hold exactly the <option> values, 0.5 included, or a
+  // stored 30 s lands in Custom and is reinterpreted as DAYS.
+  const blMin = parseFloat(cfg.sync?.local?.intervalMinutes) || 1440;
   const blSel = $('cfg-local-interval');
   if (blSel) {
-    if (blMin === 60 || blMin === 1440) {
+    if (blMin === 0.5 || blMin === 60 || blMin === 1440) {
       blSel.value = String(blMin);
       if ($('local-interval-custom-wrap')) $('local-interval-custom-wrap').style.display = 'none';
     } else {
@@ -18107,10 +18116,10 @@ function _fmtNotifTime(ts) {
 function logSyncEventNotif(data) {
   if (!data || !data.op) return;                       // untagged/legacy event
   if (data.status !== 'ok' && data.status !== 'error') return;   // 'syncing'/'idle' aren't outcomes
-  // A pass on a very short interval (30 s, a minute) would put a line in the
-  // bell twice a minute. Those stay silent when they succeed; passes an hour or
-  // a day apart, the ones the user presses, and every FAILURE are announced —
-  // silence on a failure reads as "it worked".
+  // Passes under an hour apart do not announce success. Note the
+  // `status === 'ok'` on the
+  // end: a FAILURE is never filtered, whatever the interval, because silence
+  // there reads exactly like success. Runs the user pressed always speak too.
   if (data.quiet && !data.manual && data.status === 'ok') return;
   const key = data.manual ? 'manual' : 'auto';
   const label = window.i18n.t(`notif.${data.op}_${key}`);

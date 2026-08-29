@@ -126,19 +126,30 @@ class SyncManager {
   }
 
   // The two-way sync's own frequency, read in one place for the same reason.
+  //
+  // A profile written by a build that still had the "realtime" option carries
+  // `realtime: true` next to `intervalMinutes: 15` — and that 15 was never a
+  // choice, it was the backstop behind the push. Honour the flag HERE, in the
+  // engine: mapping it only where the settings screen draws the dropdown left
+  // the timer at fifteen minutes until the user happened to open Settings and
+  // save, which is exactly how a machine ended up taking a quarter of an hour
+  // to notice the other one's notes.
   _twowayIntervalMinutes() {
-    return SyncManager._readInterval(this.config?.sync?.twoway?.intervalMinutes, 15);
+    const tw = this.config?.sync?.twoway;
+    if (tw?.realtime) return SyncManager._MIN_INTERVAL;
+    return SyncManager._readInterval(tw?.intervalMinutes, 15);
   }
 
-  // A pass this short must not announce itself: at 30 s it would put a line in
-  // the notifications bell twice a minute. Scheduled passes an hour or a day
-  // apart still do, and so do the ones the user presses and every failure.
-  _quietInterval(min) { return min < 5; }
+  // Success is announced only by a pass MORE than an hour apart: at 30 s, or a
+  // few minutes, or hourly, it is a line in the bell for something that simply
+  // worked. Whatever the interval, the bell still hears every FAILURE and every
+  // run the user pressed or forced — those answer a question just asked.
+  _quietInterval(min) { return min <= 60; }
 
   // Whether the two-way sync has somewhere to sync WITH — the same condition
   // _startAutoSync uses to decide it deserves a timer at all.
   _twowayConfigured() {
-    return !!(this.config?.sync?.twoway?.enabled && SyncManager._twowayRemoteFolder(this.config?.sync?.twoway));
+    return !!(this.config?.sync?.twoway?.enabled && this._twowayRemoteFolder());
   }
 
   /**
@@ -147,11 +158,35 @@ class SyncManager {
    * its folder in `smbLan`; leaving it out of this test meant its timer was
    * never created, so that machine only ever pulled when the user pressed sync
    * by hand while the other one pushed happily.
+   *
+   * It must name the SAME place the pass itself would use, and a flat chain of
+   * fallbacks did not: it answered for a method other than the chosen one. Both
+   * directions were wrong. A VPN setup with a LEFTOVER LAN share answered with
+   * the LAN folder — enough to arm a timer, which then asked
+   * _twowaySambaConn() (correctly refusing smbLan for VPN), got nothing and did
+   * nothing, under a Sync tab that said "configured". And a VPN setup whose
+   * share comes from the BACKUP connection — `sync.samba` / `sync.vpn.smb`,
+   * which _twowaySambaConn falls back to for exactly that case — answered with
+   * NOTHING, so it got no timer at all: the same fault v1.0.45 fixed for the LAN
+   * method, still open for this shape.
+   *
+   * So each method is asked its own question, through the same resolution the
+   * pass uses. Keep it that way: a shortcut here is a timer that does not match
+   * what runs.
    */
-  static _twowayRemoteFolder(tw) {
+  _twowayRemoteFolder() {
+    const tw = this.config?.sync?.twoway;
     if (!tw) return '';
-    if (SyncManager._twowayTransport(tw) === 'webdav') return tw.webdav?.url || '';
-    return tw.smbLan?.remoteSubPath || tw.smb?.remoteSubPath || tw.subPath || tw.path || '';
+    const transport = SyncManager._twowayTransport(tw);
+    if (transport === 'webdav') return tw.webdav?.url || '';
+    // The oldest shape, the mounted folder: _syncTwoway rsyncs to `path`.
+    if (transport === 'legacy') return tw.path || tw.subPath || '';
+    // Samba (LAN) and VPN: the connection decides, and an unusable one is not a
+    // destination — the same null conditions _twowaySambaConn ends on, so the
+    // two can never disagree about whether there is somewhere to sync with.
+    const cand = this._twowaySambaCandidate();
+    if (!cand || !(cand.host || cand.ip) || !cand.share) return '';
+    return String(cand.remoteSubPath || cand.path || tw.subPath || '').trim();
   }
 
   // When each of the two last succeeded. Kept beside the settings rather than
@@ -481,7 +516,7 @@ class SyncManager {
     }
     // Two-way sync timer on its own (shorter) frequency. The remote folder comes
     // from the connection (smb.remoteSubPath) or a legacy local path/subPath.
-    const twHasFolder = SyncManager._twowayRemoteFolder(s.twoway);
+    const twHasFolder = this._twowayRemoteFolder();
     if (s.twoway?.enabled && twHasFolder) {
       const min = this._twowayIntervalMinutes();
       this._twowayTimer = setInterval(() => this._twowayTick(), min * 60 * 1000);
@@ -511,35 +546,78 @@ class SyncManager {
   scheduleSync() { /* no-op — see _twowayTick() */ }
 
   /**
-   * One two-way tick. At 30 seconds a FULL pass every time would keep the share
+   * One two-way tick. At 30 seconds a FULL pass every time would keep the remote
    * busy for nothing, so this asks two cheap questions first — did the vault
    * change, and did the remote folder change — and only runs the pass when one
    * of them says yes. The remote question is a single recursive listing, which
    * the pass itself would do first thing anyway.
    *
-   * WebDAV has no equivalent cheap listing here, so it keeps running the pass.
+   * EVERY method answers it now. It used to be Samba and VPN only, and the other
+   * two fell straight through to a full pass every tick: at the 30-second
+   * cadence that is a deep PROPFIND and a whole diff every half minute against a
+   * WebDAV server, for a vault nobody touched. WebDAV lists with the same call
+   * the pass uses; the mounted folder is a walk of the disk.
    */
   async _twowayTick() {
     const tw = this.config.sync?.twoway;
     if (!tw?.enabled || this._plaintextOpen || this._busy()) return;
-    const transport = SyncManager._twowayTransport(tw);
-    if (transport !== 'samba' && transport !== 'vpn') return void this.runTwoway({ manual: false });
-
-    const smb = this._twowaySambaConn();
-    const base = String(smb?.remoteSubPath || tw.subPath || '').trim();
-    if (!smb || !base) return;
     const localSig = this._vaultSignature();
     let remoteSig;
-    try { remoteSig = this._remoteSignature(await this._smbListRecursive(smb, base)); }
-    catch (_) { return; }                       // share unreachable → try again next tick
+    try { remoteSig = await this._twowayRemoteSignature(); }
+    catch (_) { return; }                       // remote unreachable → try again next tick
+    if (remoteSig === null) return;             // nothing configured to sync with
     if (localSig === this._twLocalSig && remoteSig === this._twRemoteSig) return;   // nothing moved
 
     await this.runTwoway({ manual: false });
     // Re-baseline AFTER the pass: our own upload changed the remote, and without
     // this every tick would see a difference and sync again forever.
     this._twLocalSig = this._vaultSignature();
-    try { this._twRemoteSig = this._remoteSignature(await this._smbListRecursive(smb, base)); }
+    try { this._twRemoteSig = await this._twowayRemoteSignature(); }
     catch (_) { this._twRemoteSig = undefined; }
+  }
+
+  /**
+   * Fingerprint of the two-way remote, by whichever method is in use.
+   *
+   * `null` means "nothing configured" — the tick then does nothing at all. A
+   * THROW means the remote is unreachable, which is a DIFFERENT answer and must
+   * stay one: treating an unreachable share as an empty listing would look
+   * exactly like every file having been deleted on the other machine.
+   */
+  async _twowayRemoteSignature() {
+    const tw = this.config.sync?.twoway || {};
+    const transport = SyncManager._twowayTransport(tw);
+
+    if (transport === 'webdav') {
+      const w = tw.webdav || {};
+      const url = String(w.url || '').trim();
+      if (!url) return null;
+      const { createClient } = require('webdav');
+      const client = createClient(url, { username: w.username || '', password: this._decSecret(w.password) || '' });
+      const base = '/' + String(w.remotePath || 'amelie/sync').replace(/^\/+|\/+$/g, '');
+      return this._remoteSignature(await this._webdavTwowayList(client, base));
+    }
+
+    if (transport === 'legacy') {
+      // _syncTwoway rsyncs to <path>/amelie — fingerprint THAT, not the whole
+      // mount, or unrelated files sitting beside it would fake a change every
+      // tick and the cheap question would never save a thing.
+      const root = tw.path || tw.subPath;
+      if (!root) return null;
+      const dir = path.join(root, 'amelie');
+      // Not created yet is a real, empty state — not an unreachable one.
+      if (!fs.existsSync(dir)) return this._remoteSignature({});
+      const out = {};
+      for (const f of this._getAllLocalFiles(dir, '')) {
+        try { out[f.relPath] = fs.statSync(f.absPath).mtimeMs; } catch (_) {}
+      }
+      return this._remoteSignature(out);
+    }
+
+    const smb = this._twowaySambaConn();
+    const base = String(smb?.remoteSubPath || tw.subPath || '').trim();
+    if (!smb || !base) return null;
+    return this._remoteSignature(await this._smbListRecursive(smb, base));
   }
 
   /** Stable fingerprint of a remote listing: every path with its mtime. */
@@ -891,19 +969,29 @@ class SyncManager {
     return null;
   }
 
+  // Which stored connection two-way sync would use, BEFORE the password is
+  // decrypted. Split out from _twowaySambaConn so "is there anywhere to sync
+  // with" can be answered without a trip to the keyring on every reload, every
+  // catch-up and every tick — and, more to the point, so it is answered by the
+  // SAME selection the pass makes instead of a parallel chain of fallbacks.
+  _twowaySambaCandidate() {
+    const s = this.config.sync || {};
+    const tw = s.twoway || {};
+    // The Samba (LAN) method keeps its OWN share (twoway.smbLan) so it and the
+    // VPN method can point at different servers. Everything else is unchanged.
+    return (SyncManager._twowayTransport(tw) === 'samba' && tw.smbLan && (tw.smbLan.host || tw.smbLan.ip) ? tw.smbLan : null)
+      || tw.smb
+      || (s.samba && (s.samba.host || s.samba.ip) ? s.samba : null)
+      || (s.vpn && s.vpn.smb ? { ...s.vpn.smb, host: s.vpn.smb.ip || s.vpn.peerIp, ip: s.vpn.smb.ip || s.vpn.peerIp } : null);
+  }
+
   // Samba connection used by TWO-WAY sync. Independent from the backup: prefer a
   // dedicated `sync.twoway.smb` (set up from the Sync tab, no backup enabled),
   // then fall back to the backup's Samba/VPN connection (legacy/shared setups).
   // Only needs host/share/credentials — no "enabled" flag required.
   _twowaySambaConn() {
-    const s = this.config.sync || {};
-    const tw = s.twoway || {};
-    // The Samba (LAN) method keeps its OWN share (twoway.smbLan) so it and the
-    // VPN method can point at different servers. Everything else is unchanged.
-    const cand = (SyncManager._twowayTransport(tw) === 'samba' && tw.smbLan && (tw.smbLan.host || tw.smbLan.ip) ? tw.smbLan : null)
-      || tw.smb
-      || (s.samba && (s.samba.host || s.samba.ip) ? s.samba : null)
-      || (s.vpn && s.vpn.smb ? { ...s.vpn.smb, host: s.vpn.smb.ip || s.vpn.peerIp, ip: s.vpn.smb.ip || s.vpn.peerIp } : null);
+    const tw = this.config.sync?.twoway || {};
+    const cand = this._twowaySambaCandidate();
     if (!cand) return null;
     const host = cand.host || cand.ip;
     const share = cand.share;

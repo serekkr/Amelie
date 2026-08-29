@@ -763,12 +763,18 @@ kbd {
 /* The note itself: prominent, like a title. */
 .note-breadcrumb .crumb-note { color: var(--text-0); font-weight: 500; }
 .note-breadcrumb .crumb-sep { padding: 0 4px; color: var(--text-3); user-select: none; }
-/* Inline rename field inside the breadcrumb (double-click / right-click). */
+/* Inline rename field inside the breadcrumb (double-click / right-click).
+   TALLER, not wider: at `padding: 0 4px` the box was a slit exactly as tall as
+   the text. Only the VERTICAL padding was added — the horizontal padding and
+   the 80px floor stay as they were, so the field keeps the width it always had
+   (the browser's default 20-character input). The negative margin gives the new
+   vertical padding back to the row, so opening the field does not push the
+   title line taller. */
 .crumb-rename-input {
   font-family: var(--ui-font); font-size: 15px; font-weight: 500;
   background: var(--bg-0); color: var(--text-0);
   border: 1px solid var(--accent); border-radius: 3px;
-  padding: 0 4px; outline: none; min-width: 80px;
+  padding: 4px 4px; margin: -4px 0; outline: none; min-width: 80px;
 }
 /* Inline rename field for the Draw title. */
 .canvas-title-input {

@@ -170,8 +170,8 @@ const T = (tw) => SyncManager._twowayTransport(tw);
   const lan = mgr({ sync: { twoway: { enabled: true, transport: 'samba', useWireGuard: false, smbLan: conn } } });
   check('a Samba (LAN) two-way sync counts as configured', lan._twowayConfigured() === true,
     `_twowayConfigured()=${lan._twowayConfigured()}`);
-  check('and its remote folder is found', SyncManager._twowayRemoteFolder(lan.config.sync.twoway) === 'amelie/sync',
-    SyncManager._twowayRemoteFolder(lan.config.sync.twoway));
+  check('and its remote folder is found', lan._twowayRemoteFolder() === 'amelie/sync',
+    lan._twowayRemoteFolder());
 }
 {
   // Unchanged for the other two methods.
@@ -202,6 +202,16 @@ const T = (tw) => SyncManager._twowayTransport(tw);
     `${mgr(cfg(0.01))._twowayIntervalMinutes()}`);
   check('an hourly setting is untouched', mgr(cfg(60))._twowayIntervalMinutes() === 60,
     `${mgr(cfg(60))._twowayIntervalMinutes()}`);
+  // A profile from a build that still had "realtime": the 15 next to it was the
+  // backstop behind the push, never a choice. Honoured in the ENGINE — mapping
+  // it only in the settings screen left the timer at 15 minutes until the user
+  // opened Settings and saved, and the other machine's notes took that long.
+  {
+    const legacy = { sync: { twoway: { enabled: true, realtime: true, intervalMinutes: 15,
+      transport: 'samba', useWireGuard: false, smbLan: CONN } } };
+    check('a legacy realtime profile ticks at 30 s without touching Settings',
+      mgr(legacy)._twowayIntervalMinutes() === 0.5, `${mgr(legacy)._twowayIntervalMinutes()}`);
+  }
 
   // The tick: nothing changed on either side → no pass at all.
   {
@@ -237,7 +247,13 @@ const T = (tw) => SyncManager._twowayTransport(tw);
   const pressed = await metaOf(mgr(cfg(0.5)), true);
   check('but one the user pressed is not', pressed && pressed.quiet === false && pressed.manual === true, JSON.stringify(pressed));
   const hourly = await metaOf(mgr(cfg(60)), false);
-  check('and neither is an hourly one', hourly && hourly.quiet === false, JSON.stringify(hourly));
+  check('an hourly one is quiet: exactly an hour is not MORE than an hour',
+    hourly && hourly.quiet === true, JSON.stringify(hourly));
+  const fiveMin = await metaOf(mgr(cfg(5)), false);
+  check('and so is anything shorter', fiveMin && fiveMin.quiet === true, JSON.stringify(fiveMin));
+  const daily = await metaOf(mgr(cfg(1440)), false);
+  check('only a pass MORE than an hour apart announces success',
+    daily && daily.quiet === false, JSON.stringify(daily));
 }
 
 // ── Report ───────────────────────────────────────────────────────────────────
