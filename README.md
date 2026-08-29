@@ -76,9 +76,17 @@ development:
   notes and attachments are encrypted on disk.
 - **WebDAV sync** — Nextcloud, ownCloud, or any WebDAV server.
 - **Samba / SMB sync** — local network shares, via a bundled static SMB2/3 helper
-  (no system `smbclient` required).
+  (no system `smbclient` required). A share on a network you already reach needs
+  **no VPN**: the tunnel is a separate choice, not a requirement.
 - **VPN + Samba** — reach a Samba share on a remote machine over a private
   **WireGuard or OpenVPN** tunnel; either VPN works for both **backup** and **sync**.
+- **Backup and sync are set up independently** — each picks its own connection
+  type (Samba, VPN or WebDAV) *and its own server*, so your backups can go to one
+  machine while two-way sync runs against another. The two never share a folder:
+  each claims the one it uses, and refuses a folder claimed by the other.
+- **Two-way sync on a timer, down to every 30 seconds.** Each tick first asks
+  whether anything actually changed — on this machine or on the remote — and only
+  then does the work, so a short interval does not keep the share busy.
 - **Atomic writes** — files are written to a temp name and renamed, so a second
   PC syncing at the same instant never sees a half-written file.
 - **Connection-tested destinations** — remote backup/sync targets only enable
