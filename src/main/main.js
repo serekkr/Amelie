@@ -1764,6 +1764,17 @@ async function startMainApp() {
   }
 
   migrateConfigSecrets();   // encrypt any pre-existing plaintext SMB/WebDAV password at rest
+  // File root images into images/ for a vault with NO encryption. The unlock path
+  // runs this for encrypted vaults — it needs the key to rewrite links inside .enc
+  // notes — and a vault that never unlocks would otherwise keep new images in
+  // images/ and the old ones at the root forever, which is the half-and-half state
+  // this migration exists to avoid.
+  // Guarded on the CONFIG, not on ENCRYPTION_KEY: a locked encrypted vault has no
+  // key here either, and moving its files while unable to rewrite the links inside
+  // its notes would break every one of them.
+  try {
+    if (!readAppConfig().encryption?.enabled) migrateImagesToImagesFolder(null);
+  } catch (e) { console.error('[images] startup migration failed:', e.message); }
   syncManager = new SyncManager(NOTES_DIR, ATTACHMENTS_DIR, CONFIG_FILE);
   syncManager.init();
   refreshSyncPlaintextFlag();
@@ -2818,6 +2829,64 @@ function migrateAudioToAudioFolder(key) {
   return moved;
 }
 
+// Consolidate images into attachments/images/, and fix the links in notes to
+// match. Mirrors the two above; the reason it exists is different.
+//
+// Video and audio were scattered by history. Images were left at the attachments
+// ROOT on purpose: that was the marker for "this belongs to a note", and
+// _collectAttachmentNodes lists images only from images/, so a note's own photo
+// stayed out of the tree. Filing them by TYPE means they show up there like every
+// other attachment — which is the point, and what makes this migration a real
+// change to what the sidebar looks like rather than a tidy-up nobody sees.
+//
+// Scans ONLY the root: images/ itself would be a no-op loop, and pdf/, audio/ and
+// videos/ hold no images. IMAGE_EXT_RE is exactly the set of image formats the app
+// accepts, so a legacy PDF sitting in the root — which _collectAttachmentNodes
+// still surfaces from there — is not touched.
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
+function migrateImagesToImagesFolder(key) {
+  if (!ATTACHMENTS_DIR || !fs.existsSync(ATTACHMENTS_DIR)) return 0;
+  const imagesDir = path.join(ATTACHMENTS_DIR, 'images');
+  const moves = [];
+  let items; try { items = fs.readdirSync(ATTACHMENTS_DIR, { withFileTypes: true }); } catch (_) { return 0; }
+  for (const it of items) {
+    if (!it.isFile() || isOwnTempOrHidden(it.name)) continue;
+    const onDiskName = it.name;                                   // may end .enc/.amd
+    const logical = onDiskName.replace(/\.(enc|amd)$/, '');
+    if (!IMAGE_EXT_RE.test(logical)) continue;
+    moves.push({ relPrefix: '', abs: ATTACHMENTS_DIR, onDiskName, logical });
+  }
+  if (!moves.length) return 0;
+  fs.mkdirSync(imagesDir, { recursive: true });
+  const linkPairs = [];
+  let moved = 0;
+  for (const m of moves) {
+    const encSuffix = m.onDiskName.endsWith(ENC_EXT) ? ENC_EXT
+                    : m.onDiskName.endsWith(LEGACY_ENC_EXT) ? LEGACY_ENC_EXT : '';
+    const ext = path.extname(m.logical);
+    const stem = path.basename(m.logical, ext);
+    // Collision-free target leaf inside images/: a root photo and a sidebar-dropped
+    // one can share a name and are DIFFERENT files — never overwrite one with the other.
+    let leaf = m.logical, n = 1;
+    while (fs.existsSync(path.join(imagesDir, leaf + encSuffix)) || fs.existsSync(path.join(imagesDir, leaf))) {
+      leaf = `${stem}-${n}${ext}`; n++;
+    }
+    try {
+      fs.renameSync(path.join(m.abs, m.onDiskName), path.join(imagesDir, leaf + encSuffix));
+      moved++;
+      linkPairs.push({ oldLogical: m.relPrefix + m.logical, newLogical: 'images/' + leaf });
+    } catch (e) { console.error('[images] move failed:', m.onDiskName, e.message); }
+  }
+  if (linkPairs.length) {
+    try { _rewriteAttachmentLinksInNotes(linkPairs, key); } catch (e) { console.error('[images] link rewrite pass failed:', e.message); }
+  }
+  if (moved) {
+    console.log('[images] moved', moved, 'image(s) → attachments/images/');
+    if (syncManager) syncManager.scheduleSync();
+  }
+  return moved;
+}
+
 async function unlockWithPassphrase(passphrase) {
   const cfg = readAppConfig();
   if (!cfg.encryption?.enabled) return { ok: true };
@@ -2872,6 +2941,7 @@ async function unlockWithPassphrase(passphrase) {
       try { migrateNotesFrontmatter(null); } catch (_) {}     // notes are plaintext .md on disk now
       try { migrateVideosToVideosFolder(null); } catch (_) {} // legacy videos → videos/ + fix links (plaintext)
       try { migrateAudioToAudioFolder(null); } catch (_) {}   // legacy audio (root/media) → audio/ + fix links
+      try { migrateImagesToImagesFolder(null); } catch (_) {} // root images → images/ + fix links
     } else {
       ENCRYPTION_KEY = key;
       try { migrateNoteExt(); } catch (_) {}                  // legacy .amd → .enc (rename only)
@@ -2881,6 +2951,7 @@ async function unlockWithPassphrase(passphrase) {
       try { migrateNotesFrontmatter(key); } catch (_) {}      // add created/modified frontmatter to .md notes
       try { migrateVideosToVideosFolder(key); } catch (_) {}  // legacy videos → videos/ + fix links (at rest)
       try { migrateAudioToAudioFolder(key); } catch (_) {}    // legacy audio (root/media) → audio/ + fix links
+      try { migrateImagesToImagesFolder(key); } catch (_) {}  // root images → images/ + fix links
       try { purgeStalePlaintextNotes(key); } catch (_) {}     // remove stale plaintext leftovers (verified+reversible)
     }
     refreshSyncPlaintextFlag();   // pause sync if unlocked into plaintext-while-open mode

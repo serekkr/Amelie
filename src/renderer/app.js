@@ -4660,11 +4660,14 @@ function insertAtCursor(text, start, end) {
   }
 }
 
-// Attachments foldering: PDFs → attachments/pdf/, VIDEOS → attachments/videos/,
-// everything else (images, audio, scripts, …) stays flat at the attachments root.
-// Old files in scripts/ media/ audio/ video/ keep working (links carry the path;
+// Attachments foldering: every accepted type has a folder — PDFs → attachments/pdf/,
+// video → videos/, audio → audio/, images → images/. Old files still sitting in
+// scripts/ media/ audio/ video/ or at the root keep working (links carry the path;
 // playback is extension-based, not folder-based — so a video in videos/ plays the
 // same way).
+// The four regexes below are the whole routing table, and IMAGE_EXT_RE covers
+// exactly the image formats SUPPORTED_ATTACH_RE accepts — so no accepted image
+// can slip past the router and land unfiled at the root.
 const AUDIO_EXT_RE = /\.(mp3|wav|flac|m4a|aac|opus|wma|weba)$/i;
 const VIDEO_EXT_RE = /\.(mp4|webm|mkv|mov|m4v|avi|wmv|mpeg)$/i;
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
@@ -4695,24 +4698,33 @@ function isSupportedAttachmentFile(file) {
   if (isSupportedAttachmentName(file.name)) return true;
   return SUPPORTED_ATTACH_MIME.has((file.type || '').toLowerCase());
 }
-// A media file dropped on the SIDEBAR is a file of its own, not one note's image, so
-// it goes where the tree actually surfaces media: images/ for a photo. The attachments
-// ROOT is where a note's own inline images live, and those are deliberately not listed
-// (they belong to their note) — sending a sidebar drop there is what made a dropped
-// photo vanish.
-function _sidebarMediaTarget(name) {
-  if (/\.pdf$/i.test(name)) return 'pdf/' + name;
-  if (VIDEO_EXT_RE.test(name)) return 'videos/' + name;
-  if (AUDIO_EXT_RE.test(name)) return 'audio/' + name;
-  return 'images/' + name;
-}
-
+// Where a file entering the vault is filed, by TYPE — the one answer for every
+// route in: dropped on the sidebar, dropped on a note, pasted, recorded.
+//
+// There used to be two of these, differing on one line. A photo dropped on the
+// sidebar went to images/; the same photo pasted into a note stayed at the
+// attachments ROOT, the only type not filed at all — PDFs, audio and video have
+// always had their folder whichever way they arrived.
+//
+// That root was doing double duty as a HIDING PLACE: _collectAttachmentNodes
+// lists images only from images/, so a note's inline photo never appeared in the
+// tree. Filing them properly means they do appear, next to the note that uses
+// them — which is already how a PDF or a recording pasted into a note behaves.
+// Deliberate, and asked for: the folder tells you what a file IS, not who
+// happens to reference it.
+//
+// A type with no folder of its own keeps landing at the root: better an
+// unfiled file than one filed under a lie.
 function _attachmentTarget(name) {
-  if (/\.pdf$/i.test(name)) return 'pdf/' + name;
+  if (/\.pdf$/i.test(name))  return 'pdf/' + name;
   if (VIDEO_EXT_RE.test(name)) return 'videos/' + name;
   if (AUDIO_EXT_RE.test(name)) return 'audio/' + name;
+  if (IMAGE_EXT_RE.test(name)) return 'images/' + name;
   return name;
 }
+// Kept as the sidebar's name for the same rule, so the call sites still read as
+// what they do. Same function — do not let them drift apart again.
+const _sidebarMediaTarget = _attachmentTarget;
 
 // In the rendered preview, links to AUDIO and VIDEO attachments become inline
 // players, Obsidian-style (the markdown source keeps a plain link — portable
