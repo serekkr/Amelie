@@ -5648,7 +5648,24 @@ function _previewRowBoxes(root, originY) {
     },
   });
   const range = document.createRange();
+  // A table ROW is one row, whatever its cells do inside it. The rects in there are
+  // cells, not rows, and they do not line up: a `code` chip is a couple of px taller
+  // than the text beside it, and a cell that wraps to two lines starts ABOVE its
+  // middle-aligned neighbours and ends below them. Merging those by top gave one
+  // table row two or three numbers stacked almost on top of each other. In the
+  // editor that same row is a single source line with a single number, so this is
+  // also the answer that agrees with the other column.
+  const seenRows = new Set();
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const el = n.nodeType === 3 ? n.parentElement : n;
+    const tr = el && el.closest ? el.closest('tr') : null;
+    if (tr) {
+      if (seenRows.has(tr)) continue;
+      seenRows.add(tr);
+      const rr = tr.getBoundingClientRect();
+      if (rr.height > 0 && rr.width > 0) rows.push({ top: rr.top - originY, height: rr.height });
+      continue;
+    }
     let rects;
     if (n.nodeType === 3) { range.selectNodeContents(n); rects = range.getClientRects(); }
     else rects = [n.getBoundingClientRect()];
@@ -5965,6 +5982,26 @@ function setupTableColumnResize(table, tableIdx, widths) {
     // still overrides its preferred width, so a long word grows the column (and the
     // table, capped by max-width:100%) rather than clipping.
     table.style.tableLayout = 'auto';
+
+    // The layout is resolved by the time we read a rect back, so ASK the browser what
+    // it did with our widths. A width it gave MORE room to than we asked for is a
+    // width it cannot produce — the cell's content needs more — and under auto layout
+    // that extra is taken from the neighbouring columns: the table then renders wider
+    // than the total we just pinned it to, and no column matches what was dragged.
+    // Markers written before v1.0.49 are all like this, because the drag floor they
+    // were clamped to under-measured any cell holding a `code` chip or bold text by
+    // 30-50px (see _columnContentMins). Adopt the resolution rather than argue with
+    // it: give each <col> the width actually used and re-pin the table to that total,
+    // which is self-consistent and stable on every later render. The note's own
+    // `amelie:colw` comment is deliberately left untouched — the next drag rewrites it
+    // with numbers that hold.
+    if (allSet) {
+      const resolved = headerCells.map(c => Math.round(c.getBoundingClientRect().width));
+      if (resolved.some((w, i) => w > clamped[i] + 1)) {
+        cols.forEach((col, i) => { if (resolved[i]) col.style.width = resolved[i] + 'px'; });
+        table.style.width = resolved.reduce((sum, w) => sum + w, 0) + 'px';
+      }
+    }
   }
   table.dataset.tableIdx = String(tableIdx);
 
@@ -6098,44 +6135,54 @@ function syncCellToMarkdown(table, cell) {
   }
 }
 
-// Smallest width a column may shrink to without CLIPPING its text. Cells use
-// word-break:normal / overflow-wrap:normal (so a word is never split — see the
-// per-char-stacking fix), which means a long single word can't wrap and would be
-// cut off when the column gets narrower than it. The floor is the widest word in
-// the column plus the cell's horizontal padding + borders. (v1.0.615)
-let _colMeasureCtx = null;
-function _columnContentMin(table, cols, colIndex) {
-  // Smallest the column can get without CLIPPING text: the widest unbreakable word
-  // (cells use word-break/overflow-wrap:normal → a word never splits) plus the
-  // cell's padding + borders. PERF (v1.0.983): measured with a canvas 2D context,
-  // NOT a per-word in-cell <span> + offsetWidth. The old span approach appended to /
-  // read from a live cell for EVERY word in EVERY row of EVERY column at drag engage,
-  // forcing a synchronous layout each time (~cols×rows×words reflows) → a big hitch
-  // the moment you started to widen a table. Canvas measureText touches no layout.
-  let min = 40;
-  const ctx = _colMeasureCtx || (_colMeasureCtx = document.createElement('canvas').getContext('2d'));
-  for (const row of table.rows) {
-    const cell = row.cells[colIndex];
-    if (!cell) continue;
-    const words = (cell.textContent || '').replace(/\u200b/g, '').trim().split(/\s+/).filter(Boolean);
-    if (!words.length) continue;
-    const cs = getComputedStyle(cell);
-    // Canvas font shorthand: style weight size family — the cell's exact font (header
-    // th and body td differ in size/weight, so read it per cell).
-    ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-    let widest = 0;
-    for (const word of words) {
-      const wdt = ctx.measureText(word).width;
-      if (wdt > widest) widest = wdt;
-    }
-    const extra = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
-      + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
-    // +3px slack: canvas can under-measure the rendered box by ~1-2px (sub-pixel /
-    // letter-spacing) — keep the old "text is never clipped" guarantee.
-    const need = Math.ceil(widest + extra) + 3;
-    if (need > min) min = need;
-  }
-  return min;
+// Smallest width every column may shrink to without the browser taking the width
+// back off us. Cells use word-break:normal / overflow-wrap:normal (a word is never
+// split — see the per-char-stacking fix), so a column narrower than its widest
+// unbreakable word cannot wrap: the content spills over the next cell instead.
+//
+// Measured BY the browser, on an off-screen clone of the table with the <col> widths
+// cleared and the table squeezed to `width: min-content`: one clone, one layout,
+// every column at once. It replaces a canvas measureText loop over every word of
+// every cell (v1.0.983), which was believed fast and was wrong — canvas was given
+// the CELL's font, and a table cell is rarely just cell-font text. An inline `code` chip carries its
+// own monospace family PLUS 5px of padding and a 1px border on each side, and
+// `strong` is heavier than the td it sits in. On the six-column inventory table that
+// found this, the canvas floor came out 32-48px BELOW the truth: it claimed
+// 140,135,140,175,174,84 where the browser needs 135,167,156,221,222,90.
+//
+// A floor that low is not a cosmetic error. The drag clamps to it, so a column could
+// be dragged narrower than its own content and `amelie:colw` persisted a width no
+// renderer would honour. What came back was never what was dragged: under
+// table-layout:auto the browser reclaimed the width and squeezed the neighbours down
+// to their 90px cell min-width (so those cells wrapped to two lines, and the preview
+// gutter numbered each line), and in the fixed layout a drag leaves behind, the chip
+// simply overflowed into the next column and painted on top of its text.
+//
+// The canvas loop was not even the cheaper of the two, measured on a 1500-row table
+// (the case v1.0.983 was written for): the clone costs ~318ms against its ~243ms, and
+// both are dominated by the table's own layout — the canvas version spent its time in
+// 9000 getComputedStyle calls. It runs once per drag, at engage, as before.
+function _columnContentMins(table) {
+  const box = document.createElement('div');
+  // Inside the table's own parent, so #preview-content's table rules still apply;
+  // off-screen in a zero-width box, so `min-content` is what we get back.
+  box.style.cssText = 'position:absolute;left:-99999px;top:0;width:0;visibility:hidden';
+  const clone = table.cloneNode(true);
+  clone.style.width = 'min-content';
+  clone.style.maxWidth = 'none';
+  clone.style.tableLayout = 'auto';
+  clone.querySelectorAll('colgroup col').forEach(c => { c.style.width = ''; });
+  // Amelie's own furniture is not content (the handle is absolutely positioned and
+  // measures as nothing, but it costs nothing to drop it either).
+  clone.querySelectorAll('.col-resize-handle').forEach(h => h.remove());
+  box.appendChild(clone);
+  (table.parentElement || document.body).appendChild(box);
+  const firstRow = clone.querySelector('tr');
+  const mins = firstRow
+    ? [...firstRow.querySelectorAll('th, td')].map(c => Math.ceil(c.getBoundingClientRect().width))
+    : [];
+  box.remove();
+  return mins;
 }
 
 function startColumnResize(e, table, cols, cells, colIdx, isLast) {
@@ -6192,7 +6239,8 @@ function startColumnResize(e, table, cols, cells, colIdx, isLast) {
     containerW = (table.parentElement
       ? table.parentElement.clientWidth
       : table.clientWidth) - 2;
-    colMin = cols.map((_, i) => _columnContentMin(table, cols, i));
+    const mins = _columnContentMins(table);
+    colMin = cols.map((_, i) => mins[i] || 40);
   };
 
   const onMove = (ev) => {

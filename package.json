@@ -33,7 +33,8 @@
     "test:tabs": "node test/tab-width.cdp.mjs",
     "test:align": "node test/strip-align.cdp.mjs",
     "test:syncsamba": "node test/sync-samba-no-vpn.cdp.mjs",
-    "test:images": "node test/images-foldered.cdp.mjs"
+    "test:images": "node test/images-foldered.cdp.mjs",
+    "test:tablecols": "node test/table-columns-fit.cdp.mjs"
   },
   "dependencies": {
     "hash-wasm": "^4.12.0",
