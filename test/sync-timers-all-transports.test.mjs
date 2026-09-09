@@ -267,6 +267,55 @@ for (const [name, shape] of Object.entries(TWOWAY)) {
   }
 }
 
+// ── Backup AND sync, both switched on ───────────────────────────────────────
+// Every case above tests one half with the other half off: the sync-method cases
+// all say `local: { enabled: false }`, and the backup cases never enable twoway.
+// So nothing asserted the shape the user actually runs — a local backup every
+// hour AND a Samba (LAN) sync every 30 seconds, at the same time. Two timers on
+// two different periods, from one _startAutoSync.
+{
+  const both = { sync: { enabled: true,
+    backupTransport: 'local',
+    local: { enabled: true, path: '/home/u/Documents/amelie-backup/', intervalMinutes: 60 },
+    twoway: { enabled: true, transport: 'samba', useWireGuard: false, intervalMinutes: 0.5,
+              smbLan: { host: '10.0.0.2', ip: '10.0.0.2', share: 'saturn',
+                        remoteSubPath: 'amelie/sync', username: 'u', password: 'p' } } } };
+  const t = timersOf(both);
+  check('both on: the backup timer is created, on the backup frequency', t.backup === 60, `backup=${t.backup}`);
+  check('both on: the two-way timer is created, on its own 30 s', t.twoway === 0.5, `twoway=${t.twoway}`);
+  check('both on: neither timer displaces the other', t.backup !== null && t.twoway !== null,
+    `backup=${t.backup} twoway=${t.twoway}`);
+
+  // They write to different places, and nothing checks that for you: the backup
+  // goes to a local folder, the sync to a folder on the share. A setup pointing
+  // both at one folder is what the "already configured for the other" warning in
+  // the settings screen is for.
+  const m = mgr(both);
+  m._decSecret = (v) => v;
+  check('both on: the sync folder is not the backup folder',
+    m._twowayRemoteFolder() !== both.sync.local.path,
+    `sync=${JSON.stringify(m._twowayRemoteFolder())} backup=${both.sync.local.path}`);
+
+  // A run in flight blocks the other one rather than racing it. The two-way tick
+  // costs a 30-second delay, which the next tick covers. The BACKUP loses its
+  // whole hour — it returns "Already syncing" and, because that path never calls
+  // _setStatus, it does so silently: no bell, no error, just no backup until the
+  // next hour. Worth knowing, not worth a race.
+  const busy = mgr(both);
+  busy._decSecret = (v) => v;
+  busy.status = 'syncing';
+  busy._syncStartedAt = Date.now();
+  let passes = 0;
+  busy.runTwoway = async () => { passes++; return { success: true }; };
+  await busy._twowayTick();
+  check('both on: a two-way tick during a run does not race it', passes === 0, `${passes} passes started`);
+  const r = await busy.runBackup();
+  check('both on: a backup during a run is refused, not raced',
+    r && r.success === false && r.error === 'Already syncing', JSON.stringify(r));
+  check('both on: that refusal leaves the status alone (no bell for it)',
+    busy.status === 'syncing', `status=${busy.status}`);
+}
+
 // ── The bell, on the backup side ─────────────────────────────────────────────
 // The two-way half of this rule is covered in samba-without-vpn.test.mjs. The
 // backup half runs off a DIFFERENT interval (sync.local) and was never asserted.
