@@ -1514,18 +1514,34 @@ class SyncManager {
     if (toDelete.length) console.log('[Samba] Rotation: removed', toDelete.length, 'old dated folders');
   }
 
-  /** Recursively list files under `base` on the share → { relPathUnderBase: mtimeMs }. */
+  /**
+   * Recursively list files under `base` on the share → { relPathUnderBase: mtimeMs }.
+   *
+   * THROWS when the share cannot be read. "Unreachable" and "empty" are
+   * different answers and must STAY different — the same rule _twowayRemoteSignature
+   * already states for every other transport, which this one quietly broke by
+   * swallowing its error into `{}`.
+   *
+   * What that cost (2026-09-10): with the NAS off the network, the tick's cheap
+   * question came back as an empty share every time, i.e. "everything over there
+   * changed", so it started a FULL pass every 30 seconds — each one minutes long,
+   * because every SMB call has to reach its timeout first. The engine was then
+   * never idle, `_busy()` was true at every moment, and a local .tar.gz backup
+   * that needs no network at all could not run again.
+   *
+   * An empty ARRAY from the helper is a real, empty folder: {} and no throw.
+   */
   async _smbListRecursive(cfg, base) {
+    const entries = await this._smbJson(cfg, ['listr', base], { timeout: 120000, maxBuffer: 64 * 1024 * 1024 });
+    // _smbJson answers null when the helper printed something that is not JSON —
+    // a failure it may well have exited 0 on. Anything but an array means we did
+    // not get a listing, which is not the same as getting an empty one.
+    if (!Array.isArray(entries)) throw new Error(`Samba: impossibile leggere la cartella remota "${base}"`);
     const map = {};
-    try {
-      const entries = await this._smbJson(cfg, ['listr', base], { timeout: 120000, maxBuffer: 64 * 1024 * 1024 });
-      if (Array.isArray(entries)) {
-        for (const e of entries) {
-          if (e.dir) continue;              // files only (as before)
-          map[e.path] = +e.mtime || 0;      // path already relative to base, mtime already in ms
-        }
-      }
-    } catch (_) { /* transient error → {} (the caller does not delete on an empty listing) */ }
+    for (const e of entries) {
+      if (e.dir) continue;              // files only (as before)
+      map[e.path] = +e.mtime || 0;      // path already relative to base, mtime already in ms
+    }
     return map;
   }
 
@@ -1705,10 +1721,12 @@ class SyncManager {
       if (rel.startsWith('notes/') || rel.startsWith('attachments/')) allRels.add(rel);
     }
 
-    // SAFETY: never let a failed/empty remote listing turn into a mass local
-    // wipe. _smbListRecursive returns {} on a transient error; if we've synced
-    // before (baselines exist) or have local files, an all-empty remote almost
-    // certainly means the listing failed → skip delete propagation this run.
+    // SAFETY: never let an empty remote listing turn into a mass local wipe.
+    // A listing that FAILED now throws before it can reach this point, so what is
+    // left to guard is one that came back successfully empty when it should not
+    // have; if we've synced before (baselines exist) or have local files, that
+    // still almost certainly means something went wrong on the other end → skip
+    // delete propagation this run.
     let pd = propagateDeletes;
     if (pd) {
       const remoteCount = Object.keys(remote).filter(r => r.startsWith('notes/') || r.startsWith('attachments/')).length;

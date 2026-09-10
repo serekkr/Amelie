@@ -210,6 +210,25 @@ for (const [name, shape] of Object.entries(TWOWAY)) {
       await m._twowayTick();
       check(`a "${name}" tick with the remote unreachable does no pass`, m.runs === 0, `passate=${m.runs}`);
     }
+    // ...and the same thing without the stub that was making it true.
+    //
+    // The three checks above mock _smbListRecursive itself, so they asserted a
+    // rule the Samba path did not actually follow: the real method swallowed
+    // every error into `{}`, which the tick reads as a share whose files all
+    // vanished. It therefore started a FULL pass on EVERY tick, each one minutes
+    // long against a remote that is timing out, and the engine never went idle
+    // again — which is what stopped backups from running at all (2026-09-10).
+    // Drive the real listing over a failing helper instead.
+    for (const [why, smbJson] of [
+      ['unreachable', async () => { throw new Error('dial tcp 192.168.30.10:445: i/o timeout'); }],
+      ['unanswerable', async () => null],   // helper exited 0 having printed no JSON
+    ]) {
+      const m = tickMgr('samba');
+      delete m._smbListRecursive;           // back to the real one
+      m._smbJson = smbJson;
+      for (let i = 0; i < 3; i++) await m._twowayTick();
+      check(`three ticks against an ${why} share start no pass at all`, m.runs === 0, `passate=${m.runs}`);
+    }
   }
   {
     // Every method must respect the two gates a tick has, or a 30-second timer
@@ -224,6 +243,42 @@ for (const [name, shape] of Object.entries(TWOWAY)) {
     }
   }
   fs.rmSync(legacyRoot, { recursive: true, force: true });
+}
+
+// ── An unreachable share is not an empty one ─────────────────────────────────
+// _twowayRemoteSignature promises `null` for "nothing configured" and a THROW
+// for "unreachable". _smbListRecursive is where the Samba transport keeps that
+// promise, or fails to.
+{
+  const m = mgr({ sync: {} });
+  const conn = { host: 'h', share: 's' };
+  const throws = async () => {
+    try { await m._smbListRecursive(conn, 'amelie/sync'); return false; } catch (_) { return true; }
+  };
+
+  m._smbJson = async () => { throw new Error('dial tcp: i/o timeout'); };
+  check('an SMB listing that failed throws instead of answering "empty"', await throws(), '');
+
+  m._smbJson = async () => null;   // the helper printed something that is not JSON
+  check('an SMB listing the helper could not answer throws too', await throws(), '');
+
+  m._smbJson = async () => [];
+  const empty = await m._smbListRecursive(conn, 'amelie/sync');
+  check('a folder that really IS empty answers {} and does not throw',
+    empty && Object.keys(empty).length === 0, JSON.stringify(empty));
+
+  m._smbJson = async () => ([{ path: 'notes', dir: true }, { path: 'notes/a.md', mtime: 1000 }]);
+  check('a listing keeps the files and drops the directories',
+    JSON.stringify(await m._smbListRecursive(conn, 'amelie/sync')) === '{"notes/a.md":1000}', '');
+
+  // And the signature the tick compares carries the throw up, rather than
+  // reporting a share that lost every file.
+  const sig = mgr(twCfg('samba', { intervalMinutes: 0.5 }));
+  sig._decSecret = (v) => v;
+  sig._smbJson = async () => { throw new Error('i/o timeout'); };
+  let sigThrew = false;
+  try { await sig._twowayRemoteSignature(); } catch (_) { sigThrew = true; }
+  check('_twowayRemoteSignature reports an unreachable Samba share as a throw', sigThrew, '');
 }
 
 // ── The remote folder must name what actually runs ───────────────────────────
