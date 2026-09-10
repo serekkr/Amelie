@@ -1836,8 +1836,35 @@ function setupGpuToggle() {
   });
 }
 
-// "Low-power mode": the toggle was REMOVED from the UI (v1.0.643); the mode
-// is now always on, forced in main.js. No renderer-side setup.
+// The other two startup switches. Same shape as setupGpuToggle: stored in
+// settings.json because the main process reads them BEFORE app 'ready', and
+// they take effect only after a restart.
+//
+// Both were hard-coded on for every install, and both were tuned for one
+// machine. Measured here on a drawing being drawn on (12 shapes, a 5-second
+// freehand stroke):
+//
+//   software compositing + low-memory   34 fps   119% of a core   ← was shipped
+//   GPU compositing + low-memory        60 fps   106%
+//   GPU compositing, no low-memory      60 fps    60%
+//
+// Software compositing halves the frame rate outright — that is the "slow
+// motion" a colleague reported on Ubuntu 26 (2026-09-10) — and low-memory mode
+// costs about a whole core on top of it. Neither is a default now.
+function setupStartupFlagToggle(elId, key, invert) {
+  const tgl = document.getElementById(elId);
+  if (!tgl) return;
+  const read = (c) => invert ? !(c && c[key]) : !!(c && c[key]);
+  window.inkwell.readConfig().then(c => { tgl.checked = read(c); }).catch(() => { tgl.checked = !!invert; });
+  tgl.addEventListener('change', async () => {
+    try {
+      const c = (await window.inkwell.readConfig()) || {};
+      c[key] = invert ? !tgl.checked : tgl.checked;
+      await window.inkwell.writeConfig(c);
+      showToast(window.i18n.t('settings.gpu_restart'));
+    } catch (e) { console.error(elId + ' save failed:', e); }
+  });
+}
 
 async function _startRecording() {
   // Immediate feedback: opening the mic device can take a couple of seconds
@@ -2347,6 +2374,8 @@ async function init() {
   setupFolderGuides();
   setupAudioRecording();
   setupGpuToggle();
+  setupStartupFlagToggle('cfg-gpu-compositing', 'softwareCompositing', true);
+  setupStartupFlagToggle('cfg-low-memory', 'lowMemory', false);
 
   // Load the event-notification log BEFORE the unlock gate: a wrong-password
   // notification fired during unlock must merge into the saved history, not

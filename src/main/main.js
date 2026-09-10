@@ -23,63 +23,25 @@ process.on('uncaughtException', (err) => {
   console.error('[main] Uncaught exception:', err);
 });
 
-// GPU acceleration re-enabled: the NVIDIA+Wayland crash workaround below was a
-// leftover from the old Dell (NVIDIA dGPU). This machine is Intel Arc (xe driver),
-// where hardware acceleration works fine and software rendering only adds CPU load
-// + heavy framebuffer copies to the compositor. Keep in-process-gpu (it also
-// prevents an extra taskbar window). To restore the old behavior on an NVIDIA box,
-// uncomment the two lines below.
-// app.disableHardwareAcceleration();
-// app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('in-process-gpu');
-// GPU RASTERIZATION stays on, but COMPOSITING is done in software. On this
-// compositor (Wayland + in-process GPU) hardware compositing leaves stale tiles —
-// "ghost" rectangles in the editor where code-block boxes were once drawn — that
-// no repaint (reflow, invalidate, opacity nudge, even a full DOM rebuild) can
-// clear. Software compositing avoids the leak with a negligible cost for a text
-// app (raster is still GPU-accelerated). Full software rendering (disableGpu)
-// is no longer needed for this glitch.
-app.commandLine.appendSwitch('disable-gpu-compositing');
-// ── No OS keyring / wallet on startup ────────────────────────────────────────
-// On KDE (this user) two separate mechanisms would pop a KWallet password dialog:
-//   1) the legacy os_crypt password store → force 'basic' (plaintext key, no kwallet)
-//   2) Chromium's os_crypt_async SecretPortalKeyProvider (default-ON since ~Cr130)
-//      which asks xdg-desktop-portal for a secret → xdg-desktop-portal-kde opens
-//      the wallet ("The application 'xdg-desktop-portal' has requested to open the
-//      wallet"). Disable that feature so no portal-secret request is ever made.
-// Baked in code (not just the launcher) so it holds no matter how the app is
-// started (wrapper, .desktop, a KDE-cached exec line) — and ONLY here: the
-// launcher used to repeat it on the command line, which changed nothing except
-// putting "--password-store=basic" in `ps aux`/htop, where it reads as "the app
-// keeps a password in the clear". Measured with it removed from the launcher:
-// the selected backend is still basic_text and the switch still reads as set.
-// Cost: the "remember
-// password" passkey is protected by a weak key — acceptable; the wallet is
-// unusable/annoying on this box anyway. See notes on the kwallet startup hang.
-// No OS keyring, on any distro. 'basic' = plaintext os_crypt key (no kwallet/
-// gnome-keyring access) → never hangs/prompts, portable everywhere. Amelie no
-// longer stores the vault passphrase (the "remember password" feature was
-// removed), so safeStorage isn't used for secrets anyway; 'basic' only covers
-// the SMB/WebDAV credential blob in settings.json, which is fine.
-app.commandLine.appendSwitch('password-store', 'basic');
-// Also block Chromium's os_crypt_async SecretPortalKeyProvider (a separate path
-// that pops a KWallet/portal dialog on KDE).
-app.commandLine.appendSwitch('disable-features', 'SecretPortalKeyProvider');
-// User-controllable startup flags, read from settings.json synchronously BEFORE
-// app 'ready' (only pre-ready switches + disableHardwareAcceleration() work here):
-//   disableGpu → software rendering. NOTE: does NOT save system RAM — with
-//                in-process-gpu there's no separate GPU process to drop.
-//   lowMemory  → Chromium low-end-device-mode; now ALWAYS on (toggle removed v643).
-try {
-  const _cfgP = path.join(os.homedir(), '.local', 'share', 'amelie', 'settings.json');
-  const _cfg = fs.existsSync(_cfgP) ? JSON.parse(fs.readFileSync(_cfgP, 'utf8')) : {};
-  app.commandLine.appendSwitch('enable-low-end-device-mode');
-  app.commandLine.appendSwitch('js-flags', '--max-old-space-size=512');
-  if (_cfg && _cfg.disableGpu) {
-    app.disableHardwareAcceleration();
-    app.commandLine.appendSwitch('disable-gpu');
+// Every pre-ready Chromium switch is decided in startupFlags() — one place, one
+// rule: a switch that works around ONE machine is opt-in, only a switch that is
+// right everywhere is unconditional. See src/main/startupFlags.js for what each
+// one costs; three of them used to be hard-coded on for every install.
+// Read settings.json synchronously: pre-ready is the only moment these count.
+{
+  const { startupFlags } = require('./startupFlags');
+  let cfg = {};
+  try {
+    const p = path.join(os.homedir(), '.local', 'share', 'amelie', 'settings.json');
+    if (fs.existsSync(p)) cfg = JSON.parse(fs.readFileSync(p, 'utf8')) || {};
+  } catch (_) {}
+  const flags = startupFlags(cfg);
+  for (const [name, value] of flags.switches) {
+    if (value === undefined) app.commandLine.appendSwitch(name);
+    else app.commandLine.appendSwitch(name, value);
   }
-} catch (_) {}
+  if (flags.disableHardwareAcceleration) app.disableHardwareAcceleration();
+}
 // Chromium sandbox left ENABLED: on this distro unprivileged user namespaces work,
 // so the renderer is sandboxed without the SUID helper. (The main process — where
 // VPN/Samba/polkit commands are spawned — is never sandboxed, so that's unaffected.)

@@ -1671,8 +1671,21 @@
               <label class="toggle"><input type="checkbox" id="cfg-disable-gpu" /><span class="slider"></span></label>
             </div>
 
-            <!-- Low-memory mode: removed from the UI (v1.0.643). It stays ALWAYS on,
-                 forced in main.js — see enable-low-end-device-mode. -->
+            <!-- GPU compositing: ON = composite on the GPU (default, smooth drawing),
+                 OFF = software compositing, which clears the "ghost" rectangles some
+                 compositors leave but halves the frame rate while drawing. Restart. -->
+            <div class="field-group toggle-row">
+              <label data-i18n-html="settings.sw_compositing">Compositing GPU <small>(On = compositing sulla GPU · Off = compositing software · richiede riavvio)</small></label>
+              <label class="toggle"><input type="checkbox" id="cfg-gpu-compositing" /><span class="slider"></span></label>
+            </div>
+
+            <!-- Low-memory mode: back in the UI (v1.0.51) and OFF by default. It was
+                 forced on for everyone from v1.0.643, and it costs about a core of
+                 extra CPU while drawing — measured 106% against 60%. -->
+            <div class="field-group toggle-row">
+              <label data-i18n-html="settings.low_memory">Modalità basso consumo <small>(On = meno RAM · UI un po' più lenta · richiede riavvio)</small></label>
+              <label class="toggle"><input type="checkbox" id="cfg-low-memory" /><span class="slider"></span></label>
+            </div>
 
           </div>
 

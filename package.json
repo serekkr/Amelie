@@ -12,7 +12,7 @@
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "build:excalidraw": "esbuild build/excalidraw-entry.js --bundle --format=iife --outfile=src/renderer/excalidraw-bundle.js --minify --legal-comments=none --conditions=production --define:process.env.NODE_ENV=\\\"production\\\" --loader:.woff2=empty --loader:.png=empty --loader:.svg=empty && node build/scrub-bundle.js",
-    "test": "node test/editor-desync.test.mjs && node test/backup-destinations.test.mjs && node test/backup-catchup.test.mjs && node test/preview-code-untouched.test.mjs && node test/media-in-folders.test.mjs && node test/samba-without-vpn.test.mjs && node test/sync-timers-all-transports.test.mjs",
+    "test": "node test/startup-flags.test.mjs && node test/editor-desync.test.mjs && node test/backup-destinations.test.mjs && node test/backup-catchup.test.mjs && node test/preview-code-untouched.test.mjs && node test/media-in-folders.test.mjs && node test/samba-without-vpn.test.mjs && node test/sync-timers-all-transports.test.mjs",
     "test:app": "node test/editor-typing.cdp.mjs",
     "test:sweep": "node test/editor-wrap-sweep.mjs",
     "test:enc": "node test/editor-encrypted.cdp.mjs",
@@ -34,7 +34,8 @@
     "test:align": "node test/strip-align.cdp.mjs",
     "test:syncsamba": "node test/sync-samba-no-vpn.cdp.mjs",
     "test:images": "node test/images-foldered.cdp.mjs",
-    "test:tablecols": "node test/table-columns-fit.cdp.mjs"
+    "test:tablecols": "node test/table-columns-fit.cdp.mjs",
+    "test:gpuflags": "node test/startup-toggles.cdp.mjs"
   },
   "dependencies": {
     "hash-wasm": "^4.12.0",
