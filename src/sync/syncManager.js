@@ -20,6 +20,8 @@ class SyncManager {
     this.status = 'idle'; // idle | syncing | error | ok
     this.lastSync = null;
     this.webdavClient = null;
+    // True while a MANUAL backup is queued behind a run in flight — see runBackup.
+    this._backupWaiting = false;
   }
 
   async init() {
@@ -560,7 +562,11 @@ class SyncManager {
    */
   async _twowayTick() {
     const tw = this.config.sync?.twoway;
-    if (!tw?.enabled || this._plaintextOpen || this._busy()) return;
+    // Three gates: not configured, the vault is open in plaintext, or someone
+    // else has the engine — either running (_busy) or holding the next slot for
+    // a manual backup (_backupWaiting), which must not be queue-jumped by a
+    // timer that comes round twice a minute.
+    if (!tw?.enabled || this._plaintextOpen || this._backupWaiting || this._busy()) return;
     const localSig = this._vaultSignature();
     let remoteSig;
     try { remoteSig = await this._twowayRemoteSignature(); }
@@ -626,6 +632,46 @@ class SyncManager {
     return keys.length + '|' + keys.map(k => k + ':' + map[k]).join('|');
   }
 
+  // How long a manual backup will wait for a run already in flight: longer than
+  // any pass has a right to take, short enough that the button still answers.
+  static get _TURN_WAIT_MS() { return 5 * 60 * 1000; }
+
+  /** Wait for whatever is in flight to finish. True once the engine is free. */
+  async _awaitTurn(maxWaitMs = SyncManager._TURN_WAIT_MS) {
+    const until = Date.now() + maxWaitMs;
+    while (this._busy() && Date.now() < until) {
+      await new Promise(r => setTimeout(r, 250));
+    }
+    return !this._busy();
+  }
+
+  /**
+   * Backup entry point.
+   *
+   * A SCHEDULED run that collides with a sync stands down, as it always has: it
+   * costs one interval and the next one covers it.
+   *
+   * A MANUAL one WAITS. It used to be refused with "Already syncing", and that
+   * was the entire answer the button gave — no copy, and the run gone until the
+   * next hour. Against a remote slow enough that a two-way pass outlasts its own
+   * 30-second timer the engine is never idle, so that was not the odd unlucky
+   * press: it was every press, for a local .tar.gz that needs no network at all
+   * (the 2026-09-10 report). `_backupWaiting` holds the next slot while we wait
+   * so the two-way timer cannot take it first.
+   */
+  async runBackup({ force = false, manual = force } = {}) {
+    if (!manual || !this._busy()) return await this._runBackup({ force, manual });
+    this._backupWaiting = true;
+    try {
+      if (!await this._awaitTurn()) {
+        return { success: false, error: 'Sincronizzazione ancora in corso: backup non eseguito. Riprova, oppure disattiva temporaneamente il sync.' };
+      }
+      return await this._runBackup({ force, manual });
+    } finally {
+      this._backupWaiting = false;
+    }
+  }
+
   // Scheduled backup (one-way: local → remote, plus WireGuard/WebDAV).
   // force=true (manual "Esegui backup ora") always runs; scheduled runs skip
   // when the vault hasn't changed since the last successful backup.
@@ -633,7 +679,7 @@ class SyncManager {
   // following `force` (the "Back up now" button is the usual forced run). The
   // first backup of a freshly enabled destination forces WITHOUT being manual —
   // nobody pressed anything — so it must be able to say so.
-  async runBackup({ force = false, manual = force } = {}) {
+  async _runBackup({ force = false, manual = force } = {}) {
     if (this._syncPausedPlaintext()) return { success: false, skipped: true, plaintextOpen: true, error: 'Cifratura a riposo disattivata: backup in pausa per non esporre i file in chiaro. Riattiva "Cifra i file a riposo".' };
     if (this._busy()) return { success: false, error: 'Already syncing' };
     // No enabled destination → don't pretend "backup complete". Tell the user.
@@ -826,6 +872,8 @@ class SyncManager {
   async runTwoway({ manual = false } = {}) {
     if (this._syncPausedPlaintext()) return { success: false, skipped: true, plaintextOpen: true, error: 'Cifratura a riposo disattivata: sync in pausa per non esporre i file in chiaro sullo share. Attiva "Cifra i file a riposo" nelle impostazioni Vault per sincronizzare.' };
     if (this._busy()) return { success: false, error: 'Already syncing' };
+    // A manual backup holding the next slot gets it — see runBackup.
+    if (!manual && this._backupWaiting) return { success: false, error: 'Backup waiting' };
     if (!this.config.sync?.twoway?.enabled) return { success: false, error: 'Two-way disabled' };
     // `quiet` rides along so the renderer can keep the bell shut for passes that
     // run every half minute — a line twice a minute is noise. An hourly pass, or

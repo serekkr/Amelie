@@ -240,6 +240,12 @@ for (const [name, shape] of Object.entries(TWOWAY)) {
       const plain = tickMgr(name); plain._plaintextOpen = true;
       await plain._twowayTick();
       check(`a "${name}" tick does nothing while the vault is plaintext`, plain.runs === 0, `passate=${plain.runs}`);
+      // The third gate. A timer that comes round twice a minute must not
+      // queue-jump the backup someone pressed the button for.
+      const queued = tickMgr(name); queued._backupWaiting = true;
+      await queued._twowayTick();
+      check(`a "${name}" tick does nothing while a manual backup waits its turn`, queued.runs === 0,
+        `passate=${queued.runs}`);
     }
   }
   fs.rmSync(legacyRoot, { recursive: true, force: true });
@@ -279,6 +285,68 @@ for (const [name, shape] of Object.entries(TWOWAY)) {
   let sigThrew = false;
   try { await sig._twowayRemoteSignature(); } catch (_) { sigThrew = true; }
   check('_twowayRemoteSignature reports an unreachable Samba share as a throw', sigThrew, '');
+}
+
+// ── A backup someone pressed waits its turn instead of losing it ─────────────
+// A SCHEDULED backup that collides stands down: it costs an interval, and the
+// next one covers it. A MANUAL one used to get the same treatment, and that was
+// the whole answer the button gave — "Already syncing", no copy, gone until the
+// next hour. Against a remote slow enough that a two-way pass outlasts its own
+// 30-second timer the engine is NEVER idle, so that was every press, for a local
+// .tar.gz that needs no network at all.
+{
+  const backupMgr = () => {
+    const m = mgr({ sync: { enabled: true, local: { enabled: true, path: '/tmp/x', intervalMinutes: 60 } } });
+    m.copies = 0;
+    m._vaultSignature = () => 'V1';
+    m._runBackupInner = async () => { m.copies++; return { local: { dateFolder: 'd' } }; };
+    m._recordBackupState = () => {};
+    m._setStatus = (status) => { m.status = status; if (status === 'syncing') m._syncStartedAt = Date.now(); };
+    m.status = 'syncing';                 // a sync is in flight right now
+    m._syncStartedAt = Date.now();
+    return m;
+  };
+
+  {
+    const m = backupMgr();
+    setTimeout(() => { m.status = 'ok'; }, 100);      // the sync finishes
+    const t0 = Date.now();
+    const r = await m.runBackup({ force: false, manual: true });
+    check('a manual backup during a sync waits for it and then runs',
+      r && r.success === true && m.copies === 1, JSON.stringify(r));
+    check('and it really did wait rather than run straight through',
+      Date.now() - t0 >= 100, `${Date.now() - t0} ms`);
+    check('and it lets go of the slot afterwards', m._backupWaiting === false, '');
+  }
+  {
+    // The scheduled run keeps standing down — that half was never the problem.
+    const m = backupMgr();
+    const r = await m.runBackup();
+    check('a scheduled backup during a sync still stands down',
+      r && r.success === false && r.error === 'Already syncing' && m.copies === 0, JSON.stringify(r));
+  }
+  {
+    // Waiting is bounded, and giving up says something a person can act on.
+    const m = backupMgr();
+    const t0 = Date.now();
+    const free = await m._awaitTurn(300);
+    check('_awaitTurn gives up instead of waiting forever',
+      free === false && (Date.now() - t0) >= 300, `${Date.now() - t0} ms, free=${free}`);
+    m._awaitTurn = async () => false;
+    const r = await m.runBackup({ manual: true });
+    check('a manual backup that never got its turn says so in words',
+      r && r.success === false && /Sincronizzazione ancora in corso/.test(r.error || ''), JSON.stringify(r));
+    check('and it releases the slot even then', m._backupWaiting === false, '');
+  }
+  {
+    // Nothing in flight → straight through, no wait at all.
+    const m = backupMgr();
+    m.status = 'idle';
+    const t0 = Date.now();
+    const r = await m.runBackup({ manual: true });
+    check('a manual backup with the engine idle does not wait',
+      r && r.success === true && (Date.now() - t0) < 200, `${Date.now() - t0} ms`);
+  }
 }
 
 // ── The remote folder must name what actually runs ───────────────────────────
