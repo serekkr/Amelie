@@ -1285,7 +1285,14 @@ kbd {
 /* font-weight 300 matches the editor (its .cm-scroller / textarea use weight 300);
    without this the preview body text inherited 400 and looked heavier/different from
    edit mode. Headings (<h1-4>) and <strong>/<b> keep their own bold. */
-#preview-content { max-width: none; font-size: var(--editor-font-size); font-family: var(--editor-font-family); font-weight: 300; overflow-wrap: anywhere; }
+#preview-content {
+  max-width: none; font-size: var(--editor-font-size); font-family: var(--editor-font-family);
+  font-weight: 300; overflow-wrap: anywhere;
+  /* ONE row of reading-mode text. The paragraphs are set in it and the blank
+     lines are measured in it (applyBlankLineSpacers), so a row is one thing and
+     it follows the note font size on its own. */
+  --md-row: 1.85em;
+}
 /* Drop the first block's top margin (e.g. a leading <p>'s .8em) so the first view-mode
    line sits at the pane's 28px top — same y as the first edit-mode line. Without this,
    toggling edit→view pushed the text ~13px down. */
@@ -1368,7 +1375,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #preview-content h2 { font-size: 1.45em; color: var(--text-0); }
 #preview-content h3 { font-size: 1.15em; color: var(--text-0); }
 #preview-content h4 { font-size: 1em;    color: var(--text-0); }
-#preview-content p { margin: .8em 0; line-height: 1.85; color: var(--text-0); }
+#preview-content p { margin: .8em 0; line-height: var(--md-row); color: var(--text-0); }
 #preview-content a { color: var(--link); text-decoration: none; }
 #preview-content a:hover { text-decoration: underline; }
 #preview-content a:visited { color: #a07ddc; }
@@ -1455,9 +1462,10 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #preview-content .col-resize-handle:hover,
 #preview-content .col-resize-handle:active { background: var(--accent); opacity: 0.45; }
 #preview-content img { max-width: 100%; border-radius: var(--radius); margin: .5em 0; }
-/* The height a run of two or more blank lines takes (see applyBlankLineSpacers).
-   Inline height, no margin of its own: it IS the space, and must not collapse
-   with the margins either side of it. */
+/* The blank lines of the file, given the height they have in it (see
+   applyBlankLineSpacers). The height is set inline as a multiple of --md-row, so it
+   follows the note font size without being re-rendered; no margin of its own, since
+   it IS the space and must not collapse with anything. */
 #preview-content .md-blank-run { margin: 0; padding: 0; pointer-events: none; }
 #preview-content strong { color: var(--text-0); }
 

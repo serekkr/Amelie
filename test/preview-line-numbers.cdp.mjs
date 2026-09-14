@@ -78,7 +78,8 @@ const MEASURE = `(() => {
   const g = document.getElementById('preview-gutter');
   if (!pc || !pane || !g) return { err: 'no preview' };
   const originY = pane.getBoundingClientRect().top + pane.clientTop - pane.scrollTop;
-  const nums = [...g.children].map(d => ({ n: parseInt(d.textContent, 10), top: parseFloat(d.style.top) }))
+  const nums = [...g.children].map(d => ({ n: parseInt(d.textContent, 10), top: parseFloat(d.style.top),
+                                          h: parseFloat(d.style.height) }))
                               .sort((a, b) => a.top - b.top);
   // Measured here with the browser's own Range, not with the app's helper: the rows
   // are where the TEXT is, and a block's box is taller than its text (the line-height
@@ -103,18 +104,21 @@ const MEASURE = `(() => {
     const lo = blocks[i - 1][blocks[i - 1].length - 1].bottom, hi = blocks[i][0].top;
     inGaps.push(nums.filter(x => x.top >= lo - 1 && x.top <= hi - 2).length);
   }
-  // The tightest the column ever gets. A run of blank lines used to be squeezed into
-  // the collapsed margin, which is the same ~12px whether the file has two blank
-  // lines there or five, so the numbers landed on top of each other.
-  let minStep = 1e9, minAt = null;
-  for (let i = 1; i < nums.length; i++) {
-    const d = nums[i].top - nums[i - 1].top;
-    if (d < minStep) { minStep = d; minAt = nums[i - 1].n; }
-  }
   const pitch = (() => {
     const el = pc.querySelector('p, li');
     return el ? parseFloat(getComputedStyle(el).lineHeight) : 0;
   })();
+  // The tightest the column ever gets. A run of blank lines used to be squeezed into
+  // the collapsed margin, which is the same ~12px whether the file has two blank
+  // lines there or five, so the numbers landed on top of each other.
+  let minStep = 1e9, minAt = null, maxStep = 0, maxAt = null;
+  for (let i = 1; i < nums.length; i++) {
+    const d = nums[i].top - nums[i - 1].top;
+    if (d < minStep) { minStep = d; minAt = nums[i - 1].n; }
+    // Measured between rows that ARE a line of text: a heading is a taller row and
+    // the step beside it is taller with it, which is the layout, not a fault.
+    if (d > maxStep && nums[i - 1].h <= pitch * 1.1) { maxStep = d; maxAt = nums[i - 1].n; }
+  }
   const probe = (sel, text) => {
     const el = [...pc.querySelectorAll(sel)].find(e => e.textContent.trim() === text);
     if (!el) return { text, n: null, top: null };
@@ -125,6 +129,7 @@ const MEASURE = `(() => {
   return {
     count: nums.length, lines: body.length, seq: nums.map(x => x.n), inGaps,
     minStep: Math.round(minStep * 10) / 10, minAt, pitch: Math.round(pitch * 10) / 10,
+    maxStep: Math.round(maxStep * 10) / 10, maxAt,
     probes: ['alfa', 'beta', 'gamma', 'delta'].map(t => probe('p', t)).concat([probe('li', 'due')]),
     srcLine: { alfa: body.indexOf('alfa') + 1, beta: body.indexOf('beta') + 1, gamma: body.indexOf('gamma') + 1,
                due: body.indexOf('- due') + 1, delta: body.indexOf('delta') + 1 },
@@ -136,7 +141,7 @@ if (!m || m.err) { console.error('measure failed:', JSON.stringify(m), '\n' + er
 console.log('   numbers    ' + JSON.stringify(m.seq) + '   file lines ' + m.lines);
 console.log('   per gap    ' + JSON.stringify(m.inGaps) + '   (blank lines in the file: [1,1,3,1,1])');
 console.log('   probes     ' + JSON.stringify(m.probes));
-console.log('   tightest   ' + m.minStep + 'px (after number ' + m.minAt + '), a row is ' + m.pitch + 'px');
+console.log('   steps      ' + m.minStep + 'px to ' + m.maxStep + 'px (after ' + m.minAt + ' / ' + m.maxAt + '), a row is ' + m.pitch + 'px');
 
 // 1. A number for every line the file has, blank ones included.
 check(`the reading view numbers all ${m.lines} lines of the file (got ${m.count})`,
@@ -164,7 +169,14 @@ check(`no two numbers crowd each other (tightest ${m.minStep}px against a ${m.pi
   m.pitch > 0 && m.minStep >= m.pitch * 0.5,
   `${m.minStep}px between number ${m.minAt} and the next — a run of blank lines was squeezed into a margin`);
 
-// 5. And so the number beside a line is that line's number in the file — which is
+// 5. Evenly, which is the whole point: one row between any two numbers, whether the
+//    line between them holds text or nothing. Measured between rows that are a line
+//    of text — the heading is a taller row, and the step beside it is taller with it.
+check(`the column steps one row at a time (${m.minStep}-${m.maxStep}px against a ${m.pitch}px row)`,
+  m.pitch > 0 && m.minStep >= m.pitch * 0.9 && m.maxStep <= m.pitch * 1.15,
+  `steps run ${m.minStep}px to ${m.maxStep}px — the column is uneven`);
+
+// 6. And so the number beside a line is that line's number in the file — which is
 //    what the editor's gutter says about the same note, and what it did not say here.
 for (const p of m.probes) {
   const want = m.srcLine[p.text];

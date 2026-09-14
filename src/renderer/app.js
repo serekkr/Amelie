@@ -5759,6 +5759,16 @@ function _previewBlankRuns(src) {
   return runs;
 }
 
+// Stand the margin on one side of a gap down, and the one on any wrapper the block
+// puts around its content (an image's resize wrapper carries its own .5em), which
+// would otherwise add itself to the rows.
+function _zeroBlockGap(el, side) {
+  if (!el || !el.style) return;
+  el.style['margin' + side] = '0';
+  const inner = el.querySelector && el.querySelector(':scope > .img-resize-wrap, :scope > .media-embed');
+  if (inner && inner.style) inner.style['margin' + side] = '0';
+}
+
 // One rendered text row. A paragraph's line-height is the honest answer: the
 // container's own computes to `normal`, a good deal shorter than the 1.85 the
 // paragraphs are set in, and using it would leave every row short.
@@ -5786,18 +5796,26 @@ function applyBlankLineSpacers() {
   if (!previewContent) return;
   for (const old of [...previewContent.querySelectorAll(':scope > .md-blank-run')]) old.remove();
   const runs = _previewBlankRuns(_previewGutterSource);
-  if (!runs || !runs.some(n => n >= 2)) return;
+  if (!runs || !runs.some(n => n >= 1)) return;
   const blocks = [...previewContent.children];
   // Not one-for-one with the source (an enhancement added a top-level node, say):
   // leave the layout alone rather than put the space in the wrong place.
   if (runs.length !== blocks.length - 1) return;
-  const pitch = _previewRowPitch();
   for (let i = 0; i < runs.length; i++) {
-    if (runs[i] < 2) continue;
+    if (runs[i] < 1) continue;
+    // The margins either side stand down: the blank lines ARE the space now, and a
+    // margin on top of them is space the file does not have. Inline, on these two
+    // blocks only — the stylesheet is untouched, and the next render rebuilds the
+    // DOM from scratch anyway.
+    _zeroBlockGap(blocks[i], 'Bottom');
+    _zeroBlockGap(blocks[i + 1], 'Top');
     const sp = document.createElement('div');
     sp.className = 'md-blank-run';
     sp.setAttribute('aria-hidden', 'true');
-    sp.style.height = ((runs[i] - 1) * pitch) + 'px';
+    // In rows, not pixels: a pixel height measured now goes stale the moment the
+    // note font size changes, and the numbers beside it drift off their rows until
+    // something happens to re-render the note.
+    sp.style.height = 'calc(' + runs[i] + ' * var(--md-row))';
     blocks[i + 1].parentNode.insertBefore(sp, blocks[i + 1]);
   }
 }
@@ -5831,10 +5849,10 @@ function _previewBlockGroups(root, originY) {
 // after it wrong, and a wrong number is worse than a conservative one. The fallback
 // is the one thing true of every gap regardless: markdown needs at least one blank
 // line to end a block, so a gap is worth at least one row.
-function _gutterRowSlots(groups, blankRuns, lh) {
+function _gutterRowSlots(groups, blankRuns, lh, pitch) {
   const useSrc = Array.isArray(blankRuns) && blankRuns.length === groups.length - 1;
   const out = [];
-  let prevBottom = null, prevIdx = -1;
+  let prevBottom = null, prevTop = 0, prevIdx = -1;
   for (let b = 0; b < groups.length; b++) {
     const rows = groups[b];
     if (!rows.length) continue;              // a block that rendered nothing measurable
@@ -5845,12 +5863,27 @@ function _gutterRowSlots(groups, blankRuns, lh) {
       if (useSrc) { n = 0; for (let k = prevIdx; k < b; k++) n += blankRuns[k]; }
       const gap = rows[0].top - prevBottom;
       if (n > 0 && gap > 0) {
-        const step = gap / n;
-        for (let i = 0; i < n; i++) out.push({ top: prevBottom + i * step, height: Math.min(step, lh) });
+        // On the row grid whenever the layout has the room: a blank line is a row,
+        // so it sits one row above the row below it, exactly like the line before it
+        // in a paragraph. Spreading them across the gap instead put the first one
+        // right under the text and the rest at another pitch, and the column came out
+        // in uneven steps.
+        //
+        // Counted UP from the block below, not down from the one above: a heading or
+        // an image is a row taller than a line of text, and counting down from one
+        // put the first blank number inside it. Any slack is then left where it
+        // belongs, against the taller block. Where the room is not there at all, they
+        // share out what there is rather than run over the block below.
+        const fits = rows[0].top - n * pitch >= prevBottom - 1;
+        for (let i = 0; i < n; i++) {
+          const top = fits ? rows[0].top - (n - i) * pitch : prevBottom + i * (gap / n);
+          out.push({ top, height: Math.min(fits ? pitch : gap / n, lh) });
+        }
       }
     }
     for (const r of rows) out.push(r);
-    prevBottom = rows[rows.length - 1].top + rows[rows.length - 1].height;
+    prevTop = rows[rows.length - 1].top;
+    prevBottom = prevTop + rows[rows.length - 1].height;
     prevIdx = b;
   }
   return out;
@@ -5875,7 +5908,7 @@ function renderPreviewGutter() {
   // beside where the block begins — the height is capped, not the position.
   const lh = parseFloat(getComputedStyle(previewContent).lineHeight) || 24;
   const rows = _gutterRowSlots(_previewBlockGroups(previewContent, originY),
-                               _previewBlankRuns(_previewGutterSource), lh);
+                               _previewBlankRuns(_previewGutterSource), lh, _previewRowPitch());
   gutter.textContent = '';
   if (rows.length > _PREVIEW_ROW_MAX) return;
   const frag = document.createDocumentFragment();
