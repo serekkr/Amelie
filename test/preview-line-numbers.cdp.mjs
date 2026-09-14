@@ -103,6 +103,18 @@ const MEASURE = `(() => {
     const lo = blocks[i - 1][blocks[i - 1].length - 1].bottom, hi = blocks[i][0].top;
     inGaps.push(nums.filter(x => x.top >= lo - 1 && x.top <= hi - 2).length);
   }
+  // The tightest the column ever gets. A run of blank lines used to be squeezed into
+  // the collapsed margin, which is the same ~12px whether the file has two blank
+  // lines there or five, so the numbers landed on top of each other.
+  let minStep = 1e9, minAt = null;
+  for (let i = 1; i < nums.length; i++) {
+    const d = nums[i].top - nums[i - 1].top;
+    if (d < minStep) { minStep = d; minAt = nums[i - 1].n; }
+  }
+  const pitch = (() => {
+    const el = pc.querySelector('p, li');
+    return el ? parseFloat(getComputedStyle(el).lineHeight) : 0;
+  })();
   const probe = (sel, text) => {
     const el = [...pc.querySelectorAll(sel)].find(e => e.textContent.trim() === text);
     if (!el) return { text, n: null, top: null };
@@ -112,6 +124,7 @@ const MEASURE = `(() => {
   };
   return {
     count: nums.length, lines: body.length, seq: nums.map(x => x.n), inGaps,
+    minStep: Math.round(minStep * 10) / 10, minAt, pitch: Math.round(pitch * 10) / 10,
     probes: ['alfa', 'beta', 'gamma', 'delta'].map(t => probe('p', t)).concat([probe('li', 'due')]),
     srcLine: { alfa: body.indexOf('alfa') + 1, beta: body.indexOf('beta') + 1, gamma: body.indexOf('gamma') + 1,
                due: body.indexOf('- due') + 1, delta: body.indexOf('delta') + 1 },
@@ -123,6 +136,7 @@ if (!m || m.err) { console.error('measure failed:', JSON.stringify(m), '\n' + er
 console.log('   numbers    ' + JSON.stringify(m.seq) + '   file lines ' + m.lines);
 console.log('   per gap    ' + JSON.stringify(m.inGaps) + '   (blank lines in the file: [1,1,3,1,1])');
 console.log('   probes     ' + JSON.stringify(m.probes));
+console.log('   tightest   ' + m.minStep + 'px (after number ' + m.minAt + '), a row is ' + m.pitch + 'px');
 
 // 1. A number for every line the file has, blank ones included.
 check(`the reading view numbers all ${m.lines} lines of the file (got ${m.count})`,
@@ -143,7 +157,14 @@ check(`each gap carries the blank lines the file has there (${JSON.stringify(m.i
   m.inGaps.length === WANT_GAPS.length && m.inGaps.every((n, i) => n === WANT_GAPS[i]),
   `got ${JSON.stringify(m.inGaps)}, file has ${JSON.stringify(WANT_GAPS)}`);
 
-// 4. And so the number beside a line is that line's number in the file — which is
+// 4. Readable: no two numbers sit on top of each other. The file's run of three
+//    blank lines has to be given room in the reading view, or the numbers for it are
+//    right and unreadable — the same fault as the holes, from the other side.
+check(`no two numbers crowd each other (tightest ${m.minStep}px against a ${m.pitch}px row)`,
+  m.pitch > 0 && m.minStep >= m.pitch * 0.5,
+  `${m.minStep}px between number ${m.minAt} and the next — a run of blank lines was squeezed into a margin`);
+
+// 5. And so the number beside a line is that line's number in the file — which is
 //    what the editor's gutter says about the same note, and what it did not say here.
 for (const p of m.probes) {
   const want = m.srcLine[p.text];

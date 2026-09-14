@@ -5759,12 +5759,58 @@ function _previewBlankRuns(src) {
   return runs;
 }
 
+// One rendered text row. A paragraph's line-height is the honest answer: the
+// container's own computes to `normal`, a good deal shorter than the 1.85 the
+// paragraphs are set in, and using it would leave every row short.
+function _previewRowPitch() {
+  const el = previewContent && previewContent.querySelector('p, li');
+  const lh = el ? parseFloat(getComputedStyle(el).lineHeight) : NaN;
+  if (lh > 0) return lh;
+  const fs = parseFloat(getComputedStyle(previewContent).fontSize) || 16;
+  return fs * 1.85;
+}
+
+// A run of two or more blank lines needs somewhere to BE. On screen a run of any
+// length is the same collapsed ~12px margin, so three blank lines put three numbers
+// 4px apart, stacked on each other: the numbers were right and the column was
+// unreadable, which is the hole bug upside down.
+//
+// So the extra rows are given real height — one line for each blank line past the
+// first, which the margin already stands for. Only runs of TWO or more are touched:
+// a single blank line between two paragraphs is what nearly every note is made of,
+// and it renders exactly as it always has.
+//
+// Nothing is written to the note. This is the reading view giving the blank lines
+// the room the file says they take, the same way the editor already does.
+function applyBlankLineSpacers() {
+  if (!previewContent) return;
+  for (const old of [...previewContent.querySelectorAll(':scope > .md-blank-run')]) old.remove();
+  const runs = _previewBlankRuns(_previewGutterSource);
+  if (!runs || !runs.some(n => n >= 2)) return;
+  const blocks = [...previewContent.children];
+  // Not one-for-one with the source (an enhancement added a top-level node, say):
+  // leave the layout alone rather than put the space in the wrong place.
+  if (runs.length !== blocks.length - 1) return;
+  const pitch = _previewRowPitch();
+  for (let i = 0; i < runs.length; i++) {
+    if (runs[i] < 2) continue;
+    const sp = document.createElement('div');
+    sp.className = 'md-blank-run';
+    sp.setAttribute('aria-hidden', 'true');
+    sp.style.height = ((runs[i] - 1) * pitch) + 'px';
+    blocks[i + 1].parentNode.insertBefore(sp, blocks[i + 1]);
+  }
+}
+
 // The rows of each top-level block, kept in per-block groups rather than one flat
 // list: the blank lines belong to the gaps BETWEEN the groups, and a flat list of
 // rows has nothing in it to hang them on.
 function _previewBlockGroups(root, originY) {
   const groups = [];
   for (const child of root.children) {
+    // The spacers that give a run of blank lines its height are not blocks and hold
+    // no text: skipped here so the groups still line up one-for-one with the source.
+    if (child.classList && child.classList.contains('md-blank-run')) continue;
     // A replaced block of its own — an <hr>, an image marked has left bare — is one
     // row, and _previewRowBoxes would never see it: its walker starts BELOW its root.
     if (_ROW_BOX_TAGS.has(String(child.tagName).toUpperCase())) {
@@ -6001,6 +6047,9 @@ function enhancePreviewContent(token, widthsByTable) {
   if (tocVisible) {
     try { renderTOC(); } catch (_) {}
   }
+
+  // Room for the runs of blank lines, before the height is read below.
+  try { applyBlankLineSpacers(); } catch (_) {}
 
   // Restore the reading position now that the WHOLE document is in the DOM and
   // all synchronous decorations (media players, image wraps, tables) that affect
