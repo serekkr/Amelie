@@ -98,16 +98,37 @@ const MEASURE = `(() => {
   // How many numbers land in each gap BETWEEN two blocks — the space the file's blank
   // lines went into. Bounded by the text either side, so a block's own number (which
   // sits exactly on its first row) is never counted as being in the gap above it.
-  const blocks = [...pc.children].map(rowsOf).filter(r => r.length);
-  const inGaps = [];
-  for (let i = 1; i < blocks.length; i++) {
-    const lo = blocks[i - 1][blocks[i - 1].length - 1].bottom, hi = blocks[i][0].top;
-    inGaps.push(nums.filter(x => x.top >= lo - 1 && x.top <= hi - 2).length);
-  }
   const pitch = (() => {
     const el = pc.querySelector('p, li');
     return el ? parseFloat(getComputedStyle(el).lineHeight) : 0;
   })();
+  // The rows the app itself measured, so "off-centre in its gap" is asked of the
+  // placement and not of two different ways of measuring a list item: a Range over a
+  // <ul> returns rects that include the markers' line boxes, a few px off the text.
+  // What the numbers are worth against the real text is check 6's job, measured
+  // independently there.
+  const blocks = (typeof _previewBlockGroups === 'function'
+    ? _previewBlockGroups(pc, originY).map(g => g.map(r => ({ top: r.top, bottom: r.top + r.height })))
+    : [...pc.children].map(rowsOf)).filter(r => r.length);
+  const inGaps = [];
+  // And how evenly they are spread: the steps from the row above, between the blank
+  // numbers, and down to the row below should all be the same size. This is the
+  // "spazi diversi" complaint stated as a number — a gap whose steps are 36px then
+  // 28px has a number sitting off-centre in it.
+  const gapSpread = [];
+  for (let i = 1; i < blocks.length; i++) {
+    const above = blocks[i - 1][blocks[i - 1].length - 1];
+    const hi = blocks[i][0].top;
+    const inside = nums.filter(x => x.top >= above.bottom - 1 && x.top <= hi - 2).map(x => x.top);
+    inGaps.push(inside.length);
+    if (!inside.length) continue;
+    // From the row above: its own number sits at its top, unless it is a block taller
+    // than a line of text, where the column picks up again below it.
+    const tall = (above.bottom - above.top) > pitch * 1.2;
+    const seq = [tall ? above.bottom : above.top].concat(inside, [hi]);
+    const steps = seq.slice(1).map((v, k) => v - seq[k]);
+    gapSpread.push(Math.round((Math.max(...steps) - Math.min(...steps)) * 10) / 10);
+  }
   // The tightest the column ever gets. A run of blank lines used to be squeezed into
   // the collapsed margin, which is the same ~12px whether the file has two blank
   // lines there or five, so the numbers landed on top of each other.
@@ -127,7 +148,7 @@ const MEASURE = `(() => {
     return { text, top: r ? Math.round(r.top) : null, n: hit ? hit.n : null };
   };
   return {
-    count: nums.length, lines: body.length, seq: nums.map(x => x.n), inGaps,
+    count: nums.length, lines: body.length, seq: nums.map(x => x.n), inGaps, gapSpread,
     minStep: Math.round(minStep * 10) / 10, minAt, pitch: Math.round(pitch * 10) / 10,
     maxStep: Math.round(maxStep * 10) / 10, maxAt,
     probes: ['alfa', 'beta', 'gamma', 'delta'].map(t => probe('p', t)).concat([probe('li', 'due')]),
@@ -142,6 +163,7 @@ console.log('   numbers    ' + JSON.stringify(m.seq) + '   file lines ' + m.line
 console.log('   per gap    ' + JSON.stringify(m.inGaps) + '   (blank lines in the file: [1,1,3,1,1])');
 console.log('   probes     ' + JSON.stringify(m.probes));
 console.log('   steps      ' + m.minStep + 'px to ' + m.maxStep + 'px (after ' + m.minAt + ' / ' + m.maxAt + '), a row is ' + m.pitch + 'px');
+console.log('   spread     ' + JSON.stringify(m.gapSpread) + ' px between the steps of one gap');
 
 // 1. A number for every line the file has, blank ones included.
 check(`the reading view numbers all ${m.lines} lines of the file (got ${m.count})`,
@@ -169,12 +191,13 @@ check(`no two numbers crowd each other (tightest ${m.minStep}px against a ${m.pi
   m.pitch > 0 && m.minStep >= m.pitch * 0.5,
   `${m.minStep}px between number ${m.minAt} and the next — a run of blank lines was squeezed into a margin`);
 
-// 5. Evenly, which is the whole point: one row between any two numbers, whether the
-//    line between them holds text or nothing. Measured between rows that are a line
-//    of text — the heading is a taller row, and the step beside it is taller with it.
-check(`the column steps one row at a time (${m.minStep}-${m.maxStep}px against a ${m.pitch}px row)`,
-  m.pitch > 0 && m.minStep >= m.pitch * 0.9 && m.maxStep <= m.pitch * 1.15,
-  `steps run ${m.minStep}px to ${m.maxStep}px — the column is uneven`);
+// 5. Evenly, which is the whole point. Inside a gap every step is the same size, so
+//    no number sits off-centre between the lines it belongs between. Across gaps the
+//    steps follow the layout — a heading is a taller row and its gap is taller with
+//    it — but within one gap they cannot differ.
+check(`the blank numbers are evenly spread in every gap (worst spread ${Math.max(0, ...m.gapSpread)}px)`,
+  m.gapSpread.length > 0 && m.gapSpread.every(d => d <= 1.5),
+  `per-gap spread ${JSON.stringify(m.gapSpread)} — a number is off-centre in its gap`);
 
 // 6. And so the number beside a line is that line's number in the file — which is
 //    what the editor's gutter says about the same note, and what it did not say here.

@@ -5765,8 +5765,14 @@ function _previewBlankRuns(src) {
 function _zeroBlockGap(el, side) {
   if (!el || !el.style) return;
   el.style['margin' + side] = '0';
-  const inner = el.querySelector && el.querySelector(':scope > .img-resize-wrap, :scope > .media-embed');
-  if (inner && inner.style) inner.style['margin' + side] = '0';
+  if (!el.querySelectorAll) return;
+  // An image carries .5em of its own, inside whichever wrapper it sits in, and the
+  // wrapper carries some too. A margin INSIDE the block is space no row accounts for:
+  // it is what left the number beside a picture adrift from the picture.
+  for (const q of el.querySelectorAll(':scope > .img-resize-wrap, :scope > .media-embed, :scope > img, :scope > .img-resize-wrap > img, :scope > p > .img-resize-wrap')) {
+    if (q.style) q.style['margin' + side] = '0';
+  }
+  if (el.tagName === 'IMG') el.style['margin' + side] = '0';
 }
 
 // One rendered text row. A paragraph's line-height is the honest answer: the
@@ -5852,7 +5858,7 @@ function _previewBlockGroups(root, originY) {
 function _gutterRowSlots(groups, blankRuns, lh, pitch) {
   const useSrc = Array.isArray(blankRuns) && blankRuns.length === groups.length - 1;
   const out = [];
-  let prevBottom = null, prevTop = 0, prevIdx = -1;
+  let prevBottom = null, prevTop = 0, rows_prevH = 0, prevIdx = -1;
   for (let b = 0; b < groups.length; b++) {
     const rows = groups[b];
     if (!rows.length) continue;              // a block that rendered nothing measurable
@@ -5863,27 +5869,28 @@ function _gutterRowSlots(groups, blankRuns, lh, pitch) {
       if (useSrc) { n = 0; for (let k = prevIdx; k < b; k++) n += blankRuns[k]; }
       const gap = rows[0].top - prevBottom;
       if (n > 0 && gap > 0) {
-        // On the row grid whenever the layout has the room: a blank line is a row,
-        // so it sits one row above the row below it, exactly like the line before it
-        // in a paragraph. Spreading them across the gap instead put the first one
-        // right under the text and the rest at another pitch, and the column came out
-        // in uneven steps.
+        // Spread EVENLY between the row above and the row below, in n+1 equal steps.
+        // Not placed at a nominal row height: that is a second opinion about the
+        // layout, and when the two disagreed by a few pixels — a margin the spacers
+        // did not account for, a font whose line box is not what the stylesheet says
+        // — the blank number landed off-centre and the column stepped 36px, 28px
+        // down the same gap. Divided, it cannot disagree with the layout: whatever
+        // the gap turns out to be, the numbers in it are evenly spaced, and when the
+        // layout gives the blank lines their rows (applyBlankLineSpacers) each step
+        // is one row.
         //
-        // Counted UP from the block below, not down from the one above: a heading or
-        // an image is a row taller than a line of text, and counting down from one
-        // put the first blank number inside it. Any slack is then left where it
-        // belongs, against the taller block. Where the room is not there at all, they
-        // share out what there is rather than run over the block below.
-        const fits = rows[0].top - n * pitch >= prevBottom - 1;
-        for (let i = 0; i < n; i++) {
-          const top = fits ? rows[0].top - (n - i) * pitch : prevBottom + i * (gap / n);
-          out.push({ top, height: Math.min(fits ? pitch : gap / n, lh) });
-        }
+        // Measured from the top of the row above, which is where ITS number sits —
+        // unless that row is taller than a line (an image, a heading), where the
+        // column starts again at the bottom of the block rather than inside it.
+        const anchor = rows_prevH <= pitch * 1.2 ? prevTop : prevBottom;
+        const step = (rows[0].top - anchor) / (n + 1);
+        if (step > 0) for (let i = 1; i <= n; i++) out.push({ top: anchor + i * step, height: Math.min(step, lh) });
       }
     }
     for (const r of rows) out.push(r);
     prevTop = rows[rows.length - 1].top;
-    prevBottom = prevTop + rows[rows.length - 1].height;
+    rows_prevH = rows[rows.length - 1].height;
+    prevBottom = prevTop + rows_prevH;
     prevIdx = b;
   }
   return out;
