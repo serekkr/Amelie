@@ -1305,9 +1305,10 @@ kbd {
    gutter sits in the left padding the rule above already reserves, so the text
    column does not move; it is a child of #preview-pane, which IS the scroller,
    so it scrolls with the content instead of being synced to it.
-   Rows are content rows: the gaps BETWEEN blocks are margins, not rows, and get
-   no number — a paragraph that follows a heading is the next number, not the
-   number after next. */
+   Rows are content rows PLUS the file's blank lines: the gap between two blocks is
+   a collapsed margin on screen, but it is one or more blank lines in the file, and
+   the editor numbers those. So they are numbered here too (see _gutterRowSlots) and
+   the column runs unbroken instead of skipping every gap. */
 #preview-gutter {
   position: absolute; left: 0; top: 0; width: calc(3 * var(--editor-font-size) + 32px);
   pointer-events: none; -webkit-user-select: none; user-select: none;

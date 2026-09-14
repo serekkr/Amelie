@@ -5539,6 +5539,10 @@ function updatePreview() {
   const { cleanedBody, widthsByTable } = extractTableWidthMarkers(body);
 
   const processedBody = _preprocessMarkdown(cleanedBody);
+  // The reading-mode gutter needs the blank lines, and rendered HTML has none left
+  // (see _previewBlankRuns). This is the string the DOM below is made of, so it is
+  // the one to count them in.
+  _previewGutterSource = processedBody;
 
   let html = marked.parse(processedBody);
   // Clean relative image refs resolve through the inkwell protocol.
@@ -5648,10 +5652,11 @@ function highlightInlineTags(root) {
 // coloured into a dozen spans, or a table row's cells, must not count a dozen
 // times.
 //
-// What differs from edit mode, said plainly: the gaps between blocks are margins,
-// not rows, so they get no number. In the editor a blank line in the file is a
-// real row and takes one. So the two columns agree on how many rows of TEXT
-// there are, not on the numbers beside any given one.
+// The gaps between blocks are where the file's BLANK LINES went, and the editor
+// numbers those like any other row, so this column does too: the count comes from
+// the source (_previewBlankRuns) and the numbers are spread through the gap. A
+// column with holes in it was the old behaviour and it read as broken — a number
+// per row of text, then nothing beside a gap the same size as a row.
 const _ROW_BOX_TAGS = new Set(['IMG', 'VIDEO', 'AUDIO', 'IFRAME', 'HR', 'CANVAS', 'SVG']);
 const _PREVIEW_ROW_TOL = 3;      // px: rects within this of each other are one row
 // Beyond this many rows the column is not readable anyway and the DOM cost stops
@@ -5718,6 +5723,93 @@ function _previewRowBoxes(root, originY) {
   return out;
 }
 
+// Blank lines are rows too. Rendered HTML has none left: two paragraphs are held
+// apart by a COLLAPSED CSS margin, whose height is a stylesheet decision and says
+// nothing about how many blank lines the file has there. So they are read back from
+// the source — marked keeps every run of them between two blocks as a `space` token,
+// and N newlines in its raw is N-1 blank lines. A blank line inside a fenced block
+// stays inside the code token, where it is content and already gets its own row.
+//
+// Entry i is the count between rendered block i and block i+1. Leading and trailing
+// runs are not returned: there is no gap on screen to put them in.
+//
+// Cached on the source string. A window resize or a font swap re-measures the same
+// unchanged note many times, and lexing a multi-MB body for each of those would cost
+// more than the measuring it is there to accompany.
+let _previewGutterSource = '';
+let _blankRunsKey = null, _blankRuns = null;
+function _previewBlankRuns(src) {
+  if (_blankRunsKey === src) return _blankRuns;
+  let runs = null;
+  if (typeof marked !== 'undefined' && typeof marked.lexer === 'function') {
+    try {
+      runs = [];
+      let pending = 0, seen = false;
+      for (const t of marked.lexer(src)) {
+        if (t.type === 'space') {
+          pending += Math.max(0, (String(t.raw).match(/\n/g) || []).length - 1);
+          continue;
+        }
+        if (seen) runs.push(pending);
+        pending = 0; seen = true;
+      }
+    } catch (_) { runs = null; }
+  }
+  _blankRunsKey = src; _blankRuns = runs;
+  return runs;
+}
+
+// The rows of each top-level block, kept in per-block groups rather than one flat
+// list: the blank lines belong to the gaps BETWEEN the groups, and a flat list of
+// rows has nothing in it to hang them on.
+function _previewBlockGroups(root, originY) {
+  const groups = [];
+  for (const child of root.children) {
+    // A replaced block of its own — an <hr>, an image marked has left bare — is one
+    // row, and _previewRowBoxes would never see it: its walker starts BELOW its root.
+    if (_ROW_BOX_TAGS.has(String(child.tagName).toUpperCase())) {
+      const r = child.getBoundingClientRect();
+      groups.push((r.height > 0 && r.width > 0) ? [{ top: r.top - originY, height: r.height }] : []);
+      continue;
+    }
+    groups.push(_previewRowBoxes(child, originY));
+  }
+  return groups;
+}
+
+// One continuous column: every group's rows, and in each gap the blank lines the
+// file has there, spread evenly across it.
+//
+// `blankRuns` is used only when it lines up one-for-one with the blocks on screen —
+// an enhancement pass that added or merged a top-level node would make every number
+// after it wrong, and a wrong number is worse than a conservative one. The fallback
+// is the one thing true of every gap regardless: markdown needs at least one blank
+// line to end a block, so a gap is worth at least one row.
+function _gutterRowSlots(groups, blankRuns, lh) {
+  const useSrc = Array.isArray(blankRuns) && blankRuns.length === groups.length - 1;
+  const out = [];
+  let prevBottom = null, prevIdx = -1;
+  for (let b = 0; b < groups.length; b++) {
+    const rows = groups[b];
+    if (!rows.length) continue;              // a block that rendered nothing measurable
+    if (prevBottom !== null) {
+      // Sum across any block skipped just above, so a group that measured empty
+      // cannot swallow the blank lines on either side of it.
+      let n = 1;
+      if (useSrc) { n = 0; for (let k = prevIdx; k < b; k++) n += blankRuns[k]; }
+      const gap = rows[0].top - prevBottom;
+      if (n > 0 && gap > 0) {
+        const step = gap / n;
+        for (let i = 0; i < n; i++) out.push({ top: prevBottom + i * step, height: Math.min(step, lh) });
+      }
+    }
+    for (const r of rows) out.push(r);
+    prevBottom = rows[rows.length - 1].top + rows[rows.length - 1].height;
+    prevIdx = b;
+  }
+  return out;
+}
+
 function renderPreviewGutter() {
   const pane = $('preview-pane');
   const gutter = $('preview-gutter');
@@ -5731,14 +5823,15 @@ function renderPreviewGutter() {
   // from viewport rects, and it then scrolls with the text for free.
   const paneRect = pane.getBoundingClientRect();
   const originY = paneRect.top + pane.clientTop - pane.scrollTop;
-  const rows = _previewRowBoxes(previewContent, originY);
-  gutter.textContent = '';
-  if (rows.length > _PREVIEW_ROW_MAX) return;
   // A number is centred on its row so it sits level with a big heading. A media box
   // is a row too, and 600px tall: centring left the number floating in the middle of
   // the video, pointing at nothing. Tall rows get the number at their TOP instead,
   // beside where the block begins — the height is capped, not the position.
   const lh = parseFloat(getComputedStyle(previewContent).lineHeight) || 24;
+  const rows = _gutterRowSlots(_previewBlockGroups(previewContent, originY),
+                               _previewBlankRuns(_previewGutterSource), lh);
+  gutter.textContent = '';
+  if (rows.length > _PREVIEW_ROW_MAX) return;
   const frag = document.createDocumentFragment();
   for (let i = 0; i < rows.length; i++) {
     const d = document.createElement('div');

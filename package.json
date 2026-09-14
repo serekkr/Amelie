@@ -35,6 +35,7 @@
     "test:syncsamba": "node test/sync-samba-no-vpn.cdp.mjs",
     "test:images": "node test/images-foldered.cdp.mjs",
     "test:tablecols": "node test/table-columns-fit.cdp.mjs",
+    "test:linenums": "node test/preview-line-numbers.cdp.mjs",
     "test:gpuflags": "node test/startup-toggles.cdp.mjs"
   },
   "dependencies": {
