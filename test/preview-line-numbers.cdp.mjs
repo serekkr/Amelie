@@ -183,12 +183,15 @@ const MEASURE = `(() => {
       ? _previewBlockGroups(pc, originY, lead, lineH)[gi] : null) || [];
     gi++;
     const plain = /^(P|UL|OL)$/.test(child.tagName);
-    for (const r of rows) kind.push(plain && r.height <= pitch * 1.2 ? 'text' : 'other');
+    for (const r of rows) kind.push(r.edge ? 'edge' : (plain && r.height <= pitch * 1.2 ? 'text' : 'other'));
   }
+  // The step INTO a picture counts too: it is the distance between two adjacent
+  // numbers with nothing between them — "i spazi tra riga 68 e 69 sono diversi". The
+  // step OUT of one is the height of the picture and belongs to no grid.
   const grid = k => k === 'blank' || k === 'text';
   const gridSteps = [];
   for (let i = 1; i < nums.length && i < kind.length; i++) {
-    if (grid(kind[i - 1]) && grid(kind[i])) gridSteps.push(R(nums[i].c - nums[i - 1].c));
+    if (grid(kind[i - 1]) && (grid(kind[i]) || kind[i] === 'edge')) gridSteps.push(R(nums[i].c - nums[i - 1].c));
   }
 
   const pics = [...pc.querySelectorAll('img')].map(img => {

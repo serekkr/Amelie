@@ -5697,15 +5697,15 @@ function _previewRowBoxes(root, originY, lead, lineH) {
       if (seenRows.has(tr)) continue;
       seenRows.add(tr);
       const rr = tr.getBoundingClientRect();
-      if (rr.height > 0 && rr.width > 0) rows.push({ top: rr.top - originY, height: rr.height, box: true });
+      if (rr.height > 0 && rr.width > 0) rows.push({ top: rr.top - originY, height: rr.height, kind: 'tr' });
       continue;
     }
-    let rects, box = false;
+    let rects, kind = 'text', el2 = null;
     if (n.nodeType === 3) { range.selectNodeContents(n); rects = range.getClientRects(); }
-    else { rects = [n.getBoundingClientRect()]; box = true; }
+    else { rects = [n.getBoundingClientRect()]; kind = 'replaced'; el2 = n; }
     for (const r of rects) {
       if (r.height <= 0 || r.width <= 0) continue;
-      rows.push({ top: r.top - originY, height: r.height, box });
+      rows.push({ top: r.top - originY, height: r.height, kind, el: el2 });
     }
   }
   rows.sort((a, b) => a.top - b.top);
@@ -5716,24 +5716,27 @@ function _previewRowBoxes(root, originY, lead, lineH) {
     const prev = out[out.length - 1];
     if (prev && r.top - prev.top <= _PREVIEW_ROW_TOL) {
       prev.height = Math.max(prev.height, r.top + r.height - prev.top);
-      prev.box = prev.box && r.box;
+      // Text on the row wins: a picture with a caption beside it is a line of text
+      // that happens to have a picture in it.
+      if (prev.kind !== 'text' && r.kind === 'text') { prev.kind = 'text'; prev.el = null; }
     } else {
-      out.push({ top: r.top, height: r.height, box: r.box });
+      out.push({ top: r.top, height: r.height, kind: r.kind, el: r.el });
     }
   }
-  // A row that is a BOX and not a line of text starts at the top of its box, while a
-  // line of text starts `lead` px inside its block: the line-height's leading sits
-  // INSIDE the box, above the glyphs. Left as they came the column mixes the two
-  // conventions and the steps come out uneven, so a box the size of a line — a table
-  // row, an icon in a sentence — is put on the text's footing here.
+  // A line of text starts `lead` px inside its own box — the line-height's leading
+  // sits INSIDE it, above the glyphs — while a box starts at its top. Left as they
+  // came the column mixes the two conventions and the steps come out uneven, so a
+  // table row, and a picture that shares its row with words, are put on the text's
+  // footing here.
   //
-  // A PICTURE is not. Its top edge is a line you can SEE, and the number belongs level
-  // with it, so it is marked instead: the gutter lines the digits themselves up with
-  // that edge (_gutterInkTop).
+  // A picture ALONE on its line is not: its top edge is a line you can SEE, and the
+  // number belongs level with it. It is marked instead, and the gutter lines the
+  // digits up with that edge and moves the picture onto the row grid (_gutterEdgeLift).
+  // Alone-on-its-line, not tall-enough: a threshold on the height would change the
+  // answer under the resize handle, halfway through a drag.
   for (const r of out) {
-    if (!r.box) continue;
-    if (lineH && r.height > lineH * 1.8) r.edge = true;
-    else if (lead) r.top += lead;
+    if (r.kind === 'replaced') r.edge = true;
+    else if (lead && r.kind === 'tr') r.top += lead;
   }
   return out;
 }
@@ -5863,6 +5866,40 @@ function _gutterInkTop(gutter, rowH) {
   return _inkTop;
 }
 
+// A picture sits at the TOP of its row, a line of text `lead` px inside its own, and
+// the digits of a number `ink` px inside their box. Put the picture's number where its
+// digits mark the picture's edge and it lands lead+ink short of the grid the rest of
+// the column is on: the step into a picture came out 20px against a 28px row — and
+// that one IS visible, because it is the distance between two adjacent numbers.
+//
+// So the picture is moved down by exactly that instead. Then its number sits one full
+// row after the one above it AND its digits begin on its top edge, which are the two
+// things the column has to do at once. It is the picture joining the row grid the
+// text is already on — the same move v1.0.54 made for the paragraphs.
+//
+// Written on the elements themselves, and only while the numbers are on: the previous
+// inline value is kept so turning them off puts the layout back exactly as it was
+// (the spacers zero some of these margins, and '' would hand them back the .5em from
+// the stylesheet instead).
+const _lifted = new Map();
+function _applyEdgeLift(rows, lift) {
+  let changed = false;
+  const want = lift > 0 ? lift + 'px' : '';
+  const seen = new Set();
+  for (const r of rows) {
+    if (!r.edge || !r.el || !r.el.style) continue;
+    seen.add(r.el);
+    if (!_lifted.has(r.el)) _lifted.set(r.el, r.el.style.marginTop);
+    if (r.el.style.marginTop !== want) { r.el.style.marginTop = want; changed = true; }
+  }
+  for (const [el, was] of [..._lifted]) {
+    if (seen.has(el)) continue;
+    _lifted.delete(el);
+    if (el.style && el.style.marginTop !== was) { el.style.marginTop = was; changed = true; }
+  }
+  return changed;
+}
+
 // A run of two or more blank lines needs somewhere to BE. On screen a run of any
 // length is the same collapsed ~12px margin, so three blank lines put three numbers
 // 4px apart, stacked on each other: the numbers were right and the column was
@@ -5930,8 +5967,7 @@ function _previewChildRows(child, originY, lead, lineH) {
   if (_ROW_BOX_TAGS.has(String(child.tagName).toUpperCase())) {
     const r = child.getBoundingClientRect();
     if (!(r.height > 0 && r.width > 0)) return [];
-    const tall = lineH && r.height > lineH * 1.8;
-    return [{ top: r.top - originY + (tall ? 0 : (lead || 0)), height: r.height, box: true, edge: !!tall }];
+    return [{ top: r.top - originY, height: r.height, kind: 'replaced', el: child, edge: true }];
   }
   return _previewRowBoxes(child, originY, lead, lineH);
 }
@@ -6022,7 +6058,7 @@ function renderPreviewGutter() {
   const on = $('editor-pane')?.classList.contains('line-numbers');
   // offsetParent is null while the pane is display:none — i.e. in edit mode, where
   // the editor's own gutter is the one on screen.
-  if (!on || !pane.offsetParent) { gutter.textContent = ''; return; }
+  if (!on || !pane.offsetParent) { gutter.textContent = ''; _applyEdgeLift([], 0); return; }
   // The gutter is an absolutely positioned child of the SCROLLER, so its tops are
   // in unscrolled content coordinates: undo the current scroll when converting
   // from viewport rects, and it then scrolls with the text for free.
@@ -6043,15 +6079,22 @@ function renderPreviewGutter() {
   const pitch = _previewRowPitch();
   const tm = _previewTextMetrics(pitch);
   const rowH = tm.height || pitch;
-  const rows = _gutterRowsFromSpacers(previewContent, originY, tm.lead, rowH)
-            || _gutterRowSlots(_previewBlockGroups(previewContent, originY, tm.lead, rowH),
-                               _previewBlankRuns(_previewGutterSource), rowH, pitch);
+  const ink = _gutterInkTop(gutter, rowH);
+  const measure = () => _gutterRowsFromSpacers(previewContent, originY, tm.lead, rowH)
+                     || _gutterRowSlots(_previewBlockGroups(previewContent, originY, tm.lead, rowH),
+                                        _previewBlankRuns(_previewGutterSource), rowH, pitch);
+  // Measured, then the pictures are moved onto the row grid, then measured again — but
+  // only when that move actually changed something, which it does once and then never
+  // again for the same note at the same size. Which rows are a picture alone on its
+  // line is not knowable without measuring first, and a threshold guessed from the
+  // markup would be wrong for exactly the case that reported this.
+  let rows = measure();
+  if (_applyEdgeLift(rows, tm.lead + ink)) rows = measure();
   gutter.textContent = '';
   if (rows.length > _PREVIEW_ROW_MAX) return;
   // A row whose top is an edge you can see — a picture, a video — has its number
   // raised by the white above the digits, so the digits START on that edge instead of
   // a couple of pixels under it.
-  const ink = _gutterInkTop(gutter, rowH);
   const frag = document.createDocumentFragment();
   for (let i = 0; i < rows.length; i++) {
     const d = document.createElement('div');
