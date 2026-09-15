@@ -1329,8 +1329,11 @@ kbd {
      padding plus the 6px on .cm-gutterElement), left-aligned like it is, so the
      numbers stay put when you toggle edit ⇄ view instead of sliding sideways. */
   padding-left: 16px; box-sizing: border-box;
-  /* Centred on its row: a number beside a big heading sits level with it rather
-     than riding the top of the row. */
+  /* Every number gets the SAME height (one line of reading-mode text, set inline by
+     renderPreviewGutter) and sits at the top of its row. Heights that followed the row
+     — taller beside a picture, shorter beside a line of text — put the numbers at
+     uneven distances from each other even when their rows were an exact row apart,
+     and left the number beside a picture floating well below the picture's top edge. */
   display: flex; align-items: center; justify-content: flex-start;
 }
 
@@ -1422,7 +1425,14 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   padding: 4px 16px; color: var(--text-2); font-style: italic;
 }
 #preview-content ul,#preview-content ol { margin: .8em 0; padding-left: 1.8em; color: var(--text-0); }
-#preview-content li { margin: .3em 0; line-height: 1.7; }
+/* List items sit on the same row grid as the paragraphs: one item is one line of the
+   file and the editor's gutter numbers it as one row, so it has to be one row tall
+   here too. With .3em of margin and a 1.7 line-height each item stepped 30px against a
+   27.75px row, and the numbers beside a list stepped with them. */
+#preview-content li { margin: 0; line-height: var(--md-row); }
+/* A loose list wraps each item's text in a <p>, whose .8em margins would put the item
+   back off the grid. */
+#preview-content li > p { margin: 0; }
 /* Task list (- [ ] / - [x]) — clickable checkbox in view mode, Obsidian style */
 #preview-content li.task-list-item { list-style: none; margin-left: -1.4em; }
 #preview-content input[type="checkbox"] { cursor: pointer; width: 15px; height: 15px; margin: 0 8px 0 0; vertical-align: -2px; accent-color: var(--accent); }

@@ -29,6 +29,9 @@ catch {
     process.exit(0);
   }
 }
+// A small solid PNG, written into the fixture vault: a picture's row is its BOX, and
+// the gutter has to put its number at the top of it like any other row.
+const PIC_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAUAAAAC0CAIAAABqhmJGAAABkUlEQVR42u3TAQkAAAjAMDWNmcxkaHMIW4TDs2cD+KkkAAMDBgYMDAYGDAwYGDAwGBgwMGBgMDBgYMDAgIHBwICBAQMDBgYDAwYGDAwGBgwMGBgwMBgYMDBgYMDAYGDAwICBwcCAgQEDAwYGAwMGBgwMBgYMDBgYMDAYGDAwYGDAwGBgwMCAgcHAgIEBAwMGBgMDBgYMDBgYDAwYGDAwGBgwMGBgwMBgYMDAgIEBA4OBAQMDBgYDAwYGDAwYGAwMGBgwMBgYMDBgYMDAYGDAwICBAQODgQEDAwYGAwMGBgwMGBgMDBgYMDBgYDAwYGDAwGBgwMCAgQEDg4EBAwMGBgwMBgYMDBgYDAwYGDAwYGAwMGBgwMBgYMDAgIEBA4OBAQMDBgYMDAYGDAwYGAwMGBgwMGBgMDBgYMDAgIHBwICBAQODgQEDAwYGDAwGBgwMGBgMDBgYMDBgYDAwYGDAwICBwcCAgQEDg4EBAwMGBgwMBgYMDBgYMDAYGDAwYGAwMGBgwMCAgcHAgIEBAwMGht8OqVYCdlxxVZEAAAAASUVORK5CYII=';
 let child = null; process.on('exit', () => { try { if (child) process.kill(-child.pid, 'SIGKILL'); } catch (_) {} });
 setTimeout(() => { console.error('TIMEOUT'); process.exit(2); }, 120000);
 fs.rmSync(HOME, { recursive: true, force: true });
@@ -38,10 +41,15 @@ fs.mkdirSync(`${VAULT}/notes`, { recursive: true });
 // Short lines on purpose: nothing here may soft-wrap at 1400px, so one file line is
 // one row on screen and "how many numbers" has a single right answer. The run of
 // THREE blank lines is the case a geometric guess cannot get right — on screen it is
-// the same collapsed margin as a run of one.
+// the same collapsed margin as a run of one. The PICTURE is the case where the row is
+// a box and not a line of text, which is where the column used to step unevenly and
+// where the number used to float a half-box down inside the picture.
+fs.mkdirSync(`${VAULT}/notes/attachments/images`, { recursive: true });
+fs.writeFileSync(`${VAULT}/notes/attachments/images/pic.png`, Buffer.from(PIC_B64, 'base64'));
 fs.writeFileSync(`${VAULT}/notes/righe.md`,
   `---\ncreated: 2026-09-14 11:00\n---\n\n` +
-  `# Titolo\n\nalfa\n\nbeta\n\n\n\ngamma\n\n- uno\n- due\n\ndelta\n`);
+  `# Titolo\n\nalfa\n\nbeta\n\n\n\ngamma\n\n- uno\n- due\n\n` +
+  `![pic](attachments/images/pic.png)\n\n\ndelta\n`);
 fs.writeFileSync(`${HOME}/.local/share/amelie/amelie.json`, JSON.stringify({ vaultPath: VAULT, encryption: { enabled: false } }));
 fs.writeFileSync(`${HOME}/.local/share/amelie/settings.json`, JSON.stringify({ autoSaveSeconds: 30, sync: { enabled: false } }));
 const eargs = ['.', `--remote-debugging-port=${PORT}`, '--no-sandbox', '--password-store=basic'];
@@ -69,6 +77,12 @@ await ev(`(() => { document.getElementById('editor-pane')?.classList.add('line-n
   document.documentElement.style.setProperty('--editor-font-size', '19px'); return 1 })()`);
 await ev(`(() => { if (typeof renderPreview === 'function') renderPreview(); return 1 })()`);
 await sleep(1500);
+// The picture has to be ON SCREEN before anything is measured: a row whose height is
+// still 0 is not the row the user is looking at.
+await ev(`(async () => { const i = [...document.querySelectorAll('#preview-content img')];
+  await Promise.all(i.map(x => x.complete ? 1 : new Promise(r => { x.onload = x.onerror = r; })));
+  return i.length })()`);
+await sleep(600);
 await ev(`(() => { if (typeof renderPreviewGutter === 'function') renderPreviewGutter(); return 1 })()`);
 await sleep(500);
 
@@ -78,9 +92,20 @@ const MEASURE = `(() => {
   const g = document.getElementById('preview-gutter');
   if (!pc || !pane || !g) return { err: 'no preview' };
   const originY = pane.getBoundingClientRect().top + pane.clientTop - pane.scrollTop;
-  const nums = [...g.children].map(d => ({ n: parseInt(d.textContent, 10), top: parseFloat(d.style.top),
-                                          h: parseFloat(d.style.height) }))
-                              .sort((a, b) => a.top - b.top);
+  const R = v => Math.round(v * 10) / 10;
+  // What the EYE sees is the middle of the number, not the top of the box it is drawn
+  // in: the boxes used to be as tall as the row beside them and the number centred in
+  // them, so rows an exact row apart showed their numbers 31px then 24px apart. Every
+  // step below is measured centre to centre, the way the column is read.
+  const nums = [...g.children].map(d => {
+    const top = parseFloat(d.style.top), h = parseFloat(d.style.height);
+    return { n: parseInt(d.textContent, 10), top, h, c: top + h / 2 };
+  }).sort((a, b) => a.top - b.top);
+  const pitch = (() => {
+    const el = pc.querySelector('p, li');
+    return el ? parseFloat(getComputedStyle(el).lineHeight) : 0;
+  })();
+  const lead = typeof _previewTextMetrics === 'function' ? _previewTextMetrics(pitch).lead : 0;
   // Measured here with the browser's own Range, not with the app's helper: the rows
   // are where the TEXT is, and a block's box is taller than its text (the line-height
   // leading sits inside it), so a block's rect is the wrong thing to compare against.
@@ -95,50 +120,78 @@ const MEASURE = `(() => {
   while (body.length && !body[0].trim()) body.shift();
   while (body.length && !body[body.length - 1].trim()) body.pop();
 
-  // How many numbers land in each gap BETWEEN two blocks — the space the file's blank
-  // lines went into. Bounded by the text either side, so a block's own number (which
-  // sits exactly on its first row) is never counted as being in the gap above it.
-  const pitch = (() => {
-    const el = pc.querySelector('p, li');
-    return el ? parseFloat(getComputedStyle(el).lineHeight) : 0;
-  })();
   // The rows the app itself measured, so "off-centre in its gap" is asked of the
   // placement and not of two different ways of measuring a list item: a Range over a
   // <ul> returns rects that include the markers' line boxes, a few px off the text.
-  // What the numbers are worth against the real text is check 6's job, measured
-  // independently there.
+  // What the numbers are worth against the real text is the probe check's job,
+  // measured independently there.
   const blocks = (typeof _previewBlockGroups === 'function'
-    ? _previewBlockGroups(pc, originY).map(g => g.map(r => ({ top: r.top, bottom: r.top + r.height })))
+    ? _previewBlockGroups(pc, originY, lead).map(gr => gr.map(r => ({ top: r.top, bottom: r.top + r.height })))
     : [...pc.children].map(rowsOf)).filter(r => r.length);
+
+  // How many numbers land in each gap BETWEEN two blocks — the space the file's blank
+  // lines went into. Bounded by the text either side, so a block's own number (which
+  // sits exactly on its first row) is never counted as being in the gap above it.
   const inGaps = [];
-  // And how evenly they are spread: the steps from the row above, between the blank
-  // numbers, and down to the row below should all be the same size. This is the
-  // "spazi diversi" complaint stated as a number — a gap whose steps are 36px then
-  // 28px has a number sitting off-centre in it.
-  const gapSpread = [];
   for (let i = 1; i < blocks.length; i++) {
     const above = blocks[i - 1][blocks[i - 1].length - 1];
     const hi = blocks[i][0].top;
-    const inside = nums.filter(x => x.top >= above.bottom - 1 && x.top <= hi - 2).map(x => x.top);
-    inGaps.push(inside.length);
-    if (!inside.length) continue;
-    // From the row above: its own number sits at its top, unless it is a block taller
-    // than a line of text, where the column picks up again below it.
-    const tall = (above.bottom - above.top) > pitch * 1.2;
-    const seq = [tall ? above.bottom : above.top].concat(inside, [hi]);
-    const steps = seq.slice(1).map((v, k) => v - seq[k]);
-    gapSpread.push(Math.round((Math.max(...steps) - Math.min(...steps)) * 10) / 10);
+    inGaps.push(nums.filter(x => x.top >= above.bottom - 1 && x.top <= hi - 2).length);
   }
+
+  // Which numbers stand beside a row that is one line of the note: a line of text in a
+  // paragraph or a list item, or a blank line. Those are the rows the editor's gutter
+  // steps through one row at a time, and the column here has to step the same way. A
+  // heading is legitimately taller and a picture is 180px tall; the steps into and out
+  // of THOSE follow the layout, and are checked separately.
+  const kind = [];
+  let gi = 0;
+  for (const child of pc.children) {
+    if (child.classList && child.classList.contains('md-blank-run')) {
+      const n = parseInt(child.dataset.blankRows || '0', 10);
+      for (let k = 0; k < n; k++) kind.push('blank');
+      continue;
+    }
+    const rows = (typeof _previewBlockGroups === 'function'
+      ? _previewBlockGroups(pc, originY, lead)[gi] : null) || [];
+    gi++;
+    const plain = /^(P|UL|OL)$/.test(child.tagName);
+    for (const r of rows) kind.push(plain && r.height <= pitch * 1.2 ? 'text' : 'other');
+  }
+  const grid = k => k === 'blank' || k === 'text';
+  const gridSteps = [];
+  for (let i = 1; i < nums.length && i < kind.length; i++) {
+    if (grid(kind[i - 1]) && grid(kind[i])) gridSteps.push(R(nums[i].c - nums[i - 1].c));
+  }
+
+  // One line of text, measured off a paragraph the same way the eye sees it: the
+  // number beside a picture has to sit no lower than the number beside a line of text
+  // sits inside ITS block, or it is floating inside the picture pointing at nothing.
+  const pEl = [...pc.querySelectorAll('p')].find(e => e.textContent.trim());
+  const tr0 = pEl ? rowsOf(pEl)[0] : null;
+  const txtH = tr0 ? tr0.bottom - tr0.top : pitch;
+
+  // The picture: its number belongs at the top edge, where the picture begins, not a
+  // half-box down inside it. Measured to the MIDDLE of the number, which is where it
+  // is drawn and what is read.
+  const img = pc.querySelector('img');
+  const ir = img ? img.getBoundingClientRect() : null;
+  const pic = ir ? (() => {
+    const top = ir.top - originY;
+    let best = null;
+    for (const x of nums) if (!best || Math.abs(x.top - top) < Math.abs(best.top - top)) best = x;
+    return { top: R(top), height: R(ir.height), n: best ? best.n : null,
+             numTop: best ? R(best.top) : null, below: best ? R(best.c - top) : null,
+             want: R(lead + txtH / 2) };
+  })() : null;
+
   // The tightest the column ever gets. A run of blank lines used to be squeezed into
   // the collapsed margin, which is the same ~12px whether the file has two blank
   // lines there or five, so the numbers landed on top of each other.
-  let minStep = 1e9, minAt = null, maxStep = 0, maxAt = null;
+  let minStep = 1e9, minAt = null;
   for (let i = 1; i < nums.length; i++) {
-    const d = nums[i].top - nums[i - 1].top;
+    const d = nums[i].c - nums[i - 1].c;
     if (d < minStep) { minStep = d; minAt = nums[i - 1].n; }
-    // Measured between rows that ARE a line of text: a heading is a taller row and
-    // the step beside it is taller with it, which is the layout, not a fault.
-    if (d > maxStep && nums[i - 1].h <= pitch * 1.1) { maxStep = d; maxAt = nums[i - 1].n; }
   }
   const probe = (sel, text) => {
     const el = [...pc.querySelectorAll(sel)].find(e => e.textContent.trim() === text);
@@ -148,22 +201,23 @@ const MEASURE = `(() => {
     return { text, top: r ? Math.round(r.top) : null, n: hit ? hit.n : null };
   };
   return {
-    count: nums.length, lines: body.length, seq: nums.map(x => x.n), inGaps, gapSpread,
-    minStep: Math.round(minStep * 10) / 10, minAt, pitch: Math.round(pitch * 10) / 10,
-    maxStep: Math.round(maxStep * 10) / 10, maxAt,
+    count: nums.length, lines: body.length, seq: nums.map(x => x.n), inGaps, gridSteps, pic,
+    kinds: kind.length, lead: R(lead), txtH: R(txtH), minStep: R(minStep), minAt, pitch: R(pitch),
     probes: ['alfa', 'beta', 'gamma', 'delta'].map(t => probe('p', t)).concat([probe('li', 'due')]),
     srcLine: { alfa: body.indexOf('alfa') + 1, beta: body.indexOf('beta') + 1, gamma: body.indexOf('gamma') + 1,
-               due: body.indexOf('- due') + 1, delta: body.indexOf('delta') + 1 },
+               due: body.indexOf('- due') + 1, delta: body.indexOf('delta') + 1,
+               pic: body.findIndex(l => l.indexOf('![pic]') === 0) + 1 },
   };
 })()`;
 
 const m = await ev(MEASURE);
 if (!m || m.err) { console.error('measure failed:', JSON.stringify(m), '\n' + err.slice(-800)); process.exit(1); }
+const spread = m.gridSteps.length ? Math.round((Math.max(...m.gridSteps) - Math.min(...m.gridSteps)) * 10) / 10 : -1;
 console.log('   numbers    ' + JSON.stringify(m.seq) + '   file lines ' + m.lines);
-console.log('   per gap    ' + JSON.stringify(m.inGaps) + '   (blank lines in the file: [1,1,3,1,1])');
+console.log('   per gap    ' + JSON.stringify(m.inGaps) + '   (blank lines in the file: [1,1,3,1,1,2])');
 console.log('   probes     ' + JSON.stringify(m.probes));
-console.log('   steps      ' + m.minStep + 'px to ' + m.maxStep + 'px (after ' + m.minAt + ' / ' + m.maxAt + '), a row is ' + m.pitch + 'px');
-console.log('   spread     ' + JSON.stringify(m.gapSpread) + ' px between the steps of one gap');
+console.log('   steps      ' + JSON.stringify(m.gridSteps) + '  a row is ' + m.pitch + 'px, the leading is ' + m.lead + 'px');
+console.log('   picture    ' + JSON.stringify(m.pic));
 
 // 1. A number for every line the file has, blank ones included.
 check(`the reading view numbers all ${m.lines} lines of the file (got ${m.count})`,
@@ -175,11 +229,11 @@ check('the numbers run 1..N with none missing',
   m.seq.length > 0 && m.seq.every((n, i) => n === i + 1),
   `got ${JSON.stringify(m.seq)}`);
 
-// 3. The symptom itself: every gap between two blocks used to hold no number at all,
+// 3. The first symptom: every gap between two blocks used to hold no number at all,
 //    leaving a hole in the column the height of a row. The run of THREE blank lines
 //    is why the count is read from the source — on screen that gap is the same
 //    collapsed margin as a run of one, so nothing about it can be measured.
-const WANT_GAPS = [1, 1, 3, 1, 1];
+const WANT_GAPS = [1, 1, 3, 1, 1, 2];
 check(`each gap carries the blank lines the file has there (${JSON.stringify(m.inGaps)})`,
   m.inGaps.length === WANT_GAPS.length && m.inGaps.every((n, i) => n === WANT_GAPS[i]),
   `got ${JSON.stringify(m.inGaps)}, file has ${JSON.stringify(WANT_GAPS)}`);
@@ -191,15 +245,34 @@ check(`no two numbers crowd each other (tightest ${m.minStep}px against a ${m.pi
   m.pitch > 0 && m.minStep >= m.pitch * 0.5,
   `${m.minStep}px between number ${m.minAt} and the next — a run of blank lines was squeezed into a margin`);
 
-// 5. Evenly, which is the whole point. Inside a gap every step is the same size, so
-//    no number sits off-centre between the lines it belongs between. Across gaps the
-//    steps follow the layout — a heading is a taller row and its gap is taller with
-//    it — but within one gap they cannot differ.
-check(`the blank numbers are evenly spread in every gap (worst spread ${Math.max(0, ...m.gapSpread)}px)`,
-  m.gapSpread.length > 0 && m.gapSpread.every(d => d <= 1.5),
-  `per-gap spread ${JSON.stringify(m.gapSpread)} — a number is off-centre in its gap`);
+// 5. The complaint itself, stated the way it was reported: "i spazi dei numeri non
+//    sono uguali". From one line of the note to the next — text or blank, and a list
+//    item is a line of the note like any other — the column steps exactly one row,
+//    everywhere. It used to alternate 31px and 24px down every note: the rows were in
+//    the right places, but each number was centred in a box as tall as its own row,
+//    and those heights differ (a line of text, a blank line, a picture).
+check(`the column steps one row between consecutive lines of the note (${JSON.stringify(m.gridSteps)})`,
+  m.gridSteps.length >= m.lines - 4 && m.gridSteps.every(d => Math.abs(d - m.pitch) <= 1.5),
+  `steps ${JSON.stringify(m.gridSteps)} against a ${m.pitch}px row (spread ${spread}px)`);
 
-// 6. And so the number beside a line is that line's number in the file — which is
+// 6. The rows the app numbers and the rows it lays out are the same rows: one kind
+//    per number, or the column is being drawn against a layout it does not describe.
+check(`every number stands for a row of the layout (${m.kinds} for ${m.count})`,
+  m.kinds === m.count, `${m.kinds} rows described, ${m.count} numbers drawn`);
+
+// 7. A picture is a row whose box is the picture: its number belongs at the top edge,
+//    where the picture starts — "il numero deve essere allo primo livello quando
+//    inizia la foto". It used to be centred in a box two lines tall, i.e. ~24px down
+//    inside the picture, pointing at nothing.
+check(`the number beside the picture is level with its top edge (${m.pic ? m.pic.below : '?'}px in, a line of text is ${m.pic && m.pic.want}px into its own block)`,
+  !!m.pic && m.pic.below >= 0 && m.pic.below <= m.pic.want + 2,
+  `number ${m.pic && m.pic.n} sits ${m.pic && m.pic.below}px inside a ${m.pic && m.pic.height}px picture, where a line of text sits ${m.pic && m.pic.want}px inside its block`);
+
+// 8. And it is the picture's own line in the file.
+check(`the picture is number ${m.srcLine.pic} in the reading view, as it is in the file`,
+  !!m.pic && m.pic.n === m.srcLine.pic, `got ${m.pic && m.pic.n}`);
+
+// 9. And so the number beside a line is that line's number in the file — which is
 //    what the editor's gutter says about the same note, and what it did not say here.
 for (const p of m.probes) {
   const want = m.srcLine[p.text];

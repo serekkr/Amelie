@@ -5664,7 +5664,7 @@ const _PREVIEW_ROW_TOL = 3;      // px: rects within this of each other are one 
 // already streaming in incrementally). Nothing silently truncates: no numbers.
 const _PREVIEW_ROW_MAX = 8000;
 
-function _previewRowBoxes(root, originY) {
+function _previewRowBoxes(root, originY, lead) {
   const rows = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
     acceptNode(n) {
@@ -5697,15 +5697,15 @@ function _previewRowBoxes(root, originY) {
       if (seenRows.has(tr)) continue;
       seenRows.add(tr);
       const rr = tr.getBoundingClientRect();
-      if (rr.height > 0 && rr.width > 0) rows.push({ top: rr.top - originY, height: rr.height });
+      if (rr.height > 0 && rr.width > 0) rows.push({ top: rr.top - originY, height: rr.height, box: true });
       continue;
     }
-    let rects;
+    let rects, box = false;
     if (n.nodeType === 3) { range.selectNodeContents(n); rects = range.getClientRects(); }
-    else rects = [n.getBoundingClientRect()];
+    else { rects = [n.getBoundingClientRect()]; box = true; }
     for (const r of rects) {
       if (r.height <= 0 || r.width <= 0) continue;
-      rows.push({ top: r.top - originY, height: r.height });
+      rows.push({ top: r.top - originY, height: r.height, box });
     }
   }
   rows.sort((a, b) => a.top - b.top);
@@ -5716,10 +5716,17 @@ function _previewRowBoxes(root, originY) {
     const prev = out[out.length - 1];
     if (prev && r.top - prev.top <= _PREVIEW_ROW_TOL) {
       prev.height = Math.max(prev.height, r.top + r.height - prev.top);
+      prev.box = prev.box && r.box;
     } else {
-      out.push({ top: r.top, height: r.height });
+      out.push({ top: r.top, height: r.height, box: r.box });
     }
   }
+  // A row that is a BOX and not a line of text — a picture, a video, a table row —
+  // starts at the top of its box, while a line of text starts `lead` px inside its
+  // block: the line-height's leading sits INSIDE the box, above the glyphs. Left as
+  // they came the column mixes the two conventions, and every step into and out of a
+  // picture is short by that leading. Put on the same footing here, once.
+  if (lead) for (const r of out) if (r.box) r.top += lead;
   return out;
 }
 
@@ -5786,6 +5793,34 @@ function _previewRowPitch() {
   return fs * 1.85;
 }
 
+// Where one line of reading-mode text sits inside its block, and how tall it is:
+// the leading of the line-height lives INSIDE the box, above the glyphs, so a
+// paragraph's text starts a few px below the top of its own box while a picture's
+// starts at the top of its box. The gutter needs both on the same footing.
+//
+// Measured off a real paragraph at gutter time, and never written into the layout —
+// a pixel baked into the layout goes stale the moment the note font size changes
+// (v1.0.54's spacers did exactly that); this one is re-measured on every render.
+function _previewTextMetrics(pitch) {
+  const out = { lead: 0, height: pitch || 0 };
+  if (!previewContent) return out;
+  let el = null;
+  const cands = previewContent.querySelectorAll('p, li');
+  for (let i = 0; i < cands.length && i < 40 && !el; i++) {
+    if ((cands[i].textContent || '').trim()) el = cands[i];
+  }
+  if (!el) return out;
+  const box = el.getBoundingClientRect();
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const r = [...range.getClientRects()].find(x => x.width > 0 && x.height > 0);
+  if (!r || !(r.height > 0)) return out;
+  out.height = r.height;
+  const lead = r.top - box.top;
+  if (lead > 0 && lead < box.height) out.lead = lead;
+  return out;
+}
+
 // A run of two or more blank lines needs somewhere to BE. On screen a run of any
 // length is the same collapsed ~12px margin, so three blank lines put three numbers
 // 4px apart, stacked on each other: the numbers were right and the column was
@@ -5800,13 +5835,18 @@ function _previewRowPitch() {
 // the room the file says they take, the same way the editor already does.
 function applyBlankLineSpacers() {
   if (!previewContent) return;
+  delete previewContent.dataset.blankSpacers;
   for (const old of [...previewContent.querySelectorAll(':scope > .md-blank-run')]) old.remove();
   const runs = _previewBlankRuns(_previewGutterSource);
-  if (!runs || !runs.some(n => n >= 1)) return;
+  if (!runs) return;
   const blocks = [...previewContent.children];
   // Not one-for-one with the source (an enhancement added a top-level node, say):
   // leave the layout alone rather than put the space in the wrong place.
   if (runs.length !== blocks.length - 1) return;
+  // Every gap on screen is now a gap of the file, and carries the blank lines the
+  // file has there — so the gutter can read its blank rows off these boxes instead
+  // of working out where they ought to fall.
+  previewContent.dataset.blankSpacers = '1';
   for (let i = 0; i < runs.length; i++) {
     if (runs[i] < 1) continue;
     // The margins either side stand down: the blank lines ARE the space now, and a
@@ -5822,6 +5862,7 @@ function applyBlankLineSpacers() {
     // note font size changes, and the numbers beside it drift off their rows until
     // something happens to re-render the note.
     sp.style.height = 'calc(' + runs[i] + ' * var(--md-row))';
+    sp.dataset.blankRows = String(runs[i]);
     blocks[i + 1].parentNode.insertBefore(sp, blocks[i + 1]);
   }
 }
@@ -5829,22 +5870,57 @@ function applyBlankLineSpacers() {
 // The rows of each top-level block, kept in per-block groups rather than one flat
 // list: the blank lines belong to the gaps BETWEEN the groups, and a flat list of
 // rows has nothing in it to hang them on.
-function _previewBlockGroups(root, originY) {
+function _previewBlockGroups(root, originY, lead) {
   const groups = [];
   for (const child of root.children) {
     // The spacers that give a run of blank lines its height are not blocks and hold
     // no text: skipped here so the groups still line up one-for-one with the source.
     if (child.classList && child.classList.contains('md-blank-run')) continue;
-    // A replaced block of its own — an <hr>, an image marked has left bare — is one
-    // row, and _previewRowBoxes would never see it: its walker starts BELOW its root.
-    if (_ROW_BOX_TAGS.has(String(child.tagName).toUpperCase())) {
-      const r = child.getBoundingClientRect();
-      groups.push((r.height > 0 && r.width > 0) ? [{ top: r.top - originY, height: r.height }] : []);
-      continue;
-    }
-    groups.push(_previewRowBoxes(child, originY));
+    groups.push(_previewChildRows(child, originY, lead));
   }
   return groups;
+}
+
+// The rows of one top-level block.
+function _previewChildRows(child, originY, lead) {
+  // A replaced block of its own — an <hr>, an image marked has left bare — is one
+  // row, and _previewRowBoxes would never see it: its walker starts BELOW its root.
+  if (_ROW_BOX_TAGS.has(String(child.tagName).toUpperCase())) {
+    const r = child.getBoundingClientRect();
+    return (r.height > 0 && r.width > 0)
+      ? [{ top: r.top - originY + (lead || 0), height: r.height, box: true }] : [];
+  }
+  return _previewRowBoxes(child, originY, lead);
+}
+
+// Every row of the reading view in order: each block's rows, and in each gap the
+// file's blank lines read off the SPACER that stands for them.
+//
+// The spacer is exactly n rows tall (`calc(n * var(--md-row))`) and the block below
+// begins where it ends, so n numbers divide it into steps of one row and the step out
+// of it is a row like every other. Same argument as dividing the gap (v1.0.55), made
+// against a box the layout itself produced rather than between the gap's two ends —
+// those ends belong to different blocks, and a picture's end is its box while a
+// paragraph's is its text, which is what left the steps beside a picture short.
+//
+// null when the spacers do not stand for the file's gaps at all (applyBlankLineSpacers
+// left the layout alone because the blocks and the source did not line up): the caller
+// falls back to dividing each gap.
+function _gutterRowsFromSpacers(root, originY, lead, rowH) {
+  if (!root || root.dataset.blankSpacers !== '1') return null;
+  const out = [];
+  for (const child of root.children) {
+    if (child.classList && child.classList.contains('md-blank-run')) {
+      const n = parseInt(child.dataset.blankRows || '0', 10);
+      const r = child.getBoundingClientRect();
+      if (!(n > 0) || !(r.height > 0)) return null;
+      const step = r.height / n;
+      for (let k = 0; k < n; k++) out.push({ top: r.top - originY + k * step + lead, height: rowH });
+      continue;
+    }
+    for (const row of _previewChildRows(child, originY, lead)) out.push(row);
+  }
+  return out;
 }
 
 // One continuous column: every group's rows, and in each gap the blank lines the
@@ -5909,20 +5985,31 @@ function renderPreviewGutter() {
   // from viewport rects, and it then scrolls with the text for free.
   const paneRect = pane.getBoundingClientRect();
   const originY = paneRect.top + pane.clientTop - pane.scrollTop;
-  // A number is centred on its row so it sits level with a big heading. A media box
-  // is a row too, and 600px tall: centring left the number floating in the middle of
-  // the video, pointing at nothing. Tall rows get the number at their TOP instead,
-  // beside where the block begins — the height is capped, not the position.
-  const lh = parseFloat(getComputedStyle(previewContent).lineHeight) || 24;
-  const rows = _gutterRowSlots(_previewBlockGroups(previewContent, originY),
-                               _previewBlankRuns(_previewGutterSource), lh, _previewRowPitch());
+  // EVERY number is drawn in a box of the same height, at the TOP of its row.
+  //
+  // The boxes used to be as tall as the row they stood beside — 17px beside a line of
+  // text, 24 beside a blank line, 48 beside a picture — with the number centred in
+  // them. Rows exactly one row apart then put their numbers 31px apart, then 24px,
+  // then 31px, the whole way down the note: the column the user kept reporting as
+  // uneven was never the row positions, which were right, but the different amount of
+  // box each number was centred in. One height, one place in the row, and the steps
+  // between the numbers ARE the steps between the rows.
+  //
+  // It is also what puts the number beside a picture level with the picture's top
+  // edge, where it begins, instead of half a box down inside it.
+  const pitch = _previewRowPitch();
+  const tm = _previewTextMetrics(pitch);
+  const rowH = tm.height || pitch;
+  const rows = _gutterRowsFromSpacers(previewContent, originY, tm.lead, rowH)
+            || _gutterRowSlots(_previewBlockGroups(previewContent, originY, tm.lead),
+                               _previewBlankRuns(_previewGutterSource), rowH, pitch);
   gutter.textContent = '';
   if (rows.length > _PREVIEW_ROW_MAX) return;
   const frag = document.createDocumentFragment();
   for (let i = 0; i < rows.length; i++) {
     const d = document.createElement('div');
     d.style.top = rows[i].top + 'px';
-    d.style.height = Math.min(rows[i].height, lh * 2) + 'px';
+    d.style.height = rowH + 'px';
     d.textContent = String(i + 1);
     frag.appendChild(d);
   }
