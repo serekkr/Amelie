@@ -49,7 +49,10 @@ fs.writeFileSync(`${VAULT}/notes/attachments/images/pic.png`, Buffer.from(PIC_B6
 fs.writeFileSync(`${VAULT}/notes/righe.md`,
   `---\ncreated: 2026-09-14 11:00\n---\n\n` +
   `# Titolo\n\nalfa\n\nbeta\n\n\n\ngamma\n\n- uno\n- due\n\n` +
-  `![pic](attachments/images/pic.png)\n\n\ndelta\n`);
+  `![pic](attachments/images/pic.png)\n\n\ndelta\n\n` +
+  // and a picture pasted INSIDE a paragraph, between two lines of text with no blank
+  // line either side — the way a photo lands when you paste it while typing.
+  `ok\n![pic](attachments/images/pic.png)\nfine\n`);
 fs.writeFileSync(`${HOME}/.local/share/amelie/amelie.json`, JSON.stringify({ vaultPath: VAULT, encryption: { enabled: false } }));
 fs.writeFileSync(`${HOME}/.local/share/amelie/settings.json`, JSON.stringify({ autoSaveSeconds: 30, sync: { enabled: false } }));
 const eargs = ['.', `--remote-debugging-port=${PORT}`, '--no-sandbox', '--password-store=basic'];
@@ -105,7 +108,8 @@ const MEASURE = `(() => {
     const el = pc.querySelector('p, li');
     return el ? parseFloat(getComputedStyle(el).lineHeight) : 0;
   })();
-  const lead = typeof _previewTextMetrics === 'function' ? _previewTextMetrics(pitch).lead : 0;
+  const tm = typeof _previewTextMetrics === 'function' ? _previewTextMetrics(pitch) : { lead: 0, height: pitch };
+  const lead = tm.lead, lineH = tm.height;
   // Measured here with the browser's own Range, not with the app's helper: the rows
   // are where the TEXT is, and a block's box is taller than its text (the line-height
   // leading sits inside it), so a block's rect is the wrong thing to compare against.
@@ -126,7 +130,7 @@ const MEASURE = `(() => {
   // What the numbers are worth against the real text is the probe check's job,
   // measured independently there.
   const blocks = (typeof _previewBlockGroups === 'function'
-    ? _previewBlockGroups(pc, originY, lead).map(gr => gr.map(r => ({ top: r.top, bottom: r.top + r.height })))
+    ? _previewBlockGroups(pc, originY, lead, lineH).map(gr => gr.map(r => ({ top: r.top, bottom: r.top + r.height })))
     : [...pc.children].map(rowsOf)).filter(r => r.length);
 
   // How many numbers land in each gap BETWEEN two blocks — the space the file's blank
@@ -153,7 +157,7 @@ const MEASURE = `(() => {
       continue;
     }
     const rows = (typeof _previewBlockGroups === 'function'
-      ? _previewBlockGroups(pc, originY, lead)[gi] : null) || [];
+      ? _previewBlockGroups(pc, originY, lead, lineH)[gi] : null) || [];
     gi++;
     const plain = /^(P|UL|OL)$/.test(child.tagName);
     for (const r of rows) kind.push(plain && r.height <= pitch * 1.2 ? 'text' : 'other');
@@ -174,16 +178,15 @@ const MEASURE = `(() => {
   // The picture: its number belongs at the top edge, where the picture begins, not a
   // half-box down inside it. Measured to the MIDDLE of the number, which is where it
   // is drawn and what is read.
-  const img = pc.querySelector('img');
-  const ir = img ? img.getBoundingClientRect() : null;
-  const pic = ir ? (() => {
+  const pics = [...pc.querySelectorAll('img')].map(img => {
+    const ir = img.getBoundingClientRect();
     const top = ir.top - originY;
     let best = null;
     for (const x of nums) if (!best || Math.abs(x.top - top) < Math.abs(best.top - top)) best = x;
     return { top: R(top), height: R(ir.height), n: best ? best.n : null,
-             numTop: best ? R(best.top) : null, below: best ? R(best.c - top) : null,
-             want: R(lead + txtH / 2) };
-  })() : null;
+             numTop: best ? R(best.top) : null, below: best ? R(best.c - top) : null };
+  });
+  const pic = pics[0] || null;
 
   // The tightest the column ever gets. A run of blank lines used to be squeezed into
   // the collapsed margin, which is the same ~12px whether the file has two blank
@@ -202,11 +205,13 @@ const MEASURE = `(() => {
   };
   return {
     count: nums.length, lines: body.length, seq: nums.map(x => x.n), inGaps, gridSteps, pic,
-    kinds: kind.length, lead: R(lead), txtH: R(txtH), minStep: R(minStep), minAt, pitch: R(pitch),
+    kinds: kind.length, lead: R(lead), txtH: R(txtH), want: R(txtH / 2), pics,
+    minStep: R(minStep), minAt, pitch: R(pitch),
     probes: ['alfa', 'beta', 'gamma', 'delta'].map(t => probe('p', t)).concat([probe('li', 'due')]),
     srcLine: { alfa: body.indexOf('alfa') + 1, beta: body.indexOf('beta') + 1, gamma: body.indexOf('gamma') + 1,
                due: body.indexOf('- due') + 1, delta: body.indexOf('delta') + 1,
-               pic: body.findIndex(l => l.indexOf('![pic]') === 0) + 1 },
+               pic: body.findIndex(l => l.indexOf('![pic]') === 0) + 1,
+               pic2: body.length - body.slice().reverse().findIndex(l => l.indexOf('![pic]') === 0) },
   };
 })()`;
 
@@ -214,10 +219,10 @@ const m = await ev(MEASURE);
 if (!m || m.err) { console.error('measure failed:', JSON.stringify(m), '\n' + err.slice(-800)); process.exit(1); }
 const spread = m.gridSteps.length ? Math.round((Math.max(...m.gridSteps) - Math.min(...m.gridSteps)) * 10) / 10 : -1;
 console.log('   numbers    ' + JSON.stringify(m.seq) + '   file lines ' + m.lines);
-console.log('   per gap    ' + JSON.stringify(m.inGaps) + '   (blank lines in the file: [1,1,3,1,1,2])');
+console.log('   per gap    ' + JSON.stringify(m.inGaps) + '   (blank lines in the file: [1,1,3,1,1,2,1])');
 console.log('   probes     ' + JSON.stringify(m.probes));
 console.log('   steps      ' + JSON.stringify(m.gridSteps) + '  a row is ' + m.pitch + 'px, the leading is ' + m.lead + 'px');
-console.log('   picture    ' + JSON.stringify(m.pic));
+console.log('   pictures   ' + JSON.stringify(m.pics) + '   (a number is ' + m.want + 'px into its own row)');
 
 // 1. A number for every line the file has, blank ones included.
 check(`the reading view numbers all ${m.lines} lines of the file (got ${m.count})`,
@@ -233,7 +238,7 @@ check('the numbers run 1..N with none missing',
 //    leaving a hole in the column the height of a row. The run of THREE blank lines
 //    is why the count is read from the source — on screen that gap is the same
 //    collapsed margin as a run of one, so nothing about it can be measured.
-const WANT_GAPS = [1, 1, 3, 1, 1, 2];
+const WANT_GAPS = [1, 1, 3, 1, 1, 2, 1];
 check(`each gap carries the blank lines the file has there (${JSON.stringify(m.inGaps)})`,
   m.inGaps.length === WANT_GAPS.length && m.inGaps.every((n, i) => n === WANT_GAPS[i]),
   `got ${JSON.stringify(m.inGaps)}, file has ${JSON.stringify(WANT_GAPS)}`);
@@ -252,7 +257,7 @@ check(`no two numbers crowd each other (tightest ${m.minStep}px against a ${m.pi
 //    the right places, but each number was centred in a box as tall as its own row,
 //    and those heights differ (a line of text, a blank line, a picture).
 check(`the column steps one row between consecutive lines of the note (${JSON.stringify(m.gridSteps)})`,
-  m.gridSteps.length >= m.lines - 4 && m.gridSteps.every(d => Math.abs(d - m.pitch) <= 1.5),
+  m.gridSteps.length >= m.lines - 6 && m.gridSteps.every(d => Math.abs(d - m.pitch) <= 1.5),
   `steps ${JSON.stringify(m.gridSteps)} against a ${m.pitch}px row (spread ${spread}px)`);
 
 // 6. The rows the app numbers and the rows it lays out are the same rows: one kind
@@ -264,13 +269,23 @@ check(`every number stands for a row of the layout (${m.kinds} for ${m.count})`,
 //    where the picture starts — "il numero deve essere allo primo livello quando
 //    inizia la foto". It used to be centred in a box two lines tall, i.e. ~24px down
 //    inside the picture, pointing at nothing.
-check(`the number beside the picture is level with its top edge (${m.pic ? m.pic.below : '?'}px in, a line of text is ${m.pic && m.pic.want}px into its own block)`,
-  !!m.pic && m.pic.below >= 0 && m.pic.below <= m.pic.want + 2,
-  `number ${m.pic && m.pic.n} sits ${m.pic && m.pic.below}px inside a ${m.pic && m.pic.height}px picture, where a line of text sits ${m.pic && m.pic.want}px inside its block`);
+// A picture's top edge is a line you can see, and the number belongs level with it:
+// half a line of text in, no more — which is where the middle of a digit falls when
+// the number's box starts exactly at the picture's top. Reported twice: first at 24px
+// in (v1.0.55, centred in a box two lines tall), then at 18px in (v1.0.56, carrying
+// the text leading it has no business carrying).
+check(`the number on each picture is level with its top edge (${JSON.stringify(m.pics.map(p => p.below))}px in, half a line is ${m.want}px)`,
+  m.pics.length >= 2 && m.pics.every(p => p.below >= 0 && p.below <= m.want + 2),
+  `${JSON.stringify(m.pics)} — a number sits further into a picture than half a line of text`);
 
 // 8. And it is the picture's own line in the file.
 check(`the picture is number ${m.srcLine.pic} in the reading view, as it is in the file`,
   !!m.pic && m.pic.n === m.srcLine.pic, `got ${m.pic && m.pic.n}`);
+
+// The pasted-in-a-paragraph case: the picture sits between two lines of text with no
+// blank line either side, so its row is one line of a paragraph and not a block.
+check(`the picture pasted inside a paragraph is number ${m.srcLine.pic2} (got ${m.pics[1] && m.pics[1].n})`,
+  !!m.pics[1] && m.pics[1].n === m.srcLine.pic2, `got ${m.pics[1] && m.pics[1].n}`);
 
 // 9. And so the number beside a line is that line's number in the file — which is
 //    what the editor's gutter says about the same note, and what it did not say here.

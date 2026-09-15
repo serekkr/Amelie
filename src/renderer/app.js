@@ -5664,7 +5664,7 @@ const _PREVIEW_ROW_TOL = 3;      // px: rects within this of each other are one 
 // already streaming in incrementally). Nothing silently truncates: no numbers.
 const _PREVIEW_ROW_MAX = 8000;
 
-function _previewRowBoxes(root, originY, lead) {
+function _previewRowBoxes(root, originY, lead, lineH) {
   const rows = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
     acceptNode(n) {
@@ -5721,12 +5721,17 @@ function _previewRowBoxes(root, originY, lead) {
       out.push({ top: r.top, height: r.height, box: r.box });
     }
   }
-  // A row that is a BOX and not a line of text — a picture, a video, a table row —
-  // starts at the top of its box, while a line of text starts `lead` px inside its
-  // block: the line-height's leading sits INSIDE the box, above the glyphs. Left as
-  // they came the column mixes the two conventions, and every step into and out of a
-  // picture is short by that leading. Put on the same footing here, once.
-  if (lead) for (const r of out) if (r.box) r.top += lead;
+  // A row that is a BOX and not a line of text starts at the top of its box, while a
+  // line of text starts `lead` px inside its block: the line-height's leading sits
+  // INSIDE the box, above the glyphs. Left as they came the column mixes the two
+  // conventions and the steps come out uneven, so a box the size of a line — a table
+  // row, an icon in a sentence — is put on the text's footing here.
+  //
+  // A PICTURE is not. Its top edge is a line you can see, and the number belongs
+  // level with it: five pixels inside it is five pixels of nothing to look at, and it
+  // was reported as soon as it shipped. The step into a picture is that much shorter
+  // for it — unnoticeable where the next step is the height of the picture.
+  if (lead) for (const r of out) if (r.box && !(lineH && r.height > lineH * 1.8)) r.top += lead;
   return out;
 }
 
@@ -5870,27 +5875,28 @@ function applyBlankLineSpacers() {
 // The rows of each top-level block, kept in per-block groups rather than one flat
 // list: the blank lines belong to the gaps BETWEEN the groups, and a flat list of
 // rows has nothing in it to hang them on.
-function _previewBlockGroups(root, originY, lead) {
+function _previewBlockGroups(root, originY, lead, lineH) {
   const groups = [];
   for (const child of root.children) {
     // The spacers that give a run of blank lines its height are not blocks and hold
     // no text: skipped here so the groups still line up one-for-one with the source.
     if (child.classList && child.classList.contains('md-blank-run')) continue;
-    groups.push(_previewChildRows(child, originY, lead));
+    groups.push(_previewChildRows(child, originY, lead, lineH));
   }
   return groups;
 }
 
 // The rows of one top-level block.
-function _previewChildRows(child, originY, lead) {
+function _previewChildRows(child, originY, lead, lineH) {
   // A replaced block of its own — an <hr>, an image marked has left bare — is one
   // row, and _previewRowBoxes would never see it: its walker starts BELOW its root.
   if (_ROW_BOX_TAGS.has(String(child.tagName).toUpperCase())) {
     const r = child.getBoundingClientRect();
-    return (r.height > 0 && r.width > 0)
-      ? [{ top: r.top - originY + (lead || 0), height: r.height, box: true }] : [];
+    if (!(r.height > 0 && r.width > 0)) return [];
+    const tall = lineH && r.height > lineH * 1.8;
+    return [{ top: r.top - originY + (tall ? 0 : (lead || 0)), height: r.height, box: true }];
   }
-  return _previewRowBoxes(child, originY, lead);
+  return _previewRowBoxes(child, originY, lead, lineH);
 }
 
 // Every row of the reading view in order: each block's rows, and in each gap the
@@ -5918,7 +5924,7 @@ function _gutterRowsFromSpacers(root, originY, lead, rowH) {
       for (let k = 0; k < n; k++) out.push({ top: r.top - originY + k * step + lead, height: rowH });
       continue;
     }
-    for (const row of _previewChildRows(child, originY, lead)) out.push(row);
+    for (const row of _previewChildRows(child, originY, lead, rowH)) out.push(row);
   }
   return out;
 }
@@ -6001,7 +6007,7 @@ function renderPreviewGutter() {
   const tm = _previewTextMetrics(pitch);
   const rowH = tm.height || pitch;
   const rows = _gutterRowsFromSpacers(previewContent, originY, tm.lead, rowH)
-            || _gutterRowSlots(_previewBlockGroups(previewContent, originY, tm.lead),
+            || _gutterRowSlots(_previewBlockGroups(previewContent, originY, tm.lead, rowH),
                                _previewBlankRuns(_previewGutterSource), rowH, pitch);
   gutter.textContent = '';
   if (rows.length > _PREVIEW_ROW_MAX) return;
