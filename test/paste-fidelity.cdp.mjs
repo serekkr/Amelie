@@ -78,17 +78,53 @@ const send = (method, params = {}) => new Promise(res => {
 const ev = async (expression) => (await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })).result?.result?.value;
 
 // The real system clipboard, then a real Ctrl+V into the editing surface.
-// NOT wl-copy: it stays alive to serve the Wayland selection, so execSync waits
-// for it forever. The renderer's own clipboard write reaches the same system
-// clipboard and returns.
-console.log('   .. clipboard:', await ev(`navigator.clipboard.writeText(${JSON.stringify(PAYLOAD)}).then(() => 'ok', e => 'ERR ' + e.message)`));
+// NOT wl-copy: it stays alive to serve the Wayland selection, so execSync waits for
+// it forever — and it would hand the test's payload to whatever the user copies
+// next. The renderer's own clipboard write reaches the same system clipboard and
+// returns. Under xvfb that clipboard is the throwaway X server's, not the desktop's.
+const writeClip = () => ev(`navigator.clipboard.writeText(${JSON.stringify(PAYLOAD)}).then(() => 'ok', e => 'ERR ' + e.message)`);
+let clipWrite = await writeClip();
+console.log('   .. clipboard:', clipWrite);
 await sleep(400);
+
+// A REAL Ctrl+V only works while the window holds the compositor's focus: Chromium
+// refuses a paste command — and execCommand('paste'), and clipboard.readText — on an
+// unfocused document, and it refuses them SILENTLY, inserting nothing. With no xvfb
+// on this machine (whatever the header says) the window comes up behind whatever the
+// user is working in, so every fidelity check below compared the payload against an
+// empty string: four failures that read exactly like a fault in the app, in a run
+// where the app was never given anything to paste.
+//
+// So the bytes are delivered as a paste EVENT when the window cannot take the focus.
+// That event runs the same handlers a keyboard paste does — CodeMirror's, and
+// Amelie's own — which is what these checks are about; what it does not exercise is
+// Chromium's clipboard plumbing, which is not Amelie's code. The run says which path
+// it took, and a paste that inserts nothing is reported as that and not as a
+// mismatch.
+let pastePath = '';
 const paste = async () => {
+  await send('Page.bringToFront');
   await ev(`(() => { const cd = document.querySelector('#cm-mount .cm-content'); cd.focus(); })()`);
   await sleep(200);
-  await send('Input.dispatchKeyEvent', { type: 'keyDown', windowsVirtualKeyCode: 86, key: 'v', code: 'KeyV', modifiers: 2, commands: ['paste'] });
-  await send('Input.dispatchKeyEvent', { type: 'keyUp', windowsVirtualKeyCode: 86, key: 'v', code: 'KeyV', modifiers: 2 });
+  const before = await ev(`editor.value`);
+  const focused = await ev(`document.hasFocus()`);
+  // The write is refused on an unfocused document too, so it gets another go now
+  // that the window has been asked for the front: where that works — xvfb, an idle
+  // desktop — the real Ctrl+V below is the path taken.
+  if (focused && clipWrite !== 'ok') clipWrite = await writeClip();
+  if (focused && clipWrite === 'ok') {
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', windowsVirtualKeyCode: 86, key: 'v', code: 'KeyV', modifiers: 2, commands: ['paste'] });
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', windowsVirtualKeyCode: 86, key: 'v', code: 'KeyV', modifiers: 2 });
+    await sleep(700);
+    if (await ev(`editor.value`) !== before) { pastePath = pastePath || 'real Ctrl+V'; return; }
+  }
+  await ev(`(() => {
+    const el = document.querySelector('#cm-mount .cm-content'); el.focus();
+    const dt = new DataTransfer(); dt.setData('text/plain', ${JSON.stringify(PAYLOAD)});
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  })()`);
   await sleep(700);
+  pastePath = pastePath || 'paste event (the window could not take the focus a real Ctrl+V needs)';
 };
 
 console.log('   .. app up');
@@ -102,8 +138,15 @@ await sleep(600);
 await ev(`editor.value = ''; _cmHandle.setSelection(0, 0);`);
 await sleep(300);
 await paste();
-console.log('   .. pasted plain');
+console.log('   .. pasted plain, via ' + pastePath);
 const plainVal = await ev(`editor.value`);
+// An empty editor is not a fidelity fault: nothing was pasted at all. Said plainly
+// here, because as a byte comparison it reads as the app having eaten the script.
+if (!plainVal.trim()) {
+  console.error('\nNOTHING WAS PASTED. The paste never reached the editor — this is the\n'
+    + 'harness, not the app. clipboard write: ' + clipWrite + '; path: ' + pastePath);
+  process.exit(3);
+}
 check('normal text: the editor holds the clipboard verbatim',
   plainVal.trim() === PAYLOAD.trim(), JSON.stringify({ got: plainVal.slice(0, 200), want: PAYLOAD.slice(0, 200) }));
 
@@ -111,7 +154,7 @@ check('normal text: the editor holds the clipboard verbatim',
 await ev(`editor.value = ''; _cmHandle.setSelection(0, 0); handleToolbarCmd('code');`);
 await sleep(400);
 await paste();
-console.log('   .. pasted in fence');
+console.log('   .. pasted in fence, via ' + pastePath);
 const fenceVal = await ev(`editor.value`);
 const inner = fenceVal.split('\n').slice(1, -1).join('\n');
 check('code block: the fences sit at column 0', /^```\n/.test(fenceVal) && /\n```$/.test(fenceVal.trim()), JSON.stringify(fenceVal.slice(0, 40)));
