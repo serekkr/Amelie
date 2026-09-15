@@ -5727,11 +5727,14 @@ function _previewRowBoxes(root, originY, lead, lineH) {
   // conventions and the steps come out uneven, so a box the size of a line — a table
   // row, an icon in a sentence — is put on the text's footing here.
   //
-  // A PICTURE is not. Its top edge is a line you can see, and the number belongs
-  // level with it: five pixels inside it is five pixels of nothing to look at, and it
-  // was reported as soon as it shipped. The step into a picture is that much shorter
-  // for it — unnoticeable where the next step is the height of the picture.
-  if (lead) for (const r of out) if (r.box && !(lineH && r.height > lineH * 1.8)) r.top += lead;
+  // A PICTURE is not. Its top edge is a line you can SEE, and the number belongs level
+  // with it, so it is marked instead: the gutter lines the digits themselves up with
+  // that edge (_gutterInkTop).
+  for (const r of out) {
+    if (!r.box) continue;
+    if (lineH && r.height > lineH * 1.8) r.edge = true;
+    else if (lead) r.top += lead;
+  }
   return out;
 }
 
@@ -5826,6 +5829,40 @@ function _previewTextMetrics(pitch) {
   return out;
 }
 
+// How far below the top of its own box a gutter number's DIGITS begin.
+//
+// A number is drawn in a box one line of text tall with the text centred in it, so
+// there is white above the digits — 2.3px of it at a 15px font. Against a line of
+// text that is exactly right: the digits come out level with the glyphs beside them,
+// which is what the eye checks. Against the top EDGE OF A PICTURE there is nothing to
+// average with, and the same 2.3px reads as the picture starting above its own
+// number — reported as such.
+//
+// Taken from the font itself rather than by trying pixels: fontBoundingBox gives the
+// line box the digits sit in and actualBoundingBox gives their ink, so
+//   ink top = half the box + half the font's own imbalance − the digits' ascent.
+// Cached on the font and the box height; both change only with the note font size.
+let _inkCtx = null, _inkKey = '', _inkTop = 0;
+function _gutterInkTop(gutter, rowH) {
+  if (!gutter || !(rowH > 0)) return 0;
+  const cs = getComputedStyle(gutter);
+  const font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+  const key = font + '|' + rowH;
+  if (key === _inkKey) return _inkTop;
+  let top = 0;
+  try {
+    _inkCtx = _inkCtx || document.createElement('canvas').getContext('2d');
+    _inkCtx.font = font;
+    const m = _inkCtx.measureText('0123456789');
+    // A browser without actualBoundingBox metrics gets no shift rather than a wrong one.
+    if (m && m.actualBoundingBoxAscent > 0) {
+      top = rowH / 2 + (m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2 - m.actualBoundingBoxAscent;
+    }
+  } catch (_) { top = 0; }
+  _inkKey = key; _inkTop = top > 0 ? top : 0;
+  return _inkTop;
+}
+
 // A run of two or more blank lines needs somewhere to BE. On screen a run of any
 // length is the same collapsed ~12px margin, so three blank lines put three numbers
 // 4px apart, stacked on each other: the numbers were right and the column was
@@ -5894,7 +5931,7 @@ function _previewChildRows(child, originY, lead, lineH) {
     const r = child.getBoundingClientRect();
     if (!(r.height > 0 && r.width > 0)) return [];
     const tall = lineH && r.height > lineH * 1.8;
-    return [{ top: r.top - originY + (tall ? 0 : (lead || 0)), height: r.height, box: true }];
+    return [{ top: r.top - originY + (tall ? 0 : (lead || 0)), height: r.height, box: true, edge: !!tall }];
   }
   return _previewRowBoxes(child, originY, lead, lineH);
 }
@@ -6011,10 +6048,14 @@ function renderPreviewGutter() {
                                _previewBlankRuns(_previewGutterSource), rowH, pitch);
   gutter.textContent = '';
   if (rows.length > _PREVIEW_ROW_MAX) return;
+  // A row whose top is an edge you can see — a picture, a video — has its number
+  // raised by the white above the digits, so the digits START on that edge instead of
+  // a couple of pixels under it.
+  const ink = _gutterInkTop(gutter, rowH);
   const frag = document.createDocumentFragment();
   for (let i = 0; i < rows.length; i++) {
     const d = document.createElement('div');
-    d.style.top = rows[i].top + 'px';
+    d.style.top = (rows[i].edge ? rows[i].top - ink : rows[i].top) + 'px';
     d.style.height = rowH + 'px';
     d.textContent = String(i + 1);
     frag.appendChild(d);

@@ -124,6 +124,26 @@ const MEASURE = `(() => {
   while (body.length && !body[0].trim()) body.shift();
   while (body.length && !body[body.length - 1].trim()) body.pop();
 
+  // One line of text, measured off a paragraph the same way the eye sees it: the
+  // number beside a picture has to sit no lower than the number beside a line of text
+  // sits inside ITS block, or it is floating inside the picture pointing at nothing.
+  const pEl = [...pc.querySelectorAll('p')].find(e => e.textContent.trim());
+  const tr0 = pEl ? rowsOf(pEl)[0] : null;
+  const txtH = tr0 ? tr0.bottom - tr0.top : pitch;
+
+  // The picture: its number belongs at the top edge, where the picture begins, not a
+  // half-box down inside it. Measured to the MIDDLE of the number, which is where it
+  // is drawn and what is read.
+  // Where the digits of a number begin inside its box, from the font's own metrics —
+  // the same question the app asks, asked independently here.
+  const inkTop = (() => {
+    const cs = getComputedStyle(g);
+    const cx = document.createElement('canvas').getContext('2d');
+    cx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+    const m = cx.measureText('0123456789');
+    if (!m || !(m.actualBoundingBoxAscent > 0)) return 0;
+    return txtH / 2 + (m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2 - m.actualBoundingBoxAscent;
+  })();
   // The rows the app itself measured, so "off-centre in its gap" is asked of the
   // placement and not of two different ways of measuring a list item: a Range over a
   // <ul> returns rects that include the markers' line boxes, a few px off the text.
@@ -140,7 +160,10 @@ const MEASURE = `(() => {
   for (let i = 1; i < blocks.length; i++) {
     const above = blocks[i - 1][blocks[i - 1].length - 1];
     const hi = blocks[i][0].top;
-    inGaps.push(nums.filter(x => x.top >= above.bottom - 1 && x.top <= hi - 2).length);
+    // Counted where the DIGITS are: a picture's number is raised so they begin on its
+    // top edge, which puts its box a few px above the row — it belongs to the block
+    // below all the same, not to the gap above it.
+    inGaps.push(nums.filter(x => x.top + inkTop >= above.bottom - 1 && x.top + inkTop < hi - 1).length);
   }
 
   // Which numbers stand beside a row that is one line of the note: a line of text in a
@@ -168,23 +191,15 @@ const MEASURE = `(() => {
     if (grid(kind[i - 1]) && grid(kind[i])) gridSteps.push(R(nums[i].c - nums[i - 1].c));
   }
 
-  // One line of text, measured off a paragraph the same way the eye sees it: the
-  // number beside a picture has to sit no lower than the number beside a line of text
-  // sits inside ITS block, or it is floating inside the picture pointing at nothing.
-  const pEl = [...pc.querySelectorAll('p')].find(e => e.textContent.trim());
-  const tr0 = pEl ? rowsOf(pEl)[0] : null;
-  const txtH = tr0 ? tr0.bottom - tr0.top : pitch;
-
-  // The picture: its number belongs at the top edge, where the picture begins, not a
-  // half-box down inside it. Measured to the MIDDLE of the number, which is where it
-  // is drawn and what is read.
   const pics = [...pc.querySelectorAll('img')].map(img => {
     const ir = img.getBoundingClientRect();
     const top = ir.top - originY;
     let best = null;
     for (const x of nums) if (!best || Math.abs(x.top - top) < Math.abs(best.top - top)) best = x;
     return { top: R(top), height: R(ir.height), n: best ? best.n : null,
-             numTop: best ? R(best.top) : null, below: best ? R(best.c - top) : null };
+             numTop: best ? R(best.top) : null, below: best ? R(best.c - top) : null,
+             // what the eye compares: the top of the digits against the top of the picture
+             inkBelow: best ? R(best.top + inkTop - top) : null };
   });
   const pic = pics[0] || null;
 
@@ -205,7 +220,7 @@ const MEASURE = `(() => {
   };
   return {
     count: nums.length, lines: body.length, seq: nums.map(x => x.n), inGaps, gridSteps, pic,
-    kinds: kind.length, lead: R(lead), txtH: R(txtH), want: R(txtH / 2), pics,
+    kinds: kind.length, lead: R(lead), txtH: R(txtH), want: R(txtH / 2), inkTop: R(inkTop), pics,
     minStep: R(minStep), minAt, pitch: R(pitch),
     probes: ['alfa', 'beta', 'gamma', 'delta'].map(t => probe('p', t)).concat([probe('li', 'due')]),
     srcLine: { alfa: body.indexOf('alfa') + 1, beta: body.indexOf('beta') + 1, gamma: body.indexOf('gamma') + 1,
@@ -222,7 +237,7 @@ console.log('   numbers    ' + JSON.stringify(m.seq) + '   file lines ' + m.line
 console.log('   per gap    ' + JSON.stringify(m.inGaps) + '   (blank lines in the file: [1,1,3,1,1,2,1])');
 console.log('   probes     ' + JSON.stringify(m.probes));
 console.log('   steps      ' + JSON.stringify(m.gridSteps) + '  a row is ' + m.pitch + 'px, the leading is ' + m.lead + 'px');
-console.log('   pictures   ' + JSON.stringify(m.pics) + '   (a number is ' + m.want + 'px into its own row)');
+console.log('   pictures   ' + JSON.stringify(m.pics) + '   (the digits start ' + m.inkTop + 'px into a number\'s box)');
 
 // 1. A number for every line the file has, blank ones included.
 check(`the reading view numbers all ${m.lines} lines of the file (got ${m.count})`,
@@ -269,14 +284,15 @@ check(`every number stands for a row of the layout (${m.kinds} for ${m.count})`,
 //    where the picture starts — "il numero deve essere allo primo livello quando
 //    inizia la foto". It used to be centred in a box two lines tall, i.e. ~24px down
 //    inside the picture, pointing at nothing.
-// A picture's top edge is a line you can see, and the number belongs level with it:
-// half a line of text in, no more — which is where the middle of a digit falls when
-// the number's box starts exactly at the picture's top. Reported twice: first at 24px
-// in (v1.0.55, centred in a box two lines tall), then at 18px in (v1.0.56, carrying
-// the text leading it has no business carrying).
-check(`the number on each picture is level with its top edge (${JSON.stringify(m.pics.map(p => p.below))}px in, half a line is ${m.want}px)`,
-  m.pics.length >= 2 && m.pics.every(p => p.below >= 0 && p.below <= m.want + 2),
-  `${JSON.stringify(m.pics)} — a number sits further into a picture than half a line of text`);
+// A picture's top edge is a line you can see, and the DIGITS of its number begin on
+// it. Not the number's box — the box has white above the digits, which is right
+// against a line of text and reads as the picture starting above its own number when
+// there is nothing beside it to average with. Reported three times: 24px in (v1.0.55,
+// centred in a box two lines tall), 18px in (v1.0.56, carrying the text leading), and
+// 2.3px in (v1.0.57, the white above the digits).
+check(`the digits of each picture's number start on its top edge (${JSON.stringify(m.pics.map(p => p.inkBelow))}px off)`,
+  m.pics.length >= 2 && m.pics.every(p => Math.abs(p.inkBelow) <= 1),
+  `${JSON.stringify(m.pics)} — the digits do not begin where the picture does`);
 
 // 8. And it is the picture's own line in the file.
 check(`the picture is number ${m.srcLine.pic} in the reading view, as it is in the file`,
