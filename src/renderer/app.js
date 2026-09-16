@@ -2332,6 +2332,16 @@ async function restoreSession() {
 // limit, so names never error. The note BODY editor (a <textarea>) is exempt —
 // only single-line <input>s and contenteditable fields are capped.
 const INPUT_MAX = 254;
+// NAMES of things in the vault are capped much shorter, at 60 characters — asked
+// for on 2026-09-16, after the inline rename stopped hiding long names and it
+// turned out nothing was stopping a name from running on. It applies where a name
+// is TYPED: the breadcrumb rename (double click on the note name), the tree rename,
+// a drawing's title, the "new note" and "rename attachment" prompts. FOLDERS are
+// deliberately left out — the ask was about file names. Names already on disk are
+// not touched: maxLength only limits what is typed, so a longer existing name opens
+// intact in the field and can still be edited and saved. Generated names (a
+// duplicate's " (1)", an imported attachment) are not typed and are not capped.
+const NAME_MAX = 60;
 function enforceInputLimits() {
   const NOCAP = new Set(['checkbox', 'radio', 'color', 'range', 'file', 'hidden', 'submit', 'button', 'image']);
   const cap = (el) => { if (el.tagName === 'INPUT' && !NOCAP.has(el.type) && el.maxLength < 0) el.maxLength = INPUT_MAX; };
@@ -2363,6 +2373,7 @@ async function init() {
   applyFolderIconStyle(loadFolderIconStyle()); // restore folder icon style early
   enforceInputLimits();   // gentle 254-char cap on all user inputs
   attachNameGuard(noteTitle);   // block forbidden filename chars in the note title
+  attachNameCap(noteTitle);     // and the 60-character name cap
   // Samba fields: share name = strict name allowlist; remote folder = same but
   // keeps "/" (it's a path). Username/password are credentials — left untouched.
   attachNameGuard($('cfg-smb-share'));
@@ -3276,7 +3287,7 @@ async function saveCurrentNote() {
       : null;
     if (!safeName) {
       if (!content.trim()) return;
-      const prompted = await showInputModal('Nome nota:', 'untitled');
+      const prompted = await showInputModal('Nome nota:', 'untitled', { name: true });
       if (!prompted) return;
       safeName = prompted.replace(FORBIDDEN_NAME_RE_G, '-').replace(/\.md$/, '');
     }
@@ -3352,6 +3363,10 @@ function showInputModal(label, defaultValue = '', opts = {}) {
     labelEl.textContent = label;
     field.value = defaultValue;
     if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+    // Name mode: the same 60-character cap as the inline renames (opts.name), so a
+    // name typed in the modal cannot be longer than one typed in the tree. Reset in
+    // cleanup — the field is shared with the password/passphrase prompts.
+    if (opts.name) attachNameCap(field); else field.maxLength = INPUT_MAX;
     // Password mode: mask the field and show the show/hide eye toggle.
     const isPass = !!opts.password;
     field.type = isPass ? 'password' : 'text';
@@ -3364,7 +3379,7 @@ function showInputModal(label, defaultValue = '', opts = {}) {
     setTimeout(() => { field.select(); field.focus(); }, 60);
     const cleanup = (val) => {
       modal.style.display = 'none';
-      field.type = 'text'; field.style.paddingRight = '';
+      field.type = 'text'; field.style.paddingRight = ''; field.maxLength = INPUT_MAX;
       if (eye) { eye.style.display = 'none'; eye.onclick = null; }
       if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
       okBtn.disabled = false;
@@ -3549,7 +3564,7 @@ function setupCrumbContextMenu() {
     if (!_crumbCtx.seg || !_crumbCtx.path) return;
     let txt = '';
     try { txt = await navigator.clipboard.readText(); } catch(_) {}
-    txt = (txt || '').split('\n')[0].trim();
+    txt = (txt || '').split('\n')[0].trim().slice(0, NAME_MAX);   // same ceiling as typing it
     if (txt) {
       const node = findNote(state.notes, _crumbCtx.path)
         || { type: 'note', name: _crumbCtx.seg.textContent, path: _crumbCtx.path };
@@ -3574,6 +3589,7 @@ function renameNoteInBreadcrumb(noteSeg, path) {
   noteSeg.style.display = 'none';
   noteSeg.after(input);
   attachNameGuard(input);   // block forbidden chars as you type (no revert)
+  attachNameCap(input);     // …and stop at NAME_MAX characters
 
   let done = false;
   const finish = async (commit) => {
@@ -3822,7 +3838,7 @@ async function renameNote(node) {
   const nameEl = row ? row.querySelector('.tree-name') : null;
   if (!row || !nameEl) {
     // Fallback (e.g. row not in DOM): minimal prompt instead of the old modal.
-    const np = await showInputModal('Rinomina:', node.name);
+    const np = await showInputModal('Rinomina:', node.name, { name: true });
     if (np) await commitRename(node, np);
     return;
   }
@@ -3836,6 +3852,9 @@ async function renameNote(node) {
   nameEl.style.display = 'none';
   nameEl.after(input);
   attachNameGuard(input);   // block forbidden chars as you type (no revert)
+  // Files and notes take the 60-character cap; a folder name is not a file name
+  // and keeps the general input limit.
+  if (node.type !== 'folder') attachNameCap(input);
   // Don't let a click in the input trigger the row's open/select handler.
   input.addEventListener('click', e => e.stopPropagation());
   input.addEventListener('mousedown', e => e.stopPropagation());
@@ -3895,6 +3914,32 @@ let _nameErrAt = 0;
 function showNameError() {
   const now = Date.now();
   if (now - _nameErrAt > 1200) { showToast(window.i18n.t('toast.invalid_name_chars'), 5000); _nameErrAt = now; }
+}
+let _nameLenErrAt = 0;
+function showNameTooLong() {
+  const now = Date.now();
+  if (now - _nameLenErrAt > 1200) {
+    showToast(window.i18n.t('toast.name_too_long', { n: NAME_MAX }), 5000);
+    _nameLenErrAt = now;
+  }
+}
+// The 60-character cap on a name field (see NAME_MAX). maxLength does the blocking;
+// the beforeinput listener exists only to SAY SO — a field that silently stops
+// accepting letters reads as a broken keyboard. It fires only when the insertion is
+// the one being refused: what a selection would replace is discounted, and deletions
+// and caret moves carry no data at all.
+function attachNameCap(el) {
+  if (!el) return;
+  // The cap is set on EVERY call, the listener only once: #input-modal-field is a
+  // single shared element that cleanup() puts back to INPUT_MAX after each prompt,
+  // so an early return here would leave the second "new note" prompt uncapped.
+  el.maxLength = NAME_MAX;
+  if (el._nameCap) return; el._nameCap = true;
+  el.addEventListener('beforeinput', (e) => {
+    if (e.data == null && e.inputType !== 'insertFromPaste') return;
+    const selLen = Math.abs((el.selectionEnd ?? 0) - (el.selectionStart ?? 0));
+    if ((el.value.length - selLen) >= NAME_MAX) showNameTooLong();
+  });
 }
 // opts.test / opts.strip override the default name allowlist (e.g. the path set).
 function attachNameGuard(el, opts) {
@@ -8887,7 +8932,7 @@ function setupSplitView() {
     }
     if (payload.action === 'rename' && payload.rel) {
       const oldRel = payload.rel, oldLeaf = oldRel.split('/').pop();
-      const typed = await showInputModal('Rinomina allegato:', oldLeaf);
+      const typed = await showInputModal('Rinomina allegato:', oldLeaf, { name: true });
       if (!typed || !typed.trim() || typed.trim() === oldLeaf) return;
       let finalName;
       try { finalName = await window.inkwell.renameAttachment(oldRel, typed.trim()); } catch (_) { return; }
@@ -15552,6 +15597,7 @@ function renameDrawTitle() {
   titleEl.style.display = 'none';
   titleEl.after(input);
   attachNameGuard(input);   // block forbidden filename chars as you type (like notes)
+  attachNameCap(input);     // …and the same 60-character cap as a note name
 
   let done = false;
   const finish = async (commit) => {
