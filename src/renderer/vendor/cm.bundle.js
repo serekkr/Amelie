@@ -19838,6 +19838,26 @@
       return builder.finish();
     }
   }, { decorations: (v) => v.decorations });
+  var tickMark = Decoration.mark({ class: "cm-tick" });
+  var tickPlugin = ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.decorations = this.build(view);
+    }
+    update(u) {
+      if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view);
+    }
+    build(view) {
+      const builder = new RangeSetBuilder();
+      const doc2 = view.state.doc;
+      for (const { from, to } of view.visibleRanges) {
+        const text = doc2.sliceString(from, to);
+        for (let i2 = 0; i2 < text.length; i2++) {
+          if (text.charCodeAt(i2) === 96) builder.add(from + i2, from + i2 + 1, tickMark);
+        }
+      }
+      return builder.finish();
+    }
+  }, { decorations: (v) => v.decorations });
   function _selectedLength(state) {
     try {
       let n = 0;
@@ -20176,6 +20196,7 @@
             codeHighlightPlugin,
             linkColorPlugin,
             tagColorPlugin,
+            tickPlugin,
             searchField,
             updateListener2
           ]

@@ -3885,6 +3885,14 @@ kbd {
    rendered preview (.md-tag) so a hashtag reads clearly as a tag. Fixed blue
    (not a theme var: --link/--accent aren't blue in every theme). */
 .md-tag, .cm-md-tag { color: #2f7ef2; }
+/* Backticks get 1px of air on each side (tickPlugin in cm-entry.js marks every
+   one of them). A run — ``` opening a fence, or ```` typed by hand — otherwise
+   smudges into a single blob: the glyph is narrow and its advance is narrower
+   still. 1px, measured against 0.5 / 1.5 / 2: at 2 the backtick lets go of the
+   word it belongs to (`ls -la` reads as ` ls -la `), at 0.5 the run is still one
+   mark. Padding, so the space is the same in every font the picker offers —
+   the widened-glyph font this replaces is described where it used to live. */
+#cm-mount .cm-tick { padding: 0 1px; }
 
 /* Accent on hover for the ICONS of the two accent-coloured palettes — Green Dark (the
    default → no data-theme attribute, see applyTheme) and Serekkr. Icons have no box and

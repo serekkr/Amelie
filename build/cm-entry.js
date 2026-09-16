@@ -584,6 +584,37 @@ const tagColorPlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: (v) => v.decorations });
 
+// ── Backtick breathing room ──────────────────────────────────────────────────
+// A backtick is a narrow, high mark, and a row of them — ``` opening a fence, or
+// ```` typed by hand — used to run together into one smudge. This is the job the
+// old AmelieWideTick font did (one glyph, a grave with a widened advance, taken
+// from Noto Sans Mono and forced on top of whatever font you picked). It was
+// dropped on 2026-09-16 because that glyph was cut for Helvetica's proportions
+// and read as a speck beside Inter; the SPACING it bought is put back here, on
+// the note font's own backtick, as 1px of padding each side (see #cm-mount
+// .cm-tick). CSS padding on a mark, not a different typeface: the letterforms
+// stay the ones the font designer drew, and the space is the same whichever
+// family is chosen in Settings.
+const tickMark = Decoration.mark({ class: 'cm-tick' });
+const tickPlugin = ViewPlugin.fromClass(class {
+  constructor(view) { this.decorations = this.build(view); }
+  update(u) { if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view); }
+  build(view) {
+    const builder = new RangeSetBuilder();
+    const doc = view.state.doc;
+    for (const { from, to } of view.visibleRanges) {
+      const text = doc.sliceString(from, to);
+      // One mark per backtick, not one per run: the padding has to land between
+      // two adjacent backticks, and a single mark around the whole run would only
+      // pad its two outer edges.
+      for (let i = 0; i < text.length; i++) {
+        if (text.charCodeAt(i) === 96) builder.add(from + i, from + i + 1, tickMark);
+      }
+    }
+    return builder.finish();
+  }
+}, { decorations: (v) => v.decorations });
+
 // Total length selected across every range. The guards below compare a deletion against
 // what the user had selected; measuring only `selection.main` would understate it if the
 // selection ever had several ranges. It cannot today — this editor does not enable
@@ -1051,6 +1082,7 @@ window.AmelieCM = {
           codeHighlightPlugin,
           linkColorPlugin,
           tagColorPlugin,
+          tickPlugin,
           searchField,
           updateListener,
         ],
