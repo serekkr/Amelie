@@ -392,8 +392,10 @@
    opposite of every other theme in this file, and that is what makes the writing
    surface read as the front-most thing. Greys are strictly R=G=B; the display
    this is used on turns any blue-leaning grey purple (see the note at the top).
-   The accent is a restrained violet — the one colour in an otherwise colourless
-   palette — and the in-app colour picker overrides it (with --accent-dim/glow and
+   The accent is the app's green, #3fb950 — the one colour in an otherwise colourless
+   palette, and the same green Green Dark and Serekkr are built on, so the folder
+   icons and buttons look the same whichever of the three you are on. It was violet
+   first, then navy; the in-app colour picker overrides it (with --accent-dim/glow and
    the two --active-* that must move with it) for anyone who wants another. */
 [data-theme="graphite"] {
   --bg-0: #212121;
@@ -407,9 +409,9 @@
   --text-1: #b2b2b2;
   --text-2: #8a8a8a;
   --text-3: #5c5c5c;
-  --accent: #4f7fd4;
-  --accent-dim: #35589a;
-  --accent-glow: rgba(79,127,212,0.13);
+  --accent: #3fb950;
+  --accent-dim: #277332;
+  --accent-glow: rgba(63,185,80,0.13);
   /* The selected row is GREY here, not a tint of the accent as in every other theme:
      in the screenshot this palette comes from, the open note sits on #424242 — plain
      lighter grey — and that flatness is half of what the theme looks like. White at
@@ -417,17 +419,20 @@
      on #3e3e3e. The accent still marks the row: --active-border, the folder icons and
      the buttons keep it. */
   --active-bg: rgba(255,255,255,0.10);
-  --active-border: #4f7fd4;
+  --active-border: #3fb950;
   --red: #e5534b;
+  /* --green is the SUCCESS colour (a passing connection test, a healthy dot), not a
+     synonym for the accent — the two happen to be green together here, and must still
+     not be merged, or changing the accent would repaint every success indicator. */
   --green: #4caf7d;
   --yellow: #d6a344;
-  --h1: #8fb6ec;
-  --h2: #6f9ee2;
-  --h3: #4f7fd4;
-  --h4: #a9c8f0;
-  /* The link stays a step LIGHTER than the accent on purpose. With a navy accent the
-     two are the same hue, and the house rule is that a link must never read as the
-     accent — here the separation is brightness, not colour. */
+  --h1: #6bd88a;
+  --h2: #4fc873;
+  --h3: #3fb950;
+  --h4: #93e5ab;
+  /* Blue, and the only frankly blue thing in the theme: with a green accent a link
+     can keep its own hue, which is the clearest way to say it is not an accent. It
+     stayed put through the violet and navy accents that came before. */
   --link: #7ec0f5;
   /* --code-bg is NOT set here: it is defined in a :root block further down the file,
      which has the same specificity as [data-theme=…] and comes later, so a value
