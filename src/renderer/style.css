@@ -1354,46 +1354,14 @@ kbd {
    line sits at the pane's 28px top — same y as the first edit-mode line. Without this,
    toggling edit→view pushed the text ~13px down. */
 #preview-content > :first-child { margin-top: 0; }
-/* When line numbers are ON, the editor text is pushed right of the number gutter
-   (scroller padding 10px + gutter[min-width 3em + 6+16 padding]). Indent the preview
-   by the SAME amount so the view-mode text lines up UNDER the editor text (not under
-   the numbers) — no horizontal jump on edit↔view. The 3em term is tied to
-   --editor-font-size so it stays aligned under Ctrl-wheel zoom; the +32px is the fixed
-   10px scroller pad + 22px gutter padding. (Sibling selector: editor-pane precedes
-   preview-pane under #content-split; 2 IDs+1 class beats the base #preview-pane padding.) */
-#editor-pane.line-numbers ~ #preview-pane { padding-left: calc(3 * var(--editor-font-size) + 32px); }
-/* ── Line numbers in reading mode ────────────────────────────────────────────
-   Same promise as edit mode: every ROW YOU SEE gets the next number. Rendered
-   HTML has no lines to count, so renderPreviewGutter measures the real line
-   boxes (Range rects) and drops one absolutely-positioned number on each. The
-   gutter sits in the left padding the rule above already reserves, so the text
-   column does not move; it is a child of #preview-pane, which IS the scroller,
-   so it scrolls with the content instead of being synced to it.
-   Rows are content rows PLUS the file's blank lines: the gap between two blocks is
-   a collapsed margin on screen, but it is one or more blank lines in the file, and
-   the editor numbers those. So they are numbered here too (see _gutterRowSlots) and
-   the column runs unbroken instead of skipping every gap. */
-#preview-gutter {
-  position: absolute; left: 0; top: 0; width: calc(3 * var(--editor-font-size) + 32px);
-  pointer-events: none; -webkit-user-select: none; user-select: none;
-  font-family: var(--editor-font-family);
-  font-size: var(--editor-font-size); font-weight: var(--note-weight);
-  color: var(--text-3); font-variant-numeric: tabular-nums;
-}
-#preview-gutter > div {
-  position: absolute; left: 0; width: 100%;
-  /* 16px = CodeMirror's own gutter offset in edit mode (.cm-scroller's 10px of
-     padding plus the 6px on .cm-gutterElement), left-aligned like it is, so the
-     numbers stay put when you toggle edit ⇄ view instead of sliding sideways. */
-  padding-left: 16px; box-sizing: border-box;
-  /* Every number gets the SAME height (one line of reading-mode text, set inline by
-     renderPreviewGutter) and sits at the top of its row. Heights that followed the row
-     — taller beside a picture, shorter beside a line of text — put the numbers at
-     uneven distances from each other even when their rows were an exact row apart,
-     and left the number beside a picture floating well below the picture's top edge. */
-  display: flex; align-items: center; justify-content: flex-start;
-}
-
+/* Reading mode has NO line numbers (removed 2026-09-16 — "fa solo casino"), and with
+   them went the left column that was reserved here for the measured gutter:
+   `#editor-pane.line-numbers ~ #preview-pane { padding-left: calc(3 * var(--editor-font-size) + 32px) }`,
+   which matched the editor's gutter so the text did not shift on edit↔view.
+   The cost, stated rather than hidden: with the numbers ON in the editor, reading-mode
+   text now starts further LEFT than edit-mode text, because the editor still holds its
+   own gutter column. An empty band down the left of a page with nothing in it was the
+   worse of the two. */
 /* ── View width: readable line length (Obsidian-style) ──────────────
    Wide (default): editor + preview fill the full pane width, with equal
    VISIBLE left/right empty space (right = 48px padding + 12px scrollbar,
