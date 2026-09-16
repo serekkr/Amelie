@@ -1506,29 +1506,58 @@ function applyAppearance(prefs = {}) {
 // pre-zoom pixels while the measurement is in viewport ones, hence the division.
 // Recomputed whenever either side changes shape — an icon size, a note whose
 // header carries a tags row, a window resize.
+//
+// The padding STICKS once measured. A PDF, an image, a drawing or the graph hides
+// the whole editor container (`editorContainer.style.display = 'none'`), taking the
+// toolbar with it — there is then nothing to measure against, and the strip used to
+// fall back to the authored padding: clicking a note, then a PDF in the root, made
+// the gap between the five icons widen and narrow on every switch. The last value
+// measured against a real note toolbar is kept and re-applied instead, so the strip
+// looks the same whatever the right-hand pane is showing. It is also remembered
+// across restarts, for a session that opens straight onto a PDF and so has no note
+// to measure yet; the first note re-measures and overwrites it.
 let _stripAlignObs = null;
+let _stripPad = null;          // null = never measured; '' = authored padding is already right
+const STRIP_PAD_KEY = 'amelie.strip-pad';
+function _applyStripPad(strip) {
+  if (_stripPad == null) return;                             // nothing measured yet — leave it
+  strip.style.paddingTop = strip.style.paddingBottom = _stripPad;
+}
+function _rememberStripPad(v) {
+  _stripPad = v;
+  try { localStorage.setItem(STRIP_PAD_KEY, v); } catch (_) {}
+}
 function alignSidebarStrip() {
   const strip = document.getElementById('sidebar-views');
   const toolbar = document.getElementById('editor-toolbar');
   if (!strip || !toolbar) return;
+  // Measured BEFORE clearing: with no toolbar on screen there is nothing to align
+  // to, and clearing first is exactly what made the icons jump.
+  if (!toolbar.getBoundingClientRect().height) { _applyStripPad(strip); return; }
   strip.style.paddingTop = strip.style.paddingBottom = '';   // back to the authored values
   const tb = toolbar.getBoundingClientRect();
-  if (!tb.height) return;                                    // no note open — leave it alone
+  if (!tb.height) { _applyStripPad(strip); return; }         // hidden between the two reads
   const cs = getComputedStyle(strip);
   const baseTop = parseFloat(cs.paddingTop) || 0;
   const baseBottom = parseFloat(cs.paddingBottom) || 0;
   const zoom = parseFloat(cs.zoom) || 1;
   const delta = (tb.bottom - strip.getBoundingClientRect().bottom) / zoom;
-  if (delta <= 0.5) return;
+  if (delta <= 0.5) { _rememberStripPad(''); return; }       // authored padding aligns it
   const half = (baseTop + baseBottom + delta) / 2;
-  strip.style.paddingTop = half + 'px';
-  strip.style.paddingBottom = half + 'px';
+  _rememberStripPad(half + 'px');
+  _applyStripPad(strip);
 }
 function watchSidebarStripAlign() {
   if (_stripAlignObs || typeof ResizeObserver === 'undefined') return;
   const toolbar = document.getElementById('editor-toolbar');
   const header  = document.getElementById('note-header');
   if (!toolbar || !header) return;
+  // Last session's value, so a window that opens on a PDF already has the gap a
+  // note would give it. Overwritten by the first real measurement.
+  try {
+    const saved = localStorage.getItem(STRIP_PAD_KEY);
+    if (saved !== null) { _stripPad = saved; _applyStripPad(document.getElementById('sidebar-views')); }
+  } catch (_) {}
   // Observing both: the toolbar changes size with the icon zoom, and the header
   // above it changes height when a note brings a tags or source row, which
   // moves the toolbar without resizing it.
