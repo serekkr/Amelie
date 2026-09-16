@@ -1333,6 +1333,7 @@ const THEMES = {
   nord:          { label: 'Nord',          attr: 'nord'      },
   onedark:       { label: 'One Dark',      attr: 'onedark'   },
   dracula:       { label: 'Dracula',       attr: 'dracula'   },
+  obsidian:      { label: 'Obsidian',      attr: 'obsidian'  },
 };
 
 // The theme a fresh profile gets, and the one anything falls back to (a deleted custom
