@@ -601,12 +601,18 @@ html.is-mac #titlebar { padding-left: 72px; }
 :root[data-folder-icon="dot"]      .tree-folder.open .tree-folder-icon .fi-dot,
 :root[data-folder-icon="folder"]   .tree-folder.open .tree-folder-icon .folder-closed { fill: none; }
 .tree-folder-children {
-  /* Vertical guide line centred on the parent folder ICON: row padding 14 +
-     icon half-width 8 = x≈22, so the line descends from the middle of the
-     folder, not its left edge. Children content then starts at 22(margin)
-     +1(border)+0(pad) = 23, and a child note's text at 23+14(note pad) = 37px,
-     aligned with the folder name's first letter (14+16+7=37). */
-  margin-left: 22px;
+  /* ONE step for every level, 14px (2026-09-16, asked for: "le prime hanno più
+     spazio"). It was 22px, which put the guide line on the exact centre of the
+     parent folder icon (row padding 14 + icon half-width 8) — that was the reason
+     for the number, and it is given up here: at 22px seven nested folders pushed
+     the innermost name 195px into a 250px sidebar and left 40px for it. The line
+     now descends from the icon's left edge instead of its middle, 8px further in.
+     14px was measured against 12 and 16 on a seven-level copy of the user's DPI
+     tree: 96px of name at level seven, the same room the mixed 22/12/8 steps of
+     v1.0.72 bought, with none of its unevenness. A tree two folders deep — most of
+     them — is 16px narrower than it was; that is the price of the same step
+     everywhere, and it was the thing asked for. */
+  margin-left: 14px;
   padding-left: 0;
   /* A white hairline, at a third strength. No tint: the accent-green version drew a
      coloured stripe down the sidebar, and plain --text-2 was the same shade as the
@@ -621,45 +627,16 @@ html.is-mac #titlebar { padding-left: 72px; }
    folder row highlights itself anyway, and a line that lights up as the mouse crosses
    the tree is movement where the whole point is a quiet hairline. */
 
-/* Uniform mode (Settings → guides off): no vertical guide lines — a clean, flat indent per
-   nesting level, like Obsidian/Notion. Matches the guided mode so a child
-   note's text begins just after the first letter of the parent folder name
-   (content start 29 + note pad 14 = 43px ≈ folder name 37 + one letter). */
+/* Uniform mode (Settings → guides off): no vertical guide lines — a clean, flat indent
+   per nesting level. Same 14px step as the guided mode above, and for the same reason;
+   1px more than it, so both modes land the text in the same column (guided spends one
+   of its pixels on the hairline itself). */
 :root[data-folder-guides="off"] .tree-folder-children {
   border-left: none;
   margin-left: 0;
-  padding-left: 23px;
+  padding-left: 15px;
 }
 
-/* ── DEEP NESTING: the step narrows instead of running off the edge ───────────
-   Each level indents its children by the full step, so depth costs width without
-   limit: with seven folders inside one another the innermost name started 195px
-   into a 250px sidebar and had 40px left — the name was a couple of letters and
-   an ellipsis (measured on a copy of the user's own DPI tree).
-   The first two levels keep the full step: a normal tree is one or two deep and
-   must look exactly as it always has. From the THIRD level the step halves, from
-   the SIXTH it halves again — the same seven folders now start at 137px with 98px
-   for the name. Depth still reads (every level is still a step in), it just stops
-   being paid for at full price. A chain of N `.tree-folder-children` selectors
-   matches a container with N-1 ancestors of its own kind, i.e. level N and deeper,
-   and the longer chain wins for the deeper levels — no JS, no depth counter.
-   Written once per guide mode ON PURPOSE: guided nesting indents with margin (the
-   hairline sits on that edge), uniform nesting indents with padding, and a rule
-   setting the wrong one would ADD to the other instead of replacing it. */
-:root:not([data-folder-guides="off"]) .tree-folder-children .tree-folder-children .tree-folder-children {
-  margin-left: 12px;
-}
-:root:not([data-folder-guides="off"]) .tree-folder-children .tree-folder-children .tree-folder-children
-  .tree-folder-children .tree-folder-children .tree-folder-children {
-  margin-left: 8px;
-}
-:root[data-folder-guides="off"] .tree-folder-children .tree-folder-children .tree-folder-children {
-  padding-left: 12px;
-}
-:root[data-folder-guides="off"] .tree-folder-children .tree-folder-children .tree-folder-children
-  .tree-folder-children .tree-folder-children .tree-folder-children {
-  padding-left: 8px;
-}
 .tree-note-icon { color: var(--text-3); font-size: 12px; pointer-events: none; }
 .tree-name { flex: 1; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 
