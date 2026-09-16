@@ -383,7 +383,7 @@
   --link: #8be9fd;
 }
 
-/* ── THEME: Obsidian ────────────────────────────────────────── */
+/* ── THEME: Graphite ───────────────────────────────────────── */
 /* The neutral graphite the user asked for, sampled pixel by pixel from the
    screenshot they sent (font.png) rather than guessed: editor #212121, sidebar
    #2c2c2c, selected row #424242, text #d8d8d8, sidebar text #b2b2b2 — those five
@@ -392,10 +392,10 @@
    opposite of every other theme in this file, and that is what makes the writing
    surface read as the front-most thing. Greys are strictly R=G=B; the display
    this is used on turns any blue-leaning grey purple (see the note at the top).
-   The accent is Obsidian's own purple — the one colour in an otherwise colourless
+   The accent is a restrained violet — the one colour in an otherwise colourless
    palette — and the in-app colour picker overrides it (with --accent-dim/glow and
    the two --active-* that must move with it) for anyone who wants another. */
-[data-theme="obsidian"] {
+[data-theme="graphite"] {
   --bg-0: #212121;
   --bg-1: #2c2c2c;
   --bg-2: #303030;

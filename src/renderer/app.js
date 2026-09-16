@@ -1333,7 +1333,7 @@ const THEMES = {
   nord:          { label: 'Nord',          attr: 'nord'      },
   onedark:       { label: 'One Dark',      attr: 'onedark'   },
   dracula:       { label: 'Dracula',       attr: 'dracula'   },
-  obsidian:      { label: 'Obsidian',      attr: 'obsidian'  },
+  graphite:      { label: 'Graphite',      attr: 'graphite'  },
 };
 
 // The theme a fresh profile gets, and the one anything falls back to (a deleted custom
@@ -2225,7 +2225,11 @@ function setupTheme() {
   // adds a card for each one. Then restore the saved theme (which can
   // be custom, so the custom ones are loaded FIRST).
   loadCustomThemes().finally(() => {
-    const savedTheme = (() => { try { return localStorage.getItem('inkwell-theme'); } catch(_) { return null; } })();
+    let savedTheme = (() => { try { return localStorage.getItem('inkwell-theme'); } catch(_) { return null; } })();
+    // Themes that were renamed after shipping. Without this the check below finds
+    // no such key and silently drops the profile back to the default theme.
+    const RENAMED = { obsidian: 'graphite' };   // v1.0.69 -> v1.0.70
+    if (savedTheme && RENAMED[savedTheme]) savedTheme = RENAMED[savedTheme];
     applyTheme(savedTheme && THEMES[savedTheme] ? savedTheme : DEFAULT_THEME);
     paintAllThemePreviews();
   });
