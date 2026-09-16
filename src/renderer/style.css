@@ -971,16 +971,16 @@ kbd {
 .note-meta-item span { color: var(--text-2); }
 
 /* ─── Editor pane ───────────────────────────────────────────── */
-/* AmelieWideTick: a 1-glyph font holding ONLY a widened backtick (`).
-   Prepended to the editor font stack so the three ``` fence backticks
-   render spaced out, WITHOUT touching prose (which has no backticks) and
-   WITHOUT desyncing the caret: both the textarea AND the overlay use this
-   same font for `, so the wider advance is identical on both layers.
-   Derived from Noto Sans Mono's grave glyph, advance 600->680, ink centered. */
-@font-face {
-  font-family: 'AmelieWideTick';
-  src: url(data:font/woff;base64,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) format('woff');
-}
+/* AmelieWideTick REMOVED (2026-09-16). It was a 1-glyph font holding a widened
+   backtick (`), derived from Noto Sans Mono and prepended to the editor font stack
+   so the three ``` fence backticks would not collide under Helvetica — which on
+   Linux meant Nimbus Sans, whose grave is cramped. Rendered beside Inter the same
+   glyph reads as a thin speck floating above the letters: it was drawn for another
+   typeface's proportions, and every backtick in the editor came out of it whatever
+   font you picked. Inter's own grave is a full, slanted mark that sits with its
+   letters, and three of them in a row stay legible on their own, so the patch now
+   costs more than it buys. If a future default font has a cramped backtick, this is
+   the trick — one glyph, applied to BOTH editing layers so the advance matches. */
 /* AmelieMask: every glyph is an asterisk. Applied to the unlock passphrase
    field so the typed password shows as *** (the user wants stars, not the OS
    bullets). The field stays type=text so .value keeps the real text; the eye
@@ -1001,7 +1001,7 @@ kbd {
 #editor-highlight {
   position: absolute; top: 0; left: 0; right: 0; bottom: 0;
   pointer-events: none; z-index: 0; overflow: hidden;
-  font-family: 'AmelieWideTick', var(--editor-font-family); font-size: var(--editor-font-size);
+  font-family: var(--editor-font-family); font-size: var(--editor-font-size);
   line-height: var(--editor-line-height); padding: 28px 48px 28px 60px;
   white-space: pre-wrap; word-break: break-all; overflow-wrap: normal;
   box-sizing: border-box; tab-size: 2; color: var(--text-0); font-weight: var(--note-weight);
@@ -1090,7 +1090,7 @@ kbd {
   position: relative; z-index: 1;
   flex: 1; resize: none; background: transparent;
   border: none; outline: none; color: transparent; caret-color: var(--text-0);
-  font-family: 'AmelieWideTick', var(--editor-font-family); font-size: var(--editor-font-size);
+  font-family: var(--editor-font-family); font-size: var(--editor-font-size);
   font-weight: var(--note-weight);
   /* Left padding is 60 (= 48 + the 12px scrollbar) so the VISIBLE left margin
      equals the right one: the right side always shows the 12px scrollbar gutter,
@@ -1113,7 +1113,7 @@ kbd {
 #cm-mount, #cm-mount .cm-editor { height: 100%; background: var(--bg-0); }
 #cm-mount .cm-editor.cm-focused { outline: none; }
 #cm-mount .cm-scroller {
-  font-family: 'AmelieWideTick', var(--editor-font-family); font-size: var(--editor-font-size);
+  font-family: var(--editor-font-family); font-size: var(--editor-font-size);
   /* Balanced left/right margins (was left:12 → text hugged the sidebar while the
      right had 48px). CM's scrollbar is on the right, so equal 48px reads centered. */
   /* 48px left/right matches #preview-pane's real padding (28px 48px, set at ~L1907 —
@@ -1246,7 +1246,7 @@ kbd {
      each number lands exactly on its row — no per-element offset to fight.
      One number per LOGICAL line; soft-wrapped lines get blank rows (added in
      renderEditorGutter) so following numbers stay on their rows. */
-  font-family: 'AmelieWideTick', var(--editor-font-family);
+  font-family: var(--editor-font-family);
   font-size: var(--editor-font-size); line-height: var(--editor-line-height);
   font-weight: var(--note-weight); padding: 28px 0 28px 14px; box-sizing: border-box;
   /* The baselines already coincide, but the digits read a touch low next to the
@@ -1341,7 +1341,7 @@ kbd {
 #preview-gutter {
   position: absolute; left: 0; top: 0; width: calc(3 * var(--editor-font-size) + 32px);
   pointer-events: none; -webkit-user-select: none; user-select: none;
-  font-family: 'AmelieWideTick', var(--editor-font-family);
+  font-family: var(--editor-font-family);
   font-size: var(--editor-font-size); font-weight: var(--note-weight);
   color: var(--text-3); font-variant-numeric: tabular-nums;
 }

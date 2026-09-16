@@ -1303,8 +1303,8 @@ function _initCmEditor() {
     } catch (_) {}
     // Sync the line-number gutter to the saved setting (CM's native gutter).
     try { _cmHandle.setLineNumbers(loadLineNumbers()); } catch (_) {}
-    // Force CM to re-measure line metrics after the custom editor font
-    // ('AmelieWideTick') finishes loading. Without this CM measures line HEIGHT
+    // Force CM to re-measure line metrics after the editor's web font
+    // (Inter, or whichever family is picked — they are all bundled woff2) loads. Without this CM measures line HEIGHT
     // with the fallback font at create time and never updates — on a big note the
     // wrong per-line height makes the virtualized viewport miscalculate (symptom:
     // the editor collapses to a few visible rows after a large paste). The legacy
