@@ -271,61 +271,7 @@
   --link: #9ccfd8;
 }
 
-/* ── THEME: Gruvbox ─────────────────────────────────────────── */
-[data-theme="gruvbox"] {
-  --bg-0: #1d2021;
-  --bg-1: #282828;
-  --bg-2: #32302f;
-  --bg-3: #3c3836;
-  --bg-4: #504945;
-  --border: #504945;
-  --border-light: #665c54;
-  --text-0: #ebdbb2;
-  --text-1: #d5c4a1;
-  --text-2: #a89984;
-  --text-3: #7c6f64;
-  --accent: #b8bb26;
-  --accent-dim: #8a9120;
-  --accent-glow: rgba(184,187,38,0.12);
-  --active-bg: rgba(184,187,38,0.10);
-  --active-border: #b8bb26;
-  --red: #fb4934;
-  --green: #b8bb26;
-  --yellow: #fabd2f;
-  --h1: #fabd2f;
-  --h2: #b8bb26;
-  --h3: #8ec07c;
-  --h4: #d8a657;
-  --link: #83a598;
-}
 
-/* ── THEME: Nord ────────────────────────────────────────────── */
-[data-theme="nord"] {
-  --bg-0: #2e3440;
-  --bg-1: #272c38;
-  --bg-2: #3b4252;
-  --bg-3: #434c5e;
-  --bg-4: #4c566a;
-  --border: #434c5e;
-  --border-light: #545f74;
-  --text-0: #eceff4;
-  --text-1: #d8dee9;
-  --text-2: #94a0b8;
-  --text-3: #616e88;
-  --accent: #88c0d0;
-  --accent-dim: #5e81ac;
-  --accent-glow: rgba(136,192,208,0.12);
-  --active-bg: rgba(136,192,208,0.10);
-  --active-border: #88c0d0;
-  --red: #bf616a;
-  --green: #a3be8c;
-  --yellow: #ebcb8b;
-  --h1: #8fbcbb;
-  --h2: #88c0d0;
-  --h3: #81a1c1;
-  --h4: #5e81ac;
-  --link: #88c0d0;
-}
 
 /* ── THEME: One Dark ────────────────────────────────────────── */
 [data-theme="onedark"] {
@@ -617,7 +563,8 @@ html.is-mac #titlebar { padding-left: 72px; }
 /* Folder selected as the target for a new note. It takes the accent LABEL as well
    as the tint, the way an active note does: a tint is a fill, and a fill is what
    hover uses too — with some accents the two land within ΔE 4 of each other no
-   matter how they are tuned (Solarized Dark, Nord). The letters are the signal
+   matter how they are tuned (Solarized Dark; it also held for Nord, removed in
+   v1.0.78). The letters are the signal
    hover never gives, so the two states can never be read for one another. */
 .tree-folder.selected {
   background: var(--active-bg); color: var(--accent);

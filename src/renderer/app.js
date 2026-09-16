@@ -1330,8 +1330,6 @@ const THEMES = {
   solarized:     { label: 'Solarized',     attr: 'solarized' },
   light:         { label: 'Light Paper',   attr: 'light'     },
   rose:          { label: 'Rosé Pine',     attr: 'rose'      },
-  gruvbox:       { label: 'Gruvbox',       attr: 'gruvbox'   },
-  nord:          { label: 'Nord',          attr: 'nord'      },
   onedark:       { label: 'One Dark',      attr: 'onedark'   },
   dracula:       { label: 'Dracula',       attr: 'dracula'   },
 };
@@ -2226,8 +2224,11 @@ function setupTheme() {
   // be custom, so the custom ones are loaded FIRST).
   loadCustomThemes().finally(() => {
     let savedTheme = (() => { try { return localStorage.getItem('inkwell-theme'); } catch(_) { return null; } })();
-    // Themes that were renamed after shipping. Without this the check below finds
-    // no such key and silently drops the profile back to the default theme.
+    // Themes that were RENAMED after shipping: carried over, because the check below
+    // finds no such key and would silently drop the profile back to the default.
+    // (Themes that were DELETED are not listed — Gruvbox and Nord, removed in
+    // v1.0.78, have no successor to point at, so a profile on one of them does fall
+    // back to the default theme, which is the honest outcome of deleting it.)
     const RENAMED = { obsidian: 'graphite' };   // v1.0.69 -> v1.0.70
     if (savedTheme && RENAMED[savedTheme]) savedTheme = RENAMED[savedTheme];
     applyTheme(savedTheme && THEMES[savedTheme] ? savedTheme : DEFAULT_THEME);
