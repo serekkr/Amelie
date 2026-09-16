@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════
    AMELIE — Multi-theme notes app
-   Fonts: Helvetica at 15px (app + notes, the default the font picker starts on;
+   Fonts: Inter at 15px (app + notes, the default the font picker starts on;
           the sidebar tree sits a pixel below, at 14px)
           + Roboto Mono for code, paths and commands, whatever font you pick
 ═══════════════════════════════════════════════════════════════ */
@@ -47,9 +47,17 @@
   --link: #5b8def;
   /* The default font, and the value the very first paint uses — applyAppearance
      overwrites both from the saved pref a moment later, so keep them equal to
-     FONTS.helvetica (app.js) or startup flashes one typeface before settling on another. */
-  --editor-font: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --ui-font: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+     FONTS.inter (app.js) or startup flashes one typeface before settling on another.
+     INTER, not Helvetica (2026-09-16): 'Helvetica Neue' and 'Helvetica' are not
+     installed on Linux, so fontconfig substituted them — Nimbus Sans here — and the
+     app was drawn in a typeface nobody chose, thin and uneven at 15px. Inter ships
+     inside the app (fonts.css, woff2, offline), so every machine gets the same
+     letterforms. It carries weights 300/400/500; heavier text is synthesised.
+     The stack is FONTS.inter exactly — 'Inter', sans-serif — not Inter followed by
+     the old Helvetica chain: the generic keyword is only what shows for the instant
+     before the bundled woff2 swaps in, and the two stacks must stay identical. */
+  --editor-font: 'Inter', sans-serif;
+  --ui-font: 'Inter', sans-serif;
   --radius: 6px;
   /* Appearance — tunable from settings */
   --tree-item-py: 1px;
@@ -3406,7 +3414,7 @@ body.split-open .pane-flash::after {
   position: absolute; inset: 0; z-index: 50;
   display: flex; flex-direction: column;
   background: var(--bg-0);
-  font-family: var(--ui-font);   /* the whole PDF view follows the app font (Helvetica by default) */
+  font-family: var(--ui-font);   /* the whole PDF view follows the app font (Inter by default) */
 }
 /* Image viewer (photos in the sidebar): same shell as the PDF viewer */
 #img-view-overlay {

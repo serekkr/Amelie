@@ -1380,7 +1380,11 @@ const FONTS = {
 // which line read it first. Keep --editor-font / --ui-font in style.css (and --uf in
 // vault-setup.html) on the SAME stack, or the first paint flashes one typeface before
 // applyAppearance settles on this one.
-const DEFAULT_FONT = 'helvetica';
+// INTER since 2026-09-16: the default was 'helvetica', and no Linux machine has
+// Helvetica — fontconfig quietly answered with Nimbus Sans (and 'Helvetica Neue' with
+// Noto Sans), so the app was drawn in whatever the system happened to substitute.
+// Inter is bundled (fonts.css), so the default now renders the same everywhere.
+const DEFAULT_FONT = 'inter';
 
 // The family currently chosen for the editor, for the places that need it as a string
 // (canvas contexts, which cannot inherit CSS).
@@ -1967,7 +1971,7 @@ function loadAppearance() {
     if (saved) {
       // One-time bumps for EXISTING users (migrations of old profiles). A FRESH
       // install skips these (see the else branch) so it starts at the clean
-      // defaults — Helvetica, editor 15px — instead of an oversized 16px.
+      // defaults — Inter, editor 15px — instead of an oversized 16px.
       // One-time bump (v1.0.152): old builds defaulted to editor 14 / tree 13.
       if (!localStorage.getItem('inkwell-fontsize-bump-v1')) {
         if ((prefs.editorFontSize ?? 0) < 16) prefs.editorFontSize = 16;
@@ -2003,15 +2007,25 @@ function loadAppearance() {
         if ((prefs.treeFontSize ?? 14) === 14) prefs.treeFontSize = 13;
         localStorage.setItem('amelie.tree-13-v2', '1');
       }
+      // v1.0.60: the default family moves from Helvetica to Inter — Helvetica is not
+      // installed on Linux, so that default was really fontconfig's substitute (Nimbus
+      // Sans). Same rule as every migration above: only a profile still sitting on the
+      // family it was GIVEN is moved. Any other family is a choice, and stays.
+      // Picking Helvetica back from the font menu survives this — it runs once.
+      if (!localStorage.getItem('amelie.default-inter-v1')) {
+        if ((prefs.editorFont ?? 'helvetica') === 'helvetica') prefs.editorFont = DEFAULT_FONT;
+        localStorage.setItem('amelie.default-inter-v1', '1');
+      }
     } else {
       // Fresh install: mark all migrations done so they never bump this profile;
-      // the empty prefs then fall back to the defaults (Helvetica, editor 15px,
+      // the empty prefs then fall back to the defaults (Inter, editor 15px,
       // sidebar 13px — DEFAULT_FONT and the `??` values in applyAppearance).
       localStorage.setItem('inkwell-fontsize-bump-v1', '1');
       localStorage.setItem('inkwell-editorsize-15-v1', '1');
       localStorage.setItem('inkwell-treesize-13-v1', '1');
       localStorage.setItem('amelie.defaults-helvetica-15-v1', '1');
       localStorage.setItem('amelie.tree-13-v2', '1');
+      localStorage.setItem('amelie.default-inter-v1', '1');
     }
     return prefs;
   } catch(_) { return {}; }
