@@ -142,7 +142,7 @@ const TRANSLATIONS = {
     'sync.restore_ask_pass':   'Backup cifrato: inserisci la password di decrittazione',
     'sync.restore_wrong_pass': 'Password errata — riprova',
     'toast.invalid_name_chars': 'Caratteri speciali non permessi nel nome: / \\ ? % * : | " < >',
-    'toast.name_too_long': 'Il nome può avere al massimo {n} caratteri',
+    'toast.name_too_long': 'Raggiunta la lunghezza massima di {n} caratteri',
     'toast.backup_running':    'Backup in corso…',
     'toast.backup_ok':         'Backup completato',
     'toast.backup_failed':     'Backup fallito',
@@ -1021,7 +1021,7 @@ const TRANSLATIONS = {
     'sync.restore_ask_pass':   'Encrypted backup: enter the decryption password',
     'sync.restore_wrong_pass': 'Wrong password — try again',
     'toast.invalid_name_chars': 'Special characters not allowed in name: / \\ ? % * : | " < >',
-    'toast.name_too_long': 'A name can be at most {n} characters',
+    'toast.name_too_long': 'Maximum length of {n} characters reached',
     'toast.backup_running':    'Backing up…',
     'toast.backup_ok':         'Backup complete',
     'toast.backup_failed':     'Backup failed',
@@ -1769,7 +1769,7 @@ const TRANSLATIONS = {
   // ── DE (translated from the EN catalog) ──
   de: {
     "toast.invalid_name_chars": "Sonderzeichen im Namen nicht erlaubt: / \\ ? % * : | \" < >",
-    "toast.name_too_long": "Ein Name darf höchstens {n} Zeichen lang sein",
+    "toast.name_too_long": "Maximale Länge von {n} Zeichen erreicht",
     "sync.conflict_copies": "Konfliktkopien",
     "sync.conflict_copies_desc": "(Ein = beide Versionen bei Konflikt behalten · Aus = die neueste Version wird behalten)",
     "sync.propagate_deletes": "Löschungen übertragen",
@@ -2554,7 +2554,7 @@ const TRANSLATIONS = {
   // ── ES (translated from the EN catalog) ──
   es: {
     "toast.invalid_name_chars": "Caracteres especiales no permitidos en el nombre: / \\ ? % * : | \" < >",
-    "toast.name_too_long": "Un nombre puede tener como máximo {n} caracteres",
+    "toast.name_too_long": "Se alcanzó la longitud máxima de {n} caracteres",
     "sync.conflict_copies": "Copias de conflicto",
     "sync.conflict_copies_desc": "(Sí = mantener ambas versiones en conflicto · No = se mantiene la versión más reciente)",
     "sync.propagate_deletes": "Propagar eliminaciones",
@@ -3339,7 +3339,7 @@ const TRANSLATIONS = {
   // ── FR (translated from the EN catalog) ──
   fr: {
     "toast.invalid_name_chars": "Caractères spéciaux non autorisés dans le nom : / \\ ? % * : | \" < >",
-    "toast.name_too_long": "Un nom peut comporter au maximum {n} caractères",
+    "toast.name_too_long": "Longueur maximale de {n} caractères atteinte",
     "sync.conflict_copies": "Copies de conflit",
     "sync.conflict_copies_desc": "(Activé = garder les deux versions en cas de conflit · Désactivé = la version la plus récente est conservée)",
     "sync.propagate_deletes": "Propager les suppressions",
@@ -4124,7 +4124,7 @@ const TRANSLATIONS = {
   // ── PL (translated from the EN catalog) ──
   pl: {
     "toast.invalid_name_chars": "Znaki specjalne niedozwolone w nazwie: / \\ ? % * : | \" < >",
-    "toast.name_too_long": "Nazwa może mieć najwyżej {n} znaków",
+    "toast.name_too_long": "Osiągnięto maksymalną długość {n} znaków",
     "sync.conflict_copies": "Kopie konfliktów",
     "sync.conflict_copies_desc": "(Wł. = zachowaj obie wersje przy konflikcie · Wył. = zachowywana jest najnowsza wersja)",
     "sync.propagate_deletes": "Propaguj usunięcia",
@@ -4909,7 +4909,7 @@ const TRANSLATIONS = {
   // ── RO (translated from the EN catalog) ──
   ro: {
     "toast.invalid_name_chars": "Caractere speciale nepermise în nume: / \\ ? % * : | \" < >",
-    "toast.name_too_long": "Un nume poate avea cel mult {n} caractere",
+    "toast.name_too_long": "A fost atinsă lungimea maximă de {n} caractere",
     "sync.conflict_copies": "Copii de conflict",
     "sync.conflict_copies_desc": "(Activat = păstrează ambele versiuni la conflict · Dezactivat = se păstrează cea mai recentă versiune)",
     "sync.propagate_deletes": "Propagă ștergerile",
