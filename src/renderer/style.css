@@ -771,17 +771,19 @@ kbd {
 .note-breadcrumb .crumb-note { color: var(--text-0); font-weight: 500; }
 .note-breadcrumb .crumb-sep { padding: 0 4px; color: var(--text-3); user-select: none; }
 /* Inline rename field inside the breadcrumb (double-click / right-click).
-   TALLER, not wider: at `padding: 0 4px` the box was a slit exactly as tall as
-   the text. Only the VERTICAL padding was added — the horizontal padding and
-   the 80px floor stay as they were, so the field keeps the width it always had
-   (the browser's default 20-character input). The negative margin gives the new
-   vertical padding back to the row, so opening the field does not push the
-   title line taller. */
+   NO BOX: the bordered field was the browser's default 20-character input, so a
+   longer name scrolled out of sight inside a frame that never grew. The frame is
+   gone — no border, no background, no padding of its own — and the field takes
+   the rest of the title row (`flex: 1`), so what you see while typing is just
+   the name, selected, with room to keep typing. Font and padding match the
+   .crumb span it replaces, so the text does not shift when the field opens. */
 .crumb-rename-input {
   font-family: var(--ui-font); font-size: 15px; font-weight: 500;
-  background: var(--bg-0); color: var(--text-0);
-  border: 1px solid var(--accent); border-radius: 3px;
-  padding: 4px 4px; margin: -4px 0; outline: none; min-width: 80px;
+  line-height: 1.3;
+  background: transparent; color: var(--text-0);
+  border: none; border-radius: 0;
+  padding: 0 1px; margin: 0; outline: none;
+  flex: 1 1 auto; min-width: 0;
 }
 /* Inline rename field for the Draw title. */
 .canvas-title-input {
