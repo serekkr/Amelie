@@ -1280,15 +1280,17 @@ kbd {
      the tables have to agree: they drifted apart once already. */
   --code-bg: color-mix(in srgb, color-mix(in srgb, var(--link) 40%, #000) 28%, var(--bg-0));
 }
-/* Graphite keeps its code panel GREY. The rule above builds the panel from the theme's
-   link, which everywhere else ties it to the palette; this palette has no blue in any
-   of its surfaces, and a blue slab under the code was the one thing in it that did not
-   belong. Mixed from --text-0 over the page rather than written flat, so it tracks the
-   palette: 6% lands on #2c2c2c, one rung above the page — the relationship a code block
-   has in the screenshot the theme was measured from. The extra :root raises the
-   specificity over the plain :root rule above; inside the theme block it would lose. */
+/* Graphite keeps its code panel GREY, and BELOW the page. The rule above builds the
+   panel from the theme's link, which everywhere else ties it to the palette; this
+   palette has no blue in any of its surfaces, and a blue slab under the code was the
+   one thing in it that did not belong. The first grey tried was one rung UP (#2c2c2c),
+   which is the sidebar's colour exactly — a code block then read as the same surface
+   as the tree instead of as a recess in the page. Black mixed into the page instead:
+   22% lands on #1a1a1a, a clear step below it. Mixed rather than written flat so it
+   tracks --bg-0. The extra :root raises the specificity over the plain :root rule
+   above; inside the theme block it would lose. */
 :root[data-theme="graphite"] {
-  --code-bg: color-mix(in srgb, var(--text-0) 6%, var(--bg-0));
+  --code-bg: color-mix(in srgb, #000 22%, var(--bg-0));
 }
 [data-theme="light"] {
   --hl-comment: #6e7781;
