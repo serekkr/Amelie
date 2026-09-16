@@ -407,9 +407,9 @@
   --text-1: #b2b2b2;
   --text-2: #8a8a8a;
   --text-3: #5c5c5c;
-  --accent: #7f6df2;
-  --accent-dim: #5a4bc4;
-  --accent-glow: rgba(127,109,242,0.13);
+  --accent: #4f7fd4;
+  --accent-dim: #35589a;
+  --accent-glow: rgba(79,127,212,0.13);
   /* The selected row is GREY here, not a tint of the accent as in every other theme:
      in the screenshot this palette comes from, the open note sits on #424242 — plain
      lighter grey — and that flatness is half of what the theme looks like. White at
@@ -417,15 +417,22 @@
      on #3e3e3e. The accent still marks the row: --active-border, the folder icons and
      the buttons keep it. */
   --active-bg: rgba(255,255,255,0.10);
-  --active-border: #7f6df2;
+  --active-border: #4f7fd4;
   --red: #e5534b;
   --green: #4caf7d;
   --yellow: #d6a344;
-  --h1: #a48cff;
-  --h2: #8f79f0;
-  --h3: #7f6df2;
-  --h4: #b7a6ff;
-  --link: #6aa8f0;
+  --h1: #8fb6ec;
+  --h2: #6f9ee2;
+  --h3: #4f7fd4;
+  --h4: #a9c8f0;
+  /* The link stays a step LIGHTER than the accent on purpose. With a navy accent the
+     two are the same hue, and the house rule is that a link must never read as the
+     accent — here the separation is brightness, not colour. */
+  --link: #7ec0f5;
+  /* --code-bg is NOT set here: it is defined in a :root block further down the file,
+     which has the same specificity as [data-theme=…] and comes later, so a value
+     written here would lose. Graphite's grey code panel is set with :root[data-theme]
+     right after that definition — search --code-bg. */
 }
 
 /* ════════════════════════════════════════════════════════════ */
@@ -1272,6 +1279,16 @@ kbd {
      deep navy that sits BELOW the page. One variable because the editor, the preview and
      the tables have to agree: they drifted apart once already. */
   --code-bg: color-mix(in srgb, color-mix(in srgb, var(--link) 40%, #000) 28%, var(--bg-0));
+}
+/* Graphite keeps its code panel GREY. The rule above builds the panel from the theme's
+   link, which everywhere else ties it to the palette; this palette has no blue in any
+   of its surfaces, and a blue slab under the code was the one thing in it that did not
+   belong. Mixed from --text-0 over the page rather than written flat, so it tracks the
+   palette: 6% lands on #2c2c2c, one rung above the page — the relationship a code block
+   has in the screenshot the theme was measured from. The extra :root raises the
+   specificity over the plain :root rule above; inside the theme block it would lose. */
+:root[data-theme="graphite"] {
+  --code-bg: color-mix(in srgb, var(--text-0) 6%, var(--bg-0));
 }
 [data-theme="light"] {
   --hl-comment: #6e7781;

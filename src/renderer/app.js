@@ -1323,6 +1323,7 @@ function _initCmEditor() {
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
   serekkr:       { label: 'Serekkr',       attr: 'serekkr'   },
+  graphite:      { label: 'Graphite',      attr: 'graphite'  },
   'github-dark': { label: 'Green Dark',     attr: ''          },
   navy:          { label: 'Navy',          attr: 'navy'      },
   amber:         { label: 'Amber Dark',    attr: 'amber'     },
@@ -1333,7 +1334,6 @@ const THEMES = {
   nord:          { label: 'Nord',          attr: 'nord'      },
   onedark:       { label: 'One Dark',      attr: 'onedark'   },
   dracula:       { label: 'Dracula',       attr: 'dracula'   },
-  graphite:      { label: 'Graphite',      attr: 'graphite'  },
 };
 
 // The theme a fresh profile gets, and the one anything falls back to (a deleted custom
