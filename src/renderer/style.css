@@ -383,6 +383,51 @@
   --link: #8be9fd;
 }
 
+/* ── THEME: Graphite ───────────────────────────────────────── */
+/* The neutral graphite the user asked for, sampled pixel by pixel from the
+   screenshot they sent (font.png) rather than guessed: editor #212121, sidebar
+   #2c2c2c, selected row #424242, text #d8d8d8, sidebar text #b2b2b2 — those five
+   are measurements, the rungs between them are filled in to keep the ladder even.
+   Note the order: here the SIDEBAR is lighter than the page you write on, the
+   opposite of every other theme in this file, and that is what makes the writing
+   surface read as the front-most thing. Greys are strictly R=G=B; the display
+   this is used on turns any blue-leaning grey purple (see the note at the top).
+   The accent is a restrained violet — the one colour in an otherwise colourless
+   palette — and the in-app colour picker overrides it (with --accent-dim/glow and
+   the two --active-* that must move with it) for anyone who wants another. */
+[data-theme="graphite"] {
+  --bg-0: #212121;
+  --bg-1: #2c2c2c;
+  --bg-2: #303030;
+  --bg-3: #363636;
+  --bg-4: #424242;
+  --border: #3a3a3a;
+  --border-light: #4d4d4d;
+  --text-0: #d8d8d8;
+  --text-1: #b2b2b2;
+  --text-2: #8a8a8a;
+  --text-3: #5c5c5c;
+  --accent: #7f6df2;
+  --accent-dim: #5a4bc4;
+  --accent-glow: rgba(127,109,242,0.13);
+  /* The selected row is GREY here, not a tint of the accent as in every other theme:
+     in the screenshot this palette comes from, the open note sits on #424242 — plain
+     lighter grey — and that flatness is half of what the theme looks like. White at
+     10% over the sidebar's #2c2c2c lands on exactly that, and over the page's #212121
+     on #3e3e3e. The accent still marks the row: --active-border, the folder icons and
+     the buttons keep it. */
+  --active-bg: rgba(255,255,255,0.10);
+  --active-border: #7f6df2;
+  --red: #e5534b;
+  --green: #4caf7d;
+  --yellow: #d6a344;
+  --h1: #a48cff;
+  --h2: #8f79f0;
+  --h3: #7f6df2;
+  --h4: #b7a6ff;
+  --link: #6aa8f0;
+}
+
 /* ════════════════════════════════════════════════════════════ */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

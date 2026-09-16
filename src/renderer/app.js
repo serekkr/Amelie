@@ -1333,6 +1333,7 @@ const THEMES = {
   nord:          { label: 'Nord',          attr: 'nord'      },
   onedark:       { label: 'One Dark',      attr: 'onedark'   },
   dracula:       { label: 'Dracula',       attr: 'dracula'   },
+  graphite:      { label: 'Graphite',      attr: 'graphite'  },
 };
 
 // The theme a fresh profile gets, and the one anything falls back to (a deleted custom
@@ -2225,13 +2226,10 @@ function setupTheme() {
   // be custom, so the custom ones are loaded FIRST).
   loadCustomThemes().finally(() => {
     let savedTheme = (() => { try { return localStorage.getItem('inkwell-theme'); } catch(_) { return null; } })();
-    // Themes that no longer exist. The check below finds no such key and would
-    // silently drop the profile back to the DEFAULT theme, which is not where its
-    // owner was. The grey theme of v1.0.69/70 (shipped as obsidian, renamed
-    // graphite) was withdrawn in favour of Nord, which was already here — so that
-    // is where a profile still pointing at it lands.
-    const RETIRED = { obsidian: 'nord', graphite: 'nord' };
-    if (savedTheme && RETIRED[savedTheme]) savedTheme = RETIRED[savedTheme];
+    // Themes that were renamed after shipping. Without this the check below finds
+    // no such key and silently drops the profile back to the default theme.
+    const RENAMED = { obsidian: 'graphite' };   // v1.0.69 -> v1.0.70
+    if (savedTheme && RENAMED[savedTheme]) savedTheme = RENAMED[savedTheme];
     applyTheme(savedTheme && THEMES[savedTheme] ? savedTheme : DEFAULT_THEME);
     paintAllThemePreviews();
   });
