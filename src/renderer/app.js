@@ -496,18 +496,22 @@ function _applyTabSplit(tab) {
 function renderTabBar() {
   saveSession();
   const list = $('tab-list');
-  // On the ToDo board the tab strip goes away. The board IS a tab, so the row sat there
-  // saying "what else is open" while being read as "where am I" — called confusing on
-  // 2026-09-20. The tabs go, and so does the new-tab + beside them: a button that opens
-  // a note belongs to the strip it opens it into, and on the board there is no strip.
-  // The focus toggle and the draggable stretch stay, so the title bar still drags.
+  // On the ToDo board and in the graph the tab strip goes away. Each of them IS a tab,
+  // so the row sat there saying "what else is open" while being read as "where am I" —
+  // called confusing on 2026-09-20 for ToDo and on 2026-09-21 for the graph. The tabs
+  // go, and so does the new-tab + beside them: a button that opens a note belongs to
+  // the strip it opens it into, and on these two there is no strip. The focus toggle
+  // and the draggable stretch stay, so the title bar still drags.
+  // A drawing is NOT in the list: it is a document you edit and keep open alongside
+  // notes, and switching between the two is exactly what the tabs are for.
   // ONE class, and the stylesheet decides what it hides — several inline styles would
-  // be several places to forget. Decided here rather than in showTodoView/hideTodoView
+  // be several places to forget. Decided here rather than in each view's show/hide
   // because renderTabBar runs on every tab change, so it is derived from what is on
   // screen and cannot be left behind by an exit path that forgot to undo it: that is
   // exactly how a hidden strip becomes permanently hidden.
+  const STRIPLESS_VIEWS = ['todo', 'mindmap'];
   const bar = $('tab-bar');
-  if (bar) bar.classList.toggle('on-todo', !!(tabs[activeTabIdx] && tabs[activeTabIdx].type === 'todo'));
+  if (bar) bar.classList.toggle('on-todo', !!(tabs[activeTabIdx] && STRIPLESS_VIEWS.includes(tabs[activeTabIdx].type)));
   list.innerHTML = '';
   tabs.forEach((tab, i) => {
     const el = document.createElement('div');
@@ -3202,9 +3206,20 @@ async function openNote(node, opts) {
     }
   }
 
-  // Replace the active tab in-place (single-tab navigation), but only if it's a note tab
-  if (activeTabIdx !== -1 && !tabs[activeTabIdx]?.type) {
-    const tab = tabs[activeTabIdx];
+  // Which tab does this note land in? The active one, when it holds a note — that is
+  // single-tab navigation, and it is why clicking note after note does not pile up tabs.
+  let into = (activeTabIdx !== -1 && !tabs[activeTabIdx]?.type) ? activeTabIdx : -1;
+  // The active tab is a VIEW — the ToDo board or the graph. Those are places you visit,
+  // not documents you keep, so a note clicked from one used to open a tab of its own,
+  // and a session that went back and forth grew one tab per visit (measured 2026-09-21:
+  // board, click, graph, click → five tabs from two notes). Reuse the note tab that is
+  // already open instead, the most recent one, and leave the view where it is so you can
+  // go back to it.
+  if (into === -1) {
+    for (let i = tabs.length - 1; i >= 0; i--) if (!tabs[i].type) { into = i; break; }
+  }
+  if (into !== -1) {
+    const tab = tabs[into];
     // The same note may already be open in another tab (only the arrows get
     // here, having skipped the switch above). Start from ITS content, which can
     // hold unsaved edits: blanking would show the on-disk version, and the twin
@@ -3220,7 +3235,7 @@ async function openNote(node, opts) {
     tab.cursorPos = 0;
     tab.created  = node.created;
     tab.modified = node.modified;
-    await switchTab(activeTabIdx);
+    await switchTab(into);
     return;
   }
 
