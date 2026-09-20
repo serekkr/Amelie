@@ -414,6 +414,23 @@ class SyncManager {
              sinceMin: Math.round((Date.now() - at) / 60000) };
   }
 
+  /**
+   * Is there an edit that no backup has copied yet? Compares the vault as it is now
+   * against the fingerprint recorded by the last run that actually WROTE something
+   * (`vaultSig` in sync-state.json, restored into `_lastBackupSig` at startup — a
+   * skip deliberately leaves it alone, so it always describes a real copy).
+   *
+   * False when there is no record at all: that case is already "overdue" on the
+   * clock, and answering true here as well would only duplicate it. Any error
+   * walking the vault answers false too — a catch-up is an optimisation, and the
+   * interval timer is still behind it.
+   */
+  _backupChangePending() {
+    if (!this._lastBackupSig) return false;
+    try { return this._vaultSignature() !== this._lastBackupSig; }
+    catch (_) { return false; }
+  }
+
   // Runs missed while the app was closed, made up shortly after launch.
   //
   // The backup catch-up is NOT forced: an untouched vault still skips, so
@@ -434,13 +451,31 @@ class SyncManager {
     if (this._anyBackupDestination()) {
       const min = this._backupIntervalMinutes();
       const { overdue, sinceMin } = this._overdueBy('lastBackupAt', min);
-      if (overdue) {
-        console.log(sinceMin == null
-          ? '[Sync] No record of a previous backup — catching up'
-          : `[Sync] Last backup ${sinceMin} min ago, past the ${min} min interval — catching up`);
+      // The clock alone is not enough to decide this, because a SKIPPED run writes
+      // `lastBackupAt` exactly like a real copy does (see _runBackup — it has to, or
+      // an untouched vault files a "backup skipped" on every single launch). So the
+      // field means "the last time a run reached a conclusion", not "the last time
+      // anything was copied", and a restart that lands inside the interval finds it
+      // recent, schedules no catch-up, and starts the interval timer again from zero.
+      // Restart more often than the interval — an app reinstalled six times in a
+      // morning, or a laptop opened and closed — and the periodic run never arrives,
+      // with a real edit sitting unsaved to any destination the whole time. Reported
+      // 2026-09-20: a note written at 11:27 was still in no archive at 12:08, while
+      // the state file said the last backup was 57 minutes ago.
+      // So ask the other question too, the one that does not depend on the clock:
+      // is there actually something to copy? A pending change means a copy is due
+      // whatever the timestamp says. On a quiet vault the fingerprints match, no job
+      // is queued, and the silence the skip-collapsing bought is kept.
+      const pending = this._backupChangePending();
+      if (overdue || pending) {
+        console.log(overdue
+          ? (sinceMin == null
+              ? '[Sync] No record of a previous backup — catching up'
+              : `[Sync] Last backup ${sinceMin} min ago, past the ${min} min interval — catching up`)
+          : `[Sync] Vault changed since the last copy (last run ${sinceMin} min ago, under the ${min} min interval) — catching up`);
         jobs.push({ what: 'backup', run: () => this._anyBackupDestination() && this.runBackup({ manual: false }) });
       } else {
-        console.log(`[Sync] Last backup ${sinceMin} min ago — under the ${min} min interval, nothing to catch up`);
+        console.log(`[Sync] Last backup ${sinceMin} min ago and the vault is unchanged — nothing to catch up`);
       }
     }
 
@@ -756,7 +791,7 @@ class SyncManager {
       if (errs.length) {
         const msg = errs.join(' · ');
         this._setStatus('error', msg, meta);
-        return { success: false, error: msg, results, lastSync: this.lastSync };
+        return { success: false, error: SyncManager._publicError(msg), results, lastSync: this.lastSync };
       }
       this._lastBackupSig = sig;   // remember success → skip next time if unchanged
       this._recordBackupState(sig, results);   // when, and what was written where
@@ -770,7 +805,7 @@ class SyncManager {
     } catch (e) {
       console.error('[Sync] Backup failed:', e);
       this._setStatus('error', e.message, meta);
-      return { success: false, error: e.message };
+      return { success: false, error: SyncManager._publicError(e.message) };
     }
   }
 
@@ -894,7 +929,7 @@ class SyncManager {
     } catch (e) {
       console.error('[Sync] Two-way failed:', e);
       this._setStatus('error', e.message, meta);
-      return { success: false, error: e.message };
+      return { success: false, error: SyncManager._publicError(e.message) };
     }
   }
 
@@ -1201,10 +1236,77 @@ class SyncManager {
       AMELIE_SMB_PASS:   String(cfg.password || ''),
       AMELIE_SMB_DOMAIN: String(cfg.domain || 'WORKGROUP'),
     };
-    const { stdout } = await execFileAsync(bin, args, {
-      env, timeout: opts.timeout || 120000, maxBuffer: opts.maxBuffer || 64 * 1024 * 1024,
-    });
-    return stdout;
+    try {
+      const { stdout } = await execFileAsync(bin, args, {
+        env, timeout: opts.timeout || 120000, maxBuffer: opts.maxBuffer || 64 * 1024 * 1024,
+      });
+      return stdout;
+    } catch (e) {
+      // Re-throw with a sentence instead of child_process's own. See _smbFailureText:
+      // this message travels all the way to the notification bell.
+      throw new Error(SyncManager._smbFailureText(e, env.AMELIE_SMB_HOST, env.AMELIE_SMB_SHARE));
+    }
+  }
+
+  /**
+   * Last stop before an error reaches the user: the home directory becomes `~`.
+   *
+   * Asked for on 2026-09-20 — "non mi piace che si vedeva il mio path". The SMB
+   * helper's own failures are already rewritten into one short sentence
+   * (_smbFailureText), but they are not the only way a path can surface: an fs or
+   * tar error carries the file it choked on, and those messages are built by Node,
+   * not here. Scrubbing at the exit covers every source at once, including the ones
+   * added later, without having to guess their wording.
+   *
+   * Only the home prefix goes: `/home/me/Documents/vault/a.md` reads
+   * `~/Documents/vault/a.md`, which still says which file and no longer says who.
+   * split/join rather than a regex — a home directory can hold characters that
+   * would otherwise have to be escaped.
+   */
+  static _publicError(msg) {
+    const s = String(msg == null ? '' : msg);
+    let home = '';
+    try { home = require('os').homedir() || ''; } catch (_) {}
+    return home && home !== '/' ? s.split(home).join('~') : s;
+  }
+
+  /**
+   * Why a helper run failed, in ONE short line naming the host.
+   *
+   * promisify(execFile) rejects with `Command failed: <binary> <every argument>`
+   * followed by the whole of stderr, and that string went straight into the bell:
+   * a notification three lines long, opening with the absolute path of a binary,
+   * that never actually said the server had not answered. Reported 2026-09-20 —
+   * "command failed" reads like the app broke, not like the NAS is off.
+   *
+   * The classification does not read go-smb2's prose, which is not stable: the Go
+   * helper prints `SMBERR:<TOKEN>` for exactly this purpose (see smbErrToken in
+   * smb-helper/main.go), and the same tokens are already read this way by the
+   * connection test in wireguardManager.js. The wording is ENGLISH, matching the
+   * notification head it is appended to ("Sync failed: …"); the Go helper's own
+   * prose is Italian, which is half of why the old line read as two glued-together
+   * messages. These strings do not go through i18n — no engine message does.
+   *
+   * Nothing secret can reach the text: credentials go to the helper through the
+   * ENVIRONMENT, never argv, so neither the preamble nor stderr can carry a password.
+   */
+  static _smbFailureText(e, host, share) {
+    const err = String((e && e.stderr) || '');
+    const at = host ? ` to ${host}` : '';
+    const on = host ? ` on ${host}` : '';
+    // A timeout kills the child (SIGTERM, killed=true) and usually leaves stderr
+    // empty, so it has to be recognised from the process, not from its output.
+    if (e && e.killed) return `connection${at} timed out`;
+    if (/dial tcp|i\/o timeout|no route to host|connection refused|network is unreachable|no such host|context deadline/i.test(err))
+      return `failed to connect${at}`;
+    if (/SMBERR:BAD_NETWORK_NAME/.test(err)) return `share "${share || ''}" not found${on}`;
+    if (/SMBERR:(LOGON_FAILURE|WRONG_PASSWORD|NO_SUCH_USER|ACCOUNT_RESTRICTION|ACCOUNT_DISABLED|ACCOUNT_LOCKED_OUT|PASSWORD_EXPIRED)/.test(err))
+      return `wrong username or password${on}`;
+    if (/SMBERR:ACCESS_DENIED/.test(err)) return `access denied${on}`;
+    // Anything unrecognised: the helper's OWN first line, capped — never the
+    // "Command failed: <binary> <args>" preamble, which is the thing being removed.
+    const first = err.split('\n').map(x => x.trim()).filter(x => x && !/^SMBERR:/.test(x))[0];
+    return first ? first.slice(0, 120) : `sync failed${on}`;
   }
 
   /** Same as _smb but parses the JSON the helper prints (list/listr/stat). */
@@ -1265,10 +1367,13 @@ class SyncManager {
     if (!destDir) throw new Error('createArchive: destinazione mancante');
     const tar = require('tar');
     if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-    const d = new Date();
-    const p2 = (n) => String(n).padStart(2, '0');
-    const ts = `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
-    const file = path.join(destDir, `amelie-vault-${ts}.tar.gz`);
+    // The SAME stamp the dated snapshot folders use (_dateStamp), so an archive and a
+    // folder made by the same run are named alike: amelie-vault-2026-09-20_12-30-00.
+    // This used to carry its own copy of the formatting, compressed to YYYYMMDD-HHMMSS,
+    // so the two halves of one backup read as two different conventions in the same
+    // directory. Older archives keep their old names — nothing is renamed on disk — and
+    // both spellings are still recognised for retention (_ARCHIVE_RE).
+    const file = path.join(destDir, `amelie-vault-${this._dateStamp()}.tar.gz`);
     const vaultDir = path.dirname(this.notesDir);   // <vault>; notes/ + attachments/ are siblings here
     // Bundle notes/ AND attachments/ (images, PDFs — they live at the vault root,
     // siblings of notes/, since the attachment-location migration). Without
@@ -1362,6 +1467,28 @@ class SyncManager {
         try { fs.rmSync(path.join(baseDir, name), { recursive: true, force: true }); console.log('[Local] pruned old dated folder', name); } catch (_) {}
       }
     } catch (_) { /* retention is best-effort */ }
+  }
+
+  /**
+   * Matches a vault archive under EITHER naming: the current
+   * `amelie-vault-YYYY-MM-DD_HH-MM-SS.tar.gz` and the older
+   * `amelie-vault-YYYYMMDD-HHMMSS.tar.gz` that destinations still hold from
+   * before the rename. Both have to be recognised or the ones written under the
+   * other spelling are never rotated and the folder grows without limit.
+   */
+  static get _ARCHIVE_RE() { return /^amelie-vault-(\d{4})-?(\d{2})-?(\d{2})[_-](\d{2})-?(\d{2})-?(\d{2})\.tar\.gz$/; }
+
+  /**
+   * A sortable YYYYMMDDHHMMSS lifted out of either spelling, or null for a name
+   * that is not one of ours. Sorting the NAMES instead does the wrong thing the
+   * moment the two spellings share a directory: `amelie-vault-2026-09-17_…` and
+   * `amelie-vault-20260917-…` agree up to "2026", and then '-' (0x2D) sorts below
+   * '0' (0x30), so every new archive looks OLDER than every old one and retention
+   * deletes the newest first. Compare the parsed stamps, never the names.
+   */
+  static _archiveStamp(name) {
+    const m = SyncManager._ARCHIVE_RE.exec(String(name || ''));
+    return m ? m.slice(1, 7).join('') : null;
   }
 
   // Retention: keep only the newest `keepLast` amelie-vault-*.tar.gz in dir.
@@ -2068,8 +2195,11 @@ class SyncManager {
   async _smbPruneArchives(cfg, subPath, keepLast) {
     const list = await this._smbJson(cfg, ['list', subPath], { timeout: 30000 });
     if (!Array.isArray(list)) return;
-    const found = list.filter(e => !e.dir && /^amelie-vault-\d{8}-\d{6}\.tar\.gz$/.test(e.name || '')).map(e => e.name);
-    const sorted = [...new Set(found)].sort();   // timestamp in name → chronological
+    const found = [...new Set(list.filter(e => !e.dir).map(e => e.name))]
+      .map(n => ({ n, k: SyncManager._archiveStamp(n) }))
+      .filter(x => x.k);                          // ours, in either spelling
+    // By the PARSED stamp, oldest first — see _archiveStamp for why not by name.
+    const sorted = found.sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : 0)).map(x => x.n);
     const toDelete = sorted.slice(0, Math.max(0, sorted.length - keepLast));
     for (const f of toDelete) { try { await this._smb(cfg, ['del', subPath + '/' + f], { timeout: 60000 }); } catch (_) {} }
     if (toDelete.length) console.log('[Samba] Rotation: removed', toDelete.length, 'old remote archives');
@@ -2298,6 +2428,9 @@ class SyncManager {
   // Without it every run looked identical and an automatic backup was
   // indistinguishable from a scheduled two-way sync.
   _setStatus(status, error = null, meta = null) {
+    // Scrubbed HERE so no caller can forget: this is the one door every status,
+    // and so every notification, goes through. See _publicError.
+    error = error == null ? null : SyncManager._publicError(error);
     this.status = status;
     this.lastError = error;
     if (status === 'syncing') this._syncStartedAt = Date.now();

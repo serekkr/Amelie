@@ -55,11 +55,17 @@ function mgr(cfg = SHARE()) {
 }
 const statePath = () => path.join(ROOT, 'sync-state.json');
 const dropState = () => { try { fs.unlinkSync(statePath()); } catch (_) {} };
-const writeState = (agoMin, cfg = SHARE(), vaultSig = 'sig-1') => {
+// vaultSig defaults to the vault AS IT IS at the moment of the call, i.e. "the last
+// copy is up to date". It used to be the literal 'sig-1', which no vault ever matches
+// — harmless while only the clock decided a catch-up, and wrong the moment the
+// fingerprint started deciding too: every "nothing to catch up" case was really
+// saying "there is an unsaved edit", and would have been right to run a backup.
+// Pass an explicit mismatched string to mean "an edit is pending".
+const writeState = (agoMin, cfg = SHARE(), vaultSig = null) => {
   const m = new SyncManager(NOTES, ATT, CONF); m.config = cfg;
   fs.writeFileSync(statePath(), JSON.stringify({
     lastBackupAt: new Date(Date.now() - agoMin * 60000).toISOString(),
-    vaultSig,
+    vaultSig: vaultSig === null ? m._vaultSignature() : vaultSig,
     dests: m._backupDestSignature(cfg),
   }));
 };
@@ -164,6 +170,90 @@ const writeState = (agoMin, cfg = SHARE(), vaultSig = 'sig-1') => {
   m.reloadConfig(next);                              // switched off during the wait
   await sleep(40);
   check('switching the destination off before it fires cancels it', m._runs.length === 0, JSON.stringify(m._runs));
+}
+
+// ── A change made INSIDE the interval, then a restart ────────────────────────
+// The 2026-09-20 report: a note written at 11:27 was in no archive at 12:08. A skipped
+// run stamps `lastBackupAt` exactly like a real copy (it must, or an untouched vault
+// files a "skipped" on every launch), so after one skip the clock always reads recent;
+// restart inside the interval and the timer starts counting from zero again. Six
+// restarts in a morning and the periodic run never arrives. The clock cannot answer
+// this — only the fingerprint can.
+{
+  writeState(57, SHARE(), 'a-signature-that-is-not-this-vault');
+  const m = mgr();
+  m._loadSyncState();
+  m._scheduleCatchUp();
+  await sleep(40);
+  check('an edit made inside the interval is caught up after a restart', m._runs.length === 1, JSON.stringify(m._runs));
+  check('and it is still not forced, so the copy decides for itself what to write',
+    m._runs[0] && m._runs[0].force === undefined && m._runs[0].manual === false, JSON.stringify(m._runs));
+}
+{
+  const probe = new SyncManager(NOTES, ATT, CONF); probe.config = SHARE();
+  writeState(57, SHARE(), probe._vaultSignature());      // inside the hour AND untouched
+  const m = mgr();
+  m._loadSyncState();
+  m._scheduleCatchUp();
+  await sleep(40);
+  check('a quiet vault inside the interval is still left alone', m._runs.length === 0, JSON.stringify(m._runs));
+}
+
+// ── It sits ABOVE the formats, so it covers all of them ──────────────────────
+// The catch-up queues runBackup; _runBackupInner is what picks the destinations and
+// the formats. Asserted per shape anyway, because "does this also apply to the dated
+// folder and to the tar.gz?" is exactly what was asked.
+{
+  const LOCAL = (folder, archive, archiveOnly) => ({ sync: { enabled: true,
+    local: { enabled: true, path: '/tmp/amelie-x', folder, archive, archiveOnly, intervalMinutes: 60 },
+    vpn: { enabled: false, smb: {} }, webdav: { enabled: false, url: '' } } });
+  const SHAPES = [
+    ['local, dated folder only', LOCAL(true, false, false)],
+    ['local, tar.gz only',       LOCAL(false, true, true)],
+    ['local, folder + tar.gz',   LOCAL(true, true, false)],
+    ['webdav', { sync: { enabled: true, local: { enabled: false, intervalMinutes: 60 },
+       vpn: { enabled: false, smb: {} },
+       webdav: { enabled: true, url: 'https://example.invalid/dav', folder: true, archive: true } } }],
+  ];
+  for (const [what, cfg] of SHAPES) {
+    writeState(57, cfg, 'a-signature-that-is-not-this-vault');
+    const m = mgr(cfg);
+    m._loadSyncState();
+    m._scheduleCatchUp();
+    await sleep(40);
+    check(`a pending change is caught up for ${what}`, m._runs.length === 1, JSON.stringify(m._runs));
+  }
+}
+
+// ── The same question, asked of the two-way sync ─────────────────────────────
+// It needs no fingerprint test of its own, and the two reasons are worth pinning down
+// so nobody "tidies" them away — they are what keeps the backup's bug out of the sync:
+//   1. a skipped tick returns BEFORE runTwoway, and the stamp lives inside the run,
+//      so lastTwowayAt always means "the last real pass" (lastBackupAt does not);
+//   2. the baselines it compares are in memory only, never restored from
+//      sync-state.json, so the first tick after a restart always does a real pass.
+{
+  const cfg = clone(SHARE());
+  cfg.sync.twoway = { enabled: true, transport: 'samba', intervalMinutes: 0.5,
+    smbLan: { host: 'h', share: 's', remoteSubPath: 'amelie/sync' } };
+  const m = mgr(cfg);
+  m._busy = () => false;
+  m._twowayRemoteSignature = async () => 'remote-unchanged';
+  // Like the real one: a pass that happens stamps the clock.
+  m.runTwoway = async (opts) => { m._runs.push({ what: 'twoway', ...(opts || {}) }); m._recordTwowayState(); return { success: true }; };
+
+  check('a fresh manager holds no two-way baselines', m._twLocalSig === undefined && m._twRemoteSig === undefined);
+  await m._twowayTick();
+  check('so the first tick after a restart always runs a pass',
+    m._runs.filter(r => r.what === 'twoway').length === 1, JSON.stringify(m._runs));
+  const stamped = m._syncState?.lastTwowayAt;
+  check('and that pass stamps lastTwowayAt', typeof stamped === 'string' && !Number.isNaN(Date.parse(stamped)), String(stamped));
+
+  m._runs.length = 0;
+  await m._twowayTick();                               // nothing moved either side
+  check('a tick with nothing moved runs no pass', m._runs.length === 0, JSON.stringify(m._runs));
+  check('and, unlike a skipped backup, it does NOT move the clock',
+    m._syncState?.lastTwowayAt === stamped, `${m._syncState?.lastTwowayAt} vs ${stamped}`);
 }
 
 // ── Round trip: the shortcut survives a restart, so an idle vault is not recopied ──

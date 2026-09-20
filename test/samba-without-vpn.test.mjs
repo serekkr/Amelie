@@ -17,6 +17,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -254,6 +255,91 @@ const T = (tw) => SyncManager._twowayTransport(tw);
   const daily = await metaOf(mgr(cfg(1440)), false);
   check('only a pass MORE than an hour apart announces success',
     daily && daily.quiet === false, JSON.stringify(daily));
+}
+
+// ── What a failed run SAYS ───────────────────────────────────────────────────
+// The bell prints "<head>: <error>", and the error used to be child_process's own
+// rejection: "Command failed: /home/…/amelie-smb listr amelie/sync" plus the whole of
+// stderr — six wrapped lines opening with the path of a binary, which never plainly
+// said the server had not answered (screenshot, 2026-09-20). One line now, naming the
+// host, classified from the helper's stable SMBERR tokens rather than go-smb2's prose.
+{
+  const T = (stderr, killed = false) => SyncManager._smbFailureText({ stderr, killed }, '192.168.30.10', 'saturn');
+
+  check('an unreachable network says so, with the IP',
+    T('connessione fallita: dial tcp 192.168.30.10:445: connect: network is unreachable\n')
+      === 'failed to connect to 192.168.30.10', T('connessione fallita: dial tcp 192.168.30.10:445: connect: network is unreachable\n'));
+  check('a refused connection reads the same way',
+    T('dial tcp 192.168.30.10:445: connect: connection refused\n') === 'failed to connect to 192.168.30.10');
+  check('a timeout is told apart from a refusal', T('', true) === 'connection to 192.168.30.10 timed out');
+  check('a wrong share name names the share',
+    T('connect: The specified share name cannot be found\nSMBERR:BAD_NETWORK_NAME\n')
+      === 'share "saturn" not found on 192.168.30.10');
+  check('bad credentials say so, not "command failed"',
+    T('connect: logon failure\nSMBERR:LOGON_FAILURE\n') === 'wrong username or password on 192.168.30.10');
+  check('a permissions problem is its own case',
+    T('SMBERR:ACCESS_DENIED\n') === 'access denied on 192.168.30.10');
+
+  // The whole point: none of it carries the preamble, and none of it is long.
+  const ALL = [
+    T('dial tcp 192.168.30.10:445: connect: network is unreachable\n'), T('', true),
+    T('SMBERR:BAD_NETWORK_NAME\n'), T('SMBERR:LOGON_FAILURE\n'), T('SMBERR:ACCESS_DENIED\n'),
+    T('rename: something odd happened\n'), T(''),
+  ];
+  check('no message carries the "Command failed" preamble', !ALL.some(m => /Command failed/i.test(m)), JSON.stringify(ALL));
+  check('no message leaks the helper path', !ALL.some(m => /amelie-smb|\/home\//.test(m)), JSON.stringify(ALL));
+  check('no message ever prints the SMBERR token', !ALL.some(m => /SMBERR/.test(m)), JSON.stringify(ALL));
+  check('every message fits one line, under 80 chars',
+    ALL.every(m => m.length <= 80 && !m.includes('\n')), JSON.stringify(ALL.map(m => m.length)));
+  check('an unrecognised failure still says something useful',
+    T('rename: something odd happened\n') === 'rename: something odd happened');
+  check('and an empty stderr does not produce an empty notification',
+    T('') === 'sync failed on 192.168.30.10');
+}
+
+// ── The user's home directory never reaches a notification ───────────────────
+// "non mi piace che si vedeva il mio path" (2026-09-20). _smbFailureText handles the
+// helper's own failures, but it is not the only source: an fs or tar error carries the
+// file it choked on, and Node writes those messages, not us. The scrub therefore sits
+// on _setStatus, the single door every status — and so every bell entry — goes through.
+// Driven against the REAL _setStatus, with a stand-in for electron's BrowserWindow, so
+// what is asserted is what the renderer would actually receive.
+{
+  const HOME = os.homedir();
+  const sent = [];
+  const eid = require.resolve('electron');
+  const saved = require.cache[eid];
+  require.cache[eid] = { id: eid, filename: eid, loaded: true, exports: {
+    BrowserWindow: { getAllWindows: () => [{ webContents: { send: (_ch, data) => sent.push(data) } }] },
+  } };
+  try {
+    const m = new SyncManager('/nonexistent/notes', '/nonexistent/attachments', '/nonexistent/settings.json');
+
+    m._setStatus('error', `ENOENT: no such file or directory, open '${HOME}/Documents/amelie-vault/notes/a.md'`, { op: 'backup' });
+    const fsErr = sent.at(-1).error;
+    check('an fs error reaches the bell with the home replaced by ~',
+      fsErr === "ENOENT: no such file or directory, open '~/Documents/amelie-vault/notes/a.md'", fsErr);
+    check('and it still says WHICH file, so the scrub costs no meaning',
+      fsErr.includes('amelie-vault/notes/a.md'), fsErr);
+
+    m._setStatus('error', `Command failed: ${HOME}/.local/share/amelie/app/resources/amelie-smb listr`, { op: 'twoway' });
+    check('so does any message naming the app under the home',
+      !sent.at(-1).error.includes(HOME), sent.at(-1).error);
+
+    m._setStatus('error', 'failed to connect to 192.168.30.10', { op: 'twoway' });
+    check('a message with no path in it is passed through untouched',
+      sent.at(-1).error === 'failed to connect to 192.168.30.10', sent.at(-1).error);
+
+    m._setStatus('ok', null, { op: 'backup' });
+    check('and a success still carries no error at all', sent.at(-1).error === null, JSON.stringify(sent.at(-1)));
+
+    check('every occurrence goes, not just the first',
+      SyncManager._publicError(`${HOME}/a and ${HOME}/b`) === '~/a and ~/b');
+    check('a home of "/" would scrub everything, so it is left alone',
+      typeof SyncManager._publicError('/etc/passwd') === 'string');
+  } finally {
+    if (saved) require.cache[eid] = saved; else delete require.cache[eid];
+  }
 }
 
 // ── Report ───────────────────────────────────────────────────────────────────
