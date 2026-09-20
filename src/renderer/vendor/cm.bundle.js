@@ -17136,6 +17136,10 @@
     view.dispatch({ changes, selection, scrollIntoView: true, userEvent: "delete.line" });
     return true;
   };
+  var insertNewline = ({ state, dispatch }) => {
+    dispatch(state.update(state.replaceSelection(state.lineBreak), { scrollIntoView: true, userEvent: "input" }));
+    return true;
+  };
   function isBetweenBrackets(state, pos) {
     if (/\(\)|\[\]|\{\}/.test(state.sliceDoc(pos - 1, pos + 1)))
       return { from: pos, to: pos };
@@ -19295,6 +19299,19 @@
   });
 
   // build/cm-entry.js
+  var plainEnter = {
+    key: "Enter",
+    run(view) {
+      const { state } = view;
+      let fences = null;
+      try {
+        fences = state.field(fenceField);
+      } catch (_) {
+      }
+      if (_posInFencedCode(state.selection.main.head, fences, state.doc)) return false;
+      return insertNewline(view);
+    }
+  };
   var cbLine = Decoration.line({ class: "cm-codeblock" });
   var cbFirst = Decoration.line({ class: "cm-codeblock cm-cb-first" });
   var cbLast = Decoration.line({ class: "cm-codeblock cm-cb-last" });
@@ -20190,7 +20207,7 @@
             EditorView.lineWrapping,
             fenceAutoClose,
             pasteNormalize,
-            keymap.of([fenceEnter, ...defaultKeymap, ...historyKeymap, indentWithTab]),
+            keymap.of([fenceEnter, plainEnter, ...defaultKeymap, ...historyKeymap, indentWithTab]),
             fenceField,
             codeBlockPlugin,
             codeHighlightPlugin,

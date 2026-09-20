@@ -3,7 +3,7 @@
 // so app.js can drive CodeMirror without importing ESM modules directly.
 import { EditorView, keymap, lineNumbers, gutter, GutterMarker, drawSelection, highlightActiveLine, Decoration, ViewPlugin } from '@codemirror/view';
 import { EditorState, Compartment, Transaction, RangeSetBuilder, StateField, StateEffect } from '@codemirror/state';
-import { defaultKeymap, history, historyKeymap, indentWithTab, deleteCharBackward, deleteCharForward } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab, deleteCharBackward, deleteCharForward, insertNewline } from '@codemirror/commands';
 import { StringStream } from '@codemirror/language';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { python } from '@codemirror/legacy-modes/mode/python';
@@ -16,6 +16,28 @@ import { sql } from '@codemirror/legacy-modes/mode/sql';
 // code blocks we DO colour the code, but with cheap per-LINE stream tokenizers
 // (@codemirror/legacy-modes) driven manually over ONLY the visible code lines — so the
 // cost is O(viewport), never O(doc). Language is chosen by the fence's tag (```bash …).
+
+// Enter starts the next line at COLUMN 0 — in prose, which is what this editor mostly
+// holds. defaultKeymap binds Enter to insertNewlineAndIndent, a code-editor default:
+// with no language configured (the markdown parser is deliberately absent, see the note
+// at the top) it has no indent service to ask, so it falls back to copying the current
+// line's leading whitespace. Type "  vvvvv", press Enter, and the caret lands under the
+// v's instead of at the margin — reported 2026-09-20 against a note that had grown a
+// staircase of inherited spaces nobody typed.
+//
+// INSIDE a fenced code block it stays out of the way and lets the default run: there
+// the indentation is the point, and _posInFencedCode already tells us where we are.
+// Sits AFTER fenceEnter in the keymap, so opening a block still auto-closes it.
+const plainEnter = {
+  key: 'Enter',
+  run(view) {
+    const { state } = view;
+    let fences = null;
+    try { fences = state.field(fenceField); } catch (_) {}
+    if (_posInFencedCode(state.selection.main.head, fences, state.doc)) return false;
+    return insertNewline(view);
+  },
+};
 
 // ── Code-block grey masks (virtualized: only visible lines decorated) ──────────
 const cbLine  = Decoration.line({ class: 'cm-codeblock' });
@@ -1076,7 +1098,7 @@ window.AmelieCM = {
           EditorView.lineWrapping,
           fenceAutoClose,
           pasteNormalize,
-          keymap.of([fenceEnter, ...defaultKeymap, ...historyKeymap, indentWithTab]),
+          keymap.of([fenceEnter, plainEnter, ...defaultKeymap, ...historyKeymap, indentWithTab]),
           fenceField,
           codeBlockPlugin,
           codeHighlightPlugin,
