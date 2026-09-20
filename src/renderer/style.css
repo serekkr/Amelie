@@ -271,8 +271,6 @@
   --link: #9ccfd8;
 }
 
-
-
 /* ── THEME: One Dark ────────────────────────────────────────── */
 [data-theme="onedark"] {
   --bg-0: #282c34;
@@ -380,6 +378,43 @@
      can keep its own hue, which is the clearest way to say it is not an accent. It
      stayed put through the violet and navy accents that came before. */
   --link: #7ec0f5;
+  /* The open tab is marked by its LABEL, not by its box. Its background is --bg-1
+     #2c2c2c, which is #tab-bar's own colour exactly (ΔE00 0.00) — so the box is, and is
+     meant to be, invisible: three darker greys were tried on it (#171717, #1a1a1a,
+     #212121) and all three were turned down. The label stays WHITE, as in every other
+     theme, and carries the distinction by WEIGHT instead. Colours were tried first and
+     all failed on the same wall: against #2c2c2c black scores 1.50 of contrast and a
+     dark brown 1.11 — both a shape rather than text, and note that a dark brown scores
+     WORSE than black, being very nearly the background at that lightness. Lighten it
+     enough to read (#c08552, 4.47) and at 57% saturation it stops looking brown and
+     reads ORANGE; desaturate to ~21% and you get #87736a, legible at 3.12 but dimmer
+     than the closed tabs' own #8a8a8a label, so the open tab ended up the quietest
+     thing in the strip. White at 9.80 with more weight is the way that works.
+     600 is SYNTHETIC here and that is not a slip: Inter is bundled as a single face
+     declared three times, at 300, 400 and 500 — the six woff2 files behind those three
+     weights are byte-identical (md5 f072=f074=f076, f073=f075=f077), so the family has
+     no real bold to reach for, and 600/700/800 all render at the same width (103.98 vs
+     93.96), the fixed-factor signature of Chromium thickening the outlines itself. It
+     is clean enough at 13px. A real Inter SemiBold would have to be added to fonts.css
+     to do it properly. The label also gets ~10% wider, so a long note name reaches its
+     ellipsis a character or two earlier than on a closed tab. */
+  --tab-fw-active: 600;
+  /* The note tree, a hair below the sidebar's own #2c2c2c. The value is boxed in from
+     both sides and there is no comfortable answer: the tree's two neighbours — the
+     controls stacked above it (#2c2c2c) and the page beside it (#212121) — are only
+     ΔE00 3.47 apart in total, so a grey between them splits that distance and cannot
+     clear the ~2.3 threshold against both. It was #212121 for a day and that is the
+     one thing it must not be: identical to the editor beside it, the two panels read
+     as one surface with a hairline drawn on it. Going the other way, only #171717 or
+     darker separates from the page (3.14) — tried on the tab and called too dark.
+     So it opens back up: 2.84 from the page, which is what the request was, at the
+     cost of 0.63 from the controls above, which is nothing. The note list is therefore
+     NOT meaningfully darker than the search row any more — the sidebar reads as one
+     panel again, and only the 1px --border separates it from the page. If that step
+     down is wanted back, it has to come from somewhere other than lightness.
+     Knock-on kept in mind: --active-bg is white at 10%, sampled to land on #424242
+     over #2c2c2c; over #2a2a2a it lands on #404040, ΔE00 0.6 — invisible. */
+  --tree-bg: #2a2a2a;
   /* --code-bg is NOT set here: it is defined in a :root block further down the file,
      which has the same specificity as [data-theme=…] and comes later, so a value
      written here would lose. Graphite's grey code panel is set with :root[data-theme]
@@ -530,7 +565,17 @@ html.is-mac #titlebar { padding-left: 72px; }
 #search-input:focus, #tags-search-input:focus, #bookmarks-search-input:focus { border-color: var(--accent-dim); }
 /* The scrollbar uses the global style (wide and grabbable). The resize handle
    sits on the editor side of the border, so it doesn't cover it: notes stay scrollable. */
-#file-tree { flex: 1; overflow-y: auto; overflow-x: hidden; padding-bottom: 20px; }
+/* The tree gets its own background, transparent everywhere except Graphite (see the
+   theme block): the note list is the one part of the sidebar that holds CONTENT, and
+   the strips above it — the search field and the create row — are controls. Only this
+   region moves; they stay on the sidebar's own colour. */
+#file-tree {
+  flex: 1; overflow-y: auto; overflow-x: hidden; padding-bottom: 20px;
+  /* See #sidebar-views: this is that row's old margin-bottom, moved in here so the gap
+     under its rule is painted the tree's colour instead of the sidebar's. */
+  padding-top: calc(6px * var(--toolbar-zoom, 1));
+  background: var(--tree-bg, transparent);
+}
 
 /* Tree nodes */
 .tree-folder, .tree-note {
@@ -978,7 +1023,6 @@ kbd {
 
 /* tags-bar removed — tags/source now inline in note-header */
 
-
 /* ─── Note meta header ──────────────────────────────────────── */
 #note-meta {
   display: flex; align-items: center; gap: 20px;
@@ -1014,13 +1058,12 @@ kbd {
   font-family: 'AmelieMask';
   src: url(data:font/woff;base64,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) format('woff');
 }
-/* Cipher chooser uses the .draw-loc-pills/.dlp style (like "New drawings").
-   Encryption enabled → cipher is fixed: pills become read-only, the inactive dimmed. */
+/* The cipher chooser stopped being a row of pills when only one cipher was left: it
+   is a plain "AES-256-GCM" label now, written with textContent, so the two .dlp rules
+   that used to dim and neutralise its buttons had nothing left to match. They went
+   with the .dlp class itself (2026-09-20). This one stays — it still makes the box
+   inert when encryption pins the cipher. */
 #sec-enc-algo.locked { pointer-events: none; }
-#sec-enc-algo.locked .dlp:not(.active) { opacity: .4; }
-/* Green "active" only means encryption is ON. While disabled, the picked cipher
-   shows a neutral selected style (not the green accent). */
-#sec-enc-algo:not(.locked) .dlp.active { border-color: var(--border-light); color: var(--text-0); background: transparent; }
 #editor-highlight {
   position: absolute; top: 0; left: 0; right: 0; bottom: 0;
   pointer-events: none; z-index: 0; overflow: hidden;
@@ -2193,13 +2236,29 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   border: 1px solid var(--border); border-radius: 7px; overflow: hidden;
   transition: border-color .15s;
 }
-/* Spacing BETWEEN stacked sections — as in the two-way sync tab, where they follow one
-   another. In the Backup tab only one is ever shown at a time, so this adjacent-sibling
-   rule handed the 8px to whichever came second or third in the markup and nothing to the
-   first: Local, first in the DOM, sat 8px closer to the recap above it than WebDAV and
-   VPN did. The rule below gives all three the same gap, whatever their order. */
-.sync-section + .sync-section { margin-top: 8px; }
-#bksec-local, #bksec-webdav, #bksec-vpn { margin-top: 8px; }
+/* The destinations (Backup) and the methods (Sync) are each ONE list, and the list owns
+   the spacing. Both tab panels are flex columns with `gap: 20px`, so while the sections
+   were direct children of the panel that gap fell between every pair — and the 8px
+   margin-top they also carried ADDED to it, flexbox gap and margin being cumulative.
+   Measured on the running app: 28px between rows 49px tall, which is what was reported
+   as "troppo spazio". Inside the list the panel gap no longer applies at all.
+   The two rules that produced the 8px are gone with it; the second of them existed only
+   because the Backup tab used to show one section at a time, which it no longer does. */
+/* No `gap` on the list, deliberately: the heading and the rows want DIFFERENT spacing,
+   and a gap would force one number on both — then the only way to tell them apart is a
+   margin that adds to it, which is the very sum that produced the 28px this started
+   from. Stated separately below, each as the distance it actually is.
+   16px between rows is the rest of Settings: the User Interface tab stacks its blocks
+   at 16 and 20, the General tab its option rows at 22. At 6 these read as a different
+   panel from the rest of the window; at 28 (measured before) they read as adrift. */
+.sync-section-list { display: flex; flex-direction: column; }
+.sync-section-list > .sync-section + .sync-section { margin-top: 16px; }
+/* The heading lives INSIDE the list, so it is bound to what it names by structure
+   rather than by a measurement someone has to keep in step. Left outside it ended up
+   26px from its list and 20px from the block above — nearer to the thing it does not
+   label. Closer to its rows than they are to each other, which is what makes it read
+   as their heading rather than as another item. */
+.sync-section-list > .bk-group-title { margin: 0 0 10px; }
 .sync-section:has(.sync-section-body:not([style*="display:none"])) { border-color: var(--border-light); }
 
 .sync-section-header {
@@ -2259,6 +2318,12 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   -webkit-app-region: drag;
 }
 #tab-list::-webkit-scrollbar { display: none; }
+/* The ToDo board is itself a tab, so the strip showing it is noise: set by renderTabBar
+   from the active tab. The focus toggle and #tab-drag-space stay — the window still has
+   to be draggable by its title bar, and the strip is most of that bar's width. */
+#tab-bar.on-todo #tab-list,
+#tab-bar.on-todo #tab-new-btn,
+#tab-bar.on-todo .titlebar-sep { display: none; }
 
 .note-tab {
   display: flex; align-items: center; gap: 6px;
@@ -2301,6 +2366,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
      selected under the pointer; --bg-0, the page's own colour, too dark; --bg-4, lighter
      than the others, too bright. */
   background: var(--bg-1); color: var(--text-0);
+  font-weight: var(--tab-fw-active, inherit);
   border-bottom-color: var(--accent);
 }
 .note-tab.active::after {
@@ -3318,7 +3384,16 @@ body.split-open .pane-flash::after {
      Same --border as the hairlines between the icons, and inside the same
      zoomed row, so it follows the icon-size setting like they do. */
   border-bottom: 1px solid var(--border);
-  margin-bottom: 6px;
+  /* The 6px of air that used to follow this rule as `margin-bottom` now lives on
+     #file-tree as padding-top. Same gap, same place — but OUTSIDE the tree it was
+     painted the sidebar's colour, and the moment the tree got a background of its own
+     that strip of #2c2c2c between the rule and the dark panel read as an empty table
+     row (reported 2026-09-20, with a screenshot). Inside the tree it takes the tree's
+     colour and the rule sits straight on the panel. It has to be re-scaled there by
+     hand: this row is inside the `zoom: var(--toolbar-zoom)` group and #file-tree is
+     not, so the margin used to shrink with the icon-size setting and a plain 6px would
+     not. alignSidebarStrip() only ever writes paddingTop/paddingBottom here, never the
+     margin, so nothing that keeps this rule level with the editor toolbar is touched. */
 }
 .sidebar-view-btn {
   /* Five equal shares of the row, no width cap: the buttons fill the sidebar and the
@@ -3458,11 +3533,31 @@ body.split-open .pane-flash::after {
 #img-zoom-label { font-size: 13px; color: var(--text-1); min-width: 42px; text-align: center; }
 #img-view-embed {
   flex: 1; width: 100%; overflow: auto; background: #1a1a1a;
-  display: flex; align-items: flex-start; justify-content: center; padding: 18px;
+  /* `safe center`, not plain `center`: a centred flex item that overflows its scroll
+     container pushes its own left edge into negative space, where no amount of
+     scrolling reaches it. `safe` falls back to start-alignment exactly when the item
+     is too big — so a zoomed image stays centred while it fits and becomes reachable
+     from its left edge the moment it does not. */
+  display: flex; align-items: flex-start; justify-content: safe center; padding: 18px;
 }
+/* Drag to move around a zoomed image. The hand appears only when there IS somewhere
+   to go — .pannable is set from the measured overflow, so a picture that fits keeps the
+   ordinary arrow instead of promising a pan that does nothing. */
+#img-view-embed.pannable { cursor: grab; }
+#img-view-embed.panning  { cursor: grabbing; }
 #img-view-content {
   max-width: 100%; height: auto; display: block;
+  /* The zoom did nothing past the first step without this, and the reason is not
+     obvious: an <img> is a flex item, flex items shrink by default, and a flex item
+     cannot shrink below `min-width: auto` — which for a replaced element is its
+     INTRINSIC width. So `width: 6240px` on a 2400px-wide photo was being squeezed
+     straight back to 2400, and every further click grew a number nobody could see
+     (measured 2026-09-20: css 2880 → 6240px, rendered 2400px throughout). */
+  flex-shrink: 0;
   border-radius: 4px; box-shadow: 0 2px 16px rgba(0,0,0,.5);
+  /* Without these the press-and-move is taken by the browser's own image drag and the
+     pan never starts — the single thing most likely to break this. */
+  -webkit-user-drag: none; user-select: none;
 }
 /* Audio/video player — same frame as the image viewer. Audio is centred as a
    single bar (its element is only ~54px tall, so top alignment would pin it
@@ -3731,6 +3826,23 @@ body.split-open .pane-flash::after {
   border-radius: var(--radius); padding: 6px 10px; margin-bottom: 4px;
 }
 .sc-group { display: flex; flex-direction: column; gap: 3px; }
+/* Heading over the Backup tab's destination list. A quiet label, not a banner: the
+   first try borrowed the Shortcuts tab's group-title look — the editor font, ALL CAPS
+   and .12em of tracking — and at the top of a settings panel that reads as a heading
+   competing with the tab name rather than a word introducing the four switches under
+   it. Sentence case, the UI font, one step down in size.
+   The margins are deliberately lopsided: air ABOVE, to separate it from the backup
+   format card, and very little BELOW, so it sits against the list it names instead of
+   floating between the two blocks. A label equidistant from both belongs to neither. */
+.bk-group-title {
+  /* 14px because everything around it is 12: the field labels, and the destination
+     names in the rows below. At 12 this was the same size as the things it introduces
+     and read as one more label rather than as their heading. One step up in SIZE and
+     one step down in BRIGHTNESS (--text-1 against the rows' --text-0) is what makes it
+     lead without competing with the names underneath. */
+  font-family: var(--ui-font); font-size: 14px;
+  color: var(--text-1); margin: 2px 0 6px;
+}
 .sc-group-title {
   font-family: var(--editor-font); font-size: 13px;
   text-transform: uppercase; letter-spacing: .12em;
@@ -4394,70 +4506,6 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .fip:hover { color: var(--text-0); border-color: var(--border-light); }
 .fip.active { border-color: var(--accent); color: var(--accent); }
 .fip svg { width: 16px; height: 16px; }
-/* New-drawing location: text pills, same look as .fip but sized for a label */
-.draw-loc-pills { display: flex; gap: 5px; }
-.dlp {
-  padding: 4px 10px; height: 26px; cursor: pointer;
-  border: 1px solid var(--border); border-radius: 6px;
-  background: transparent; color: var(--text-1);
-  font-family: var(--editor-font); font-size: 12px; white-space: nowrap;
-  transition: border-color .1s, color .1s;
-}
-.dlp:hover { color: var(--text-0); border-color: var(--border-light); }
-.dlp.active { border-color: var(--accent); color: var(--accent); }
-/* Connection-type chooser (Sync + Backup tabs): BIGGER pills, matching the other
-   settings buttons in size/font (the small .dlp default is for inline pickers
-   like "New drawings"/cipher). Scoped to these two containers only. */
-/* One joined strip, not three separate pills: the destinations are a choice between
-   alternatives, and a row of tabs says that better than three buttons with air between
-   them. Same shape as the Settings tabs above — a rule along the bottom, and the
-   selected one sitting on an accent underline. */
-#tw-transport-pills, #bk-transport-pills {
-  gap: 0; flex-wrap: wrap; border-bottom: 1px solid var(--border);
-}
-#tw-transport-pills .dlp, #bk-transport-pills .dlp {
-  padding: 7px 14px; height: auto;
-  font-family: var(--ui-font); font-size: 14px;
-  border: none; border-radius: 0; min-width: 92px; text-align: center;
-  background: transparent; color: var(--text-1);
-  /* The underline space is reserved on EVERY one, so selecting does not nudge the row
-     by two pixels; margin-bottom pulls it onto the strip's own rule. */
-  border-bottom: 2px solid transparent; margin-bottom: -1px;
-}
-#tw-transport-pills .dlp:hover, #bk-transport-pills .dlp:hover { background: transparent; color: var(--text-0); }
-/* Selected: the accent as a BORDER, not as a fill. A solid accent block behind an
-   icon and its label swallowed both — the icon read as a silhouette cut out of a
-   coloured tile. The fill stays the neutral --bg-3 the unselected ones use, the ring
-   says which one is on, and the label keeps its own colour. */
-#tw-transport-pills .dlp.active, #bk-transport-pills .dlp.active {
-  background: transparent; color: var(--accent);
-  border-bottom-color: var(--accent); box-shadow: none;
-}
-/* Backup destinations recap, under the pills. The pills show ONE section at a
-   time, so this line is the only place that states every destination at once:
-   the enabled ones (green dot + target) and the configured-but-off ones (dim,
-   struck through) — an enabled destination must never be invisible. */
-.bk-dest-summary {
-  display: flex; flex-direction: column; gap: 3px;
-  /* Air on BOTH sides: this recap belongs to the tab strip above it, and with only the
-     top margin set the destination card below sat right against it, reading as one block
-     with the list instead of as the panel the list is summarising. */
-  margin-top: 18px; margin-bottom: 16px;
-  font-family: var(--ui-font); font-size: 13px; color: var(--text-1);
-}
-.bk-dest-summary .bkd-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-.bk-dest-summary .bkd-dot {
-  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-  background: var(--green); align-self: center;
-}
-/* Only ENABLED destinations are listed, so there is no off-state to style: the
-   dot is always the live green and the name always full white. */
-.bk-dest-summary .bkd-name { color: var(--text-0); }
-/* The target (path / share / URL) is secondary info — dim and breakable so a long
-   path can't push the settings panel into horizontal scrolling. */
-.bk-dest-summary .bkd-target { color: var(--text-2); word-break: break-all; }
-.bk-dest-summary .bkd-state { color: var(--text-2); }
-.bk-dest-summary .bkd-warn { color: var(--red); }
 /* Sync option labels (Two-way sync / WebDAV / VPN with Samba): bright white like
    the Backup tab's destination titles, instead of the dim grey field-label color.
    Needs ID specificity to beat #settings-modal .field-group label:not(.toggle). */
@@ -4648,16 +4696,13 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 #settings-modal .wiz-btn,
 #settings-modal .btn-test,
 #settings-modal .btn-test-run,
-#settings-modal .btn-save,
-#settings-modal #tw-transport-pills .dlp,
-#settings-modal #bk-transport-pills .dlp,
-#settings-modal .dlp { font-size: var(--settings-btn-fs); }
+#settings-modal .btn-save { font-size: var(--settings-btn-fs); }
 
 /* Uniform action-button geometry across ALL settings tabs: identical height,
    padding, radius and icon/label centering so every button (Save, Test
    connection, Verify connection, Modify, Remove, Show config, Restore…)
-   is the same size and lines up the same everywhere. Pills (.dlp / .vpn-type-btn)
-   keep their own sizing — not included here. */
+   is the same size and lines up the same everywhere. .vpn-type-btn keeps its own
+   sizing — not included here. */
 #settings-modal .wiz-btn,
 #settings-modal .btn-test,
 #settings-modal .btn-test-run,

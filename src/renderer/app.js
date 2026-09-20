@@ -496,6 +496,18 @@ function _applyTabSplit(tab) {
 function renderTabBar() {
   saveSession();
   const list = $('tab-list');
+  // On the ToDo board the tab strip goes away. The board IS a tab, so the row sat there
+  // saying "what else is open" while being read as "where am I" — called confusing on
+  // 2026-09-20. The tabs go, and so does the new-tab + beside them: a button that opens
+  // a note belongs to the strip it opens it into, and on the board there is no strip.
+  // The focus toggle and the draggable stretch stay, so the title bar still drags.
+  // ONE class, and the stylesheet decides what it hides — several inline styles would
+  // be several places to forget. Decided here rather than in showTodoView/hideTodoView
+  // because renderTabBar runs on every tab change, so it is derived from what is on
+  // screen and cannot be left behind by an exit path that forgot to undo it: that is
+  // exactly how a hidden strip becomes permanently hidden.
+  const bar = $('tab-bar');
+  if (bar) bar.classList.toggle('on-todo', !!(tabs[activeTabIdx] && tabs[activeTabIdx].type === 'todo'));
   list.innerHTML = '';
   tabs.forEach((tab, i) => {
     const el = document.createElement('div');
@@ -1318,7 +1330,13 @@ function _initCmEditor() {
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
-  serekkr:       { label: 'Serekkr',       attr: 'serekkr'   },
+  // Shown as "Cyan Dark" (renamed 2026-09-20) for the blue-green surfaces it is built
+  // on; its ACCENT is the same green as Green Dark, which is why the surface colour is
+  // what the name has to carry. The id stays 'serekkr': it is DEFAULT_THEME, the value
+  // in localStorage and the [data-theme] attribute in style.css, so renaming it would
+  // need a migration (cf. RENAMED, obsidian -> graphite) and would drop the theme of
+  // every existing profile. Only the label moved.
+  serekkr:       { label: 'Cyan Dark',     attr: 'serekkr'   },
   graphite:      { label: 'Graphite',      attr: 'graphite'  },
   'github-dark': { label: 'Green Dark',     attr: ''          },
   navy:          { label: 'Navy',          attr: 'navy'      },
@@ -1812,6 +1830,134 @@ function loadFolderGuides() {
   // glance, and they are a pale hairline now rather than the grey line they were.
   // Anyone who prefers the flat, line-free look switches them off in Settings.
   try { return localStorage.getItem('inkwell-folder-guides') || 'on'; } catch(_) { return 'on'; }
+}
+
+// ─── Update check (once a day, notification only) ────────────────────────────
+// Amelie cannot install its own update: it ships as a .run installer, not an
+// AppImage on an update channel, and app-update.yml in resources is inert (nothing
+// reads it — electron-updater is not a dependency). So this only ever SAYS that a
+// newer release exists, and links to it.
+
+/** -1, 0 or 1. Numeric, per component: "1.0.9" is NEWER than "1.0.10" as a string. */
+function cmpVersions(a, b) {
+  const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x > y ? 1 : -1;
+  }
+  return 0;
+}
+
+const UPDATE_CHECK_KEY = 'amelie-update-lastcheck';
+const UPDATE_SEEN_KEY  = 'amelie-update-announced';
+const UPDATE_EVERY_MS  = 24 * 3600 * 1000;
+// Two minutes in, not four seconds. Nothing about this is urgent, and startup is
+// already busy: the backup catch-up fires at 30s and the two-way sync ticks every 30s.
+// Asked for explicitly on 2026-09-21 — it must not get in their way.
+const UPDATE_FIRST_TRY_MS = 120 * 1000;
+const UPDATE_RETRY_MS     = 60 * 1000;
+const UPDATE_MAX_RETRIES  = 5;
+/** True while the sync engine is mid-pass — see the sync:statusUpdate listener. */
+let _syncEngineBusy = false;
+
+function updateCheckEnabled() {
+  try { return localStorage.getItem('inkwell-update-check') !== 'off'; } catch (_) { return true; }
+}
+
+/**
+ * Is a check due? Pure, so "once a day" can be tested without waiting a day.
+ * No record at all counts as due: a fresh profile should ask once.
+ */
+function updateCheckDue(lastMs, now = Date.now()) {
+  const last = parseInt(lastMs, 10);
+  if (!Number.isFinite(last) || last <= 0) return true;
+  return (now - last) >= UPDATE_EVERY_MS;
+}
+
+/**
+ * Should this release be announced? Pure — no network, no storage, no bell — because
+ * everything that goes wrong with an update check goes wrong HERE: announcing the same
+ * version every morning, or comparing versions as strings. The fetch is the easy part.
+ */
+function updateWorthAnnouncing(latest, mine, announced) {
+  if (!latest || !latest.version || !mine) return false;          // nothing to compare
+  if (cmpVersions(latest.version, mine) <= 0) return false;       // we are level or ahead
+  if (announced && cmpVersions(latest.version, announced) <= 0) return false;  // said already
+  return true;
+}
+
+/**
+ * Once a day, at startup. Deliberately NOT a setInterval: a daily timer counts app
+ * UPTIME and dies with the window, so anyone who closes Amelie more often than once a
+ * day would never reach it — the same fault the backup catch-up was fixed for on
+ * 2026-09-20. A stored timestamp is what makes "once a day" mean once a day.
+ *
+ * The announced version is remembered too, or the bell would repeat the same line every
+ * morning until you updated. Only a version NEWER than the one already announced
+ * speaks again.
+ */
+async function maybeCheckForUpdate(
+  fetchLatest = () => window.inkwell.latestRelease(),
+  getMine = () => window.inkwell.appVersion(),
+) {
+  if (!updateCheckEnabled()) return true;       // nothing to come back for
+  let last = 0;
+  try { last = localStorage.getItem(UPDATE_CHECK_KEY); } catch (_) {}
+  if (!updateCheckDue(last)) return true;       // asked already today
+  let latest = null, mine = null;
+  try {
+    [latest, mine] = await Promise.all([fetchLatest(), getMine()]);
+  } catch (_) { return false; }                 // offline, blocked, whatever — say nothing
+  // ONLY a check that actually reached GitHub moves the clock. Stamping a failure as
+  // well looked tidier and was wrong: a laptop whose wifi is not up yet would burn the
+  // day's check on a request that never left the machine and then stay quiet until
+  // tomorrow. A machine with no internet now retries on the next launch instead, which
+  // costs one connection that fails at once and says nothing.
+  if (!latest) return false;
+  try { localStorage.setItem(UPDATE_CHECK_KEY, String(Date.now())); } catch (_) {}
+  let announced = '';
+  try { announced = localStorage.getItem(UPDATE_SEEN_KEY) || ''; } catch (_) {}
+  if (!updateWorthAnnouncing(latest, mine, announced)) return true;
+  try { localStorage.setItem(UPDATE_SEEN_KEY, latest.version); } catch (_) {}
+  // Stored as finished text, with no i18n key: a key would be re-translated on every
+  // draw and would lose the version number with it (see _notifText). The wording is
+  // therefore frozen in the language it was written in, which for a version number is
+  // a fair trade.
+  addEventNotif(window.i18n.t('notif.update_available', { v: latest.version }), true);
+  return true;
+}
+
+/**
+ * Try, and come back later if this is a bad moment.
+ *
+ * Two reasons to come back: the sync engine is mid-pass (it must not have to share the
+ * startup with a courtesy request — asked for on 2026-09-21), or the request could not
+ * reach GitHub, which on a machine that has just booted usually means the network is
+ * not up yet. Both wait a minute and try again, at most UPDATE_MAX_RETRIES times, and
+ * then leave it until the next launch. Nothing here is urgent enough to keep retrying.
+ */
+function scheduleUpdateCheck(delayMs, attemptsLeft = UPDATE_MAX_RETRIES) {
+  setTimeout(async () => {
+    if (_syncEngineBusy) {
+      if (attemptsLeft > 0) scheduleUpdateCheck(UPDATE_RETRY_MS, attemptsLeft - 1);
+      return;
+    }
+    let reached = true;
+    try { reached = await maybeCheckForUpdate(); } catch (_) { reached = false; }
+    if (reached === false && attemptsLeft > 0) scheduleUpdateCheck(UPDATE_RETRY_MS, attemptsLeft - 1);
+  }, delayMs);
+}
+
+function setupUpdateCheck() {
+  const tgl = document.getElementById('cfg-update-check');
+  if (tgl) {
+    tgl.checked = updateCheckEnabled();
+    tgl.addEventListener('change', () => {
+      try { localStorage.setItem('inkwell-update-check', tgl.checked ? 'on' : 'off'); } catch (_) {}
+    });
+  }
+  scheduleUpdateCheck(UPDATE_FIRST_TRY_MS);
 }
 
 function setupFolderGuides() {
@@ -2428,10 +2574,13 @@ async function init() {
   try { watchSidebarStripAlign(); } catch (_) {}
   setupEditorToolbarToggle();
   setupFolderGuides();
+  setupUpdateCheck();
   setupAudioRecording();
   setupGpuToggle();
-  setupStartupFlagToggle('cfg-gpu-compositing', 'softwareCompositing', true);
-  setupStartupFlagToggle('cfg-low-memory', 'lowMemory', false);
+  // No 'cfg-gpu-compositing' row any more — see the note in index.html. The setting
+  // itself still works when written into settings.json by hand.
+  // No 'cfg-low-memory' row any more — see index.html. The key still works when
+  // written into settings.json by hand, as softwareCompositing does.
 
   // Load the event-notification log BEFORE the unlock gate: a wrong-password
   // notification fired during unlock must merge into the saved history, not
@@ -8840,13 +8989,11 @@ function getNodeAtEvent(e) {
 }
 
 function setupMindmap() {
-  $('btn-mindmap').addEventListener('click', () => {
-    // Toggle: clicking the icon while the graph is already on screen closes it
-    // and returns to the notes (same as the ✕ button / keyboard shortcut).
-    const ov = $('mindmap-overlay');
-    if (ov.style.display && ov.style.display !== 'none') { closeMindmap(); return; }
-    openMindmap();
-  });
+  $('btn-mindmap').addEventListener('click', viewIconToggle({
+    isOpen: () => { const ov = $('mindmap-overlay'); return !!(ov.style.display && ov.style.display !== 'none'); },
+    close: closeMindmap,
+    open: openMindmap,
+  }));
   $('btn-mindmap-close').addEventListener('click', closeMindmap);
 
   const canvas = $('mindmap-canvas');
@@ -10228,9 +10375,9 @@ function setupSettings() {
         // Backup ('sync') / Sync ('twoway') tabs: reset to the DEFAULT view on
         // entry — drop any open Riconfigura/expanded form so switching tabs
         // doesn't keep a half-edited wizard around.
-        if (btn.dataset.tab === 'sync')   { _smbExpanded.backup = false; try { updateWgConfiguredView(); } catch (_) {} applySmbCollapse('backup'); }
+        if (btn.dataset.tab === 'sync')   { _smbExpanded.backup = false; try { updateWgConfiguredView(); } catch (_) {} applySmbCollapse('backup'); collapseAllBackupSections(); }
         // Opening Sync shows ONE method — the pill's — like opening Backup does.
-        if (btn.dataset.tab === 'twoway') { _smbExpanded.sync   = false; try { updateTwowayConnView(); } catch (_) {} applySmbCollapse('sync'); }
+        if (btn.dataset.tab === 'twoway') { _smbExpanded.sync   = false; try { updateTwowayConnView(); } catch (_) {} applySmbCollapse('sync'); openOnlyTwowaySection(null); }
       });
     });
   });
@@ -10240,10 +10387,14 @@ function setupSettings() {
   setupFolderIconStyle();
 
   // Sync section accordion headers
+  // Samba belongs here and was missing: while the pills existed they expanded the
+  // section they switched to, which hid the fact that its header did nothing. With
+  // every section on screen at once, a header that cannot be clicked is just broken.
   [
     { hdr: 'ssh-vpn',    body: 'ssb-vpn',    chev: 'chevron-vpn'    },
     { hdr: 'ssh-webdav', body: 'ssb-webdav', chev: 'chevron-webdav' },
     { hdr: 'ssh-local',  body: 'ssb-local',  chev: 'chevron-local'  },
+    { hdr: 'ssh-samba',  body: 'ssb-samba',  chev: 'chevron-samba'  },
   ].forEach(({ hdr, body, chev }) => {
     const hdrEl = $(hdr);
     if (!hdrEl) return;
@@ -10258,14 +10409,7 @@ function setupSettings() {
     });
   });
 
-  // Backup destination chooser (pills) — show one section at a time, like Sync.
-  document.querySelectorAll('#bk-transport-pills .dlp').forEach(b => b.addEventListener('click', async () => {
-    const t = b.dataset.bktransport;
-    state.config = state.config || {}; state.config.sync = state.config.sync || {};
-    state.config.sync.backupTransport = t;
-    updateBackupTransportView(t);
-    try { await saveSettings(); } catch (_) {}
-  }));
+
 
   // Flat layout: the WireGuard/Samba setup is now a single scrollable page with
   // no step navigation (the old Indietro/Avanti buttons and step dots were
@@ -10497,6 +10641,32 @@ function setupSettings() {
       showToast('✗ ' + window.i18n.t('sync.test_first'));
     }
   });
+  // Local was the one destination that could be switched on untested — the other
+  // three have had this gate for a while. A folder can be missing, be a file, or be
+  // unwritable just as a share can, and "enabled" then means a backup that fails at
+  // the hour nobody is watching. Same rule, same toast.
+  $('cfg-local-enabled')?.addEventListener('change', e => {
+    if (e.target.checked && !backupLocalTested()) {
+      e.target.checked = false;
+      showToast('✗ ' + window.i18n.t('sync.test_first'));
+    }
+  });
+  // Typing a new path retracts the pass the old one earned.
+  $('cfg-local-path')?.addEventListener('input', () => { state._backupLocalTested = false; });
+
+  // Switching a destination ON opens its settings — the point of the list: the names
+  // are the main view, the configuration is what the switch reveals. Off folds it.
+  //
+  // Registered HERE, below every gate above (mutual exclusivity, "test the connection
+  // first", "both formats are off"), and that is not tidiness: handlers run in the
+  // order they were added, the gates undo a refused click by setting `checked` back to
+  // false, and this one reads `checked`. Bound earlier it read the click instead of the
+  // decision, and a refused destination opened its settings anyway while its own switch
+  // sat off — which is exactly what the UI test caught.
+  [['cfg-local-enabled', 'local'], ['cfg-samba-enabled', 'samba'],
+   ['cfg-vpn-enabled', 'vpn'], ['cfg-webdav-enabled', 'webdav']].forEach(([id, key]) => {
+    $(id)?.addEventListener('change', () => setBackupSectionOpen(key, !!$(id).checked));
+  });
   // Editing the WebDAV fields invalidates the previous test.
   ['cfg-webdav-url', 'cfg-webdav-user', 'cfg-webdav-pass'].forEach(id =>
     $(id)?.addEventListener('input', () => { state._backupWebdavTested = false; }));
@@ -10612,13 +10782,25 @@ function setupSettings() {
   // method you are looking at. What actually runs is the method whose own toggle
   // is on, so clicking a pill must NOT switch the transport out from under a
   // working setup. Persisted separately, as Backup persists backupTransport.
-  document.querySelectorAll('#tw-transport-pills .dlp').forEach(b => b.addEventListener('click', async () => {
-    state.config = state.config || {}; state.config.sync = state.config.sync || {}; state.config.sync.twoway = state.config.sync.twoway || {};
-    state.config.sync.twoway.transportView = b.dataset.transport;
-    try { updateTwowayConnView(); } catch (_) {}
-    try { await saveSettings(); } catch (_) {}
-    try { updateSyncButtonVisibility(); } catch (_) {}
-  }));
+  // The three method HEADERS do what the pills did: clicking one opens it and folds
+  // the other two. Clicking is only ever a selection — it never switches the method
+  // on, so a method can be filled in before being enabled, which is why the toggle
+  // inside the header is excluded here.
+  [['twsh-webdav', 'webdav'], ['twsh-samba', 'samba'], ['twsh-vpn', 'vpn']].forEach(([hdr, which]) => {
+    $(hdr)?.addEventListener('click', async (e) => {
+      if (e.target.closest('.toggle')) return;      // the switch has its own handler
+      // Click the open one and it folds; click a closed one and it opens, folding the
+      // other two. Selecting is never switching on — the method is only filled in.
+      const body = $('twsb-' + which);
+      if (body && body.style.display !== 'none') { setTwowaySectionOpen(which, false); return; }
+      openOnlyTwowaySection(which);
+      state.config = state.config || {}; state.config.sync = state.config.sync || {}; state.config.sync.twoway = state.config.sync.twoway || {};
+      state.config.sync.twoway.transportView = which;
+      try { updateTwowayConnView(); } catch (_) {}
+      try { await saveSettings(); } catch (_) {}
+      try { updateSyncButtonVisibility(); } catch (_) {}
+    });
+  });
   $('tw-webdav-test')?.addEventListener('click', async () => {
     const res = $('tw-webdav-result');
     if (res) { res.style.display = 'block'; res.textContent = window.i18n.t('status.testing'); res.className = 'test-result'; }
@@ -10861,9 +11043,11 @@ function setupSettings() {
     resultEl.textContent = window.i18n.t('sync.checking_path', { path: p }); resultEl.className = 'test-result';
     const result = await window.inkwell.testLocalPath(p);
     if (result.ok) {
+      state._backupLocalTested = true;    // unlocks the Local backup toggle
       resultEl.textContent = '✓ ' + window.i18n.t('sync.path_ok') + (result.created ? ' ' + window.i18n.t('sync.folder_created') : '');
       resultEl.className = 'test-result ok';
     } else {
+      state._backupLocalTested = false;
       resultEl.textContent = `✗ ${result.error}`;
       resultEl.className = 'test-result fail';
     }
@@ -10985,8 +11169,9 @@ function setupSettings() {
       // reach — and what keeps an OLD config ('samba' meant WireGuard) readable.
       state.config.sync.twoway.useWireGuard = (picked === 'vpn');
     }
-    // Switching a method ON also selects it — you just chose it.
-    if (picked) state.config.sync.twoway.transportView = picked;
+    // Switching a method ON also selects it — you just chose it — and shows its
+    // settings, which is what the list is for.
+    if (picked) { state.config.sync.twoway.transportView = picked; openOnlyTwowaySection(picked); }
     try { updateTwowayConnView(); } catch (_) {}
   }
   // Reflect the saved config onto the three visible toggles (called on load and
@@ -10995,6 +11180,10 @@ function setupSettings() {
     const tw = state.config?.sync?.twoway || {};
     const on = !!tw.enabled, tr = twowayTransportOf(tw);
     Object.entries(_TW_METHODS).forEach(([k, id]) => { const el = $(id); if (el) el.checked = on && tr === k; });
+    // Same rule the Backup tab follows: arriving lands on the plain list of three
+    // names, whatever is switched on. Expanding is an action — switching a method on,
+    // or clicking its header — and arriving at a tab is not one.
+    openOnlyTwowaySection(null);
     // The panels follow the selection, not the toggles; refresh them so the
     // freshly loaded method shows its own.
     try { updateTwowayConnView(); } catch (_) {}
@@ -11886,81 +12075,8 @@ function updateActionNowButtons() {
     || (s.twoway?.transport !== 'webdav' && !!(s.twoway?.smb && (s.twoway.smb.ip || s.twoway.smb.host)))
   );
   const sblk = $('sync-now-block'); if (sblk) sblk.style.display = syncReady ? 'flex' : 'none';
-  updateBackupDestSummary();
 }
 
-// The destination recap under the Backup pills. The pills show ONE section at a
-// time and hide the rest, so an enabled destination can sit invisible in a
-// collapsed section — which is exactly how a local folder backup ran for weeks
-// while the user was looking at the (configured but switched-off) Samba panel.
-// It lists the ENABLED destinations with their target, whatever pill is
-// selected — and only those. A configured-but-switched-off destination used to
-// be listed struck through, which put the loudest thing on screen under
-// "Backup destinations" on rows that are not destinations at all: a share you
-// set up months ago and turned off is not somewhere your backup goes.
-//
-// The red line below survives that, and has to: with every destination off, a
-// scheduled backup reports "completed" having written nowhere. That is worth
-// saying precisely BECAUSE nothing is listed above it.
-//
-// Reads the LIVE form, not the saved config: every toggle change autosaves
-// immediately (the settings-modal 'change' listener), so the DOM is the truth
-// the user is looking at and never lags behind by a save.
-function updateBackupDestSummary() {
-  const box = $('bk-dest-summary');
-  if (!box) return;
-  const v = (id) => { const el = $(id); return el && typeof el.value === 'string' ? el.value.trim() : ''; };
-  const on = (id) => !!$(id)?.checked;
-  const smbShare = v('cfg-smb-share'), smbPath = v('cfg-smb-path');
-  const sbShare  = v('cfg-sb-share'),  sbPath  = v('cfg-sb-path');
-  const wdUrl = v('cfg-webdav-url') || state._webdavSaved?.backup?.url || state.config?.sync?.webdav?.url || '';
-  const dests = [
-    { key: 'sync.local', enabled: on('cfg-local-enabled'), target: v('cfg-local-path'),
-      configured: !!v('cfg-local-path') },
-    { key: 'sync.transport_samba_only', enabled: on('cfg-samba-enabled'),
-      target: sbShare ? sbShare + (sbPath ? '/' + sbPath : '') : '',
-      configured: !!(v('cfg-sb-ip') && sbShare) },
-    { key: 'sync.transport_vpn', enabled: on('cfg-vpn-enabled'),
-      target: smbShare ? smbShare + (smbPath ? '/' + smbPath : '') : '',
-      configured: !!(v('cfg-smb-ip') && smbShare) },
-    { key: 'sync.transport_webdav', enabled: on('cfg-webdav-enabled'), target: wdUrl,
-      configured: !!wdUrl },
-  ];
-  const shown = dests.filter(d => d.enabled);
-  const t = (k) => window.i18n.t(k);
-  box.innerHTML = '';
-  // Nothing set up at all → say nothing (a fresh install shouldn't scold). This
-  // still counts the switched-off ones: they earn no row, but having some is
-  // what separates "not set up yet" from "set up and all turned off", and only
-  // the second deserves the warning at the end.
-  if (!dests.some(d => d.enabled || d.configured)) return;
-  if (shown.length) {
-    const head = document.createElement('div');
-    head.className = 'bkd-row bkd-state';
-    head.textContent = t('sync.dests_label');
-    box.appendChild(head);
-  }
-  shown.forEach(d => {
-    const row = document.createElement('div');
-    row.className = 'bkd-row';
-    const dot = document.createElement('span'); dot.className = 'bkd-dot';
-    const name = document.createElement('span'); name.className = 'bkd-name'; name.textContent = t(d.key);
-    row.append(dot, name);
-    if (d.target) {
-      const tg = document.createElement('span'); tg.className = 'bkd-target'; tg.textContent = '— ' + d.target;
-      row.appendChild(tg);
-    }
-    box.appendChild(row);
-  });
-  // Configured destinations but every one switched off: the scheduled backup
-  // would report "completed" having written nowhere. Say so, in red.
-  if (!shown.length) {
-    const w = document.createElement('div');
-    w.className = 'bkd-row bkd-warn';
-    w.textContent = t('sync.dests_none');
-    box.appendChild(w);
-  }
-}
 
 // At least ONE backup mode (folder/archive) must be selected for the "VPN with
 // Samba share" flag: turning the last mode off while the flag is on switches
@@ -12442,13 +12558,10 @@ async function openSettings() {
   _smbExpanded = { backup: false, sync: false };   // each open starts collapsed-if-configured
   $('cfg-autosave').value = cfg.autoSaveSeconds || 3;
 
-  // Restore VPN section open state if enabled
-  const vpnEnabled = !!cfg.sync?.vpn?.enabled;
-  $('cfg-vpn-enabled').checked = vpnEnabled;
-  if (vpnEnabled) {
-    $('ssb-vpn').style.display = 'flex';
-    const chev = $('chevron-vpn'); if (chev) chev.classList.add('open');
-  }
+  // The checkbox only — NOT the section. Each of the three used to expand itself here
+  // when its destination was enabled, so a profile with a live backup opened Settings
+  // onto a wall of forms instead of the list of four names.
+  $('cfg-vpn-enabled').checked = !!cfg.sync?.vpn?.enabled;
   const vpn = cfg.sync?.vpn;
   if (vpn) {
     // Null-safe: some legacy inputs may no longer exist in the simplified UI.
@@ -12499,12 +12612,7 @@ async function openSettings() {
   }
 
   // WebDAV
-  const webdavEnabled = !!cfg.sync?.webdav?.enabled;
-  $('cfg-webdav-enabled').checked = webdavEnabled;
-  if (webdavEnabled) {
-    $('ssb-webdav').style.display = 'flex';
-    const chev = $('chevron-webdav'); if (chev) chev.classList.add('open');
-  }
+  $('cfg-webdav-enabled').checked = !!cfg.sync?.webdav?.enabled;
   $('cfg-webdav-url').value  = cfg.sync?.webdav?.url      || '';
   $('cfg-webdav-user').value = cfg.sync?.webdav?.username || '';
   $('cfg-webdav-pass').value = cfg.sync?.webdav?.password || '';
@@ -12529,16 +12637,11 @@ async function openSettings() {
   };
 
   // Local sync
-  const localEnabled = !!cfg.sync?.local?.enabled;
-  $('cfg-local-enabled').checked = localEnabled;
-  if (localEnabled) {
-    $('ssb-local').style.display = 'flex';
-    const chev = $('chevron-local'); if (chev) chev.classList.add('open');
-  }
+  $('cfg-local-enabled').checked = !!cfg.sync?.local?.enabled;
   $('cfg-local-path').value = cfg.sync?.local?.path || '';
   // Backup destination tab: saved choice, else the enabled destination, else Local.
-  updateBackupTransportView(cfg.sync?.backupTransport
-    || (cfg.sync?.vpn?.enabled ? 'vpn' : cfg.sync?.webdav?.enabled ? 'webdav' : 'local'));
+  collapseAllBackupSections();
+  showAllBackupSections();
   // Restore GLOBAL backup format — two INDEPENDENT flags (folder and/or .tar.gz).
   const _L = cfg.sync?.local || {}, _V = cfg.sync?.vpn || {}, _W = cfg.sync?.webdav || {};
   const wantArchive = !!(_L.archive || _L.archiveOnly || _V.archive || _W.archive);
@@ -12595,8 +12698,7 @@ async function openSettings() {
     if ($('tw-webdav-pass')) $('tw-webdav-pass').value = wd.password || '';
     if ($('tw-webdav-path')) $('tw-webdav-path').value = wd.remotePath || 'amelie/sync';
     const transport = tw.transport || 'samba';
-    document.querySelectorAll('#tw-transport-pills .dlp').forEach(b => b.classList.toggle('active', b.dataset.transport === transport));
-  }
+    }
   updateActionNowButtons();
   if ($('cfg-twoway-subpath'))  $('cfg-twoway-subpath').value  = cfg.sync?.twoway?.subPath || '';
   updateTwowayConnView();   // show the reused WireGuard+Samba connection
@@ -12698,9 +12800,10 @@ async function saveSettings() {
       enabled: !!$('cfg-vpn-enabled')?.checked || $('cfg-webdav-enabled').checked
         || !!$('cfg-samba-enabled')?.checked
         || !!$('cfg-local-enabled').checked || !!$('cfg-twoway-enabled')?.checked,
-      // Which backup destination tab is shown (Local / WireGuard+Samba / WebDAV).
-      backupTransport: (document.querySelector('#bk-transport-pills .dlp.active')?.dataset.bktransport)
-        || state.config?.sync?.backupTransport || 'local',
+      // Vestigial: the pills that set this are gone (see showAllBackupSections) and
+      // nothing reads it back any more. Still written, and carried over rather than
+      // reset, so downgrading onto the same profile finds the value it left behind.
+      backupTransport: state.config?.sync?.backupTransport || 'local',
       vpn: { enabled: !!$('cfg-vpn-enabled')?.checked, ...vpnCfg },
       // The WG+Samba backup connection: persisted HERE (the test only
       // verifies and parks it in state._backupSmbTested). Its enabled state
@@ -12789,8 +12892,7 @@ async function saveSettings() {
         })(),
         // Which method's section the Sync tab shows on open — a view preference,
         // like Backup's backupTransport. Never drives what actually syncs.
-        transportView: (document.querySelector('#tw-transport-pills .dlp.active')?.dataset.transport)
-          || state.config?.sync?.twoway?.transportView,
+        transportView: state.config?.sync?.twoway?.transportView,
         // WebDAV two-way connection (used when transport === 'webdav'). STAGED:
         // persisted ONLY by "Salva configurazione" (state._webdavSaved.sync).
         webdav: {
@@ -12873,20 +12975,51 @@ function _fmtSyncResult(r) {
 // three destination sections at a time (Local / WireGuard+Samba / WebDAV). The
 // per-section enable toggle still controls what's active — this only switches the
 // visible section. Persisted in sync.backupTransport (which tab to show on open).
-function updateBackupTransportView(transport) {
-  const t = transport
-    || (document.querySelector('#bk-transport-pills .dlp.active')?.dataset.bktransport)
-    || 'local';
-  document.querySelectorAll('#bk-transport-pills .dlp').forEach(b => b.classList.toggle('active', b.dataset.bktransport === t));
-  const sec = { local: 'bksec-local', samba: 'bksec-samba', vpn: 'bksec-vpn', webdav: 'bksec-webdav' };
-  const body = { local: 'ssb-local', samba: 'ssb-samba', vpn: 'ssb-vpn', webdav: 'ssb-webdav' };
-  const chev = { local: 'chevron-local', samba: 'chevron-samba', vpn: 'chevron-vpn', webdav: 'chevron-webdav' };
-  Object.entries(sec).forEach(([k, id]) => { const el = $(id); if (el) el.style.display = (k === t) ? 'block' : 'none'; });
-  const b = $(body[t]); if (b) b.style.display = 'flex';          // tab = expanded
-  const c = $(chev[t]); if (c) c.classList.add('open');
-  // The hidden sections stay ENABLED — the recap under the pills is what keeps
-  // them visible, so refresh it whenever the visible section changes.
-  updateBackupDestSummary();
+// Open/fold one Sync method section. The Sync tab keeps at most ONE open — its three
+// methods are mutually exclusive, so two open bodies would suggest a choice that does
+// not exist — but "at most", not "exactly": clicking the open one folds it, exactly as
+// a Backup destination folds, and the tab may sit with all three closed.
+function setTwowaySectionOpen(key, open) {
+  const body = $('twsb-' + key);
+  const chev = $('twchevron-' + key);
+  if (body) body.style.display = open ? 'flex' : 'none';
+  if (chev) chev.classList.toggle('open', !!open);
+}
+function openOnlyTwowaySection(which) {
+  ['webdav', 'samba', 'vpn'].forEach(k => setTwowaySectionOpen(k, k === which));
+  // The panels inside read the bodies (see updateTwowayConnView), so they have to be
+  // told after the bodies move — otherwise a section opens around a hidden panel for
+  // exactly as long as it takes something else to redraw.
+  try { updateTwowayConnView(); } catch (_) {}
+}
+
+// The Backup tab's resting state: four names, nothing unfolded. Arriving at the tab —
+// opening Settings, or leaving it and coming back — always lands here (asked for
+// 2026-09-20, with a screenshot of an ENABLED Local sitting collapsed). Opening a
+// section stays an action you take: switching a destination on, or clicking its header.
+function collapseAllBackupSections() {
+  ['local', 'samba', 'vpn', 'webdav'].forEach(k => setBackupSectionOpen(k, false));
+}
+
+function setBackupSectionOpen(key, open) {
+  const body = $('ssb-' + key);
+  const chev = $('chevron-' + key);
+  if (body) body.style.display = open ? 'flex' : 'none';
+  if (chev) chev.classList.toggle('open', !!open);
+}
+
+// All four destination sections are on screen, always. This used to show ONE and
+// hide the other three, chosen by a row of pills and remembered in
+// sync.backupTransport — which meant an enabled destination could be writing from
+// inside a section nobody could see, and needed a recap line underneath to say so.
+// The key is still written to settings.json by saveSettings so an older build
+// downgraded onto the same profile still finds something it understands; nothing
+// reads it any more.
+function showAllBackupSections() {
+  ['local', 'samba', 'vpn', 'webdav'].forEach(k => {
+    const el = $('bksec-' + k);
+    if (el) el.style.display = 'block';
+  });
 }
 
 async function updateTwowayConnView(forceEdit = false) {
@@ -12903,14 +13036,24 @@ async function updateTwowayConnView(forceEdit = false) {
   // One method section visible at a time, the pill saying which — the same
   // shape the Backup tab uses for its destinations. Each section carries its own
   // enable toggle in its header.
-  document.querySelectorAll('#tw-transport-pills .dlp').forEach(b => b.classList.toggle('active', b.dataset.transport === transport));
+  // All three methods stay LISTED. Which one is OPEN is NOT decided here: this runs on
+  // every refresh, and reopening the selected section each time would undo a fold the
+  // moment anything else redrew. Opening is the job of the header click, of switching a
+  // method on, and of the load below — the three places a person actually asks for it.
   Object.entries({ webdav: 'twsec-webdav', samba: 'twsec-samba', vpn: 'twsec-vpn' })
-    .forEach(([k, id]) => { const el = $(id); if (el) el.style.display = (k === transport) ? '' : 'none'; });
+    .forEach(([, id]) => { const sec = $(id); if (sec) sec.style.display = ''; });
   const webPanel = $('tw-webdav-panel'), sbPanel = $('tw-samba-panel');
-  // Show as FLEX (not block) so the .wizard-panel column `gap` actually applies —
+  // Keyed on whether the SECTION IS OPEN, not on which method is selected. The two are
+  // normally the same thing, and when they drifted apart the result was an open section
+  // with a hidden panel inside it — a body has padding, a top rule and --bg-2 behind it,
+  // so an empty one reads as a taller row in a different colour than its neighbours.
+  // That is exactly what was reported on 2026-09-20 with a screenshot of the Samba row.
+  // Tying the panel to the body makes the pair impossible to contradict.
+  // Shown as FLEX (not block) so the .wizard-panel column `gap` actually applies —
   // with display:block the 18px gap between fields is ignored and they crowd.
-  if (webPanel) webPanel.style.display = transport === 'webdav' ? 'flex' : 'none';
-  if (sbPanel)  sbPanel.style.display  = transport === 'samba'  ? 'flex' : 'none';
+  const bodyOpen = (k) => { const b = $('twsb-' + k); return !!b && b.style.display !== 'none'; };
+  if (webPanel) webPanel.style.display = bodyOpen('webdav') ? 'flex' : 'none';
+  if (sbPanel)  sbPanel.style.display  = bodyOpen('samba')  ? 'flex' : 'none';
   // WebDAV and Samba each own their panel; only the VPN method uses the wizard
   // below (import + share + three-step test), so for the other two it is hidden
   // along with its configured-summary twin.
@@ -12990,6 +13133,21 @@ let _twHasSavedConf = false;
 // A remote destination can be ENABLED only after its connection test has passed.
 // "Tested" = passed this session (session flag) OR already saved in the config
 // (a saved destination was tested when it was set up, so it stays enable-able).
+/**
+ * May the Local destination be switched on? Either its path was just tested, or the
+ * field still holds exactly the path that is already saved and working — reopening
+ * Settings must not demand a fresh test of a destination that has been backing up
+ * for weeks. Comparing against the SAVED value is what makes the second half safe:
+ * `sync.local.path` alone would also accept a brand-new path typed over a working
+ * one, which is the case the gate exists for.
+ */
+function backupLocalTested() {
+  if (state._backupLocalTested) return true;
+  const typed = ($('cfg-local-path')?.value || '').trim();
+  const saved = (state.config?.sync?.local?.path || '').trim();
+  return !!saved && typed === saved;
+}
+
 function backupSmbTested() {
   const v = state.config?.sync?.vpn?.smb, sa = state.config?.sync?.samba;
   return !!state._backupSmbTested
@@ -13033,7 +13191,6 @@ function updateTwowaySelection(which) {
   state.config = state.config || {}; state.config.sync = state.config.sync || {};
   state.config.sync.twoway = state.config.sync.twoway || {};
   state.config.sync.twoway.transportView = which;
-  document.querySelectorAll('#tw-transport-pills .dlp').forEach(b => b.classList.toggle('active', b.dataset.transport === which));
   try { updateTwowayConnView(); } catch (_) {}
 }
 
@@ -13204,6 +13361,8 @@ function setupSync() {
     // Automatic/background syncs (e.g. the initial one at startup) must NOT pulse
     // the icon orange — leave it neutral while they run and only go green when
     // they finish. (The manual buttons set their own "syncing" state.)
+    // The update check waits for the engine to be idle — see scheduleUpdateCheck.
+    _syncEngineBusy = (data.status === 'syncing');
     if (data.status === 'ok') {
       syncStatusDot.className = 'sync-ok';
       if (!data.unchanged) loadTree();   // a pass that copied nothing changed nothing to re-read
@@ -13620,14 +13779,36 @@ let _liveCanvasJson = null;
 let canvasIframeReady = false;
 const EMPTY_DRAW = '{}';
 
+/**
+ * The three view icons — Draw, Graph, ToDo — share one gesture: click to open, click
+ * again to go back to the notes. A DOUBLE click flipped that twice, so double-clicking
+ * while inside a drawing closed it and immediately opened a NEW one: you asked to
+ * leave and landed somewhere you had never been (reported 2026-09-20, for all three).
+ *
+ * A double click now always ends on the notes, and never OPENS anything. That second
+ * half matters more than it looks: newDraw() writes its .draw to disk the moment it
+ * runs and addTodo() adds its task, so a second flip would leave a stray file or an
+ * empty task behind every time somebody double-clicked.
+ *
+ * `detail` is the browser's own click counter for a run of clicks — 1, then 2, then 3
+ * — which is what tells the second click of a double apart from a fresh single one. No
+ * timer of our own, and no delay added to the single click, which stays instant.
+ */
+function viewIconToggle({ isOpen, close, open }) {
+  return (e) => {
+    if (e && e.detail >= 2) { if (isOpen()) close(); return; }
+    if (isOpen()) { close(); return; }
+    open();
+  };
+}
+
 function setupCanvas() {
-  $('btn-canvas').addEventListener('click', () => {
-    // Toggle: clicking the icon while a draw is already on screen closes it and
-    // returns to the notes (a re-click never spawns a second draw file).
-    const ov = $('canvas-overlay');
-    if (ov.style.display && ov.style.display !== 'none') { closeCanvas(); return; }
-    newDraw();
-  });
+  // See viewIconToggle: single click toggles, double click always lands on the notes.
+  $('btn-canvas').addEventListener('click', viewIconToggle({
+    isOpen: () => { const ov = $('canvas-overlay'); return !!(ov.style.display && ov.style.display !== 'none'); },
+    close: closeCanvas,
+    open: newDraw,
+  }));
   $('btn-canvas-close').addEventListener('click', closeCanvas);
 
   // Import / Export buttons on the drawing's header bar — visible while you're
@@ -13758,14 +13939,92 @@ function _updateImgZoomLabel() {
   const l = $('img-zoom-label');
   if (l) l.textContent = Math.round(_imgZoom * 100) + '%';
 }
+/**
+ * The width the picture has at 100% — i.e. as it looks when the viewer opens: its own
+ * size, or the frame's if it is bigger than that.
+ *
+ * The zoom steps are taken from HERE and not from naturalWidth, so the percentage means
+ * what the person reading it thinks it means. A 2400px photo in a 1137px frame opens
+ * fitted to 1101px and says "100%"; scaling the steps off 2400 made the first click
+ * jump it to 2880 — labelled 120% while being two and a half times bigger than the
+ * 100% it had just been showing.
+ */
+function _imgBaseWidth() {
+  const img = $('img-view-content'), box = $('img-view-embed');
+  if (!img || !img.naturalWidth) return 0;
+  if (!box) return img.naturalWidth;
+  const cs = getComputedStyle(box);
+  const avail = box.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+  return avail > 0 ? Math.min(img.naturalWidth, avail) : img.naturalWidth;
+}
 function setImgZoom(z) {
   _imgZoom = Math.min(5, Math.max(0.2, z));
   const img = $('img-view-content');
   if (img && img.naturalWidth) {
     if (_imgZoom === 1) { img.style.width = ''; img.style.maxWidth = '100%'; }
-    else { img.style.width = (img.naturalWidth * _imgZoom) + 'px'; img.style.maxWidth = 'none'; }
+    else { img.style.width = Math.round(_imgBaseWidth() * _imgZoom) + 'px'; img.style.maxWidth = 'none'; }
   }
   _updateImgZoomLabel();
+  _refreshImgPanCursor();
+}
+
+/** Is there anything to pan to — i.e. is the image bigger than its frame? */
+function _imgPannable() {
+  const box = $('img-view-embed');
+  if (!box) return false;
+  // +1: a fractional layout width can leave scrollWidth a hair over clientWidth on an
+  // image that actually fits, which would offer a hand cursor that pans nowhere.
+  return box.scrollWidth > box.clientWidth + 1 || box.scrollHeight > box.clientHeight + 1;
+}
+function _refreshImgPanCursor() {
+  const box = $('img-view-embed');
+  if (box) box.classList.toggle('pannable', _imgPannable());
+}
+
+/**
+ * Drag the image to move around it, the way every image viewer does it.
+ *
+ * Zooming in only ever grew the picture inside a scrolling box, so the only way to
+ * reach the middle of a tall photo was the scrollbars — which live on the frame's
+ * right and bottom edges (reported 2026-09-20: "devo andare agli angoli").
+ *
+ * Two things make or break this. The image must not start a NATIVE drag: pressing on
+ * an <img> and moving hands the gesture to the browser's drag-and-drop, the pan never
+ * begins, and the cursor turns into a file-drop ghost — hence preventDefault here and
+ * -webkit-user-drag: none in the stylesheet. And the pointer is CAPTURED, so a drag
+ * that leaves the frame keeps panning instead of freezing at the edge and dropping the
+ * gesture, which is exactly when you are furthest from where you wanted to go.
+ */
+function setupImagePan() {
+  const box = $('img-view-embed');
+  if (!box) return;
+  let startX = 0, startY = 0, fromLeft = 0, fromTop = 0, active = null;
+  box.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !_imgPannable()) return;
+    active = e.pointerId;
+    startX = e.clientX; startY = e.clientY;
+    fromLeft = box.scrollLeft; fromTop = box.scrollTop;
+    try { box.setPointerCapture(active); } catch (_) {}
+    box.classList.add('panning');
+    e.preventDefault();                      // no native image drag
+  });
+  box.addEventListener('pointermove', (e) => {
+    if (active === null || e.pointerId !== active) return;
+    box.scrollLeft = fromLeft - (e.clientX - startX);
+    box.scrollTop  = fromTop  - (e.clientY - startY);
+  });
+  const release = (e) => {
+    if (active === null || (e && e.pointerId !== active)) return;
+    try { box.releasePointerCapture(active); } catch (_) {}
+    active = null;
+    box.classList.remove('panning');
+  };
+  box.addEventListener('pointerup', release);
+  box.addEventListener('pointercancel', release);
+  // The frame can become pannable without the zoom changing: a photo taller than the
+  // pane is pannable at 100%, and resizing the window flips it either way.
+  $('img-view-content')?.addEventListener('load', _refreshImgPanCursor);
+  try { new ResizeObserver(_refreshImgPanCursor).observe(box); } catch (_) {}
 }
 function openImageFile(node, activate = true) {
   const attachmentName = node.attachmentName
@@ -17342,6 +17601,7 @@ function setupFileDrop() {
     if (t?.type === 'audio' || t?.type === 'video') closeTab(activeTabIdx);
     else { $('media-view-overlay').style.display = 'none'; pauseMediaViewUnlessActive(); }
   });
+  setupImagePan();
   $('img-zoom-in')?.addEventListener('click', () => setImgZoom(_imgZoom + 0.2));
   $('img-zoom-out')?.addEventListener('click', () => setImgZoom(_imgZoom - 0.2));
 
@@ -18555,12 +18815,11 @@ function setupSidebarViews() {
   $('view-recent')?.addEventListener('click', () => switchSidebarView('recent'));
   $('view-bookmarks')?.addEventListener('click', () => switchSidebarView('bookmarks'));
   $('view-tags')?.addEventListener('click', () => switchSidebarView('tags'));
-  $('btn-new-todo')?.addEventListener('click', () => {
-    // Toggle: if the ToDo board is already open, a second click returns to the
-    // notes (restores the editor), matching the Files-icon toggle.
-    if (_kanbanOpen) { switchSidebarView('files'); return; }
-    addTodo();
-  });
+  $('btn-new-todo')?.addEventListener('click', viewIconToggle({
+    isOpen: () => !!_kanbanOpen,
+    close: () => switchSidebarView('files'),
+    open: addTodo,
+  }));
   $('ctx-bookmark')?.addEventListener('click', () => { if (state.contextTarget) toggleBookmark(state.contextTarget); const m = $('context-menu'); if (m) m.style.display = 'none'; });
   document.querySelectorAll('.tv-filter').forEach(b => b.addEventListener('click', () => setTodoFilter(b.dataset.f)));
   // Notifications behave like Bookmarks/Tags: open the sidebar view, no popup.

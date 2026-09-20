@@ -706,27 +706,31 @@
               </div>
             </div>
 
-            <!-- Backup destination chooser — pills like the Sync tab. Shows one
-                 destination section at a time (Local / WireGuard+Samba / WebDAV). -->
-            <div class="field-group">
-              <label data-i18n="sync.transport">Tipo di connessione</label>
-              <div class="draw-loc-pills" id="bk-transport-pills">
-                <button type="button" class="dlp active" data-bktransport="local" data-i18n="sync.local">Local</button>
-                <button type="button" class="dlp" data-bktransport="webdav" data-i18n="sync.transport_webdav">WebDAV</button>
-                <button type="button" class="dlp" data-bktransport="samba" data-i18n="sync.transport_samba_only">Samba</button>
-                <button type="button" class="dlp" data-bktransport="vpn" data-i18n="sync.transport_vpn">VPN</button>
-              </div>
-              <!-- ALWAYS-VISIBLE list of the destinations the backup will write
-                   to. The pills above show one section at a time and hide the
-                   others, so an ENABLED destination could sit invisible in a
-                   collapsed section (a local folder backup quietly running while
-                   the user looked at the Samba panel, or a configured share that
-                   was never switched on). This line states it regardless of which
-                   pill is selected. Filled by updateBackupDestSummary(). -->
-              <div id="bk-dest-summary" class="bk-dest-summary"></div>
-            </div>
+            <!-- The four destinations are LISTED, all four, each as a name and a switch
+                 (2026-09-20). What stood here was a row of pills that showed one section
+                 at a time and hid the other three, plus a recap line underneath — and the
+                 recap existed only because of the hiding: an enabled destination could be
+                 writing from inside a section you were not looking at. Showing all four
+                 names removes the problem instead of reporting it, so the recap went with
+                 the pills. A destination's settings open when you switch it ON, and the
+                 header still opens and closes by hand, so one can be set up before being
+                 switched on — the rule the Sync tab follows too. -->
+
+            <!-- What the four switches below ARE. Without it the tab drops from the backup
+                 format straight into a row of unexplained names. The string is the one the
+                 recap used to head itself with (sync.dests_label) — already translated into
+                 all seven languages, and free the moment the recap went.
+                 "Destinations", not "sources": these are where the backup WRITES. The vault
+                 is the source, and calling them sources would name the wrong end of it. -->
 
             <!-- ── Section: Local (moved to the top, before WireGuard/WebDAV) ── -->
+            <!-- The destinations are ONE list, so the tab panel's 20px flex gap applies to the
+                 list as a whole instead of once between every pair. Stacked as direct children
+                 they sat 28px apart (20 of gap PLUS an 8px margin — in flexbox the two add up)
+                 on rows only 49px tall, which is what "troppo spazio" was. -->
+            <div class="sync-section-list">
+            <div class="bk-group-title" data-i18n="sync.dests_label">Backup Destinations</div>
+
             <div class="sync-section" id="bksec-local">
               <div class="sync-section-header" id="ssh-local">
                 <div class="sync-section-title">
@@ -827,7 +831,10 @@
                   <span class="sync-section-chevron" id="chevron-vpn">›</span>
                 </div>
               </div>
-              <div class="sync-section-body" id="ssb-vpn">
+              <!-- display:none like its three siblings. It had none: while the pills hid
+                   the whole section this body was simply always open, and nobody could
+                   tell. Listing every section made it the one that started expanded. -->
+              <div class="sync-section-body" id="ssb-vpn" style="display:none">
 
                 <!-- Configured/active summary — shown once setup is complete -->
                 <div id="wg-configured" style="display:none;flex-direction:column;gap:10px">
@@ -1014,7 +1021,8 @@
                 </div>
                 <div id="webdav-test-result" class="test-result"></div>
               </div>
-            </div><!-- sync-section webdav -->
+            </div>
+            </div><!-- /sync-section-list --><!-- sync-section webdav -->
 
           </div><!-- tab-sync -->
 
@@ -1032,13 +1040,15 @@
               <div id="twoway-test-result" class="test-result" style="display:none"></div>
             </div>
 
-            <!-- Two-way sync: a heading followed by TWO activation toggles, one per
-                 transport (WebDAV / WireGuard+Samba). They are MUTUALLY EXCLUSIVE —
-                 turning one on turns the other off — because the engine syncs with a
-                 single source of truth (_syncTwoway picks one transport). The legacy
-                 master toggle (#cfg-twoway-enabled) and transport selector
-                 (#tw-transport-pills) are kept HIDDEN and DERIVED from these toggles,
-                 so all existing save/validation/panel logic keeps working unchanged. -->
+            <!-- Two-way sync: THREE activation toggles, one per method (WebDAV / Samba /
+                 VPN+Samba). They are MUTUALLY EXCLUSIVE — turning one on turns the others
+                 off — because the engine syncs with a single source of truth (_syncTwoway
+                 picks one transport). The legacy master toggle (#cfg-twoway-enabled) is
+                 hidden and DERIVED from them, so all existing save/validation/panel logic
+                 keeps working unchanged. The transport selector this comment used to name
+                 alongside it is gone (2026-09-20) — and it had stopped being hidden long
+                 before that, which is how a comment ends up describing something that is
+                 not there in either sense. -->
             <!-- Frequency and Conflict copies come FIRST: they are global to
                  two-way sync — how it syncs, not where — so they stay put
                  whichever method is chosen. -->
@@ -1061,21 +1071,27 @@
               <label class="toggle"><input type="checkbox" id="cfg-twoway-fullsync" checked /><span class="slider"></span></label>
             </div>
 
-            <!-- Connection type — the same shape as Backup: the pills show ONE method
-                 section at a time, and that section's own toggle turns it on. -->
-            <div class="field-group">
-              <label data-i18n="sync.transport">Tipo di connessione</label>
-              <div class="draw-loc-pills" id="tw-transport-pills">
-                <button type="button" class="dlp" data-transport="webdav" data-i18n="sync.transport_webdav">WebDAV</button>
-                <button type="button" class="dlp" data-transport="samba" data-i18n="sync.transport_samba_only">Samba</button>
-                <button type="button" class="dlp active" data-transport="vpn" data-i18n="sync.transport_vpn">VPN</button>
-              </div>
-            </div>
+            <!-- The three methods are LISTED, like the Backup tab's destinations
+                 (2026-09-20): a row of pills used to pick which one section was on
+                 screen, and the other two vanished. Here the list is NOT four
+                 independent destinations, though — two-way sync has a single source of
+                 truth (_syncTwoway picks one transport), so the methods stay mutually
+                 exclusive and exactly one body is open at a time: the method you
+                 switched on, or the one whose header you clicked to fill in first.
+                 The heading reuses sync.transport, the label the pills carried — it was
+                 used nowhere else and is already translated into seven languages. -->
 
             <div id="tw-method-error" class="test-result fail" style="display:none;margin-top:6px" data-i18n="sync.twoway_one_only">Puoi attivare un solo metodo di sync alla volta: WebDAV, Samba oppure VPN.</div>
 
             <!-- Hidden: derived master enable (driven by the section toggles). -->
             <input type="checkbox" id="cfg-twoway-enabled" style="display:none" />
+
+            <!-- The destinations are ONE list, so the tab panel's 20px flex gap applies to the
+                 list as a whole instead of once between every pair. Stacked as direct children
+                 they sat 28px apart (20 of gap PLUS an 8px margin — in flexbox the two add up)
+                 on rows only 49px tall, which is what "troppo spazio" was. -->
+            <div class="sync-section-list">
+            <div class="bk-group-title" data-i18n="sync.transport">Connection Type</div>
 
             <div class="sync-section" id="twsec-webdav">
               <div class="sync-section-header" id="twsh-webdav">
@@ -1085,9 +1101,10 @@
                 </div>
                 <div class="sync-section-right">
                   <label class="toggle"><input type="checkbox" id="cfg-tw-webdav-enabled" /><span class="slider"></span></label>
+                  <span class="sync-section-chevron" id="twchevron-webdav">›</span>
                 </div>
               </div>
-              <div class="sync-section-body" id="twsb-webdav" style="display:flex">
+              <div class="sync-section-body" id="twsb-webdav" style="display:none">
             <!-- WebDAV two-way panel (shown when transport = webdav) -->
             <div class="wizard-panel" id="tw-webdav-panel" style="display:none">
               <div class="field-group">
@@ -1120,9 +1137,10 @@
                 </div>
                 <div class="sync-section-right">
                   <label class="toggle"><input type="checkbox" id="cfg-tw-lan-enabled" /><span class="slider"></span></label>
+                  <span class="sync-section-chevron" id="twchevron-samba">›</span>
                 </div>
               </div>
-              <div class="sync-section-body" id="twsb-samba" style="display:flex">
+              <div class="sync-section-body" id="twsb-samba" style="display:none">
             <!-- Samba two-way panel (shown when transport = samba): the share
                  fields and nothing else. No VPN to import — the server is on a
                  network this machine already reaches. Its own fields rather than
@@ -1167,9 +1185,10 @@
                 </div>
                 <div class="sync-section-right">
                   <label class="toggle"><input type="checkbox" id="cfg-tw-samba-enabled" /><span class="slider"></span></label>
+                  <span class="sync-section-chevron" id="twchevron-vpn">›</span>
                 </div>
               </div>
-              <div class="sync-section-body" id="twsb-vpn" style="display:flex">
+              <div class="sync-section-body" id="twsb-vpn" style="display:none">
             <!-- IDENTICAL view to Backup: configured summary + wizard. -->
             <!-- Configured/active summary — shown once setup is complete -->
             <div id="twoway-conn-ok" style="display:none;flex-direction:column;gap:10px">
@@ -1323,6 +1342,7 @@
             </div><!-- sync-section vpn -->
 
             </div>
+            </div><!-- /sync-section-list -->
 
           </div><!-- tab-twoway -->
 
@@ -1333,7 +1353,7 @@
 
               <!-- Colours here are only the pre-JS fallback: paintAllThemePreviews()
                    repaints every card from the real palette in style.css. -->
-              <div class="theme-card active" data-theme="serekkr" title="Serekkr (default)">
+              <div class="theme-card active" data-theme="serekkr" title="Cyan Dark (default)">
                 <div class="theme-preview">
                   <div class="tp-sidebar" style="background:#0e171c"></div>
                   <div class="tp-editor" style="background:#0a1014">
@@ -1344,7 +1364,7 @@
                     <div class="tp-line short" style="background:#5fa8e0"></div>
                   </div>
                 </div>
-                <div class="theme-name">Serekkr</div>
+                <div class="theme-name">Cyan Dark</div>
               </div>
 
               <div class="theme-card" data-theme="graphite" title="Graphite">
@@ -1655,21 +1675,36 @@
               <label class="toggle"><input type="checkbox" id="cfg-disable-gpu" /><span class="slider"></span></label>
             </div>
 
-            <!-- GPU compositing: ON = composite on the GPU (default, smooth drawing),
-                 OFF = software compositing, which clears the "ghost" rectangles some
-                 compositors leave but halves the frame rate while drawing. Restart. -->
+            <!-- GPU compositing had a toggle here and no longer does (2026-09-20): beside
+                 "GPU rendering" the two read as the same switch twice, which is how it was
+                 reported. They were never the same — GPU rendering drops ALL of it into
+                 software, this one moved only the compositing — but the narrower one is the
+                 harder to explain, and the broader one already covers the case where the
+                 GPU is the problem. `softwareCompositing` is still honoured by
+                 startupFlags.js for anyone who sets it in settings.json by hand; only the
+                 control is gone. Its translations are kept in i18n.js, as the low-memory
+                 ones were through their own removal, so bringing it back needs no
+                 re-translation into seven languages. -->
+
+            <!-- Once a day at startup, one GET to the GitHub releases API, and a line in
+                 the bell if a newer version exists. It never installs anything: Amelie
+                 ships as a .run, not an AppImage on an update channel. This is also the
+                 only request the app makes to anywhere other than the user's own share,
+                 which is why it is a switch and not simply a behaviour. -->
             <div class="field-group toggle-row">
-              <label data-i18n-html="settings.sw_compositing">Compositing GPU <small>(On = compositing sulla GPU · Off = compositing software · richiede riavvio)</small></label>
-              <label class="toggle"><input type="checkbox" id="cfg-gpu-compositing" /><span class="slider"></span></label>
+              <label data-i18n-html="settings.update_check">Check for updates <small>(On = asks GitHub once a day · notifies only)</small></label>
+              <label class="toggle"><input type="checkbox" id="cfg-update-check" checked /><span class="slider"></span></label>
             </div>
 
-            <!-- Low-memory mode: back in the UI (v1.0.51) and OFF by default. It was
-                 forced on for everyone from v1.0.643, and it costs about a core of
-                 extra CPU while drawing — measured 106% against 60%. -->
-            <div class="field-group toggle-row">
-              <label data-i18n-html="settings.low_memory">Modalità basso consumo <small>(On = meno RAM · UI un po' più lenta · richiede riavvio)</small></label>
-              <label class="toggle"><input type="checkbox" id="cfg-low-memory" /><span class="slider"></span></label>
-            </div>
+            <!-- Low-memory mode had a toggle here and no longer does (2026-09-20), the
+                 second of the two to go after GPU compositing. Measured on the machine
+                 this was decided on: Amelie was using 302 MB PSS of 31.6 GB, and the
+                 `--max-old-space-size=512` half of the mode could not even bind — the
+                 renderer's whole RSS was 152 MB, well under the cap. What was left to
+                 gain was tens of MB of Chromium cache against ~46 points of CPU while
+                 drawing. `lowMemory` is still honoured by startupFlags.js from
+                 settings.json, and the translations stay in i18n.js, exactly as they
+                 survived the v1.0.643 removal and were reused when it came back. -->
 
           </div>
 

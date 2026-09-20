@@ -137,6 +137,7 @@ contextBridge.exposeInMainWorld('inkwell', {
   // Platform info
   platform: process.platform,
   appVersion: () => ipcRenderer.invoke('app:getVersion'),
+  latestRelease: () => ipcRenderer.invoke('updates:latest'),
 
   // Events from main process
   onSyncStatus: (cb) => ipcRenderer.on('sync:statusUpdate', (_, data) => cb(data)),

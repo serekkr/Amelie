@@ -1,13 +1,13 @@
-// The two startup switches that stopped being defaults need a way back on, and
-// this is it: the pair of toggles in Settings. startup-flags.test.mjs holds what
-// each setting MEANS; this holds that the UI can actually set it — the half that
-// is worth nothing on its own, since the user whose compositor needs software
-// compositing has no other way to ask for it.
+// Neither startup switch has a toggle any more: GPU compositing lost its row on
+// 2026-09-20 for reading as "GPU rendering" said twice, and low-memory lost its the
+// same day, once measuring showed what it was worth on the machine in question
+// (302 MB PSS of 31.6 GB, with the 512 MB V8 cap never binding).
 //
-// Checked here: both toggles exist, they start the right way round (GPU
-// compositing on, low-memory off), the label is translated rather than the raw
-// i18n key, a click reaches settings.json under the right key, and reopening
-// Settings reads it back the same — the round trip, not just the write.
+// Both settings still WORK from settings.json — startup-flags.test.mjs owns that half
+// and is unchanged. What is left to check here is the half a unit test cannot see: the
+// rows really are gone from the running app, and the one remaining GPU control is not.
+// Asserted rather than merely untested, because startupFlags.js still reads both keys,
+// so nothing else would notice a row quietly coming back.
 //
 //   run: npm run test:gpuflags     (needs a display; uses xvfb-run when present)
 import fs from 'node:fs';
@@ -54,25 +54,20 @@ await sleep(2500);
 await ev('openSettings()'); await sleep(1200);
 const ok = [];
 const say = (n, p, d = '') => { ok.push(p); console.log(`${p ? 'ok  ' : 'FAIL'}  ${n}${p ? '' : '  — ' + d}`); };
-say('both toggles exist in Settings',
-  await ev(`!!document.getElementById('cfg-gpu-compositing') && !!document.getElementById('cfg-low-memory')`) === true);
-say('GPU compositing starts ON (fast) and low-memory starts OFF',
-  await ev(`document.getElementById('cfg-gpu-compositing').checked === true && document.getElementById('cfg-low-memory').checked === false`) === true,
-  await ev(`document.getElementById('cfg-gpu-compositing').checked + '/' + document.getElementById('cfg-low-memory').checked`));
-say('the labels are translated, not the raw key',
-  !/settings\.(sw_compositing|low_memory)/.test(await ev(`document.getElementById('cfg-gpu-compositing').closest('.field-group').textContent + document.getElementById('cfg-low-memory').closest('.field-group').textContent`) || 'x'));
-await ev(`document.getElementById('cfg-gpu-compositing').click()`); await sleep(600);
-await ev(`document.getElementById('cfg-low-memory').click()`); await sleep(900);
+say('the low-memory row is gone',
+  await ev(`!document.getElementById('cfg-low-memory')`) === true);
+say('the GPU compositing row is gone',
+  await ev(`!document.getElementById('cfg-gpu-compositing')`) === true);
+say('the GPU rendering row is still there',
+  await ev(`!!document.getElementById('cfg-disable-gpu')`) === true);
+say('its label is translated, not the raw key',
+  !/settings\.disable_gpu/.test(await ev(`document.getElementById('cfg-disable-gpu').closest('.field-group').textContent`) || 'x'));
+// Neither key may be written behind the user's back now that nothing in the UI sets them.
+await ev('closeSettings && closeSettings()'); await sleep(600);
 const c1 = JSON.parse(fs.readFileSync(SET, 'utf8'));
-say('turning GPU compositing OFF writes softwareCompositing: true', c1.softwareCompositing === true, JSON.stringify(c1.softwareCompositing));
-say('turning low-memory ON writes lowMemory: true', c1.lowMemory === true, JSON.stringify(c1.lowMemory));
-await ev('closeSettings && closeSettings()'); await sleep(400);
-await ev('openSettings()'); await sleep(1200);
-say('and both come back the same way round after reopening Settings',
-  await ev(`document.getElementById('cfg-gpu-compositing').checked === false && document.getElementById('cfg-low-memory').checked === true`) === true,
-  await ev(`document.getElementById('cfg-gpu-compositing').checked + '/' + document.getElementById('cfg-low-memory').checked`));
-await ev(`document.getElementById('cfg-gpu-compositing').click()`); await sleep(800);
-const c2 = JSON.parse(fs.readFileSync(SET, 'utf8'));
-say('and back ON writes softwareCompositing: false', c2.softwareCompositing === false, JSON.stringify(c2.softwareCompositing));
+say('closing Settings writes neither lowMemory nor softwareCompositing',
+  c1.lowMemory === undefined && c1.softwareCompositing === undefined,
+  JSON.stringify({ lowMemory: c1.lowMemory, softwareCompositing: c1.softwareCompositing }));
+
 console.log(`\n${ok.every(Boolean) ? `all ${ok.length} passed` : `${ok.filter(Boolean).length}/${ok.length}`}`);
 process.exit(ok.every(Boolean) ? 0 : 1);

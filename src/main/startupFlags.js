@@ -56,12 +56,17 @@ function startupFlags(cfg) {
   // Half the frame rate for twice the CPU — which is what "the draw goes in slow
   // motion" was, reported on an Ubuntu 26 LTS machine that never had the
   // ghosting bug in the first place (2026-09-10).
+  // Still honoured, but there is no longer a toggle for it: the Settings row was
+  // removed on 2026-09-20 because next to "GPU rendering" it read as the same switch
+  // listed twice. Set it in settings.json by hand if a compositor needs it.
   if (c.softwareCompositing) switches.push(['disable-gpu-compositing']);
 
   // Chromium's low-end-device-mode plus a 512 MB renderer heap. Forced on for
   // everyone from v1.0.643; it cuts raster threads and tile budgets, which a
   // canvas being drawn on feels immediately — the ~46 points of CPU between the
   // last two rows above.
+  // No toggle for this either, since 2026-09-20 — same reasoning as the compositing
+  // one above, and the same escape hatch: write it into settings.json by hand.
   if (c.lowMemory) {
     switches.push(['enable-low-end-device-mode']);
     switches.push(['js-flags', '--max-old-space-size=512']);

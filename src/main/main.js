@@ -1786,6 +1786,59 @@ app.on('before-quit', (event) => {
 
 
 ipcMain.handle('app:getVersion', () => app.getVersion());
+
+/**
+ * The newest published release, or null. ONE unauthenticated GET to the GitHub API.
+ *
+ * In the MAIN process, not the renderer: the renderer runs pages loaded from file://
+ * and note content that arrives over SMB/WebDAV, and giving that context a way to make
+ * outbound requests is not worth one version string.
+ *
+ * null for every failure — no network, GitHub down, a rate limit, a shape we did not
+ * expect. The caller can then say nothing at all, which is the only sensible thing for
+ * a check nobody asked for: an error about the update check is worse than not knowing.
+ * The tag is validated as digits and dots before it goes anywhere near a comparison,
+ * so a release named "nightly" or anything else cannot end up quoted in a notification.
+ * The body is capped: this parses a stranger's JSON and should not be able to eat RAM
+ * because the answer was not what we expected.
+ */
+ipcMain.handle('updates:latest', async () => {
+  return await new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    let req;
+    try {
+      req = require('https').get({
+        host: 'api.github.com',
+        path: '/repos/serekkr/Amelie/releases/latest',
+        // GitHub refuses a request without a User-Agent.
+        headers: { 'User-Agent': 'Amelie', 'Accept': 'application/vnd.github+json' },
+        timeout: 8000,
+      }, (res) => {
+        if (res.statusCode !== 200) { res.resume(); return finish(null); }
+        let buf = '';
+        res.setEncoding('utf8');
+        res.on('data', (c) => {
+          buf += c;
+          if (buf.length > 256 * 1024) { try { req.destroy(); } catch (_) {} finish(null); }
+        });
+        res.on('end', () => {
+          try {
+            const j = JSON.parse(buf);
+            const version = String(j.tag_name || '').replace(/^v/i, '');
+            if (!/^\d+(\.\d+){0,3}$/.test(version)) return finish(null);
+            const url = typeof j.html_url === 'string' && /^https:\/\/github\.com\//.test(j.html_url)
+              ? j.html_url : 'https://github.com/serekkr/Amelie/releases';
+            finish({ version, url });
+          } catch (_) { finish(null); }
+        });
+        res.on('error', () => finish(null));
+      });
+    } catch (_) { return finish(null); }
+    req.on('timeout', () => { try { req.destroy(); } catch (_) {} finish(null); });
+    req.on('error', () => finish(null));
+  });
+});
 ipcMain.on('window:startMove', () => { try { if (mainWindow && !mainWindow.isMaximized()) mainWindow.startMoving(); } catch(_) {} });
 
 // ─── IPC: Vault Setup ────────────────────────────────────────────────────────
