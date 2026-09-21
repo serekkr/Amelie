@@ -43,8 +43,16 @@ process.on('exit', () => { try { if (child) process.kill(-child.pid, 'SIGKILL');
 // and the non-ASCII the script actually contained.
 // The real thing: the script the user actually pasted, plus one line of the
 // entity spellings that must NOT be decoded on the way through.
-const PAYLOAD = fs.readFileSync(`${REPO}/map-tiles-gen.sh`, 'utf8').replace(/\n$/, '')
+// The user's own script is the best payload there is — it is what was pasted when the
+// fault was found — but it lives OUTSIDE git (.git/info/exclude), so on a machine that
+// does not have it this test used to die with ENOENT before the app even started, and
+// the paste guard was quietly not running at all. Fall back to the committed fixture,
+// which carries every rewrite _preprocessMarkdown performs, and SAY which one was used.
+const USER_SCRIPT = `${REPO}/map-tiles-gen.sh`;
+const PAYLOAD_SRC = fs.existsSync(USER_SCRIPT) ? USER_SCRIPT : `${REPO}/test/fixtures/code-fence-hazards.sh`;
+const PAYLOAD = fs.readFileSync(PAYLOAD_SRC, 'utf8').replace(/\n$/, '')
   + '\n# literal entities stay literal: &quot; &amp; &lt; &gt; &#39;';
+console.log(`payload: ${path.basename(PAYLOAD_SRC)} (${PAYLOAD.length} chars)`);
 
 fs.rmSync(HOME, { recursive: true, force: true });
 fs.mkdirSync(`${HOME}/.local/share/amelie`, { recursive: true });

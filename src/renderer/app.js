@@ -2481,9 +2481,14 @@ async function restoreSession() {
 
 // Gentle 254-char cap on EVERY user input (note/folder names, passwords, search,
 // settings fields, table cells, inline renames…). 254 < the filesystem's 255-byte
-// limit, so names never error. The note BODY editor (a <textarea>) is exempt —
-// only single-line <input>s and contenteditable fields are capped.
+// limit, so names never error. Every single-line <input> is capped automatically;
+// a CONTENTEDITABLE is capped only if it asks to be, by carrying `data-input-cap`
+// (see CAP_FIELD). The note body is a contenteditable too — see the warning on the
+// listener below for what capping it did.
 const INPUT_MAX = 254;
+// The marker a contenteditable carries to ask for that cap. Set it with capField().
+const CAP_FIELD = 'data-input-cap';
+function capField(el) { try { if (el) el.setAttribute(CAP_FIELD, '1'); } catch (_) {} return el; }
 // NAMES of things in the vault are capped much shorter, at 60 characters — asked
 // for on 2026-09-16, after the inline rename stopped hiding long names and it
 // turned out nothing was stopping a name from running on. It applies where a name
@@ -2506,9 +2511,25 @@ function enforceInputLimits() {
       if (n.querySelectorAll) n.querySelectorAll('input').forEach(cap);
     }
   }).observe(document.body, { childList: true, subtree: true });
-  // contenteditable fields (inline renames, table cells): gently truncate at the cap.
+  // The small contenteditable FIELDS (inline renames, table cells, a PDF text box):
+  // gently truncate at the cap. Opt-IN, never "every contenteditable".
+  //
+  // WHY OPT-IN. This used to cap any contenteditable, and CodeMirror's content DOM is
+  // one — so the note you were writing counted as a field. `textContent` on it is every
+  // line CONCATENATED, newlines and all structure gone, so the moment the visible text
+  // crossed 254 characters this rewrote the editor with one flat string: the whole note
+  // became a single line and everything past the cap was destroyed, on screen and then
+  // on disk. CodeMirror could not tell it from a real keystroke, because the clamp
+  // removes exactly ONE character — the one just typed — and read the flattened DOM
+  // back as the user's own edit. Reported 2026-09-21 against a note written as `step 1`
+  // / `step 2` paragraphs, which came back as `…idracstep2…`.
+  //
+  // A denylist would have to be extended for every editing surface added later, and
+  // forgetting costs the user their text. An allowlist fails the other way: forget the
+  // marker and a field simply is not capped, which is cosmetic. Mark a field with
+  // CAP_FIELD; guarded by test/input-cap-vs-editor.cdp.mjs.
   document.addEventListener('input', (e) => {
-    const el = e.target;
+    const el = e.target && e.target.closest ? e.target.closest(`[${CAP_FIELD}]`) : null;
     if (el && el.isContentEditable && el.textContent.length > INPUT_MAX) {
       el.textContent = el.textContent.slice(0, INPUT_MAX);
       try { const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
@@ -6297,6 +6318,7 @@ function makeCellEditable(table, cell) {
   if (cell.dataset.editable === '1') return;
   cell.dataset.editable = '1';
   cell.contentEditable = 'true';
+  capField(cell);          // opt in to the 254-char cap
   cell.spellcheck = false;
   cell.addEventListener('focus', () => {
     cell.dataset.origText = cell.textContent;
@@ -7192,6 +7214,7 @@ async function refreshAttachmentChips() {
     nameSpan.className = 'att-chip-name';
     nameSpan.textContent = name;
     nameSpan.contentEditable = 'true';
+    capField(nameSpan);   // opt in to the 254-char cap
     nameSpan.spellcheck = false;
     nameSpan.title = window.i18n.t('ctx.rename');
 
@@ -14646,6 +14669,7 @@ function _drawPageObjs(layer, page, scale, pageHpt) {
 // Make a text element editable; commit (or drop if empty) on blur.
 function _editTextObj(el, annot, layer, page) {
   el.contentEditable = 'true';
+  capField(el);           // opt in to the 254-char cap
   el.classList.add('editing');
   el.focus();
   const sel = window.getSelection();
