@@ -3964,7 +3964,16 @@ kbd {
   border-radius: 6px; cursor: pointer;
 }
 .simple-row:hover { background: var(--bg-3); }
-.simple-name { flex: 1; font-size: 14px; color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Every sidebar list that is not the tree — Recent, Bookmark, Tag, the ToDo vault
+   list — reads at the SAME size as the tree it stands in place of. It used to be a
+   fixed 14px against the tree's 13, so the same names looked bigger one click away,
+   and in Recent, where each row also carries a date, the whole column read heavy.
+   Asked for on 2026-09-22: "il font e troppo grande sia per la prima riga che per la
+   seconda … anche nella opzione tags e bookmarks".
+   --tree-font-size, not a number: both lines now follow "Dimensione font sidebar" in
+   Settings, exactly as the tree does. The notification rows keep their own smaller
+   size — see .notif-row .simple-name below, which has its own reason. */
+.simple-name { flex: 1; font-size: var(--tree-font-size, 13px); color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* (The rule that also brightened .simple-name to white on hover was removed: the
    background above is the whole feedback, and the label keeps its own colour.) */
 /* Notifications: smaller text, but ONE line — this is the same title as the bell's
@@ -3978,7 +3987,7 @@ kbd {
 }
 .simple-main { flex: 1; min-width: 0; cursor: pointer; }
 .simple-main .simple-name { display: block; }
-.simple-sub { font-family: var(--editor-font); font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+.simple-sub { font-family: var(--editor-font); font-size: calc(var(--tree-font-size, 13px) - 2px); color: var(--text-3); margin-top: 2px; }
 .simple-remove, .todo-v-del, .todo-v-move, .todo-v-check {
   flex-shrink: 0; background: transparent; border: 1px solid var(--border);
   color: var(--text-3); cursor: pointer; border-radius: 5px;
