@@ -708,13 +708,16 @@ html.is-mac #titlebar { padding-left: 72px; }
    ~#b2b2b2 against body ~#d8d8d8). The ladder is unchanged below: non-note files
    stay a further step down at --text-2, folders keep --text-0 at .9 opacity. */
 .tree-note .tree-name { color: var(--text-1); font-weight: 300; letter-spacing: .01em; }
-/* Files that are NOT notes — drawings, PDFs, audio, video, images — sit one step down
-   the grey ladder (--text-2 against the notes' --text-1). They are things a note points
-   at rather than notes themselves, and at the same white the tree read as one flat list.
-   Hovering or opening one brings it back to full white, so the row you are on is never
-   the dim one. `:not([data-color])` leaves a colour you set on a file alone — that is a
-   deliberate mark and outranks this. */
-.tree-note[data-kind]:not([data-color]) .tree-name { color: var(--text-2); }
+/* Files that are NOT notes — drawings, PDFs, audio, video, images — read at exactly
+   the same brightness as the notes, --text-1, which is what the rule above already
+   gives them. There is no rule here on purpose.
+   They used to sit one step down the grey ladder at --text-2, on the reasoning that
+   they are things a note points AT rather than notes themselves. In a vault whose
+   root is mostly PDFs and drawings that reasoning fails: half the list was dimmed
+   and the names were the hardest ones to read. Asked for on 2026-09-22 — "si devono
+   vedere tutte con il colore bianco la scritta" — so do not put the ladder back.
+   Everything else about these rows is unchanged: the icon stays --text-3, an open one
+   takes the accent, and a colour set on a file still outranks all of this. */
 /* Open: the accent, like any open note. HOVER is deliberately absent — the row lights
    up behind the text and the name keeps its own colour, dim included. */
 .tree-note[data-kind]:not([data-color]).active .tree-name { color: var(--accent); }
