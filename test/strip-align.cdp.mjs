@@ -52,6 +52,9 @@ await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
 let id = 0; const pending = new Map();
 ws.onmessage = e => { const m = JSON.parse(e.data); if (pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } };
 const ev = x => new Promise(res => { const my = ++id; pending.set(my, m => res(m.result?.result?.value)); ws.send(JSON.stringify({ id: my, method: 'Runtime.evaluate', params: { expression: x, awaitPromise: true, returnByValue: true } })); setTimeout(() => { if (pending.delete(my)) res(null); }, 20000); });
+// Same channel, any domain: the narrow-window case below squeezes the viewport
+// with Emulation rather than resizing the real window, which xvfb will not do.
+const cdp = (method, params) => new Promise(res => { const my = ++id; pending.set(my, m => res(m.result)); ws.send(JSON.stringify({ id: my, method, params })); setTimeout(() => { if (pending.delete(my)) res(null); }, 20000); });
 await sleep(1800);
 const results = []; const check = (n, p, d) => { results.push(p); console.log(`${p ? 'ok  ' : 'FAIL'}  ${n}${p ? '' : `\n        ${d}`}`); };
 
@@ -89,6 +92,32 @@ for (const z of [70, 130, 100]) {
   check(`still level at icon size ${z}% (gap ${g && g.gap}px), icons still centred (${g && g.above}/${g && g.below})`,
     !!g && Math.abs(g.gap) <= 1 && Math.abs(g.above - g.below) <= 2, JSON.stringify(g));
 }
+
+// …but only while there IS a toolbar row to meet. Narrow the window and the
+// breadcrumb and the formatting row fold onto several lines, dropping the
+// toolbar 100–200px: following that hollowed the sidebar out, leaving the five
+// icons floating in the middle of an empty strip with the note list pushed off
+// the top of the window (2026-09-22, v1.0.83 — 75.65px of padding a side, kept
+// in localStorage and restored on every start). Past the cap the strip keeps
+// its authored padding instead.
+const pad = () => ev(`(() => {
+  const s = document.getElementById('sidebar-views');
+  const cs = getComputedStyle(s);
+  return { top: Math.round(parseFloat(cs.paddingTop) || 0), bottom: Math.round(s.getBoundingClientRect().bottom) };
+})()`);
+const narrow = await (async () => {
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 620, height: 900, deviceScaleFactor: 1, mobile: false });
+  await sleep(900);
+  const p = await pad();
+  await cdp('Emulation.clearDeviceMetricsOverride', {});
+  await sleep(900);
+  return p;
+})();
+check(`a window too narrow for one toolbar row leaves the strip alone (${narrow && narrow.top}px of padding, was 76)`,
+  !!narrow && narrow.top <= 28, JSON.stringify(narrow));
+const back = await gap();
+check(`and the rules meet again as soon as the window is wide (gap ${back && back.gap}px)`,
+  !!back && Math.abs(back.gap) <= 1, JSON.stringify(back));
 
 console.log(`\n${results.every(Boolean) ? `all ${results.length} passed` : `${results.filter(Boolean).length}/${results.length} —`}`);
 process.exit(results.every(Boolean) ? 0 : 1);

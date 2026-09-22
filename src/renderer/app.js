@@ -1536,6 +1536,19 @@ function applyAppearance(prefs = {}) {
 let _stripAlignObs = null;
 let _stripPad = null;          // null = never measured; '' = authored padding is already right
 const STRIP_PAD_KEY = 'amelie.strip-pad';
+// How far the strip may be pushed down to meet the toolbar, in pre-zoom px.
+// The real gap is small and moves only with the icon size — 16px at 70%, 20 at
+// 100%, 28 at 130%. Anything larger does not come from the icons: it comes from
+// the right-hand column WRAPPING. In a narrow window the breadcrumb and the
+// formatting row fold onto two, three, four lines and the toolbar drops with
+// them — measured on the real CSS: delta 7px at 2075px wide, 16 at 900, 35 at
+// 700, 216 at 560. Following that is not alignment, it is a hole: the five
+// sidebar icons end up marooned in the middle of a 200px-tall empty strip with
+// the note list pushed far down the window (reported 2026-09-22 against
+// v1.0.83, which had 75.65px stored). There is no single toolbar ROW to line up
+// with once it has wrapped, so past this point the strip keeps its authored
+// padding and simply sits where it was designed to sit.
+const STRIP_PAD_MAX = 48;
 function _applyStripPad(strip) {
   if (_stripPad == null) return;                             // nothing measured yet — leave it
   strip.style.paddingTop = strip.style.paddingBottom = _stripPad;
@@ -1559,7 +1572,9 @@ function alignSidebarStrip() {
   const baseBottom = parseFloat(cs.paddingBottom) || 0;
   const zoom = parseFloat(cs.zoom) || 1;
   const delta = (tb.bottom - strip.getBoundingClientRect().bottom) / zoom;
-  if (delta <= 0.5) { _rememberStripPad(''); return; }       // authored padding aligns it
+  // Nothing to correct, or too much to be a correction at all (see STRIP_PAD_MAX):
+  // either way the authored padding — already restored above — is what stays.
+  if (delta <= 0.5 || delta > STRIP_PAD_MAX) { _rememberStripPad(''); return; }
   const half = (baseTop + baseBottom + delta) / 2;
   _rememberStripPad(half + 'px');
   _applyStripPad(strip);
@@ -1571,9 +1586,20 @@ function watchSidebarStripAlign() {
   if (!toolbar || !header) return;
   // Last session's value, so a window that opens on a PDF already has the gap a
   // note would give it. Overwritten by the first real measurement.
+  //
+  // A value from before the cap existed is thrown away rather than applied: an
+  // installed copy that once measured itself in a narrow window carries the hole
+  // in localStorage, and re-applying it would show it again on every start —
+  // including on a PDF, where there is nothing to re-measure against.
   try {
+    const strip = document.getElementById('sidebar-views');
     const saved = localStorage.getItem(STRIP_PAD_KEY);
-    if (saved !== null) { _stripPad = saved; _applyStripPad(document.getElementById('sidebar-views')); }
+    if (saved !== null) {
+      const cs = strip ? getComputedStyle(strip) : null;
+      const base = cs ? (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0) : 0;
+      if ((parseFloat(saved) || 0) > (base + STRIP_PAD_MAX) / 2) localStorage.removeItem(STRIP_PAD_KEY);
+      else { _stripPad = saved; _applyStripPad(strip); }
+    }
   } catch (_) {}
   // Observing both: the toolbar changes size with the icon zoom, and the header
   // above it changes height when a note brings a tags or source row, which
