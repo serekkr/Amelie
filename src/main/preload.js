@@ -100,6 +100,8 @@ contextBridge.exposeInMainWorld('inkwell', {
   savePdfBytes: (name, b64) => ipcRenderer.invoke('pdf:savePdfBytes', name, b64),
   savePdfBytesAsNew: (name, b64, suffix) => ipcRenderer.invoke('pdf:savePdfBytesAsNew', name, b64, suffix),
   pickPdfImage: () => ipcRenderer.invoke('pdf:pickImage'),
+  // A photo pasted onto a PDF page that arrived as a PATH, not as bytes.
+  pdfImageFromPath: (p) => ipcRenderer.invoke('pdf:imageFromPath', p),
   pickPdfForMerge: () => ipcRenderer.invoke('pdf:pickPdf'),
   applyPdfPageOps: (name, plan, sources, opts) => ipcRenderer.invoke('pdf:applyPageOps', name, plan, sources, opts),
   compressPdf: (name, level, label) => ipcRenderer.invoke('pdf:compress', name, level, label),

@@ -14608,13 +14608,23 @@ function _dragObj(handleEl, scale, onStart, onMove, onDone) {
     // drawn. Reading a stale draw-time origin made a second drag jump back.
     const base = onStart ? onStart() : null;
     const move = (e) => onMove((e.clientX - sx) / scale, -(e.clientY - sy) / scale, base);
+    // pointerup is NOT the only way a drag ends. A cancelled pointer, or a lost
+    // capture (the window loses focus, the overlay is scrolled, a dialog opens),
+    // ends it without one — and with only pointerup listened for, `move` stayed
+    // bound: the photo then followed the bare pointer around the page with no
+    // button held, and every further drag stacked another live listener on top.
+    // Nothing looks more like a jammed editor.
     const up = () => {
       handleEl.removeEventListener('pointermove', move);
       handleEl.removeEventListener('pointerup', up);
+      handleEl.removeEventListener('pointercancel', up);
+      handleEl.removeEventListener('lostpointercapture', up);
       onDone && onDone();
     };
     handleEl.addEventListener('pointermove', move);
     handleEl.addEventListener('pointerup', up);
+    handleEl.addEventListener('pointercancel', up);
+    handleEl.addEventListener('lostpointercapture', up);
   });
 }
 
@@ -14789,7 +14799,25 @@ async function addPdfImage() {
   if (_pdfTool !== 'image') setPdfTool('image');
   let res;
   try { res = await window.inkwell.pickPdfImage(); } catch (e) { console.error(e); return; }
-  if (!res || !res.dataB64) return;
+  await _placePdfImage(res);
+}
+
+// Photos a PDF page will take, and what a pasted one may weigh. pdf-lib embeds
+// PNG and JPEG only (embedPng/embedJpg) — anything else would be accepted here
+// and then refused at save time, with the work already done.
+const PDF_IMAGE_MIME_RE = /^image\/(png|jpe?g)$/i;
+const PDF_IMAGE_PATH_RE = /\.(png|jpe?g)$/i;
+const PDF_IMAGE_MAX_BYTES = 64 * 1024 * 1024;   // keep in step with main.js
+
+// Place one image annotation, centred on the page most in view. Shared by the
+// toolbar's picker and by Ctrl+V, so a pasted photo behaves exactly like a
+// picked one: same size on the page, same drag/resize, same bake on save.
+async function _placePdfImage(res) {
+  if (!res || !res.dataB64) return false;
+  // Arm the image tool, or the photo lands on the page and cannot be touched:
+  // .pdf-obj-layer only takes pointer events in image (or text) mode, so without
+  // this a pasted photo could not be dragged or resized at all.
+  if (_pdfTool !== 'image') setPdfTool('image');
   const url = `data:${res.mime};base64,${res.dataB64}`;
   const dim = await new Promise((r) => {
     const im = new Image();
@@ -14797,10 +14825,10 @@ async function addPdfImage() {
     im.onerror = () => r(null);
     im.src = url;
   });
-  if (!dim || !dim.w) { alert(window.i18n.t('pdf.invalid_image')); return; }
+  if (!dim || !dim.w) { alert(window.i18n.t('pdf.invalid_image')); return false; }
   const page = _currentPdfPage();
   const ol = _pdfContainer?.querySelector(`.pdf-obj-layer[data-page="${page}"]`);
-  if (!ol) return;
+  if (!ol) return false;
   const pageWpt = +ol.dataset.wpt, pageHpt = +ol.dataset.hpt;
   const ratio = dim.h / dim.w;
   const w = pageWpt * 0.4;
@@ -14813,6 +14841,80 @@ async function addPdfImage() {
   _pdfAnnots.push(a);
   _markPdfDirty();
   _redrawPage(page);
+  return true;
+}
+
+// ── Ctrl+V on a PDF page ─────────────────────────────────────────────────────
+// Until now the only way a photo could reach a page was the toolbar's image
+// button, which opens a NATIVE file dialog — modal on the main window, so while
+// it is up (or, on Wayland, while it is failing to come up) the app is frozen by
+// design and looks broken. Asked for on 2026-09-22, in the middle of signing a
+// document: copy the photo anywhere, Ctrl+V, and it lands on the page you are
+// looking at. No dialog.
+//
+// Bound on the document because the viewer holds no focusable element of its own
+// — a page is canvas + overlays, nothing takes a caret — so there is nothing
+// closer to listen on. It therefore has to stand aside for every field that owns
+// its own paste: a PDF text box being typed in, a form widget, the note editor
+// behind the overlay.
+async function _onPdfPaste(e) {
+  if (!_pdfAttName || !_pdfContainer) return;
+  const ov = document.getElementById('pdf-overlay');
+  if (!ov || ov.style.display === 'none') return;
+  const t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''))) return;
+
+  const cd = e.clipboardData;
+  const items = [...(cd?.items || [])];
+  const hasFileItem = items.some(i => i.kind === 'file');
+  const plain = cd?.getData('text/plain') || '';
+  const uriList = cd?.getData('text/uri-list') || '';
+  // Ordinary copied TEXT: leave it alone and, above all, do not reach for the
+  // system clipboard below — readClipboardFilePaths is a synchronous IPC that
+  // shells out to wl-paste with a 2s timeout, which on a plain Ctrl+V would be
+  // the very freeze this is meant to remove. Same guard as the note editor's.
+  const lines = plain.split('\n').map(l => l.trim()).filter(Boolean);
+  const textIsPaths = lines.length > 0 && lines.every(l => /^(file:\/\/|\/)/.test(l));
+  if (!hasFileItem && !uriList && plain && !textIsPaths) return;
+
+  // BYTES first — a screenshot, or an image copied out of a browser, has no
+  // path at all, only an image/* blob.
+  const file = items.filter(i => i.kind === 'file').map(i => i.getAsFile())
+    .find(f => f && f.size > 0 && PDF_IMAGE_MIME_RE.test(f.type || ''));
+  if (file) {
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (file.size > PDF_IMAGE_MAX_BYTES) { showToast(window.i18n.t('pdf.image_too_large')); return; }
+    try {
+      const mime = /png$/i.test(file.type) ? 'image/png' : 'image/jpeg';
+      await _placePdfImage({ mime, dataB64: _u8ToB64(new Uint8Array(await file.arrayBuffer())) });
+    } catch (err) { console.error('PDF paste (bytes) failed:', err); showToast(window.i18n.t('pdf.invalid_image')); }
+    return;
+  }
+
+  // A photo copied in the FILE MANAGER carries a path and nothing else. Read the
+  // desktop formats ourselves before falling back to the main process: the sync
+  // IPC is the expensive one, and on most desktops it is not needed.
+  const fromText = [...uriList.split('\n'), ...(textIsPaths ? lines : [])]
+    .map(l => l.trim()).filter(Boolean)
+    .map(l => { try { return decodeURIComponent(l.replace(/^file:\/\//, '')); } catch (_) { return ''; } })
+    .filter(p => PDF_IMAGE_PATH_RE.test(p));
+  let src = fromText[0];
+  if (!src) {
+    try { src = (window.inkwell.readClipboardFilePaths?.() || []).find(p => PDF_IMAGE_PATH_RE.test(p)); } catch (_) {}
+  }
+  if (!src) {
+    // Something WAS copied — a file, or a path we cannot use — but it is not a
+    // photo this page can take. Say so, rather than swallow the keystroke.
+    if (hasFileItem || uriList || textIsPaths) { e.preventDefault(); showToast(window.i18n.t('pdf.paste_not_image')); }
+    return;
+  }
+  e.preventDefault(); e.stopImmediatePropagation();
+  try {
+    await _placePdfImage(await window.inkwell.pdfImageFromPath(src));
+  } catch (err) {
+    console.error('PDF paste (path) failed:', src, err);
+    showToast(window.i18n.t(/IMAGE_TOO_LARGE/.test(err?.message || '') ? 'pdf.image_too_large' : 'pdf.invalid_image'));
+  }
 }
 
 // If the form has user edits, return the filled PDF bytes (base64) via pdf.js
@@ -17718,6 +17820,9 @@ function setupFileDrop() {
     _pdfSizeSel.addEventListener('change', (e) => setPdfTextSize(e.target.value));
   }
   $('pdf-tool-image')?.addEventListener('click', () => addPdfImage());
+  // Ctrl+V of a photo onto the page being signed (see _onPdfPaste). On the
+  // document, in capture: the viewer owns no focusable element to bind to.
+  document.addEventListener('paste', _onPdfPaste, true);
   $('pdf-undo')?.addEventListener('click', () => undoPdfAnnot());
   $('pdf-save')?.addEventListener('click', () => savePdfEdits());
   $('pdf-save-as')?.addEventListener('click', () => savePdfEditsAsNew());

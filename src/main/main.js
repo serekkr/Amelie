@@ -4043,6 +4043,28 @@ ipcMain.handle('pdf:pickImage', async () => {
   return { mime, dataB64: bytes.toString('base64') };
 });
 
+// Same payload, but for a photo COPIED in the file manager and pasted onto the
+// page with Ctrl+V: the clipboard then carries only a path, never the bytes.
+// The renderer picked that path out of the system clipboard, so it is untrusted
+// input — the extension gate is the same one importPath uses, and for the same
+// reason: without it a compromised renderer could name any file on disk and read
+// it back out of the PDF it was baked into. pdf-lib embeds PNG and JPEG only,
+// which is also why the picker's filter is these two.
+const PDF_IMAGE_EXT = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
+// A photo is BASE64 in the annotation, in the page's DOM and again in the saved
+// file, so a phone-sized panorama costs several times its own weight in memory
+// before it ever reaches pdf-lib. 64 MB is far above any signature or scan and
+// still far below the point where placing one stalls the window.
+const MAX_PDF_IMAGE_BYTES = 64 * 1024 * 1024;
+ipcMain.handle('pdf:imageFromPath', async (_, srcPath) => {
+  const mime = PDF_IMAGE_EXT[path.extname(String(srcPath || '')).toLowerCase()];
+  if (!mime) throw new Error('Unsupported image type');
+  const st = fs.statSync(srcPath);
+  if (!st.isFile()) throw new Error('Not a file');
+  if (st.size > MAX_PDF_IMAGE_BYTES) throw new Error('IMAGE_TOO_LARGE');
+  return { mime, dataB64: fs.readFileSync(srcPath).toString('base64') };
+});
+
 // Open file dialog, copy to images dir with readable name
 ipcMain.handle('attachment:openDialog', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
