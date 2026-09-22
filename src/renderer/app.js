@@ -138,17 +138,24 @@ function openTab(node, activate = true) {
     openAttachmentNode(node, activate);
     return;
   }
+  // A DRAWING needs the canvas for the same reason, and it is not an attachment
+  // node — it lives in notes/ beside the .md files. Without this a drawing reached
+  // by path (Recent, a bookmark, a tag) opened as a NOTE and put its raw
+  // Excalidraw JSON in the editor. The tree never hit it because openNote routes
+  // draws before it ever gets here.
+  if (node && (node.type === 'draw' || /\.draw$/i.test(node.path || ''))) {
+    openDrawFile(node, activate);
+    return;
+  }
   // Focus-based routing: with the split pane open and last focused, a click on
   // a note (sidebar tree, recent/bookmarks/tags lists, links) loads it into
   // the SPLIT pane instead of the main tabs. Only regular .md notes — special
   // views (canvas/pdf/mindmap) always go through the normal tab flow.
   if (_splitPath && _focusedPane === 'split' && node && node.path
       && (!node.type || node.type === 'note') && /\.md$/i.test(node.path)) {
-    try { pushRecent(node); } catch(_) {}
     openSplitView(node.path, node.name, _splitOrient);
     return;
   }
-  if (node && node.path) try { pushRecent(node); } catch(_) {}
   const existing = tabs.findIndex(t => t.path === node.path);
   if (existing !== -1) { if (activate) switchTab(existing); return; }
   tabs.push({
@@ -2723,19 +2730,19 @@ async function loadTree() {
   requestAnimationFrame(() => renderTree());
 }
 
-// Remove Recent/Bookmark entries whose note no longer exists in the tree
-// (deleted / renamed / moved). Keyed by path, so a stale path lingers forever
-// otherwise. Runs on every loadTree (unlock + refresh). GUARD: skip if the tree
-// is empty — a transient listNotes() failure must NOT wipe every saved entry.
+// Remove Bookmark entries whose note no longer exists in the tree (deleted /
+// renamed / moved). Keyed by path, so a stale path lingers forever otherwise.
+// Runs on every loadTree (unlock + refresh). GUARD: skip if the tree is empty —
+// a transient listNotes() failure must NOT wipe every saved bookmark.
+// Recent is not pruned any more: it IS the tree now, so a file that is gone from
+// the tree is already gone from the list.
 function pruneSidebarOrphans() {
   try {
     if (!state.notes || !state.notes.length) return;
-    for (const key of [RECENT_KEY, BOOKMARKS_KEY]) {
-      const list = _lsGet(key);
-      if (!list.length) continue;
-      const kept = list.filter(it => it && it.path && _findNode(it.path));
-      if (kept.length !== list.length) _lsSet(key, kept);
-    }
+    const list = _lsGet(BOOKMARKS_KEY);
+    if (!list.length) return;
+    const kept = list.filter(it => it && it.path && _findNode(it.path));
+    if (kept.length !== list.length) _lsSet(BOOKMARKS_KEY, kept);
   } catch (_) {}
 }
 
@@ -3225,7 +3232,6 @@ async function openNote(node, opts) {
   // Focus-based routing: with the split pane open and last focused, the
   // clicked note loads into the SPLIT pane; main tab and its note stay put.
   if (_splitPath && _focusedPane === 'split' && node.path && /\.md$/i.test(node.path)) {
-    try { pushRecent(node); } catch(_) {}
     openSplitView(node.path, node.name, _splitOrient);
     return;
   }
@@ -3551,12 +3557,12 @@ function noteSaved(tab) {
   const wasSameDay = !!(node && node.modified
     && _fmtDateDMY(new Date(node.modified).getTime()) === _fmtDateDMY(new Date(when).getTime()));
   if (node) node.modified = when;
-  // Autosave fires every few seconds while you type. Once the note is on top of
-  // Recents carrying today's date there is nothing left for a later save to
-  // change, and renderRecentView() walks the whole tree once per row — not work
-  // to repeat under the cursor.
-  if (wasSameDay && _lsGet(RECENT_KEY)[0]?.path === tab.path) return;
-  try { pushRecent(node || { path: tab.path, name: tab.name }); } catch (_) {}
+  // This date is what ORDERS the Recent view, so a save has to refresh it — but
+  // autosave fires every few seconds while you type, and once the row already
+  // carries today's date there is nothing left for a later save to change. Only a
+  // date that actually moved redraws, and only while that view is the one showing.
+  if (wasSameDay) return;
+  if (_sidebarView === 'recent') { try { renderRecentView(); } catch (_) {} }
 }
 
 function setSavedState(saved) {
@@ -17937,21 +17943,16 @@ function saveTasks() {
 function genTaskId() { return 't' + Date.now() + Math.random().toString(36).slice(2,6); }
 
 // ═══ Viste sidebar: Files · Recent · Bookmarks · Tags · ToDo ═══════════════════
-const RECENT_KEY = 'amelie-recent';
+// No RECENT_KEY any more: Recent is read from the vault itself (see
+// renderRecentView). The old `amelie-recent` history is left in localStorage
+// rather than deleted — it costs nothing and it is the only record of what was
+// opened, should that list ever be wanted back as a view of its own.
 const BOOKMARKS_KEY = 'amelie-bookmarks';
 let _sidebarView = 'files';
 
 function _lsGet(k) { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch(_) { return []; } }
 function _lsSet(k, a) { try { localStorage.setItem(k, JSON.stringify(a)); } catch(_) {} }
 function _baseName(p) { return (p || '').split('/').pop().replace(/\.md$/, ''); }
-
-function pushRecent(node) {
-  if (!node || !node.path) return;
-  let r = _lsGet(RECENT_KEY).filter(x => x.path !== node.path);
-  r.unshift({ path: node.path, name: node.name || _baseName(node.path) });
-  _lsSet(RECENT_KEY, r.slice(0, 30));
-  if (_sidebarView === 'recent') renderRecentView();
-}
 
 function isBookmarked(p) { return _lsGet(BOOKMARKS_KEY).some(x => x.path === p); }
 function toggleBookmark(node) {
@@ -17979,12 +17980,39 @@ function _simpleRow(label, onClick, onRemove) {
   return row;
 }
 
+// Every FILE in the vault — notes, drawings, PDFs, photos, audio, video — newest
+// MODIFIED first. One walk of the tree, not one per row.
+const RECENT_MAX = 30;
+function _recentFiles(limit = RECENT_MAX) {
+  const out = [];
+  (function walk(nodes) {
+    for (const n of (nodes || [])) {
+      if (n.type === 'folder' || n.children) { walk(n.children); continue; }
+      if (n.path) out.push(n);
+    }
+  })(state.notes || []);
+  const t = (n) => { const v = Date.parse(n && n.modified); return Number.isFinite(v) ? v : 0; };
+  return out.sort((a, b) => t(b) - t(a)).slice(0, limit);
+}
+
+// Recent used to be the history of what you had OPENED, kept in localStorage
+// (`amelie-recent`, written by pushRecent on every open). Two things were wrong
+// with it, reported 2026-09-22 — "ho creato file nuovi ma nella tabella recent
+// files non vedo i ultimi":
+//   • it was ordered by when you last opened a file while each row PRINTED the
+//     modification date, so the dates read out of order — a note from 29 August
+//     sat above three written the same afternoon,
+//   • and a drawing, a PDF or a photo never entered it at all: openNote returns
+//     for those before the line that recorded the open, and openDrawFile /
+//     openPdfFile push their tab without going through openTab either.
+// It is now what the name and the "Modified" line promise: the vault's own files,
+// newest modified at the top, whether or not you have ever opened them.
 function renderRecentView() {
   const c = $('recent-list'); if (!c) return; c.innerHTML = '';
-  const r = _lsGet(RECENT_KEY);
+  const r = _recentFiles();
   if (!r.length) { c.innerHTML = `<div class="view-empty">${window.i18n.t('section.recent_empty')}</div>`; return; }
   r.forEach(it => {
-    const node = _findNode(it.path);
+    const node = it;
     const mod = node && node.modified ? new Date(node.modified).getTime() : null;
     const row = document.createElement('div'); row.className = 'simple-row';
     const main = document.createElement('div'); main.className = 'simple-main';
