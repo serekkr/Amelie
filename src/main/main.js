@@ -1266,7 +1266,7 @@ function _backupBeforeShrink(filePath, relPath, oldBody, newBody) {
   } catch (_) {}
 }
 
-function writeNoteContent(relPath, content, keepModified) {
+function writeNoteContent(relPath, content, keepModified, dates) {
   _internalWriteUntil = Date.now() + 1500;   // suppress the vault watcher for our own saves
   const filePath = noteFilePath(relPath);
   const dir = path.dirname(filePath);
@@ -1315,6 +1315,17 @@ function writeNoteContent(relPath, content, keepModified) {
           : _readModifiedHead(filePath);
         if (prev) modified = prev;
       } catch (_) {}
+    }
+    // `dates`: a note that arrives from OUTSIDE already has a history. The block
+    // above can only recover `created` from a file that is already here, and on an
+    // import there is none — so both dates were stamped with the moment of the copy
+    // and years of notes were flattened onto one afternoon. Found on 2026-09-22
+    // after importing 982 Obsidian notes: every one of them said "created today",
+    // and the source's own `created: 2025-05-31` was thrown away by the strip below.
+    // Only used when the note is NEW here; an existing note's own `created` wins.
+    if (dates) {
+      if (!created && dates.created) created = dates.created;
+      if (dates.modified) modified = dates.modified;
     }
     // content is the clean body (frontmatter stripped on read); strip again
     // defensively so we never nest two frontmatter blocks.
@@ -2198,9 +2209,17 @@ ipcMain.handle('vault:importObsidian', async (_, rawSrc, destFolder) => {
   let images = 0, pdfs = 0, media = 0;
   for (const a of attFiles) {
     try {
+      // Images go to images/ like everything else in the vault — NOT to the
+      // attachments root. The root was the odd one out: migrateImagesToImagesFolder
+      // runs at every start and moves them into images/ anyway, rewriting the links
+      // as it goes. So an import left them where the next launch would move them
+      // from, and a SECOND import of the same folder then found nothing to dedup
+      // against (the files had been moved out of the folder it compares) and wrote
+      // 229 fresh copies of images already in the vault. Seen on 2026-09-22.
       const sub = /\.pdf$/i.test(a.r) ? 'pdf/'
                 : /\.(mp4|mov|webm)$/i.test(a.r) ? 'videos/'
                 : /\.(mp3|wav|m4a)$/i.test(a.r) ? 'audio/'
+                : /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(a.r) ? 'images/'
                 : '';
       const leaf = await saveAttachmentBuffer(sub + path.basename(a.r), fs.readFileSync(a.full));
       byBase.set(path.basename(a.r).toLowerCase(), leaf);
@@ -2238,12 +2257,45 @@ ipcMain.handle('vault:importObsidian', async (_, rawSrc, destFolder) => {
   // import appears as ONE folder with its subfolders inside (preserving the Obsidian
   // hierarchy) rather than scattering the top-level subfolders at the vault root.
   const rootName = path.basename(src.replace(/[\\/]+$/, '')) || 'import';
+  // Dates the note ALREADY has, so importing does not flatten a vault's whole
+  // history onto the afternoon it was copied (2026-09-22: 982 notes all landed
+  // saying "created today", and the Recent view, which sorts by this, became one
+  // undifferentiated block). Obsidian writes `created:`/`updated:` in its own
+  // frontmatter, in ISO with a T; some notes carry none at all, and those fall back
+  // to what the filesystem knows. Everything is normalised to Amelie's own
+  // `YYYY-MM-DD HH:MM` — a date written in any other shape would be shown verbatim
+  // and sort as a string.
+  const _fmDate = (v) => {
+    const m = String(v || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+    return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4] || '00'}:${m[5] || '00'}` : null;
+  };
+  const _srcDates = (text, file) => {
+    let fmCreated = null, fmModified = null;
+    const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (m) {
+      const get = (k) => { const g = m[1].match(new RegExp('^\\s*' + k + '\\s*:\\s*(.+?)\\s*$', 'm')); return g ? g[1] : null; };
+      fmCreated  = _fmDate(get('created')) || _fmDate(get('date'));
+      fmModified = _fmDate(get('updated')) || _fmDate(get('modified'));
+    }
+    let st = null; try { st = fs.statSync(file); } catch (_) {}
+    const born = st && st.birthtime && st.birthtime.getTime() > 0 ? st.birthtime : (st ? st.ctime : null);
+    return {
+      created:  fmCreated  || (born ? fmtLocalDate(born) : null),
+      modified: fmModified || (st ? fmtLocalDate(st.mtime) : null),
+      mtime:    st ? st.mtime : null,
+    };
+  };
   let notes = 0, skipped = 0;
   for (const n of noteFiles) {
     try {
       const noteRel = [dest, rootName, n.r.replace(/\.(markdown|txt)$/i, '.md')].filter(Boolean).join('/');
       if (fs.existsSync(noteFilePath(noteRel))) { skipped++; continue; }
-      writeNoteContent(noteRel, rewrite(fs.readFileSync(n.full, 'utf8')));
+      const raw = fs.readFileSync(n.full, 'utf8');
+      const d = _srcDates(raw, n.full);
+      writeNoteContent(noteRel, rewrite(raw), false, d);
+      // …and on the file itself: the sidebar tree reads `modified` from stat(), not
+      // from the frontmatter, so without this the note list still says today.
+      if (d.mtime) { try { fs.utimesSync(noteFilePath(noteRel), d.mtime, d.mtime); } catch (_) {} }
       notes++;
     } catch (_) {}
   }
