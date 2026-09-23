@@ -19429,25 +19429,6 @@
     }
     return builder.finish();
   }
-  function dedentCodeBlocks(text) {
-    const lines = text.split("\n");
-    const out = lines.slice();
-    const detab = (s) => s.replace(/^[ \t]+/, (w) => w.replace(/\t/g, "  "));
-    let i2 = 0;
-    while (i2 < lines.length) {
-      if (/^[ \t]*(```|~~~)/.test(lines[i2])) {
-        let j = i2 + 1;
-        while (j < lines.length && !/^[ \t]*(```|~~~)/.test(lines[j])) j++;
-        if (j < lines.length) {
-          const base2 = detab(lines[i2]).match(/^ */)[0].length;
-          const re = new RegExp("^ {0," + base2 + "}");
-          for (let k = i2; k <= j; k++) out[k] = detab(lines[k]).replace(re, "");
-          i2 = j + 1;
-        } else i2++;
-      } else i2++;
-    }
-    return out.join("\n");
-  }
   function inlineNode(c) {
     if (c.nodeType === 3) return c.textContent.replace(/\s+/g, " ");
     if (c.nodeType !== 1) return "";
@@ -19543,16 +19524,11 @@
       if (html && html.length < 4e6 && looksFlattened(text, html)) {
         try {
           const md = htmlToMarkdown(html);
-          if (md) insert2 = dedentCodeBlocks(md);
+          if (md) insert2 = md;
         } catch (_) {
         }
       }
-      if (insert2 == null) {
-        if (!text || !/(^|\n)[ \t]*(```|~~~)/.test(text)) return false;
-        const fixed = dedentCodeBlocks(text);
-        if (fixed === text) return false;
-        insert2 = fixed;
-      }
+      if (insert2 == null) return false;
       event.preventDefault();
       const _t0 = performance.now();
       const spec = view.state.replaceSelection(insert2);
@@ -20180,7 +20156,7 @@
   window.AmelieCM = {
     create(parent, doc2, onChange) {
       const lineNumbersComp = new Compartment();
-      const initialDoc = dedentCodeBlocks(doc2 || "");
+      const initialDoc = doc2 || "";
       const updateListener2 = EditorView.updateListener.of((u) => {
         if (!u.docChanged) return;
         const userEdit = u.transactions.some((tr) => tr.annotation(Transaction.userEvent) != null);
@@ -20225,7 +20201,7 @@
         view,
         getValue: () => view.state.doc.toString(),
         setValue: (s) => {
-          view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: dedentCodeBlocks(s || "") } });
+          view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: s || "" } });
           try {
             view.requestMeasure();
           } catch (_) {

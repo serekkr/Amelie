@@ -183,32 +183,15 @@ function buildDeco(view, fencePositions) {
   return builder.finish();
 }
 
-// Dedent every fenced code block in a string to column 0 (removing the opening
-// fence's indent from each line of the block, relative indent preserved). Pasted
-// markdown often nests code under lists (4+ spaces), which pushed the code far
-// right inside the grey mask — normalizing makes pasted blocks look like manual
-// ones (which start at col 0 + the 2-char CSS padding).
-function dedentCodeBlocks(text) {
-  const lines = text.split('\n');
-  const out = lines.slice();
-  // Convert leading TABS to 2 spaces (pasted code often has "  \t```", which
-  // rendered far right). Then dedent by the opening fence's leading-space count.
-  const detab = (s) => s.replace(/^[ \t]+/, (w) => w.replace(/\t/g, '  '));
-  let i = 0;
-  while (i < lines.length) {
-    if (/^[ \t]*(```|~~~)/.test(lines[i])) {
-      let j = i + 1;
-      while (j < lines.length && !/^[ \t]*(```|~~~)/.test(lines[j])) j++;
-      if (j < lines.length) {
-        const base = detab(lines[i]).match(/^ */)[0].length;
-        const re = new RegExp('^ {0,' + base + '}');
-        for (let k = i; k <= j; k++) out[k] = detab(lines[k]).replace(re, '');
-        i = j + 1;
-      } else i++;
-    } else i++;
-  }
-  return out.join('\n');
-}
+// Fenced code is never dedented or de-tabbed, not on load and not on paste.
+// `dedentCodeBlocks` used to shift every fence to column 0 and turn leading tabs into
+// two spaces — on EVERY note loaded into the editor (create + setValue) as well as on
+// paste — so it only looked cosmetic: the next save wrote the shifted text to disk. On
+// the user's imported Obsidian vault (2026-09-23) that was 53 notes whose code sat under
+// a list item, and tab-indented config/Makefile lines that would have lost their tabs.
+// The editor now holds the file's bytes; how an indented block LOOKS is the decoration's
+// business (codeBlockPlugin), never the text's. See paste-fidelity.cdp.mjs and
+// real-vault-soak.cdp.mjs.
 
 // ── Smart paste: convert clipboard HTML → Markdown ────────────────────────────
 // Sources that render markdown (Obsidian reading mode, web pages, GitHub rendered)
@@ -298,7 +281,7 @@ function looksFlattened(text, html) {
 }
 
 // Intercept paste: prefer rebuilding markdown from HTML when the plain text is
-// flattened; otherwise just normalize fenced-block indentation in the plain text.
+// flattened; otherwise the browser pastes the plain text exactly as it is.
 const pasteNormalize = EditorView.domEventHandlers({
   paste(event, view) {
     const cd = event.clipboardData;
@@ -316,14 +299,9 @@ const pasteNormalize = EditorView.domEventHandlers({
     // note over a few hundred lines fall back to the FLATTENED text/plain (newlines
     // lost → the whole paste collapsed onto a few mega-long lines).
     if (html && html.length < 4000000 && looksFlattened(text, html)) {
-      try { const md = htmlToMarkdown(html); if (md) insert = dedentCodeBlocks(md); } catch (_) {}
+      try { const md = htmlToMarkdown(html); if (md) insert = md; } catch (_) {}
     }
-    if (insert == null) {
-      if (!text || !/(^|\n)[ \t]*(```|~~~)/.test(text)) return false;   // nothing special to do
-      const fixed = dedentCodeBlocks(text);
-      if (fixed === text) return false;
-      insert = fixed;
-    }
+    if (insert == null) return false;   // plain text: pasted natively, byte for byte
     event.preventDefault();
     const _t0 = performance.now();
     const spec = view.state.replaceSelection(insert);
@@ -1068,7 +1046,7 @@ const bigDocTypingFix = EditorView.domEventHandlers({
 window.AmelieCM = {
   create(parent, doc, onChange) {
     const lineNumbersComp = new Compartment();
-    const initialDoc = dedentCodeBlocks(doc || '');
+    const initialDoc = doc || '';
     const updateListener = EditorView.updateListener.of((u) => {
       if (!u.docChanged) return;
       const userEdit = u.transactions.some((tr) => tr.annotation(Transaction.userEvent) != null);
@@ -1115,7 +1093,7 @@ window.AmelieCM = {
     return {
       view,
       getValue: () => view.state.doc.toString(),
-      setValue: (s) => { view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: dedentCodeBlocks(s || '') } }); try { view.requestMeasure(); } catch (_) {} },
+      setValue: (s) => { view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: s || '' } }); try { view.requestMeasure(); } catch (_) {} },
       focus: () => view.focus(),
       // Check the rendered DOM still matches the document, and rebuild the view if it
       // does not. Call it whenever the editor BECOMES VISIBLE again (leaving preview,
