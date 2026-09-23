@@ -11036,7 +11036,14 @@ function setupSettings() {
       if (accepted == null) { if (res) res.style.display = 'none'; return; }   // canceled
       r = accepted;
     }
-    if (r && r.ok) {
+    if (r && r.ok && r.obsidian) {
+      // An Obsidian vault was IMPORTED (links converted, attachments filed), not
+      // swapped in: nothing reloads, so the tree has to be read again here.
+      await loadTree();
+      const msg = `${window.i18n.t(r.notes === 1 ? 'toast.note_imported' : 'toast.notes_imported', { n: r.notes || 0 })} · ${r.images || 0} img · ${r.pdfs || 0} pdf`;
+      if (res) { res.style.display = 'block'; res.textContent = '✓ ' + msg; res.className = 'test-result ok'; }
+      showToast(msg);
+    } else if (r && r.ok) {
       if (res) { res.style.display = 'block'; res.textContent = '✓ ' + window.i18n.t('sync.restore_done'); res.className = 'test-result ok'; }
     } else if (res) {
       res.style.display = 'block';

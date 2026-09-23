@@ -43,7 +43,8 @@
     "test:viewicons": "node test/view-icon-toggle.cdp.mjs",
     "test:imgpan": "node test/image-pan.cdp.mjs",
     "test:bkdest": "node test/backup-dest-list.cdp.mjs",
-    "test:gpuflags": "node test/startup-toggles.cdp.mjs"
+    "test:gpuflags": "node test/startup-toggles.cdp.mjs",
+    "test:restoreobs": "node test/restore-obsidian.cdp.mjs"
   },
   "dependencies": {
     "hash-wasm": "^4.12.0",

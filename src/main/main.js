@@ -2056,6 +2056,35 @@ async function _finalizeRestore(srcDir, passphrase, { move = false, cleanup = nu
   } catch (e) { clean(); return { ok: false, error: e.message }; }
 }
 
+// Is this a backup Amelie made, or an Obsidian vault? Restore swaps the vault for an
+// Amelie backup as it is — its links and folders are already Amelie's. An Obsidian
+// vault is not in that shape (no notes/, `![[img.png]]` embeds, images anywhere), and
+// swapping it in would bring none of it across: it has to go through the same import
+// as dropping the folder on the sidebar, which converts the links and files the
+// attachments where the app keeps them (asked for on 2026-09-23: "deve essere la
+// stessa logica"). Returns the folder to import from, or null for an Amelie backup
+// or for something that is neither, which the restore then rejects as it always did.
+//
+// `.obsidian/` settles it first, because an Obsidian vault may well hold a folder
+// the user happened to call "notes". Without it, notes/ means Amelie. A synced copy
+// can lack .obsidian/ (~/Documents/obsidian-sync does), so any note file at all is
+// the last resort.
+function _obsidianRoot(dir) {
+  const has = (n) => { try { return fs.statSync(path.join(dir, n)).isDirectory(); } catch (_) { return false; } };
+  if (has('.obsidian')) return dir;
+  if (has('notes')) return null;
+  const anyNote = (d, depth) => {
+    let ents; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch (_) { return false; }
+    for (const e of ents) {
+      if (e.name.startsWith('.')) continue;
+      if (e.isFile() && /\.(md|markdown)$/i.test(e.name)) return true;
+      if (e.isDirectory() && depth < 6 && anyNote(path.join(d, e.name), depth + 1)) return true;
+    }
+    return false;
+  };
+  return anyNote(dir, 0) ? dir : null;
+}
+
 ipcMain.handle('vault:restoreArchive', async (_, rawFile, passphrase) => {
   const file = (rawFile || '').replace(/^~(?=$|[/\\])/, os.homedir());
   if (!file) return { ok: false, error: 'Nessun file selezionato' };
@@ -2070,6 +2099,18 @@ ipcMain.handle('vault:restoreArchive', async (_, rawFile, passphrase) => {
   try {
     fs.mkdirSync(staging, { recursive: true });
     await require('tar').x({ file, cwd: staging });
+    // An Obsidian vault packed by hand usually sits in one folder of its own inside
+    // the archive; look through that wrapper, and name the import after it.
+    let top = staging, rootName = path.basename(file).replace(/\.(tar\.gz|tgz|gz)$/i, '');
+    const inside = fs.readdirSync(staging).filter(n => !n.startsWith('.'));
+    if (inside.length === 1 && inside[0] !== 'notes' && !fs.existsSync(path.join(staging, '.obsidian'))
+        && fs.statSync(path.join(staging, inside[0])).isDirectory()) { top = path.join(staging, inside[0]); rootName = inside[0]; }
+    const obs = _obsidianRoot(top);
+    if (obs) {
+      const r = await importObsidianFolder(obs, '', rootName);
+      fs.rmSync(staging, { recursive: true, force: true });
+      return { ...r, obsidian: true, restoredFrom: path.basename(file) };
+    }
     return await _finalizeRestore(staging, passphrase, { move: true, cleanup: staging, restoredFrom: path.basename(file) });
   } catch (e) {
     try { fs.rmSync(staging, { recursive: true, force: true }); } catch (_) {}
@@ -2087,6 +2128,8 @@ ipcMain.handle('vault:restoreFolder', async (_, rawDir, passphrase) => {
   catch (e) { return { ok: false, error: e.message }; }
   // Allow picking either the snapshot root (has notes/) or a wrapper that contains
   // a single vault folder — but keep it simple: require notes/ directly inside.
+  const obs = _obsidianRoot(dir);
+  if (obs) return { ...(await importObsidianFolder(obs, '')), obsidian: true, restoredFrom: path.basename(dir) };
   return await _finalizeRestore(dir, passphrase, { move: false, restoredFrom: path.basename(dir) });
 });
 
@@ -2181,6 +2224,14 @@ ipcMain.handle('vault:importObsidian', async (_, rawSrc, destFolder) => {
   const src = rawSrc.replace(/^~(?=$|[/\\])/, os.homedir());
   try { if (!fs.existsSync(src) || !fs.statSync(src).isDirectory()) return { ok: false, notDir: true }; }
   catch (e) { return { ok: false, error: e.message }; }
+  return importObsidianFolder(src, destFolder);
+});
+
+// The import itself, shared by the drag-and-drop above and by Restore (which hands an
+// Obsidian folder or archive here instead of swapping the vault — see _obsidianRoot).
+// `rootName` names the container folder; it defaults to the source folder's own name,
+// which Restore overrides when the source is a temp dir an archive was unpacked into.
+async function importObsidianFolder(src, destFolder, rootNameOverride) {
   const dest = (destFolder || '').replace(/^\/+|\/+$/g, '');
 
   const SKIP_DIRS  = new Set(['.obsidian', '.trash', '.stversions', '.stfolder', '.git']);
@@ -2256,7 +2307,7 @@ ipcMain.handle('vault:importObsidian', async (_, rawSrc, destFolder) => {
   // Nest everything under a container folder named after the dropped folder, so the
   // import appears as ONE folder with its subfolders inside (preserving the Obsidian
   // hierarchy) rather than scattering the top-level subfolders at the vault root.
-  const rootName = path.basename(src.replace(/[\\/]+$/, '')) || 'import';
+  const rootName = rootNameOverride || path.basename(src.replace(/[\\/]+$/, '')) || 'import';
   // Dates the note ALREADY has, so importing does not flatten a vault's whole
   // history onto the afternoon it was copied (2026-09-22: 982 notes all landed
   // saying "created today", and the Recent view, which sorts by this, became one
@@ -2278,7 +2329,11 @@ ipcMain.handle('vault:importObsidian', async (_, rawSrc, destFolder) => {
       fmModified = _fmDate(get('updated')) || _fmDate(get('modified'));
     }
     let st = null; try { st = fs.statSync(file); } catch (_) {}
-    const born = st && st.birthtime && st.birthtime.getTime() > 0 ? st.birthtime : (st ? st.ctime : null);
+    let born = st && st.birthtime && st.birthtime.getTime() > 0 ? st.birthtime : (st ? st.ctime : null);
+    // A file unpacked from an archive is BORN at the unpacking while tar keeps its
+    // mtime, so birth can come after the last edit. A note cannot be created after it
+    // was last changed: the earlier of the two is the truer date.
+    if (born && st && st.mtime < born) born = st.mtime;
     return {
       created:  fmCreated  || (born ? fmtLocalDate(born) : null),
       modified: fmModified || (st ? fmtLocalDate(st.mtime) : null),
@@ -2301,7 +2356,7 @@ ipcMain.handle('vault:importObsidian', async (_, rawSrc, destFolder) => {
   }
   if (syncManager) syncManager.scheduleSync();
   return { ok: true, notes, images, pdfs, media, skipped };
-});
+}
 
 // ─── ToDo (.md files in the vault: todo/{today,upcoming,done}) ─────────────────
 const TODO_BUCKETS = ['today', 'tomorrow', 'upcoming', 'done'];
