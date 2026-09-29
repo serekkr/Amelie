@@ -268,9 +268,9 @@ const T = (tw) => SyncManager._twowayTransport(tw);
 
   check('an unreachable network says so, with the IP',
     T('connessione fallita: dial tcp 192.168.30.10:445: connect: network is unreachable\n')
-      === 'failed to connect to 192.168.30.10', T('connessione fallita: dial tcp 192.168.30.10:445: connect: network is unreachable\n'));
+      === "can't connect to 192.168.30.10", T('connessione fallita: dial tcp 192.168.30.10:445: connect: network is unreachable\n'));
   check('a refused connection reads the same way',
-    T('dial tcp 192.168.30.10:445: connect: connection refused\n') === 'failed to connect to 192.168.30.10');
+    T('dial tcp 192.168.30.10:445: connect: connection refused\n') === "can't connect to 192.168.30.10");
   check('a timeout is told apart from a refusal', T('', true) === 'connection to 192.168.30.10 timed out');
   check('a wrong share name names the share',
     T('connect: The specified share name cannot be found\nSMBERR:BAD_NETWORK_NAME\n')
@@ -294,7 +294,21 @@ const T = (tw) => SyncManager._twowayTransport(tw);
   check('an unrecognised failure still says something useful',
     T('rename: something odd happened\n') === 'rename: something odd happened');
   check('and an empty stderr does not produce an empty notification',
-    T('') === 'sync failed on 192.168.30.10');
+    T('') === 'unknown error on 192.168.30.10', T(''));
+
+  // The bell prints "<head>: <error>", and the head already says something FAILED.
+  // "Sync failed: failed to connect to 192.168.30.10" says it twice and reads as two
+  // messages glued together (reported 2026-09-21). Every wording this function
+  // chooses has to continue that head, not restate it. The passthrough case is
+  // excluded on purpose: it is the helper's own line, not ours to phrase.
+  const OURS = [
+    T('dial tcp 192.168.30.10:445: connect: network is unreachable\n'), T('', true),
+    T('SMBERR:BAD_NETWORK_NAME\n'), T('SMBERR:LOGON_FAILURE\n'), T('SMBERR:ACCESS_DENIED\n'), T(''),
+  ];
+  check('no wording of ours repeats the "failed" the head already said',
+    !OURS.some(m => /\bfail(ed|ure|s)?\b/i.test(m)), JSON.stringify(OURS));
+  check('every one of them still names the host',
+    OURS.every(m => m.includes('192.168.30.10')), JSON.stringify(OURS));
 }
 
 // ── The user's home directory never reaches a notification ───────────────────
@@ -326,9 +340,9 @@ const T = (tw) => SyncManager._twowayTransport(tw);
     check('so does any message naming the app under the home',
       !sent.at(-1).error.includes(HOME), sent.at(-1).error);
 
-    m._setStatus('error', 'failed to connect to 192.168.30.10', { op: 'twoway' });
+    m._setStatus('error', "can't connect to 192.168.30.10", { op: 'twoway' });
     check('a message with no path in it is passed through untouched',
-      sent.at(-1).error === 'failed to connect to 192.168.30.10', sent.at(-1).error);
+      sent.at(-1).error === "can't connect to 192.168.30.10", sent.at(-1).error);
 
     m._setStatus('ok', null, { op: 'backup' });
     check('and a success still carries no error at all', sent.at(-1).error === null, JSON.stringify(sent.at(-1)));

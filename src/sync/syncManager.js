@@ -1279,6 +1279,14 @@ class SyncManager {
    * that never actually said the server had not answered. Reported 2026-09-20 —
    * "command failed" reads like the app broke, not like the NAS is off.
    *
+   * None of these wordings may repeat the verb of the head they are appended to.
+   * "Sync failed: failed to connect to 192.168.30.10" says "failed" twice and reads
+   * like two messages glued together — reported 2026-09-21. The head names what did
+   * not work, this names WHY, so the sentence has to continue the head rather than
+   * restate it: "Sync failed: can't connect to 192.168.30.10". The fallback for an
+   * empty stderr was "sync failed on <host>", the same fault, and is now
+   * "unknown error on <host>". samba-without-vpn pins the rule for every branch.
+   *
    * The classification does not read go-smb2's prose, which is not stable: the Go
    * helper prints `SMBERR:<TOKEN>` for exactly this purpose (see smbErrToken in
    * smb-helper/main.go), and the same tokens are already read this way by the
@@ -1298,7 +1306,7 @@ class SyncManager {
     // empty, so it has to be recognised from the process, not from its output.
     if (e && e.killed) return `connection${at} timed out`;
     if (/dial tcp|i\/o timeout|no route to host|connection refused|network is unreachable|no such host|context deadline/i.test(err))
-      return `failed to connect${at}`;
+      return `can't connect${at}`;
     if (/SMBERR:BAD_NETWORK_NAME/.test(err)) return `share "${share || ''}" not found${on}`;
     if (/SMBERR:(LOGON_FAILURE|WRONG_PASSWORD|NO_SUCH_USER|ACCOUNT_RESTRICTION|ACCOUNT_DISABLED|ACCOUNT_LOCKED_OUT|PASSWORD_EXPIRED)/.test(err))
       return `wrong username or password${on}`;
@@ -1306,7 +1314,7 @@ class SyncManager {
     // Anything unrecognised: the helper's OWN first line, capped — never the
     // "Command failed: <binary> <args>" preamble, which is the thing being removed.
     const first = err.split('\n').map(x => x.trim()).filter(x => x && !/^SMBERR:/.test(x))[0];
-    return first ? first.slice(0, 120) : `sync failed${on}`;
+    return first ? first.slice(0, 120) : `unknown error${on}`;
   }
 
   /** Same as _smb but parses the JSON the helper prints (list/listr/stat). */
