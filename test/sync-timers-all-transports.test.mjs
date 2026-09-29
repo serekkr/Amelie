@@ -36,6 +36,8 @@ function mgr(cfg) {
   m._loadSyncState = () => {};
   m._updateSyncState = () => {};
   m._recordTwowayState = () => {};
+  // No vault on disk here; the empty-vault refusal has its own test (empty-vault-no-backup).
+  m._vaultIsEmpty = () => false;
   return m;
 }
 

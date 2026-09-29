@@ -11157,7 +11157,11 @@ function setupSettings() {
     if (res) { res.style.display = ''; res.textContent = window.i18n.t('toast.backup_running'); res.className = 'test-result'; }
     showToast(window.i18n.t('toast.backup_running'));
     const result = await window.inkwell.triggerBackup();
-    if (result && result.unchanged) {
+    if (result && result.empty) {
+      const msg = window.i18n.t('notif.backup_empty');
+      if (res) { res.textContent = msg; res.className = 'test-result'; }
+      showToast(msg);
+    } else if (result && result.unchanged) {
       const msg = window.i18n.t('notif.backup_unchanged');
       if (res) { res.textContent = '✓ ' + msg; res.className = 'test-result ok'; }
       showToast('✓ ' + msg);
@@ -13394,7 +13398,11 @@ function setupSync() {
     if (dot) dot.className = 'sync-syncing';
     showToast(window.i18n.t('toast.backup_running'));
     const result = await window.inkwell.triggerBackup();
-    if (result && result.unchanged) {
+    if (result && result.empty) {
+      // Empty vault: nothing was written, and it is not a failure either.
+      if (dot) dot.className = 'sync-idle';
+      showToast(window.i18n.t('notif.backup_empty'));
+    } else if (result && result.unchanged) {
       // Nothing has changed since the last successful copy, so nothing was written:
       // with keepLast, a duplicate would have pushed a real snapshot out to fit.
       if (dot) dot.className = 'sync-ok';
@@ -13422,7 +13430,10 @@ function setupSync() {
     showToast(window.i18n.t('toast.syncing'));
     const result = await window.inkwell.triggerTwoway();
     await loadTree(); // Refresh tree after sync
-    if (result.success) {
+    if (result.empty) {
+      syncStatusDot.className = 'sync-idle';
+      showToast(window.i18n.t('notif.twoway_empty'));
+    } else if (result.success) {
       syncStatusDot.className = 'sync-ok';
       const r2 = (result.results && result.results.twoway) || {};
       // Success shows as a toast + the green dot; the bell is reserved for failures.
@@ -18757,7 +18768,11 @@ function logSyncEventNotif(data) {
   const label = window.i18n.t(`notif.${data.op}_${key}`);
   // No time in the text: every row already prints the full date and time
   // underneath, so writing "(17:43)" here said the same thing twice.
-  if (data.status === 'ok' && data.unchanged) {
+  if (data.status === 'ok' && data.empty) {
+    // The vault is empty, so nothing was copied or synced (see _vaultIsEmpty).
+    const emptyKey = `notif.${data.op}_empty`;
+    addEventNotif(window.i18n.t(emptyKey), true, '', emptyKey);
+  } else if (data.status === 'ok' && data.unchanged) {
     // Nothing was copied because nothing had changed. Worth saying — silence here
     // reads exactly like a backup that failed to run — but it must not claim a copy
     // was made, so it gets its own wording.

@@ -34,6 +34,8 @@ function mgr(cfg) {
   m._stopAutoSync = () => {};
   m._stopTimers = () => {};
   m._setupWebDAV = () => {};
+  // No vault on disk here; the empty-vault refusal has its own test (empty-vault-no-backup).
+  m._vaultIsEmpty = () => false;
   return m;
 }
 const LAN_ONLY = () => ({ sync: { enabled: true,

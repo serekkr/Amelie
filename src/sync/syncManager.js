@@ -285,6 +285,31 @@ class SyncManager {
   }
 
   /**
+   * True when the vault holds no note and no attachment at all.
+   *
+   * Dotfiles don't count: the app writes `notes/.amelie-order.json` on its own,
+   * so a vault emptied by hand still has one file in it. On 2026-09-29 the user
+   * deleted every folder to start fresh, backup still on, and got a .tar.gz of
+   * that one file — which then took a slot of `keepLast` from a real copy.
+   *
+   * For the two-way pass this is a guard, not a nicety: with baselines recorded
+   * and delete propagation on, an empty vault reads as "every file was deleted
+   * here on purpose" and the pass would delete the whole remote folder.
+   */
+  _vaultIsEmpty() {
+    const hasFile = (dir) => {
+      let entries;
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return false; }
+      for (const e of entries) {
+        if (e.name.startsWith('.')) continue;
+        if (e.isDirectory() ? hasFile(path.join(dir, e.name)) : true) return true;
+      }
+      return false;
+    };
+    return !hasFile(this.notesDir) && !hasFile(this.attachmentsDir);
+  }
+
+  /**
    * Destinations whose copy of the last backup is NOT there, or does not match.
    *
    * Only worth asking when the vault fingerprint says nothing has changed: in that
@@ -725,6 +750,21 @@ class SyncManager {
       return { success: false, noDestination: true,
         error: 'Nessuna destinazione di backup attiva: attivane una (Locale, Samba, VPN o WebDAV) nelle impostazioni Backup.' };
     }
+    // An empty vault is never copied — forced or not. See _vaultIsEmpty.
+    if (this._vaultIsEmpty()) {
+      console.log('[Sync] Vault empty — nothing to back up');
+      // Said once for the scheduled passes (same collapsing as "unchanged"), every
+      // time for a press of the button.
+      if (manual || !this._emptyBackupNotified) {
+        if (!manual) this._emptyBackupNotified = true;
+        this._setStatus('ok', null, { op: 'backup', manual: !!manual, unchanged: true, empty: true });
+      }
+      // Moves the clock like any skip, or every app start would find a backup
+      // overdue and say it again.
+      this._updateSyncState({ lastBackupAt: new Date().toISOString() });
+      return { success: true, skipped: true, empty: true };
+    }
+    this._emptyBackupNotified = false;
     const sig = this._vaultSignature();
     if (!force && this._lastBackupSig && sig === this._lastBackupSig) {
       // Someone pressing the button is asking whether the copy is THERE, not
@@ -910,6 +950,18 @@ class SyncManager {
     // A manual backup holding the next slot gets it — see runBackup.
     if (!manual && this._backupWaiting) return { success: false, error: 'Backup waiting' };
     if (!this.config.sync?.twoway?.enabled) return { success: false, error: 'Two-way disabled' };
+    // An empty vault is not synced: against recorded baselines it would delete
+    // the whole remote folder, and pulling it back undoes a fresh start. See
+    // _vaultIsEmpty. Announced once for the timer passes, every time when pressed.
+    if (this._vaultIsEmpty()) {
+      console.log('[Sync] Vault empty — nothing to sync');
+      if (manual || !this._emptyTwowayNotified) {
+        if (!manual) this._emptyTwowayNotified = true;
+        this._setStatus('ok', null, { op: 'twoway', manual: !!manual, unchanged: true, empty: true });
+      }
+      return { success: true, skipped: true, empty: true };
+    }
+    this._emptyTwowayNotified = false;
     // `quiet` rides along so the renderer can keep the bell shut for passes that
     // run every half minute — a line twice a minute is noise. An hourly pass, or
     // one the user asked for, is worth saying. A FAILING run always speaks.
@@ -2457,6 +2509,8 @@ class SyncManager {
       dests: Array.isArray(meta && meta.dests) ? meta.dests : null,
       // A pass that found nothing to copy: reported, but worded as the no-op it is.
       unchanged: !!(meta && meta.unchanged),
+      // …because the vault is empty: "nothing to back up / to sync".
+      empty: !!(meta && meta.empty),
     }));
   }
 
