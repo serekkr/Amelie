@@ -980,6 +980,7 @@ class SyncManager {
       return { success: true, results: { twoway }, lastSync: this.lastSync };
     } catch (e) {
       console.error('[Sync] Two-way failed:', e);
+      if (e.heldDeletes) meta.heldDeletes = e.heldDeletes;
       this._setStatus('error', e.message, meta);
       return { success: false, error: SyncManager._publicError(e.message) };
     }
@@ -1846,6 +1847,91 @@ class SyncManager {
   }
 
   /**
+   * Would a pass deleting `n` of `total` files be a mass delete worth stopping for?
+   * More than half, and at least five — or every one of them, from two up. The
+   * ordinary delete of a note or a folder never gets near it; emptying a vault,
+   * or the other PC doing so, always does. Same idea as Nextcloud's "all files
+   * removed" prompt and rclone bisync's --max-delete 50.
+   */
+  static _isMassDelete(n, total) {
+    if (n < 2) return false;
+    return n >= total || (n >= 5 && n > total / 2);
+  }
+
+  /**
+   * Stop a two-way pass that is about to delete most of one side, and ask.
+   *
+   * Runs on the full plan BEFORE anything is transferred, so every answer leaves
+   * both sides exactly as they were until it is given:
+   *   delete  — go ahead, the deletion was meant (a fresh start, a clean-up)
+   *   restore — put the files back where they are missing instead of deleting
+   *             them on the side that still has them
+   *   cancel  — nothing happens; the pass throws with `heldDeletes`, and the next
+   *             pass that finds the same plan asks again
+   * Reported 2026-09-29: the user emptied the vault to start over while the
+   * baselines still listed 1258 files, and the first new note would have removed
+   * all of them from the NAS without a word.
+   */
+  async _holdMassDelete(plan, { remoteTotal, localTotal, target }) {
+    for (const where of ['remote', 'local']) {
+      const act = where === 'remote' ? 'delete-remote' : 'delete-local';
+      const hits = plan.filter(p => p.d.action === act);
+      const total = where === 'remote' ? remoteTotal : localTotal;
+      if (!SyncManager._isMassDelete(hits.length, total)) continue;
+      console.warn(`[Two-way] would delete ${hits.length} of ${total} files (${where}) — asking first`);
+      const choice = await this._askMassDelete({ where, count: hits.length, total, target,
+                                                 examples: hits.slice(0, 5).map(p => p.rel) });
+      if (choice === 'delete') continue;
+      if (choice === 'restore') {
+        for (const p of hits) p.d = { action: where === 'remote' ? 'download' : 'upload' };
+        continue;
+      }
+      const e = new Error(`stopped before deleting ${hits.length} of ${total} files `
+        + (where === 'remote' ? `on ${target}` : 'on this computer') + ' — nothing was changed');
+      e.heldDeletes = { where, count: hits.length, total, target };
+      throw e;
+    }
+  }
+
+  /**
+   * Ask the main window's renderer (it has the translations and the in-theme modal)
+   * and wait for 'delete' | 'restore' | 'cancel'. No window, a window closed while
+   * asking, or 30 minutes without an answer all mean 'cancel'. While a question is
+   * open the engine counts as busy, so the 30-second timer cannot start a second
+   * pass and a second question behind it.
+   */
+  _askMassDelete(info) {
+    let win = null;
+    try {
+      win = (SyncManager.askWindow && SyncManager.askWindow()) || null;
+      if (!win) win = require('electron').BrowserWindow.getAllWindows()[0] || null;
+    } catch (_) {}
+    if (!win || win.isDestroyed()) return Promise.resolve('cancel');
+    if (!this._massDeleteAsks) this._massDeleteAsks = new Map();
+    const id = `md-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    return new Promise((resolve) => {
+      const onClosed = () => done('cancel');
+      const timer = setTimeout(() => done('cancel'), 30 * 60 * 1000);
+      const done = (choice) => {
+        if (!this._massDeleteAsks.has(id)) return;
+        this._massDeleteAsks.delete(id);
+        clearTimeout(timer);
+        try { win.removeListener('closed', onClosed); } catch (_) {}
+        resolve(choice === 'delete' || choice === 'restore' ? choice : 'cancel');
+      };
+      this._massDeleteAsks.set(id, done);
+      win.once('closed', onClosed);
+      win.webContents.send('sync:massDelete', { id, ...info });
+    });
+  }
+
+  /** The renderer's answer to _askMassDelete. */
+  answerMassDelete(id, choice) {
+    const done = this._massDeleteAsks && this._massDeleteAsks.get(id);
+    if (done) done(choice);
+  }
+
+  /**
    * Two-way sync of the vault (notes + attachments) with a folder on the SMB
    * share, over smbclient (no mount). Per-file decision via _twowayDecide:
    * upload / download / skip, or — when "Copie-conflitto" is on and BOTH sides
@@ -1971,11 +2057,17 @@ class SyncManager {
       }
     }
 
+    // Decide everything first, so a mass delete can be stopped before any of it runs.
+    const plan = [...allRels].map(rel => ({ rel, L: localMap[rel], R: remote[rel],
+      d: this._twowayDecide(localMap[rel], remote[rel], getBase(rel), firstRun, conflictCopies, pd, TOL) }));
+    await this._holdMassDelete(plan, {
+      remoteTotal: Object.keys(remote).filter(r => r.startsWith('notes/') || r.startsWith('attachments/')).length,
+      localTotal: local.length,
+      target: `${cfg.host || cfg.ip}/${cfg.share}/${base}`,
+    });
+
     let uploaded = 0, downloaded = 0, conflicts = 0, deleted = 0;
-    for (const rel of allRels) {
-      const L = localMap[rel];
-      const R = remote[rel];
-      const d = this._twowayDecide(L, R, getBase(rel), firstRun, conflictCopies, pd, TOL);
+    for (const { rel, L, R, d } of plan) {
       if (d.action === 'adopt' || d.action === 'skip') {
         st[rel] = { r: R || 0, l: L || 0 };
       } else if (d.action === 'upload') {
@@ -2191,10 +2283,18 @@ class SyncManager {
       }
     }
 
-    for (const rel of allRels) {
-      const L = localMap[rel];
-      const R = remote[rel];
-      const d = this._twowayDecide(L, R, getBase(rel), firstRun, conflictCopies, pd, TOL);
+    // Decide everything first, so a mass delete can be stopped before any of it runs.
+    const plan = [...allRels].map(rel => ({ rel, L: localMap[rel], R: remote[rel],
+      d: this._twowayDecide(localMap[rel], remote[rel], getBase(rel), firstRun, conflictCopies, pd, TOL) }));
+    let host = url;
+    try { host = new URL(url).host; } catch (_) {}
+    await this._holdMassDelete(plan, {
+      remoteTotal: Object.keys(remote).filter(r => r.startsWith('notes/') || r.startsWith('attachments/')).length,
+      localTotal: local.length,
+      target: host + base,
+    });
+
+    for (const { rel, L, R, d } of plan) {
       if (d.action === 'adopt' || d.action === 'skip') {
         st[rel] = { r: R || 0, l: L || 0 };
       } else if (d.action === 'upload') {
@@ -2475,6 +2575,8 @@ class SyncManager {
   // 10 minutes is treated as stale (e.g. an upload that hung over the tunnel) so
   // a stuck flag can never lock the user out of all future backups.
   _busy() {
+    // A mass-delete question is open: the pass is waiting on it, however long.
+    if (this._massDeleteAsks && this._massDeleteAsks.size) return true;
     if (this.status !== 'syncing') return false;
     if (this._syncStartedAt && (Date.now() - this._syncStartedAt) > 10 * 60 * 1000) {
       console.warn('[Sync] stale "syncing" flag (>10min) — allowing a new backup');
@@ -2511,6 +2613,8 @@ class SyncManager {
       unchanged: !!(meta && meta.unchanged),
       // …because the vault is empty: "nothing to back up / to sync".
       empty: !!(meta && meta.empty),
+      // A two-way pass stopped before a mass delete: { where, count, total, target }.
+      heldDeletes: (meta && meta.heldDeletes) || null,
     }));
   }
 

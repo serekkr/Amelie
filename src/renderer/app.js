@@ -3662,6 +3662,41 @@ function showConfirmModal(message) {
   });
 }
 
+// A two-way pass stopped before deleting most of one side (SyncManager._holdMassDelete)
+// and is waiting for this answer. "Nothing" is the default: Escape and Enter both
+// pick it, so a stray key can never confirm a deletion.
+function showMassDeleteModal(info) {
+  const modal = document.getElementById('massdel-modal');
+  if (!modal || !info || !info.id) { window.inkwell.answerMassDelete(info && info.id, 'cancel'); return; }
+  const t = window.i18n.t;
+  const side = info.where === 'local' ? 'local' : 'remote';
+  const vars = { n: info.count, total: info.total, target: info.target || '' };
+  $('massdel-title').textContent = t('sync.massdel_title', vars);
+  $('massdel-msg').textContent = t(`sync.massdel_${side}`, vars);
+  const ex = Array.isArray(info.examples) ? info.examples : [];
+  $('massdel-examples').textContent = ex.length
+    ? t('sync.massdel_examples') + '\n' + ex.join('\n') + (info.count > ex.length ? '\n…' : '') : '';
+  $('massdel-note').textContent = t('sync.massdel_note');
+  const btn = { cancel: $('massdel-cancel'), restore: $('massdel-restore'), delete: $('massdel-delete') };
+  btn.cancel.textContent = t('sync.massdel_cancel');
+  btn.restore.textContent = t(`sync.massdel_restore_${side}`);
+  btn.delete.textContent = t(`sync.massdel_delete_${side}`);
+  const handlers = {};
+  const answer = (choice) => {
+    modal.style.display = 'none';
+    for (const k of Object.keys(btn)) btn[k].removeEventListener('click', handlers[k]);
+    document.removeEventListener('keydown', onKey, true);
+    window.inkwell.answerMassDelete(info.id, choice);
+  };
+  const onKey = (e) => {
+    if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); answer('cancel'); }
+  };
+  for (const k of Object.keys(btn)) { handlers[k] = () => answer(k); btn[k].addEventListener('click', handlers[k]); }
+  document.addEventListener('keydown', onKey, true);
+  modal.style.display = 'flex';
+  setTimeout(() => btn.cancel.focus(), 60);
+}
+
 function openNewTab() {
   tabs.push({
     path: null, name: 'Nuova nota', content: '',
@@ -13445,6 +13480,8 @@ function setupSync() {
     setTimeout(() => syncStatusDot.className = 'sync-idle', 4000);
   });
 
+  window.inkwell.onMassDelete?.(info => showMassDeleteModal(info));
+
   window.inkwell.onSyncStatus(data => {
     // Automatic/background syncs (e.g. the initial one at startup) must NOT pulse
     // the icon orange — leave it neutral while they run and only go green when
@@ -18785,6 +18822,12 @@ function logSyncEventNotif(data) {
     // The destinations the engine actually wrote are recorded on the entry (they are
     // not shown: naming them read as noise on a local-only or WebDAV-only backup).
     addEventNotif(label, true, data.dests, `notif.${data.op}_${key}`);
+  } else if (data.heldDeletes) {
+    // Stopped before a mass delete, on purpose: say what it would have done, in the
+    // user's language, instead of the engine's English message.
+    const h = data.heldDeletes;
+    addEventNotif(window.i18n.t(h.where === 'local' ? 'notif.twoway_held_local' : 'notif.twoway_held_remote',
+      { n: h.count, total: h.total, target: h.target || '' }), false);
   } else {
     // NOT the "completed" label: it produced lines like "Manual sync completed:
     // two-way: name the remote folder" — an announcement of success carrying its

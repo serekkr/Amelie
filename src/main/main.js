@@ -4389,6 +4389,13 @@ ipcMain.handle('tree-order:write', async (_, order) => {
   } catch (e) { console.error('[tree-order] write failed:', e.message); return false; }
 });
 
+// A two-way pass about to delete most of one side asks the MAIN window (not a
+// detached note window) — see SyncManager._holdMassDelete — and gets its answer here.
+require('../sync/syncManager').SyncManager.askWindow = () => mainWindow;
+ipcMain.on('sync:massDeleteAnswer', (_e, { id, choice } = {}) => {
+  if (syncManager) syncManager.answerMassDelete(id, choice);
+});
+
 // Force a two-way sync (the toolbar Sync button).
 ipcMain.handle('sync:triggerTwoway', async () => {
   if (syncManager) return syncManager.runTwoway({ manual: true });

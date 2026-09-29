@@ -143,6 +143,10 @@ contextBridge.exposeInMainWorld('inkwell', {
 
   // Events from main process
   onSyncStatus: (cb) => ipcRenderer.on('sync:statusUpdate', (_, data) => cb(data)),
+  // A two-way pass stopped before a mass delete: show the question, send the choice
+  // ('delete' | 'restore' | 'cancel') back with answerMassDelete.
+  onMassDelete: (cb) => ipcRenderer.on('sync:massDelete', (_, info) => cb(info)),
+  answerMassDelete: (id, choice) => ipcRenderer.send('sync:massDeleteAnswer', { id, choice }),
   onEditorCmd:  (cb) => ipcRenderer.on('editor:cmd', (_, cmd) => cb(cmd)),
   // Fired when notes/folders change on disk from OUTSIDE the app (file manager, sync).
   onVaultChanged: (cb) => ipcRenderer.on('vault:treeChanged', () => cb()),
