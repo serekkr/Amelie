@@ -1,7 +1,7 @@
 {
   "name": "amelie",
-  "version": "1.0.126",
-  "description": "Amelie \u2014 Your data, private by default",
+  "version": "1.0.127",
+  "description": "Amelie — Your data, private by default",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",

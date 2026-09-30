@@ -14502,7 +14502,7 @@ function setupCanvas() {
     close: closeCanvas,
     open: newDraw,
   }));
-  $('btn-canvas-close').addEventListener('click', closeCanvas);
+  $('btn-canvas-close')?.addEventListener('click', closeCanvas);
 
   // Import / Export buttons on the drawing's header bar — visible while you're
   // inside a drawing (the right-click title menu was too hidden to find).

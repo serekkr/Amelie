@@ -508,9 +508,7 @@
                    and PNG/SVG buttons that used to be here existed only because
                    tldraw's native export ignored them. -->
             </div>
-            <button id="btn-canvas-close" class="icon-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
+            <!-- No ✕: closed from its tab, like a note and a photo (2026-09-30). -->
           </div>
           <!-- src set lazily in app.js on first Draw open (the Excalidraw bundle is not loaded at startup) -->
           <iframe id="canvas-iframe" frameborder="0" allow="pointer-lock" allowfullscreen></iframe>
@@ -563,9 +561,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9l7 7v9a2 2 0 0 1-2 2z"/><path d="M9 21v-6h4v6"/><path d="M17 4v4M19 6h-4"/></svg>
               </button>
             </div>
-            <button id="btn-pdf-close" class="icon-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
+            <!-- No ✕: closed from its tab, like a note and a photo (2026-09-30). -->
           </div>
           <div id="pdf-color-pop" class="pdf-color-pop" style="display:none">
             <div class="pdf-color-swatches"></div>
@@ -604,9 +600,8 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
               </button>
             </div>
-            <button id="btn-img-view-close" class="icon-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
+            <!-- No ✕ here: the photo is closed from its tab, like a note — a second close
+                 button beside − 100% + read as one more zoom control (2026-09-30). -->
           </div>
           <div id="img-view-embed"><img id="img-view-content" alt=""/></div>
         </div>
@@ -616,9 +611,7 @@
         <div id="media-view-overlay" style="display:none">
           <div id="media-view-header">
             <span id="media-view-title">Media</span>
-            <button id="btn-media-view-close" class="icon-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
+            <!-- No ✕: closed from its tab, like a note, a photo, a drawing or a PDF (2026-09-30). -->
           </div>
           <div id="media-view-embed">
             <audio id="audio-view-content" controls preload="metadata" style="display:none"></audio>
