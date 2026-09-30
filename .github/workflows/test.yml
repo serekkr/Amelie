@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'   # the LTS the local builds use (2026-09-30)
           cache: npm
       - run: npm ci --ignore-scripts
       - name: The bundle under test must match its source
