@@ -1,6 +1,6 @@
 {
   "name": "amelie",
-  "version": "1.0.124",
+  "version": "1.0.126",
   "description": "Amelie \u2014 Your data, private by default",
   "main": "src/main/main.js",
   "scripts": {
@@ -25,6 +25,8 @@
     "test:syncreport": "node test/sync-report.cdp.mjs",
     "test:pdfdragpages": "node test/pdf-drag-across-pages.cdp.mjs",
     "test:pastefile": "node test/paste-copied-file.cdp.mjs",
+    "test:notelinks": "node test/note-links-open.cdp.mjs",
+    "test:sidebardrop": "node test/sidebar-drop-into-note.cdp.mjs",
     "test:sweep": "node test/editor-wrap-sweep.mjs",
     "test:enc": "node test/editor-encrypted.cdp.mjs",
     "test:backup": "node test/backup-restore.cdp.mjs",

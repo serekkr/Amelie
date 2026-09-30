@@ -4791,6 +4791,31 @@ function setupEditor() {
   _editorDragoverHandler = e => e.preventDefault();
   editor.addEventListener('dragover', _editorDragoverHandler);
   _editorDropHandler = async e => {
+    // An item dragged from the SIDEBAR and let go in the note becomes a link, as in
+    // Obsidian — the drag carries its tree path as text, and the editor used to paste
+    // that path verbatim (2026-09-30). A note → [[note]] (spelled with its path when
+    // the name is not unique), an attachment → its embed/link, a folder → nothing.
+    if (state.draggingNote || state.draggingAttach || state.draggingFolder) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      const wasFolder = state.draggingFolder;
+      const srcPath = e.dataTransfer?.getData('text/plain') || '';
+      state.draggingNote = state.draggingAttach = state.draggingFolder = false;
+      if (wasFolder || _editingBlocked()) return;
+      const node = flattenTree(state.notes).find(n => n.path === srcPath);
+      if (!node) return;
+      let at = null;
+      try { if (_cmActive && _cmHandle && _cmHandle.view && _cmHandle.view.posAtCoords) at = _cmHandle.view.posAtCoords({ x: e.clientX, y: e.clientY }); } catch (_) {}
+      if (isAttachNode(node)) {
+        insertAttachmentRef(node.attachmentName || srcPath.replace(/^attachments\//, ''), at);
+        return;
+      }
+      if (node.path === state.currentPath) return;   // a note linking to itself
+      const label = (node.name || srcPath.split('/').pop()).replace(/\.(md|markdown)$/i, '');
+      const { target, alias } = mmLinkTargetFor({ label, path: node.path });
+      const link = `[[${target}${alias ? '|' + alias : ''}]]`;
+      if (at != null) insertAtCursor(link, at, at); else insertAtCursor(link);
+      return;
+    }
     const rawFiles = [...(e.dataTransfer?.files || [])];
     _videoNotice(rawFiles.map(f => f && f.name));
     const rawUris = (e.dataTransfer?.getData('text/uri-list') || '').split('\n').map(l => l.trim());
@@ -5438,7 +5463,8 @@ function _setupVideoResize(video, handle, href) {
 // Media Amelie renders inline (image/audio/video) → embed form ![icon](url).
 // Everything else (pdf, zip, …) → plain link [📎](url) — an ![](non-image) would
 // render as a broken <img>, and the preview only turns a/v into players.
-function insertAttachmentRef(name) {
+// `at` (optional): where to put it — a drop from the sidebar lands where it is let go.
+function insertAttachmentRef(name, at) {
   const imageExts = new Set(['.png','.jpg','.jpeg','.gif','.webp','.svg']);
   const ext = name.substring(name.lastIndexOf('.')).toLowerCase();
   const isImg = imageExts.has(ext);
@@ -5454,7 +5480,7 @@ function insertAttachmentRef(name) {
   const icon = isImg ? '📷' : isAudio ? '🎵' : isVideo ? '🎬' : '📎';
   const bang = (isImg || isAudio || isVideo) ? '!' : '';   // ! → inline embed for media
   const ref = `\n${bang}[${icon}](${url})\n`;
-  insertAtCursor(ref);
+  if (at != null) insertAtCursor(ref, at, at); else insertAtCursor(ref);
   // For media embeds: put the caret at the END of the link (after the ")"), not
   // on the empty line below it. insertAtCursor leaves the caret past the trailing
   // "\n" — step it back one char so it sits right after the link.
@@ -6289,6 +6315,30 @@ function enhancePreviewContent(token, widthsByTable) {
     if (!href) return;
     // Attachment links (📎) are wired separately below — leave them alone.
     if (a.matches(ATT_LINK_SELECTOR)) return;
+    // A link to a heading of THIS note scrolls to it.
+    const hashAt = href.indexOf('#');
+    if (hashAt >= 0 && (hashAt === 0 || resolveMdNoteHref(href.slice(0, hashAt), state.currentPath, true)?.path === state.currentPath)) {
+      a.style.cursor = 'pointer';
+      a.addEventListener('click', e => { e.preventDefault(); _scrollPreviewToAnchor(href.slice(hashAt + 1)); });
+      return;
+    }
+    // A markdown link to another NOTE opens it, like a [[link]] (see resolveMdNoteHref).
+    const noteHit = resolveMdNoteHref(href, state.currentPath);
+    if (noteHit) {
+      a.classList.add('md-note-link');
+      a.style.cursor = 'pointer';
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        const target = resolveMdNoteHref(href, state.currentPath);
+        if (!target) return;
+        if (state.currentPath && state.currentPath !== target.path) {
+          _noteBackStack.push(state.currentPath);
+          if (_noteBackStack.length > 50) _noteBackStack.shift();
+        }
+        openNote(target);
+      });
+      return;
+    }
     const isWeb = /^https?:\/\//i.test(href) ||
                   /^www\./i.test(href) ||
                   /^mailto:/i.test(href);
@@ -9949,7 +9999,6 @@ async function buildMindmapData() {
   // `<with spaces.md>` — is a link too, as Obsidian draws it. An imported index
   // note links its sixty pages this way; counting only [[…]] left it an island.
   const mdNoteRe = /(?<!!)\[[^\]\n]*\]\((?:<([^>\n]+?\.(?:md|markdown))>|([^)\s]+?\.(?:md|markdown)))(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/gi;
-  const byPathLower = new Map(allNotes.map(x => [x.path.toLowerCase(), x]));
   // Every note's text, read in parallel batches: one IPC round trip after another
   // for a thousand notes was half of the time the map took to appear (2026-09-30).
   const texts = new Map();
@@ -9995,19 +10044,8 @@ async function buildMindmapData() {
     mdNoteRe.lastIndex = 0;
     let ml;
     while ((ml = mdNoteRe.exec(content)) !== null) {
-      let t = ml[1] || ml[2];
-      if (/^[a-z][a-z0-9+.-]*:/i.test(t)) continue;                 // https:, file:, …
-      try { t = decodeURIComponent(t); } catch (_) {}
-      // Relative to the note's own folder first (what Obsidian writes), then to the
-      // vault root, then by name like a [[link]].
-      const parts = [];
-      for (const seg of ((_folder ? _folder + '/' : '') + t.replace(/^\/+/, '')).split('/')) {
-        if (seg === '..') parts.pop(); else if (seg && seg !== '.') parts.push(seg);
-      }
-      const hit = byPathLower.get(parts.join('/').toLowerCase())
-        || byPathLower.get(t.replace(/^\.?\/+/, '').toLowerCase())
-        || resolveNoteLink(t);
-      if (hit && hit.path !== n.path && !isAttachNode(hit)) wikiLinks.push({ from: n.path, to: hit.path, md: true });
+      const hit = resolveMdNoteHref(ml[1] || ml[2], n.path);
+      if (hit) wikiLinks.push({ from: n.path, to: hit.path, md: true });
     }
     // Markdown embeds/links into attachments/ (the Amelie/Obsidian-import form).
     attMdRe.lastIndex = 0;
@@ -10500,7 +10538,48 @@ function resolveNoteLink(rawTarget) {
   // 4) alphanumeric-only (most forgiving)
   hit = all.find(n => normAlpha(n.name || '') === tAlpha || normAlpha(basename(n.path)) === tAlpha);
   if (hit) return hit;
+  // 5) A path whose folders no longer exist (`[[2-HowTo-Mixed/Special Characters]]`
+  //    after an import reshaped the tree): the note by its own name.
+  if (target.includes('/')) return resolveNoteLink(target.split('/').pop());
   return null;
+}
+
+// A markdown link to a note — `[Legacy - Easy](Legacy.md)`, `(<with spaces.md>)`,
+// `(Heist%20Box.md#enum)` — resolved the way Obsidian writes them: relative to the
+// folder of the note it is in, then from the vault root, then by name like a
+// [[link]]. null for web addresses, anchors, attachments and anything not a note.
+// Shared by the mind map (which draws these links) and the reading view (which
+// opens them); the reading view used to treat them as unknown addresses and do
+// nothing on a click (2026-09-30: 161 such links in the user's vault).
+function resolveMdNoteHref(href, fromPath, allowSelf = false) {
+  let t = String(href || '').trim().replace(/^<|>$/g, '');
+  if (!t || t.startsWith('#') || /^[a-z][a-z0-9+.-]*:/i.test(t) || t.startsWith('attachments/')) return null;
+  t = t.split('#')[0];
+  if (!/\.(md|markdown)$/i.test(t)) return null;
+  try { t = decodeURIComponent(t); } catch (_) {}
+  const all = flattenTree(state.notes);
+  const byPath = (p) => all.find(n => n.path.toLowerCase() === p.toLowerCase() && !isAttachNode(n));
+  const folder = fromPath && fromPath.includes('/') ? fromPath.slice(0, fromPath.lastIndexOf('/')) : '';
+  const parts = [];
+  for (const seg of ((folder ? folder + '/' : '') + t.replace(/^\/+/, '')).split('/')) {
+    if (seg === '..') parts.pop(); else if (seg && seg !== '.') parts.push(seg);
+  }
+  const hit = byPath(parts.join('/')) || byPath(t.replace(/^\.?\/+/, '')) || resolveNoteLink(t.replace(/\.(md|markdown)$/i, ''));
+  return hit && !isAttachNode(hit) && (allowSelf || hit.path !== fromPath) ? hit : null;
+}
+
+// A link to a heading of the note being read — `(#grab-the-damn-banner)` or
+// `(this-note.md#grab-the-damn-banner)` — scrolls to it. Compared on letters and
+// digits only, so a GitHub-style slug meets "Grab the damn banner 🛰" too.
+function _scrollPreviewToAnchor(anchor) {
+  const key = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  let want = anchor; try { want = decodeURIComponent(anchor); } catch (_) {}
+  want = key(want);
+  if (!want) return false;
+  const h = [...previewContent.querySelectorAll('h1,h2,h3,h4,h5,h6')].find(x => key(x.textContent) === want);
+  if (!h) return false;
+  h.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  return true;
 }
 
 function flattenTree(nodes) {
