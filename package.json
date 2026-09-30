@@ -1,6 +1,6 @@
 {
   "name": "amelie",
-  "version": "1.0.116",
+  "version": "1.0.124",
   "description": "Amelie \u2014 Your data, private by default",
   "main": "src/main/main.js",
   "scripts": {
@@ -23,6 +23,8 @@
     "test:mmlinks": "node test/mindmap-md-links.cdp.mjs",
     "test:mmresize": "node test/mindmap-resize-click.cdp.mjs",
     "test:syncreport": "node test/sync-report.cdp.mjs",
+    "test:pdfdragpages": "node test/pdf-drag-across-pages.cdp.mjs",
+    "test:pastefile": "node test/paste-copied-file.cdp.mjs",
     "test:sweep": "node test/editor-wrap-sweep.mjs",
     "test:enc": "node test/editor-encrypted.cdp.mjs",
     "test:backup": "node test/backup-restore.cdp.mjs",
@@ -87,7 +89,7 @@
     "@codemirror/state": "^6.7.1",
     "@codemirror/view": "^6.43.6",
     "@excalidraw/excalidraw": "^0.18.1",
-    "electron": "^42.7.1",
+    "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
     "jsdom": "^30.0.0",

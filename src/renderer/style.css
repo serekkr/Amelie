@@ -2210,7 +2210,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .font-dd-btn {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   width: 100%; padding: 8px 12px; cursor: pointer;
-  background: var(--bg-2); border: 1.5px solid var(--border); border-radius: 7px;
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: 7px;   /* 1px, as every Settings button */
   color: var(--text-0); font-size: 14px; transition: border-color .15s, background .15s;
   /* Fixed height, and a line-height that does not follow the font's own metrics: the font
      picker shows its label IN the chosen font, so the box used to grow or shrink by a
@@ -2230,7 +2230,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 }
 .font-dd-item {
   display: block; width: 100%; text-align: left; cursor: pointer;
-  padding: 7px 10px; border: none; border-radius: 6px;
+  padding: 6px 9px; border: 1px solid transparent; border-radius: 6px;   /* room for the hover edge, no shift */
   background: transparent; color: var(--text-1); font-size: 14px;
 }
 .font-dd-item:hover { background: var(--bg-3); color: var(--text-0); }
@@ -4642,10 +4642,11 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
   border-radius: 6px; color: var(--text-0); font-family: var(--ui-font);
   font-size: 14px; padding: 7px 0; cursor: pointer; transition: all .12s;
 }
-.export-seg-btn:hover { color: #fff; border-color: var(--text-3); }
-.export-seg-btn.active {
-  background: var(--accent-dim); border-color: var(--accent); color: #fff;
-}
+/* The chosen option reads as chosen by a lighter face and edge — not a green fill
+   (asked 2026-09-30); green is only the thin 1px edge on hover, as in Settings. */
+.export-seg-btn.active { background: var(--bg-3); border-color: var(--border-light); color: #fff; }
+.export-seg-btn:hover, #export-modal-ok:hover, #export-modal-cancel:hover { border-color: var(--accent) !important; }
+#export-modal-ok, #export-modal-cancel { transition: border-color .12s; }
 .export-select {
   background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px;
   color: var(--text-0); font-family: var(--ui-font); font-size: 12px;
@@ -4811,6 +4812,14 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
   margin-top: -12px; margin-bottom: 0; align-self: center;
 }
 
+/* The dropdowns (language, font, icon size, sidebar, editor font…) hover the same
+   way: the thin green edge on the button and on each entry of the open list, in
+   place of the grey highlight — one hover everywhere (asked 2026-09-30). */
+:root:is(:not([data-theme]), [data-theme="serekkr"], [data-theme="graphite"]) :is(.font-dd-btn, .font-dd-item):hover {
+  border-color: var(--accent);
+}
+:root:is(:not([data-theme]), [data-theme="serekkr"], [data-theme="graphite"]) .font-dd-item:hover:not(.active) { background: transparent; }
+
 /* Hover = a thin 1px green border on the settings action buttons, over their own
    slightly lighter grey. (Tried 2026-09-30: green text + green fill as well — the
    user preferred the border alone.) Every text button in Settings: Test/Remove/
@@ -4869,3 +4878,7 @@ input, textarea, [contenteditable="true"] {
 #syncreport-modal .sr-file.sr-open:hover { background: var(--bg-2); color: var(--text-0); }
 #syncreport-modal .sr-file.sr-gone { color: var(--text-3); }
 #syncreport-modal .sr-empty { color: var(--text-3); font-size: 13px; padding: 10px 2px; }
+
+/* The mind map's Reset (frame the whole map) in the accent colour, so it stands
+   apart from + and − beside it (asked 2026-09-30). */
+#mindmap-zoom #btn-mm-zoom-reset { color: var(--accent); }

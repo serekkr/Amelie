@@ -293,6 +293,7 @@ async function switchTab(idx) {
       // tiny circle from a stale canvas size.
       resizeMindmapCanvas();
       layoutMindmap();    // seed + headless pre-warm, so the entry framing is right
+      mmRememberOpeningLayout();
       fitMindmapView();   // fit the WHOLE graph in view on entry (nothing cut off at the edges)
       // Then let the live simulation take over warm: the graph visibly breathes
       // into its final shape, the way Obsidian's does when you open it.
@@ -4631,9 +4632,10 @@ function setupEditor() {
     // FAST PATH — ordinary TEXT paste: there ARE text bytes, NO file items, and the
     // text isn't a list of file paths. Let the editor (CM or textarea) handle it
     // natively and DON'T touch the system clipboard. The readClipboardFilePaths()
-    // call below is a *synchronous* IPC that can shell out to `wl-paste` (up to a
-    // 2s timeout) on Wayland — running it on every keystroke-paste made pasting
-    // text feel broken/laggy. This branch skips all of that for the common case.
+    // call below goes to the main process and can shell out to `wl-paste` (up to a
+    // 2s timeout) on Wayland — and it holds the native paste back while it runs.
+    // Running it on every text paste made pasting feel broken/laggy; this branch
+    // skips all of that for the common case.
     {
       const cd = e.clipboardData;
       const hasFileItem = [...(cd?.items || [])].some(i => i.kind === 'file');
@@ -4643,12 +4645,23 @@ function setupEditor() {
       const textIsPaths = lines.length > 0 && lines.every(l => /^(file:\/\/|\/)/.test(l));
       if (!hasFileItem && !uriList && plain && !textIsPaths) return;   // → native paste
     }
-    // FIRST: ask the MAIN process what the OS clipboard really holds — a
-    // synchronous read of the raw desktop formats (KDE/GNOME/uri-list/plain).
-    // Chromium's DataTransfer often mangles file copies, this never does.
+    // This paste may carry files. Take what the event holds NOW — after the first
+    // await the browser empties clipboardData — and keep the native paste from
+    // running while the system clipboard is asked; if nothing turns out to be a
+    // file, the text is pasted by hand at the end, as the native paste would have.
+    const _cd = e.clipboardData;
+    const snap = {
+      files: [...(_cd?.items || [])].filter(i => i.kind === 'file').map(i => i.getAsFile()),
+      uriList: _cd?.getData('text/uri-list') || '',
+      plain: _cd?.getData('text/plain') || '',
+    };
+    e.preventDefault(); e.stopImmediatePropagation();
+    // FIRST: ask the MAIN process what the OS clipboard really holds — the raw
+    // desktop formats (KDE/GNOME/uri-list/plain). Chromium's DataTransfer often
+    // mangles file copies, this never does. Asynchronous since Electron 44.
     let sysPaths = [];
     try {
-      const raw = window.inkwell.readClipboardFilePaths?.() || [];
+      const raw = (await window.inkwell.readClipboardFilePaths?.()) || [];
       _videoNotice(raw);
       _warnIfScript(raw);
       sysPaths = raw.filter(p => !_notAttachable(p));
@@ -4670,19 +4683,16 @@ function setupEditor() {
       if (!imported) showToast(window.i18n.t('toast.files_import_failed', { n: 0 }));
       return;
     }
-    const items = [...(e.clipboardData?.items || [])];
     // Keep only supported media/PDF. Use the FILE predicate (extension OR MIME) so a
     // pasted screenshot — which often has no filename, only an image/* MIME — survives.
-    const files = items.filter(i => i.kind === 'file')
-      .map(i => i.getAsFile())
-      .filter(f => f && isSupportedAttachmentFile(f));
+    const files = snap.files.filter(f => f && isSupportedAttachmentFile(f));
     // Audio/video/scripts copied in the file manager may arrive as file://
     // URIs only — and sometimes as EMPTY File stubs (0 bytes) with the real
     // path in text/uri-list. Prefer real bytes, fall back to paths.
-    const uriList = e.clipboardData?.getData('text/uri-list') || '';
+    const uriList = snap.uriList;
     // Warn once if the clipboard carried an unsupported file (script/archive/doc…).
     _warnUnsupported([
-      ...items.filter(i => i.kind === 'file').map(i => { const f = i.getAsFile(); return f && f.name; }),
+      ...snap.files.map(f => f && f.name),
       ...uriList.split('\n').map(l => l.trim()).filter(l => l.startsWith('file://'))
         .map(l => { try { return decodeURIComponent(l.replace(/^file:\/\//, '')); } catch (_) { return ''; } })
     ]);
@@ -4695,7 +4705,7 @@ function setupEditor() {
     // only in text/plain (file:///… or /abs/path). Hijack the paste ONLY when
     // every non-empty line looks like a local path with an attachable
     // extension — never ordinary text.
-    const plain = e.clipboardData?.getData('text/plain') || '';
+    const plain = snap.plain;
     let plainPaths = [];
     if (!files.length && !paths.length && plain.trim()) {
       const lines = plain.split('\n').map(l => l.trim()).filter(Boolean);
@@ -4731,8 +4741,9 @@ function setupEditor() {
       return;
     }
     const usableFiles = files.filter(f => f.size > 0);
-    if (!usableFiles.length) return;
-    e.preventDefault(); e.stopImmediatePropagation();
+    // Nothing to attach after all: paste the text, which the native paste would have
+    // done had it not been held back above.
+    if (!usableFiles.length) { if (plain) insertAtCursor(plain); return; }
     let saved = 0;
     for (const file of usableFiles) {
       if (_tooBigToImport(file.size)) continue;
@@ -9444,7 +9455,15 @@ function setupMindmap() {
   // Reset: re-seed the layout (so nodes you dragged around go back), then frame at
   // EXACTLY 100% + centred — the user's kept preference, deliberately not fit-to-view —
   // and reheat so it settles in front of you.
-  $('btn-mm-zoom-reset')?.addEventListener('click', () => { mmFocusNode = null; layoutMindmap(); resetMindmapView(); kickMindmap(0.45); });
+  // Reset puts the VIEW back — the whole map framed, as on opening — and nothing
+  // else. It used to re-run the layout too: ~0.7 s frozen on a 1272-note vault, then
+  // seconds of the map settling live, so "reset" seemed to take a couple of seconds
+  // (2026-09-30). A wheel glide still under way is stopped, or it zoomed on after.
+  $('btn-mm-zoom-reset')?.addEventListener('click', () => {
+    mmStopZoomGlide();
+    if (mmFocusNode) { mmFocusNode = null; kickMindmap(0.15); }   // the clearing closes gently
+    fitMindmapView();
+  });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && mmFocusNode && $('mindmap-overlay')?.style.display !== 'none') mmClearFocus();
   });
@@ -9512,14 +9531,20 @@ function setupMindmapPanel() {
     el.addEventListener('change', apply);
   }
 
+  // Back to the default settings AND to the picture the map opens with. The layout
+  // is recomputed, as on opening, but a few steps per frame (layoutMindmapAsync):
+  // done in one block it froze the window for ~0.7 s on 1272 notes ("si freeza").
   $('btn-mm-restore')?.addEventListener('click', () => {
+    mmStopZoomGlide();
+    mmFocusNode = null;
     mmSet = Object.assign({}, MM_DEFAULTS);
     saveMmSettings();
     syncUI();
     rebuildMindmapGraph();
-    layoutMindmap();
-    fitMindmapView();
-    kickMindmap(0.45);
+    // What opening the map shows — the same layout, framed the same way, breathing
+    // into shape the same way — without the freeze (asked 2026-09-30).
+    if (mmRestoreOpeningLayout()) { stopMindmapPhysics(); fitMindmapView(); kickMindmap(0.45); }
+    else layoutMindmapAsync(() => { mmRememberOpeningLayout(); fitMindmapView(); kickMindmap(0.45); });
   });
 }
 
@@ -9594,11 +9619,14 @@ function stopMindmapPhysics() {
 // Cell size = the repulsion cut-off, so each node only tests the 9 cells around
 // it. Far-apart pairs contribute almost nothing at 1/d² anyway, and the centre
 // force is what keeps detached components from drifting away.
+// A grid cell as one number, not the string "x:y" — the lookups below run a few
+// hundred thousand times per step on a thousand-note vault.
+function mmCellKey(gx, gy) { return (gx + 32768) * 65536 + (gy + 32768); }
 function mmBuildGrid(cell) {
   const grid = new Map();
   for (let i = 0; i < mmNodes.length; i++) {
     const n = mmNodes[i];
-    const key = ((n.x / cell) | 0) + ':' + ((n.y / cell) | 0);
+    const key = mmCellKey((n.x / cell) | 0, (n.y / cell) | 0);
     let bucket = grid.get(key);
     if (!bucket) { bucket = []; grid.set(key, bucket); }
     bucket.push(i);
@@ -9696,7 +9724,7 @@ function mmSimStep(alpha) {
     const a = mmNodes[i];
     const gx = (a.x / CUT) | 0, gy = (a.y / CUT) | 0;
     for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
-      const bucket = grid.get((gx + ox) + ':' + (gy + oy));
+      const bucket = grid.get(mmCellKey(gx + ox, gy + oy));
       if (!bucket) continue;
       for (const j of bucket) {
         if (j <= i) continue;
@@ -9733,14 +9761,18 @@ function mmSimStep(alpha) {
     nd.y += nd.vy;
   }
 
-  // 5) Collision — resolve dot overlaps positionally so nodes never stack.
-  const grid2 = mmBuildGrid(CUT);
+  // 5) Collision — resolve dot overlaps positionally so nodes never stack. Its own
+  // grid, with cells as wide as two of the biggest dots and their gap: sharing the
+  // charge grid (cells ~5 link-lengths wide) made every node test a few hundred
+  // neighbours it could never touch — the costliest part of a step (2026-09-30).
+  const CCELL = Math.max(24, 2 * (15 * mmSet.nodeSize + MM_COLLIDE_PAD));
+  const grid2 = mmBuildGrid(CCELL);
   for (let i = 0; i < n; i++) {
     const a = mmNodes[i];
     const ra = mmNodeRadius(a) + MM_COLLIDE_PAD / 2;
-    const gx = (a.x / CUT) | 0, gy = (a.y / CUT) | 0;
+    const gx = (a.x / CCELL) | 0, gy = (a.y / CCELL) | 0;
     for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
-      const bucket = grid2.get((gx + ox) + ':' + (gy + oy));
+      const bucket = grid2.get(mmCellKey(gx + ox, gy + oy));
       if (!bucket) continue;
       for (const j of bucket) {
         if (j <= i) continue;
@@ -9813,6 +9845,7 @@ async function openMindmap() {
 
 async function closeMindmap() {
   mmFocusNode = null;
+  _mmLayoutJob++;                // a layout still being computed is dropped
   mmClearHover();
   mmStopZoomGlide();
   stopMindmapPhysics();          // never keep a rAF loop alive behind a hidden overlay
@@ -9917,6 +9950,14 @@ async function buildMindmapData() {
   // note links its sixty pages this way; counting only [[…]] left it an island.
   const mdNoteRe = /(?<!!)\[[^\]\n]*\]\((?:<([^>\n]+?\.(?:md|markdown))>|([^)\s]+?\.(?:md|markdown)))(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/gi;
   const byPathLower = new Map(allNotes.map(x => [x.path.toLowerCase(), x]));
+  // Every note's text, read in parallel batches: one IPC round trip after another
+  // for a thousand notes was half of the time the map took to appear (2026-09-30).
+  const texts = new Map();
+  const toRead = allNotes.filter(n => !isAttachNode(n) && !(getTab(n.path)?.content));
+  for (let i = 0; i < toRead.length; i += 48) {
+    await Promise.all(toRead.slice(i, i + 48).map(n => window.inkwell.readNote(n.path)
+      .then(c => texts.set(n.path, c || ''), () => texts.set(n.path, ''))));
+  }
   for (const n of allNotes) {
     const isAttach = isAttachNode(n);
     const colorKey = noteColors[n.path];
@@ -9936,7 +9977,7 @@ async function buildMindmapData() {
     const tab = getTab(n.path);
     // Lazy tab restore: an OPEN tab may not have loaded its content yet (empty
     // sentinel) — read the file so the graph isn't missing its links/tags.
-    const content = (tab && tab.content) ? tab.content : (await window.inkwell.readNote(n.path).catch(() => ''));
+    const content = (tab && tab.content) ? tab.content : (texts.get(n.path) || '');
     const { fm } = parseFrontmatter(content);
     if (fm.tags) tags = fm.tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
     files.push({ path: n.path, label: n.name, type: 'note', tags, color, modified: n.modified, _folder });
@@ -10500,13 +10541,73 @@ function layoutMindmap() {
 
   // Headless anneal. Big graphs get fewer iterations so opening never stalls the
   // UI — they just finish converging live in the rAF loop afterwards.
-  const ITER = N > 900 ? 90 : N > 300 ? 160 : 260;
+  const ITER = mmLayoutIterations(N);
   const savedOffset = { x: mmOffset.x, y: mmOffset.y }, savedScale = mmScale;
   mmOffset = { x: 0, y: 0 }; mmScale = 1;      // pre-warm in plain canvas coords
-  for (let i = 0; i < ITER; i++) mmSimStep(Math.max(0.03, Math.pow(0.02, i / ITER)));
+  for (let i = 0; i < ITER; i++) mmSimStep(mmLayoutAlpha(i, ITER));
   mmOffset = savedOffset; mmScale = savedScale;
   for (const n of mmNodes) { n.vx = 0; n.vy = 0; }
   mmAlpha = 0;
+}
+// The layout the map opened with, kept so "Restore defaults" can bring it back at
+// once instead of computing it again (~0.8 s, spread over frames). Valid only for the
+// same settings, the same notes and the same canvas size: anything else and the
+// layout is recomputed, as it would be on opening.
+let _mmOpening = null;
+function _mmLayoutSig() {
+  const c = $('mindmap-canvas');
+  const f = ['fDist', 'fRepel', 'fLink', 'fCenter', 'fSearch', 'fTags', 'fFolders', 'fAttach', 'fOrphans'].map(k => mmSet[k]);
+  return JSON.stringify([f, c ? [c.width, c.height] : null, mmNodes.length, mmEdges.length, mmNodes.map(n => n.path).join('|')]);
+}
+function mmRememberOpeningLayout() {
+  _mmOpening = { sig: _mmLayoutSig(), pos: new Map(mmNodes.map(n => [n.path, [n.x, n.y]])) };
+}
+function mmRestoreOpeningLayout() {
+  if (!_mmOpening || _mmOpening.sig !== _mmLayoutSig()) return false;
+  for (const n of mmNodes) { const p = _mmOpening.pos.get(n.path); if (!p) return false; }
+  for (const n of mmNodes) { const p = _mmOpening.pos.get(n.path); n.x = p[0]; n.y = p[1]; n.vx = 0; n.vy = 0; }
+  mmGravityCenter = null; mmAlpha = 0;
+  return true;
+}
+function mmLayoutIterations(N) { return N > 900 ? 90 : N > 300 ? 160 : 260; }
+function mmLayoutAlpha(i, ITER) { return Math.max(0.03, Math.pow(0.02, i / ITER)); }
+
+// The same layout as layoutMindmap — the one the map opens with — computed a few
+// steps per frame, so the window never freezes (~0.7 s in one block on 1272 notes).
+// The old picture stays on screen until the new one is ready; then `done` runs.
+// A second call, or closing the map, cancels the one under way.
+let _mmLayoutJob = 0;
+function layoutMindmapAsync(done) {
+  const job = ++_mmLayoutJob;
+  const N = mmNodes.length;
+  if (!N) { done && done(); return; }
+  stopMindmapPhysics();
+  // Seed exactly as layoutMindmap does, on copies, so the screen keeps the old map.
+  const canvas = $('mindmap-canvas');
+  const dpr = canvas._dpr || 1;
+  const cx = ((canvas.width || 1000) / dpr) / 2, cy = ((canvas.height || 700) / dpr) / 2;
+  const spread = mmLinkLen() * 0.75;
+  const shown = mmNodes.map(n => ({ x: n.x, y: n.y }));
+  const seeded = mmNodes.map((_, i) => { const a = i * 2.399963229728653, r = spread * Math.sqrt(i + 0.5); return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }; });
+  const ITER = mmLayoutIterations(N);
+  let i = 0;
+  const step = () => {
+    if (job !== _mmLayoutJob) return;
+    const t0 = performance.now();
+    // Swap the layout's positions in, run a slice of steps, swap the picture back.
+    mmNodes.forEach((n, k) => { n.x = seeded[k].x; n.y = seeded[k].y; n.vx = seeded[k].vx || 0; n.vy = seeded[k].vy || 0; });
+    const savedOffset = { x: mmOffset.x, y: mmOffset.y }, savedScale = mmScale, savedFocus = mmFocusNode;
+    mmOffset = { x: 0, y: 0 }; mmScale = 1; mmFocusNode = null;
+    if (i === 0) mmGravityCenter = null;
+    while (i < ITER && performance.now() - t0 < 12) mmSimStep(mmLayoutAlpha(i++, ITER));
+    mmOffset = savedOffset; mmScale = savedScale; mmFocusNode = savedFocus;
+    mmNodes.forEach((n, k) => { seeded[k] = { x: n.x, y: n.y, vx: n.vx, vy: n.vy }; n.x = shown[k].x; n.y = shown[k].y; });
+    if (i < ITER) { requestAnimationFrame(step); return; }
+    mmNodes.forEach((n, k) => { n.x = seeded[k].x; n.y = seeded[k].y; n.vx = 0; n.vy = 0; });
+    mmAlpha = 0;
+    done && done();
+  };
+  requestAnimationFrame(step);
 }
 
 function centerMindmap() {
@@ -10519,25 +10620,6 @@ function centerMindmap() {
   const cxN = (minX+maxX)/2, cyN = (minY+maxY)/2;
   mmOffset.x = (canvas.width/dpr)/2  - cxN;
   mmOffset.y = (canvas.height/dpr)/2 - cyN;
-}
-
-// "Reset" button (formerly "Zoom 100%", the "·" between + and −) AND the mindmap
-// entry both call this: show the graph at EXACTLY 100% zoom, centred. NO
-// fit-to-viewport rescale — that zoom-to-fit was the unwanted "zoom" effect on entry.
-// Just centre at scale 1; the caller adds the wobble. Manual wheel/button zoom still
-// works from here.
-function resetMindmapView() {
-  if (!mmNodes || !mmNodes.length) return;
-  const canvas = $('mindmap-canvas');
-  const dpr = canvas._dpr || 1;
-  const W = canvas.width / dpr, H = canvas.height / dpr;
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const n of mmNodes) { if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x; if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y; }
-  mmScale = 1;                          // 100% — no fit-zoom
-  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  mmOffset.x = W / 2 - cx * mmScale;    // centre the graph
-  mmOffset.y = H / 2 - cy * mmScale;
-  drawMindmap();
 }
 
 // ENTRY view: fit the whole graph into the viewport so nothing is cut off at the
@@ -15082,18 +15164,65 @@ function _dragObj(handleEl, scale, onStart, onMove, onDone) {
     // bound: the photo then followed the bare pointer around the page with no
     // button held, and every further drag stacked another live listener on top.
     // Nothing looks more like a jammed editor.
-    const up = () => {
+    let last = ev;
+    const track = (e) => { last = e; };
+    handleEl.addEventListener('pointermove', track);
+    const up = (e) => {
       handleEl.removeEventListener('pointermove', move);
+      handleEl.removeEventListener('pointermove', track);
       handleEl.removeEventListener('pointerup', up);
       handleEl.removeEventListener('pointercancel', up);
       handleEl.removeEventListener('lostpointercapture', up);
-      onDone && onDone();
+      onDone && onDone(e && e.type === 'pointerup' ? e : last);
     };
     handleEl.addEventListener('pointermove', move);
     handleEl.addEventListener('pointerup', up);
     handleEl.addEventListener('pointercancel', up);
     handleEl.addEventListener('lostpointercapture', up);
   });
+}
+
+// A text box or photo dragged onto ANOTHER page moves to that page. Objects belong to
+// the page layer they were drawn in, so a photo dragged down used to slide UNDER the
+// next page (drawn later, it covers the one before), stay on page 1 with coordinates
+// below its bottom edge, and be baked off the sheet (2026-09-30). On release the
+// page under the pointer — or the nearest one, in the gap between two — takes it,
+// kept inside its edges. The page being dragged from is raised while it happens.
+function _pdfRaisePage(el, on) {
+  const wrap = el && el.closest('.pdf-page-wrap');
+  if (wrap) wrap.style.zIndex = on ? '6' : '';
+}
+function _pdfMoveObjToPageAt(a, el, e) {
+  const layers = [...(_pdfContainer?.querySelectorAll('.pdf-obj-layer') || [])];
+  if (!layers.length || !el) return;
+  const r = el.getBoundingClientRect();
+  const px = e && Number.isFinite(e.clientX) ? e.clientX : r.left + r.width / 2;
+  const py = e && Number.isFinite(e.clientY) ? e.clientY : r.top + r.height / 2;
+  let best = null, bestD = Infinity;
+  for (const l of layers) {
+    const q = l.getBoundingClientRect();
+    const dx = px < q.left ? q.left - px : px > q.right ? px - q.right : 0;
+    const dy = py < q.top ? q.top - py : py > q.bottom ? py - q.bottom : 0;
+    const d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = l; }
+  }
+  const scale = PDF_BASE_SCALE * _pdfZoom;
+  const q = best.getBoundingClientRect();
+  const hpt = +best.dataset.hpt, wpt = +best.dataset.wpt;
+  const wPt = r.width / scale, hPt = r.height / scale;
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
+  const x = clamp((r.left - q.left) / scale, 0, wpt - wPt);
+  const y = clamp(hpt - (r.top - q.top) / scale, Math.min(hPt, hpt), hpt);   // top edge, from the bottom
+  const from = a.page, to = +best.dataset.page;
+  if (to === from && Math.abs(x - a.x) < 0.01 && Math.abs(y - a.y) < 0.01) return;
+  a.page = to; a.x = x; a.y = y;
+  const sel = _pdfSelText === a;
+  _redrawPage(from);
+  if (to !== from) _redrawPage(to);
+  if (sel) {
+    const nel = [...(best.querySelectorAll('.pdf-obj') || [])].find(n => n.classList.contains('sel'));
+    if (nel) _pdfSelTextEl = nel;
+  }
 }
 
 // Remove a text/image object annotation and redraw its page.
@@ -15124,13 +15253,13 @@ function _drawPageObjs(layer, page, scale, pageHpt) {
       // Single click selects the box (so the colour picker recolours it).
       el.addEventListener('pointerdown', () => _selectPdfText(a, el));
       _dragObj(el, scale,
-        () => ({ x: a.x, y: a.y }),
+        () => { if (!el.isContentEditable) _pdfRaisePage(el, true); return { x: a.x, y: a.y }; },
         (dx, dy, s) => {
           if (el.isContentEditable) return;
           a.x = s.x + dx; a.y = s.y + dy;
           el.style.left = (a.x * scale) + 'px';
           el.style.top  = toTop(a.y) + 'px';
-        }, _markPdfDirty);
+        }, (e) => { _pdfRaisePage(el, false); if (!el.isContentEditable) _pdfMoveObjToPageAt(a, el, e); _markPdfDirty(); });
       el.addEventListener('dblclick', () => _editTextObj(el, a, layer, page));
       layer.appendChild(el);
 
@@ -15151,12 +15280,12 @@ function _drawPageObjs(layer, page, scale, pageHpt) {
       grip.className = 'pdf-obj-grip';
       box.appendChild(grip);
       _dragObj(box, scale,
-        () => ({ x: a.x, y: a.y }),
+        () => { _pdfRaisePage(box, true); return { x: a.x, y: a.y }; },
         (dx, dy, s) => {
           a.x = s.x + dx; a.y = s.y + dy;
           box.style.left = (a.x * scale) + 'px';
           box.style.top  = toTop(a.y) + 'px';
-        }, _markPdfDirty);
+        }, (e) => { _pdfRaisePage(box, false); _pdfMoveObjToPageAt(a, box, e); _markPdfDirty(); });
       _dragObj(grip, scale,
         () => ({ w: a.w, y: a.y }),
         (dx, _dy, s) => {
@@ -15338,9 +15467,9 @@ async function _onPdfPaste(e) {
   const plain = cd?.getData('text/plain') || '';
   const uriList = cd?.getData('text/uri-list') || '';
   // Ordinary copied TEXT: leave it alone and, above all, do not reach for the
-  // system clipboard below — readClipboardFilePaths is a synchronous IPC that
-  // shells out to wl-paste with a 2s timeout, which on a plain Ctrl+V would be
-  // the very freeze this is meant to remove. Same guard as the note editor's.
+  // system clipboard below — readClipboardFilePaths goes to the main process and
+  // can shell out to wl-paste with a 2s timeout, which on a plain Ctrl+V would be
+  // the very delay this is meant to remove. Same guard as the note editor's.
   const lines = plain.split('\n').map(l => l.trim()).filter(Boolean);
   const textIsPaths = lines.length > 0 && lines.every(l => /^(file:\/\/|\/)/.test(l));
   if (!hasFileItem && !uriList && plain && !textIsPaths) return;
@@ -15367,16 +15496,18 @@ async function _onPdfPaste(e) {
     .map(l => { try { return decodeURIComponent(l.replace(/^file:\/\//, '')); } catch (_) { return ''; } })
     .filter(p => PDF_IMAGE_PATH_RE.test(p));
   let src = fromText[0];
+  // The page takes this paste from here on: decided before any await, which the
+  // asynchronous clipboard read below needs (Electron 44).
+  e.preventDefault(); e.stopImmediatePropagation();
   if (!src) {
-    try { src = (window.inkwell.readClipboardFilePaths?.() || []).find(p => PDF_IMAGE_PATH_RE.test(p)); } catch (_) {}
+    try { src = ((await window.inkwell.readClipboardFilePaths?.()) || []).find(p => PDF_IMAGE_PATH_RE.test(p)); } catch (_) {}
   }
   if (!src) {
     // Something WAS copied — a file, or a path we cannot use — but it is not a
     // photo this page can take. Say so, rather than swallow the keystroke.
-    if (hasFileItem || uriList || textIsPaths) { e.preventDefault(); showToast(window.i18n.t('pdf.paste_not_image')); }
+    if (hasFileItem || uriList || textIsPaths) showToast(window.i18n.t('pdf.paste_not_image'));
     return;
   }
-  e.preventDefault(); e.stopImmediatePropagation();
   try {
     await _placePdfImage(await window.inkwell.pdfImageFromPath(src));
   } catch (err) {

@@ -92,6 +92,50 @@ await session(9491, async (ev, cdp) => {
   }
 });
 
+// ── Reset puts the view back at once ────────────────────────────────────────
+// It re-ran the whole layout (~0.7 s frozen on 1272 notes, then seconds settling);
+// a wheel glide still under way zoomed on after it. Now: the frame, instantly.
+await session(9492, async (ev, cdp) => {
+  await ev(`(async () => { await loadTree(); await openMindmap(); return 1; })()`);
+  for (let i = 0; i < 30; i++) { await sleep(500); if (await ev('mmAlpha < 0.002')) break; }
+  const home = JSON.parse(await ev(`JSON.stringify((stopMindmapPhysics(), fitMindmapView(), { s: mmScale, x: mmOffset.x, y: mmOffset.y, pos: mmNodes.map((n) => [n.x, n.y]) }))`));
+  // Zoom in with the wheel, and press Reset while the glide is still going.
+  const c = JSON.parse(await ev(`JSON.stringify((() => { const r = document.getElementById('mindmap-canvas').getBoundingClientRect(); return { x: r.left + r.width * 0.7, y: r.top + r.height * 0.3 }; })())`));
+  for (let i = 0; i < 6; i++) await cdp('Input.dispatchMouseEvent', { type: 'mouseWheel', x: c.x, y: c.y, deltaX: 0, deltaY: -100 });
+  await sleep(60);
+  const took = await ev(`(() => { const t = performance.now(); document.getElementById('btn-mm-zoom-reset').click(); return performance.now() - t; })()`);
+  const now = JSON.parse(await ev(`JSON.stringify({ s: mmScale, x: mmOffset.x, y: mmOffset.y })`));
+  check('Reset frames the whole map at once', Math.abs(now.s - home.s) < 1e-6 && Math.abs(now.x - home.x) < 0.5 && Math.abs(now.y - home.y) < 0.5,
+    JSON.stringify({ home: [home.s, home.x, home.y], now }));
+  check('in well under a frame, not a re-layout', took < 16, `${took.toFixed(1)} ms`);
+  await sleep(800);
+  const later = JSON.parse(await ev(`JSON.stringify({ s: mmScale, pos: mmNodes.map((n) => [n.x, n.y]) })`));
+  check('and the wheel glide under way does not zoom on after it', Math.abs(later.s - home.s) < 1e-6, String(later.s));
+  check('the notes stay where they were: the view moved, not the map',
+    later.pos.every((p, i) => Math.hypot(p[0] - home.pos[i][0], p[1] - home.pos[i][1]) < 1), 'nodes moved');
+
+  // "Restore defaults": the picture the map opens with, without freezing on the way.
+  await ev(`(() => { mmSet.fDist = 200; mmSet.fRepel = 20; saveMmSettings(); return 1; })()`);
+  // What opening shows: the same steps, run now in one block, remembered.
+  const opening = JSON.parse(await ev(`JSON.stringify((() => { const keep = mmNodes.map((n) => [n.x, n.y]); const s0 = Object.assign({}, mmSet);
+    mmSet = Object.assign({}, MM_DEFAULTS); rebuildMindmapGraph(); layoutMindmap(); fitMindmapView();
+    const out = { pos: mmNodes.map((n) => [n.x, n.y]), s: mmScale, x: mmOffset.x, y: mmOffset.y };
+    mmSet = s0; mmNodes.forEach((n, k) => { n.x = keep[k][0]; n.y = keep[k][1]; }); return out; })())`));
+  await ev(`(stopMindmapPhysics(), window._longest = 0, window._last = performance.now(), (function tick() { const t = performance.now(); window._longest = Math.max(window._longest, t - window._last); window._last = t; if (!window._stopTick) requestAnimationFrame(tick); })(), 1)`);
+  // Catch the moment it is done — before the live settling moves anything. Armed
+  // BEFORE the click: when the opening layout is remembered it is all over within it.
+  await ev(`(window._doneP = new Promise((res) => { const orig = kickMindmap; kickMindmap = (a) => { kickMindmap = orig; res(JSON.stringify({ pos: mmNodes.map((n) => [n.x, n.y]), s: mmScale, x: mmOffset.x, y: mmOffset.y })); orig(a); }; setTimeout(() => res('null'), 8000); }), 1)`);
+  const blocked = await ev(`(() => { const t = performance.now(); document.getElementById('btn-mm-restore').click(); return performance.now() - t; })()`);
+  const done = JSON.parse(await ev(`window._doneP`));
+  const longest = await ev(`(window._stopTick = true, window._longest)`);
+  check('Restore defaults does not freeze the window', blocked < 20 && longest < 60, `click ${blocked.toFixed(1)} ms, longest frame ${longest.toFixed(0)} ms`);
+  check('and the defaults are back', (await ev(`JSON.stringify([mmSet.fDist, mmSet.fRepel])`)) === JSON.stringify([90, 10]), await ev(`JSON.stringify([mmSet.fDist, mmSet.fRepel])`));
+  check('it shows the very picture the map opens with', !!done && done.pos.length === opening.pos.length
+    && done.pos.every((p, k) => Math.hypot(p[0] - opening.pos[k][0], p[1] - opening.pos[k][1]) < 0.01)
+    && Math.abs(done.s - opening.s) < 1e-9 && Math.abs(done.x - opening.x) < 0.01, JSON.stringify(done && [done.s, opening.s]));
+  check('then breathes into shape, as on opening', (await ev(`mmPhysicsRunning`)) === true);
+});
+
 fs.rmSync(HOME, { recursive: true, force: true });
 const failed = results.filter((r) => !r).length;
 console.log(failed ? `\n${failed} of ${results.length} FAILED` : `\nall ${results.length} passed`);

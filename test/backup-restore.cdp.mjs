@@ -160,8 +160,13 @@ check('the edited note is restored byte for byte', fs.existsSync(`${VAULT}/notes
 check('the deleted note comes back', fs.existsSync(`${VAULT}/notes/${NOTE_B}`) && fs.readFileSync(`${VAULT}/notes/${NOTE_B}`, 'utf8') === TEXT_B,
   fs.existsSync(`${VAULT}/notes/${NOTE_B}`) ? 'content differs' : 'still missing');
 
-// keepLast: three kept, and the oldest dropped.
-for (let i = 0; i < 3; i++) { await cx.ev('window.inkwell.triggerBackup()', 120000); await sleep(2500); }
+// keepLast: three kept, and the oldest dropped. Each backup follows an edit: an
+// unchanged vault is not copied again ("skipped because nothing changed"), so
+// three presses in a row over the same vault make ONE new archive, not three.
+for (let i = 0; i < 3; i++) {
+  fs.writeFileSync(`${VAULT}/notes/keeplast-${i}.md`, `modifica ${i}\n`);
+  await cx.ev('window.inkwell.triggerBackup()', 120000); await sleep(2500);
+}
 const kept = archives();
 check('keepLast prunes to the configured number', kept.length === 3, `${kept.length} archives: ${kept.join(', ')}`);
 check('and it keeps the newest, not the oldest', !kept.includes(path.basename(arch)), `the first archive ${path.basename(arch)} is still there`);

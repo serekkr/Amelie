@@ -41,9 +41,10 @@ fs.rmSync(HOME, { recursive: true, force: true });
 fs.mkdirSync(`${HOME}/.local/share/amelie`, { recursive: true });
 fs.mkdirSync(`${VAULT}/notes`, { recursive: true });
 
-// The script the user actually keeps in this repo — a real 303-line file beats
-// a generated one, and it is the same script preview-code-untouched.test.mjs uses.
-const SCRIPT = fs.readFileSync(`${REPO}/map-tiles-gen.sh`, 'utf8').replace(/\n$/, '');
+// A real shell script beats a generated one: the user's own 303-line script when it
+// is in the repo root (untracked, theirs), else the one kept with the tests.
+const SCRIPT_FILE = fs.existsSync(`${REPO}/map-tiles-gen.sh`) ? `${REPO}/map-tiles-gen.sh` : `${REPO}/test/fixtures/code-fence-hazards.sh`;
+const SCRIPT = fs.readFileSync(SCRIPT_FILE, 'utf8').replace(/\n$/, '');
 const BLOCKS = 12;   // exactly one old batch: the worst case the old code had
 // Block 1 is the script alone, so the byte-identity check below reads back
 // something known. The rest are three times as long, which is what makes the

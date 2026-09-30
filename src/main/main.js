@@ -76,9 +76,11 @@ if (!fs.existsSync(APP_HOME)) fs.mkdirSync(APP_HOME, { recursive: true });
 // on top of them would show TWO sets of controls; the renderer hides the custom
 // ones on mac (html.is-mac .tb-btn). Setting frame:false AND titleBarStyle on mac
 // was the bug that produced the doubled controls.
+// roundedCorners: false — since Electron 43 a frameless window on Linux gets rounded
+// corners by default; Amelie's are square, the way the user wants them (2026-09-30).
 const WINDOW_CHROME = process.platform === 'darwin'
   ? { titleBarStyle: 'hiddenInset' }
-  : { frame: false };
+  : { frame: false, roundedCorners: false };
 
 // One-shot migration: the config used to live in ~/.amelie. Move everything
 // into APP_HOME (merging directories, never overwriting), then drop the old
@@ -3688,40 +3690,66 @@ ipcMain.handle('attachment:delete', async (_, name) => {
   return true;
 });
 
-// Read copied FILE PATHS straight from the system clipboard (synchronous).
-// Chromium's DataTransfer often mangles file copies (hollow stubs, missing
-// uri-list); the Electron clipboard API sees the raw desktop formats — KDE,
-// GNOME and plain-text variants alike. Only EXISTING files are returned.
-ipcMain.on('clipboard:file-paths', (e) => {
+// Read copied FILE PATHS straight from the system clipboard. Chromium's DataTransfer
+// often mangles file copies (hollow stubs, missing uri-list); the Electron clipboard
+// API sees the raw desktop formats — KDE, GNOME and plain-text variants alike. Only
+// EXISTING files are returned.
+//
+// Asynchronous since Electron 44, whose clipboard is the W3C one: availableFormats()
+// and readBuffer() are gone, readText() returns a Promise, and the desktop's own
+// formats come as items typed `electron application/osclipboard;format="…"`. The
+// synchronous IPC this used to be cannot wait for a Promise. Both APIs are handled,
+// so the same code runs on the Electron it is built with.
+function _clipboardParseUris(s) {
+  return String(s || '').split('\n')
+    .map(l => l.trim())
+    .filter(l => l.startsWith('file://'))
+    .map(l => { try { return decodeURIComponent(l.replace(/^file:\/\//, '')); } catch (_) { return null; } })
+    .filter(Boolean);
+}
+async function clipboardFilePaths() {
+  let out = [];
+  const plainOnlyPaths = (t) => {
+    const lines = String(t || '').split('\n').map(l => l.trim()).filter(Boolean);
+    return lines.length && lines.every(l => l.startsWith('file://')) ? _clipboardParseUris(t) : [];
+  };
   try {
-    const parse = (s) => String(s || '').split('\n')
-      .map(l => l.trim())
-      .filter(l => l.startsWith('file://'))
-      .map(l => { try { return decodeURIComponent(l.replace(/^file:\/\//, '')); } catch (_) { return null; } })
-      .filter(Boolean);
-    const formats = clipboard.availableFormats();
-    let out = [];
-    if (formats.includes('text/uri-list')) out = parse(clipboard.readBuffer('text/uri-list').toString('utf8'));
-    if (!out.length && formats.includes('x-special/gnome-copied-files')) out = parse(clipboard.readBuffer('x-special/gnome-copied-files').toString('utf8'));
-    if (!out.length) {
-      const t = clipboard.readText();
-      const lines = String(t || '').split('\n').map(l => l.trim()).filter(Boolean);
-      if (lines.length && lines.every(l => l.startsWith('file://'))) out = parse(t);
+    if (typeof clipboard.availableFormats === 'function') {          // Electron ≤ 43
+      const formats = clipboard.availableFormats();
+      if (formats.includes('text/uri-list')) out = _clipboardParseUris(clipboard.readBuffer('text/uri-list').toString('utf8'));
+      if (!out.length && formats.includes('x-special/gnome-copied-files')) out = _clipboardParseUris(clipboard.readBuffer('x-special/gnome-copied-files').toString('utf8'));
+      if (!out.length) out = plainOnlyPaths(clipboard.readText());
+    } else {                                                          // Electron ≥ 44
+      const items = await clipboard.read();
+      const want = [
+        (t) => t === 'text/uri-list' || /format="text\/uri-list"/.test(t),
+        (t) => /format="x-special\/gnome-copied-files"/.test(t),
+      ];
+      for (const match of want) {
+        for (const it of items || []) {
+          const type = (it.types || []).find(match);
+          if (!type) continue;
+          try { out = _clipboardParseUris(await (await it.getType(type)).text()); } catch (_) {}
+          if (out.length) break;
+        }
+        if (out.length) break;
+      }
+      if (!out.length) out = plainOnlyPaths(await clipboard.readText());
     }
-    // Wayland fallback: the app runs on XWayland and KDE's clipboard bridge
-    // can silently fail — files copied in Wayland-native apps (Dolphin) never
-    // reach the X11 selection Electron reads. wl-paste reads the Wayland
-    // clipboard directly.
-    if (!out.length) {
-      try {
-        const { execFileSync } = require('child_process');
-        const uris = execFileSync('wl-paste', ['-t', 'text/uri-list'], { timeout: 2000 }).toString('utf8');
-        out = parse(uris);
-      } catch (_) { /* wl-paste missing or clipboard not uri-list */ }
-    }
-    e.returnValue = out.filter(p => { try { return fs.statSync(p).isFile(); } catch (_) { return false; } });
-  } catch (_) { e.returnValue = []; }
-});
+  } catch (_) {}
+  // Wayland fallback: the app runs on XWayland and KDE's clipboard bridge can
+  // silently fail — files copied in Wayland-native apps (Dolphin) never reach the X11
+  // selection Electron reads. wl-paste reads the Wayland clipboard directly.
+  if (!out.length) {
+    try {
+      const uris = await new Promise((res, rej) => require('child_process').execFile('wl-paste', ['-t', 'text/uri-list'], { timeout: 2000 },
+        (err, stdout) => (err ? rej(err) : res(String(stdout || '')))));
+      out = _clipboardParseUris(uris);
+    } catch (_) { /* wl-paste missing or clipboard not uri-list */ }
+  }
+  return out.filter(p => { try { return fs.statSync(p).isFile(); } catch (_) { return false; } });
+}
+ipcMain.handle('clipboard:file-paths', () => clipboardFilePaths().catch(() => []));
 
 // Reveal an attachment in the system file manager (right-click → "Apri percorso").
 ipcMain.handle('attachment:showInFolder', async (_, name) => {

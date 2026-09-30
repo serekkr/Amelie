@@ -89,8 +89,8 @@ contextBridge.exposeInMainWorld('inkwell', {
   importAttachmentPath: (srcPath, name) => ipcRenderer.invoke('attachment:importPath', srcPath, name),
   showAttachmentInFolder: (name) => ipcRenderer.invoke('attachment:showInFolder', name),
   openAttachmentFile: (name) => ipcRenderer.invoke('attachment:openFile', name),
-  // Synchronous: copied file paths as the OS clipboard really sees them.
-  readClipboardFilePaths: () => ipcRenderer.sendSync('clipboard:file-paths'),
+  // Copied file paths as the OS clipboard really sees them (a Promise: see main.js).
+  readClipboardFilePaths: () => ipcRenderer.invoke('clipboard:file-paths'),
   // Base URL of the localhost media server (audio/video playback). Async: the
   // server is started by this very call, so the first one waits for the port.
   mediaBaseUrl: () => ipcRenderer.invoke('media:base-url'),
