@@ -2231,6 +2231,34 @@ ipcMain.handle('vault:importObsidian', async (_, rawSrc, destFolder) => {
 // Obsidian folder or archive here instead of swapping the vault — see _obsidianRoot).
 // `rootName` names the container folder; it defaults to the source folder's own name,
 // which Restore overrides when the source is a temp dir an archive was unpacked into.
+// `files`: [{ r: path inside the source vault, leaf: stored name under attachments/ }].
+// Adds every one that no note links to the order of the folder it came from (under
+// `root`, the import's own folder), unless some folder already keeps it — a second
+// import of the same vault, or a file the user has since moved, stays where it is.
+function _recordImportedHomes(files, root) {
+  const f = treeOrderFile();
+  if (!f) return 0;
+  const usage = _attachmentUsage();
+  let order = {};
+  try { order = JSON.parse(fs.readFileSync(f, 'utf8')) || {}; } catch (_) {}
+  const kept = new Set();
+  for (const [k, list] of Object.entries(order)) if (k && Array.isArray(list)) list.forEach(p => kept.add(p));
+  let added = 0;
+  for (const a of files) {
+    if (!a.leaf || (usage.get(a.leaf) || new Set()).size) continue;
+    const p = 'attachments/' + a.leaf;
+    if (kept.has(p)) continue;
+    const dir = path.posix.dirname(a.r);
+    const home = [root, dir === '.' ? '' : dir].filter(Boolean).join('/');
+    if (!home) continue;                       // imported into the root: the root it is
+    (order[home] = Array.isArray(order[home]) ? order[home] : []).push(p);
+    if (Array.isArray(order[''])) order[''] = order[''].filter(x => x !== p);
+    kept.add(p); added++;
+  }
+  if (added) fs.writeFileSync(f, JSON.stringify(order, null, 2), 'utf8');
+  return added;
+}
+
 async function importObsidianFolder(src, destFolder, rootNameOverride) {
   const dest = (destFolder || '').replace(/^\/+|\/+$/g, '');
 
@@ -2273,6 +2301,7 @@ async function importObsidianFolder(src, destFolder, rootNameOverride) {
                 : /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(a.r) ? 'images/'
                 : '';
       const leaf = await saveAttachmentBuffer(sub + path.basename(a.r), fs.readFileSync(a.full));
+      a.leaf = leaf;
       byBase.set(path.basename(a.r).toLowerCase(), leaf);
       byRel.set(a.r.toLowerCase(), leaf);
       if (/\.pdf$/i.test(leaf)) pdfs++; else if (AV_EXT_RE.test(leaf)) media++; else images++;
@@ -2354,6 +2383,11 @@ async function importObsidianFolder(src, destFolder, rootNameOverride) {
       notes++;
     } catch (_) {}
   }
+  // Phase C: an attachment no note uses keeps the folder it sat in — in the sidebar
+  // order, which is where _attachmentHomes looks for it. Stored flat on disk, it
+  // would otherwise be listed at the root, far from everything it went with.
+  try { _recordImportedHomes(attFiles, [dest, rootName].filter(Boolean).join('/')); }
+  catch (e) { console.warn('[import] attachment folders not recorded:', e.message); }
   if (syncManager) syncManager.scheduleSync();
   return { ok: true, notes, images, pdfs, media, skipped };
 }
@@ -4396,6 +4430,10 @@ ipcMain.on('sync:massDeleteAnswer', (_e, { id, choice } = {}) => {
   if (syncManager) syncManager.answerMassDelete(id, choice);
 });
 
+// Sync reports — what each two-way pass did (SyncManager._saveTwowayReport).
+ipcMain.handle('sync:reports', async () => (syncManager ? syncManager.listSyncReports() : []));
+ipcMain.handle('sync:report', async (_, id) => (syncManager ? syncManager.getSyncReport(String(id || '')) : null));
+
 // Force a two-way sync (the toolbar Sync button).
 ipcMain.handle('sync:triggerTwoway', async () => {
   if (syncManager) return syncManager.runTwoway({ manual: true });
@@ -4809,7 +4847,7 @@ ipcMain.handle('wg:removeConf', async () => {
       // Reset the WHOLE vpn block (not just smb): leftovers like peerIp /
       // wgConfig / remotePath would re-prefill the Samba IP/share fields on the
       // next settings open — after a Remove the form must be back to defaults.
-      if (vaultCfg.sync.vpn) vaultCfg.sync.vpn = { enabled: false };
+      if (vaultCfg.sync.vpn) vaultCfg.sync.vpn = { enabled: false, ...(vaultCfg.sync.vpn.syncOnly ? { syncOnly: true } : {}) };   // the "only for sync" preference outlives the VPN
       if (vaultCfg.sync.samba) delete vaultCfg.sync.samba;
       // If the two-way sync was riding on the same WG+Samba link, disable it
       // and drop its connection too (same shared link — the Sync view must not
@@ -4837,7 +4875,7 @@ ipcMain.handle('wg:removeVpnKeepSamba', async () => {
     let cfg = {};
     try { if (fs.existsSync(CONFIG_FILE)) cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch (_) {}
     if (cfg.sync) {
-      if (cfg.sync.vpn) cfg.sync.vpn = { enabled: false };
+      if (cfg.sync.vpn) cfg.sync.vpn = { enabled: false, ...(cfg.sync.vpn.syncOnly ? { syncOnly: true } : {}) };   // the "only for sync" preference outlives the VPN
       if (cfg.sync.twoway) cfg.sync.twoway.useWireGuard = false;
       // KEEP cfg.sync.samba and cfg.sync.twoway.smb
       writeConfig(cfg);
@@ -5020,7 +5058,7 @@ ipcMain.handle('wg:removeSyncConnection', async () => {
     if (vaultCfg.sync) {
       // Reset the WHOLE vpn block (see wg:removeConf): leftover peerIp/wgConfig
       // would re-prefill the Samba fields after a Remove + re-import.
-      if (vaultCfg.sync.vpn) vaultCfg.sync.vpn = { enabled: false };
+      if (vaultCfg.sync.vpn) vaultCfg.sync.vpn = { enabled: false, ...(vaultCfg.sync.vpn.syncOnly ? { syncOnly: true } : {}) };   // the "only for sync" preference outlives the VPN
       if (vaultCfg.sync.samba) delete vaultCfg.sync.samba;
       if (vaultCfg.sync.twoway) {
         vaultCfg.sync.twoway.enabled = false;
@@ -5317,6 +5355,31 @@ function _attachmentUsage() {
   return map;
 }
 
+// attachment node path → the folders (never the root) whose saved sidebar order
+// lists it. That order is where an attachment NO note uses lives: dropped on a
+// folder, or placed by an import where the source vault kept it (Obsidian holds
+// loose PDFs in any folder; Amelie stores them flat in attachments/, and without
+// this the 2026-09-22 import piled 16 of them at the root). A folder since deleted
+// no longer counts. The order file syncs with the notes, so the place does too.
+function _attachmentHomes() {
+  const homes = new Map();
+  let order;
+  try { order = JSON.parse(fs.readFileSync(treeOrderFile(), 'utf8')); } catch (_) { return homes; }
+  if (!order || typeof order !== 'object') return homes;
+  for (const [folder, list] of Object.entries(order)) {
+    if (!folder || !Array.isArray(list)) continue;
+    const att = list.filter(p => typeof p === 'string' && p.startsWith('attachments/'));
+    if (!att.length) continue;
+    try { if (!fs.statSync(path.join(NOTES_DIR, folder)).isDirectory()) continue; } catch (_) { continue; }
+    for (const p of att) {
+      let set = homes.get(p);
+      if (!set) homes.set(p, set = new Set());
+      set.add(folder);
+    }
+  }
+  return homes;
+}
+
 // folder rel path ('' = vault root) → the attachment nodes to list there.
 // Built ONCE per tree walk and handed down the recursion.
 function _attachmentPlacement() {
@@ -5329,8 +5392,12 @@ function _attachmentPlacement() {
     if (!arr) byFolder.set(folder, arr = []);
     arr.push(node);
   };
+  let homes = null;
   for (const node of nodes) {
-    const folders = usage.get(node.attachmentName);
+    let folders = usage.get(node.attachmentName);
+    // Linked by no note: the folder the sidebar order keeps it in (dragged there,
+    // or where an import found it), else the root, where it can still be found.
+    if (!folders || !folders.size) folders = (homes || (homes = _attachmentHomes())).get(node.path);
     if (!folders || !folders.size) { add('', node); continue; }
     // A file used from two folders is shown in both — same file behind each.
     let first = true;

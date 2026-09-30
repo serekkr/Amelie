@@ -63,6 +63,8 @@ function mgr(answer) {
     return '';
   };
   m.asked = [];
+  m.prog = [];
+  m._progress = (p) => m.prog.push(p);
   if (answer !== undefined) m._askMassDelete = async (info) => { m.asked.push(info); return answer; };
   return m;
 }
@@ -110,6 +112,8 @@ const localNotes = () => fs.readdirSync(NOTES, { recursive: true }).filter((f) =
   const m = mgr('cancel');
   const r = await m.runTwoway({ manual: false });
   check('the pass stops and asks', m.asked.length === 1 && m.asked[0].where === 'remote', JSON.stringify(m.asked));
+  check('the status line says it is waiting for the answer', m.prog.some((p) => p.phase === 'waiting' && p.total === 20), JSON.stringify(m.prog));
+  check('and a held pass ends it without claiming anything moved', m.prog.at(-1).final && m.prog.at(-1).error === true, JSON.stringify(m.prog.at(-1)));
   check('with the numbers and where', m.asked[0]?.count === 20 && m.asked[0]?.total === 20
     && m.asked[0]?.target === '192.168.30.10/saturn/amelie/sync', JSON.stringify(m.asked[0]));
   check('and a few names to recognise them by', m.asked[0]?.examples?.length === 5, JSON.stringify(m.asked[0]?.examples));
@@ -134,6 +138,18 @@ const localNotes = () => fs.readdirSync(NOTES, { recursive: true }).filter((f) =
     JSON.stringify(Object.keys(share)));
   check('and uploads the new note', 'notes/nuova.md' in share, JSON.stringify(Object.keys(share)));
   check('the local vault keeps only the new note', JSON.stringify(localNotes()) === '["nuova.md"]', JSON.stringify(localNotes()));
+  // The report of that pass: every file, and what happened to it.
+  const ok = m.sent.filter((x) => x.status === 'ok').at(-1) || {};
+  const rep = ok.report && m.getSyncReport(ok.report.id);
+  check('the pass leaves a report the bell can open', !!rep && ok.report.counts.delRemote === 20 && ok.report.counts.up === 1,
+    JSON.stringify(ok.report));
+  check('holding every file it touched, by name', !!rep && rep.files.length === 21
+    && rep.files.some(([a, f]) => a === 'del-remote' && f === 'notes/old/nota-7.md') && rep.files.some(([a, f]) => a === 'up' && f === 'notes/nuova.md'),
+    JSON.stringify(rep && rep.files.slice(0, 3)));
+  const before = m.listSyncReports().length;
+  await m.runTwoway({ manual: true });
+  check('a pass that moved nothing adds no report', m.listSyncReports().length === before && !m.sent.at(-1).report, String(m.listSyncReports().length));
+  check('the list comes without the file lists', m.listSyncReports().every((r) => !('files' in r) && r.counts));
 }
 
 // ── "Put them back": the share keeps them and they come home ────────────────
@@ -145,6 +161,18 @@ const localNotes = () => fs.readdirSync(NOTES, { recursive: true }).filter((f) =
   check('"put back" deletes nothing on the share', r.success === true && !calls.includes('del') && Object.keys(share).length === 21,
     JSON.stringify({ calls: calls.filter((c) => c !== 'mkdirp'), n: Object.keys(share).length }));
   check('and downloads all twenty again', localNotes().length === 21, String(localNotes().length));
+  const ok = m.sent.filter((x) => x.status === 'ok').at(-1) || {};
+  check('its report counts twenty down and one up', ok.report && ok.report.counts.down === 20 && ok.report.counts.up === 1 && ok.report.counts.total === 21,
+    JSON.stringify(ok.report));
+  // The sidebar's status line is fed from this pass: every transfer, in order.
+  const tr = m.prog.filter((p) => p.phase === 'transfer');
+  check('progress counts every transfer, 1 to 21', tr.length === 21 && tr[0].done === 1 && tr.at(-1).done === 21
+    && tr.every((p) => p.total === 21), JSON.stringify(tr.map((p) => p.done)));
+  check('and names the file and what happens to it', tr.some((p) => p.action === 'download' && p.file === 'notes/old/nota-0.md')
+    && tr.some((p) => p.action === 'upload' && p.file === 'notes/nuova.md'), JSON.stringify(tr.slice(0, 2)));
+  check('it opens with the listing and closes with the total moved',
+    m.prog[0].phase === 'listing' && m.prog.at(-1).final === true && m.prog.at(-1).total === 21,
+    JSON.stringify([m.prog[0], m.prog.at(-1)]));
 }
 
 // ── Ordinary deletes are not asked about ─────────────────────────────────────
@@ -203,6 +231,15 @@ const localNotes = () => fs.readdirSync(NOTES, { recursive: true }).filter((f) =
   check('an answer it does not know counts as "do nothing"', r.success === false && Object.keys(share).length === 20, JSON.stringify(r));
   check('and afterwards the engine is free again', m._busy() === false);
   SyncManager.askWindow = null;
+}
+
+// ── Reports kept: the last twenty ───────────────────────────────────────────
+{
+  const m = mgr('cancel');
+  for (let i = 0; i < 25; i++) { m._twowayLog = [['down', `notes/n${i}.md`]]; m._saveTwowayReport({}); }
+  const all = m.listSyncReports();
+  check('only the last twenty reports are kept, newest first', all.length === SyncManager.SYNC_REPORTS_KEEP
+    && m.getSyncReport(all[0].id).files[0][1] === 'notes/n24.md', JSON.stringify(all.length));
 }
 
 fs.rmSync(ROOT, { recursive: true, force: true });

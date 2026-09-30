@@ -342,6 +342,8 @@ class WireGuardManager {
       }
       // Harden: no autoconnect.
       await execFileAsync('nmcli', ['connection', 'modify', conn, 'connection.autoconnect', 'no'], { timeout: 10000 }).catch(() => {});
+      // "Use only for sync", if the flag is on — the same one WireGuard uses.
+      await this.applySyncOnlyRouting(conn);
       // Leave it DOWN — the tunnel comes up only with the flag.
       try { await execFileAsync('nmcli', ['connection', 'down', conn], { timeout: 15000 }); } catch (_) {}
       // Fresh import: the meta mirrors exactly what went into NM.
@@ -385,6 +387,10 @@ class WireGuardManager {
       // (down→up) and briefly breaks reachability mid-backup. No-op instead.
       if (await this.nmActiveAmelie()) return true;
       for (const name of await this._nmAmelieConns()) {
+        // Every activation goes through the "sync only" routing first, so the
+        // tunnel always comes up the way the flag says — including after the
+        // share's address changed. See applySyncOnlyRouting.
+        await this.applySyncOnlyRouting(name);
         try {
           await execFileAsync('nmcli', ['connection', 'up', name], { timeout: 30000 });
           console.log('[WG] Tunnel activated via NetworkManager:', name);
@@ -393,6 +399,103 @@ class WireGuardManager {
       }
     } catch (_) { /* nmcli unavailable */ }
     return false;
+  }
+
+  /**
+   * "Use the VPN only for sync" (sync.vpn.syncOnly), for WireGuard and OpenVPN alike.
+   *
+   * On a laptop that joins many networks the tunnel must never get in the way of
+   * the others. With the flag on, the connection's routes — whatever the .conf or
+   * the OpenVPN server hands out, 0.0.0.0/0 included — go into a table of its own
+   * that nothing else looks at, and two rules per share host decide:
+   *   1. look in "main" ignoring its default route: a LAN or VPN that has its own
+   *      route to that address (a work network using the same subnet) wins;
+   *   2. only if none did, that host goes through the tunnel.
+   * So the tunnel only ever stands in for the default route, and only for the
+   * share. No DNS of its own, no IPv6, lowest metric. Set by SyncManager through
+   * WireGuardManager.syncOnly = { enabled, hosts } — see _vpnSyncOnlyHosts.
+   */
+  static get SYNC_ONLY_TABLE() { return 51830; }
+  static get SYNC_ONLY_PRIO()  { return 31590; }   // before NM's own full-tunnel rules (3167x)
+
+  /** The nmcli settings the flag asks for, or null when there is nothing to route. PURE. */
+  static syncOnlySettings(hosts) {
+    const ips = [...new Set((hosts || []).filter(h => /^\d{1,3}(\.\d{1,3}){3}$/.test(h)))];
+    if (!ips.length) return null;
+    const T = WireGuardManager.SYNC_ONLY_TABLE, P = WireGuardManager.SYNC_ONLY_PRIO;
+    // Written exactly as NM prints them back, so an unchanged setting is recognised
+    // and the connection is not rewritten on every activation.
+    const rules = [
+      ...ips.map(ip => `priority ${P} to ${ip} suppress_prefixlength 0 table 254`),
+      ...ips.map(ip => `priority ${P + 1} to ${ip} table ${T}`),
+    ].join(', ');
+    return {
+      'ipv4.route-table': String(T),
+      'ipv4.routing-rules': rules,
+      'ipv4.route-metric': '9999',
+      'ipv4.never-default': 'no',        // a full-tunnel default may exist — but only in table T
+      'ipv4.ignore-auto-dns': 'yes',
+      'ipv4.dns': '',
+      'ipv6.method': 'disabled',
+    };
+  }
+
+  /** What turning the flag off puts back. Only applied to a connection the flag had set. */
+  static get SYNC_ONLY_RESET() {
+    return { 'ipv4.route-table': '0', 'ipv4.routing-rules': '', 'ipv4.route-metric': '-1', 'ipv4.ignore-auto-dns': 'no' };
+  }
+
+  /**
+   * WireGuard only: NM's "auto default route". For a peer with 0.0.0.0/0 NM adds a
+   * policy rule of its own that sends EVERYTHING to the connection's table — with
+   * the table moved to SYNC_ONLY_TABLE that is every packet on the machine, the
+   * exact opposite of the flag. Caught by vpn-sync-only.nm.mjs on a full-tunnel
+   * test connection: internet went into the tunnel. OpenVPN has no such rule.
+   */
+  // Written as nmcli prints them back: 0 = off, -1 = NM's default.
+  static get SYNC_ONLY_WG()       { return { 'wireguard.ip4-auto-default-route': '0', 'wireguard.ip6-auto-default-route': '0' }; }
+  static get SYNC_ONLY_WG_RESET() { return { 'wireguard.ip4-auto-default-route': '-1', 'wireguard.ip6-auto-default-route': '-1' }; }
+
+  async _resolveIPv4(host) {
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return host;
+    try { return (await require('dns').promises.lookup(host, { family: 4 })).address; } catch (_) { return null; }
+  }
+
+  /**
+   * Bring connection `name` in line with the flag. Non-secret properties only — an
+   * nmcli modify that names no secret leaves the keys alone. Skips the write when
+   * nothing would change. Returns 'set' | 'reset' | 'unchanged' | 'skipped'.
+   */
+  async applySyncOnlyRouting(name) {
+    const so = WireGuardManager.syncOnly || { enabled: false, hosts: [] };
+    const get = async (f) => {
+      try { return (await execFileAsync('nmcli', ['-g', f, 'connection', 'show', name], { timeout: 5000 })).stdout.trim(); }
+      catch (_) { return null; }
+    };
+    let want;
+    if (so.enabled) {
+      const ips = (await Promise.all((so.hosts || []).map(h => this._resolveIPv4(String(h).trim())))).filter(Boolean);
+      want = WireGuardManager.syncOnlySettings(ips);
+      if (!want) { console.warn('[VPN] "sync only" is on but no share address is known — routing left as it is'); return 'skipped'; }
+    } else {
+      // Off: undo only what the flag did. A connection routed by hand stays as it is.
+      if ((await get('ipv4.route-table')) !== String(WireGuardManager.SYNC_ONLY_TABLE)) return 'unchanged';
+      want = WireGuardManager.SYNC_ONLY_RESET;
+    }
+    if ((await get('connection.type')) === 'wireguard') {
+      want = { ...want, ...(so.enabled ? WireGuardManager.SYNC_ONLY_WG : WireGuardManager.SYNC_ONLY_WG_RESET) };
+    }
+    const args = [];
+    for (const [k, v] of Object.entries(want)) if ((await get(k)) !== v) args.push(k, v);
+    if (!args.length) return 'unchanged';
+    try {
+      await execFileAsync('nmcli', ['connection', 'modify', name, ...args], { timeout: 10000 });
+      console.log('[VPN]', name, so.enabled ? '→ used only for sync (own table, lowest priority)' : '→ normal routing restored');
+      return so.enabled ? 'set' : 'reset';
+    } catch (e) {
+      console.warn('[VPN] could not apply "sync only" routing to', name, (e.stderr || e.message || '').toString().trim());
+      return 'skipped';
+    }
   }
 
   /**
@@ -470,6 +573,8 @@ class WireGuardManager {
         'connection.interface-name', iface,
         'ipv4.never-default', 'no',
         'ipv6.never-default', 'no'], { timeout: 10000 }).catch(() => {});
+      // 3b. "Use only for sync", if the flag is on (see applySyncOnlyRouting).
+      await this.applySyncOnlyRouting(iface);
       // 4. Unless asked to activate, leave it DOWN: importing a config must not
       //    leave a tunnel connected — the tunnel comes up only with the flag.
       if (!activate) { try { await execFileAsync('nmcli', ['connection', 'down', iface], { timeout: 15000 }); } catch (_) {} }

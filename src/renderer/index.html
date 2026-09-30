@@ -177,6 +177,14 @@
           <div id="notifications-list" class="simple-list"></div>
         </div>
 
+        <!-- Sync / backup progress: what is running, which file, how many are left.
+             Hidden while idle; see renderSyncProgress. -->
+        <div id="sync-progress" style="display:none" aria-live="polite">
+          <div id="sync-progress-text"></div>
+          <div id="sync-progress-file"></div>
+          <div id="sync-progress-bar"><div id="sync-progress-fill"></div></div>
+        </div>
+
       </aside>
 
       <!-- Resize handle -->
@@ -836,6 +844,14 @@
                    tell. Listing every section made it the one that started expanded. -->
               <div class="sync-section-body" id="ssb-vpn" style="display:none">
 
+                <!-- "Use the VPN only for sync": ONE setting (sync.vpn.syncOnly) for WireGuard
+                     and OpenVPN, shown in Backup and in Sync — the two boxes mirror each other. -->
+                <div class="field-group toggle-row" style="margin-bottom:6px">
+                  <label for="cfg-vpn-synconly" data-i18n="sync.vpn_sync_only">Usa la VPN solo per il sync (priorità più bassa)</label>
+                  <label class="toggle"><input type="checkbox" id="cfg-vpn-synconly" class="vpn-sync-only" /><span class="slider"></span></label>
+                </div>
+                <p class="wstep-desc" style="margin:-4px 0 10px" data-i18n="sync.vpn_sync_only_hint">Nel tunnel passa solo l'indirizzo della share: route, DNS e IPv6 restano come sono.</p>
+
                 <!-- Configured/active summary — shown once setup is complete -->
                 <div id="wg-configured" style="display:none;flex-direction:column;gap:10px">
                   <div style="display:flex;align-items:center;gap:8px">
@@ -1189,6 +1205,13 @@
                 </div>
               </div>
               <div class="sync-section-body" id="twsb-vpn" style="display:none">
+                <!-- "Use the VPN only for sync": ONE setting (sync.vpn.syncOnly) for WireGuard
+                     and OpenVPN, shown in Backup and in Sync — the two boxes mirror each other. -->
+                <div class="field-group toggle-row" style="margin-bottom:6px">
+                  <label for="cfg-tw-vpn-synconly" data-i18n="sync.vpn_sync_only">Usa la VPN solo per il sync (priorità più bassa)</label>
+                  <label class="toggle"><input type="checkbox" id="cfg-tw-vpn-synconly" class="vpn-sync-only" /><span class="slider"></span></label>
+                </div>
+                <p class="wstep-desc" style="margin:-4px 0 10px" data-i18n="sync.vpn_sync_only_hint">Nel tunnel passa solo l'indirizzo della share: route, DNS e IPv6 restano come sono.</p>
             <!-- IDENTICAL view to Backup: configured summary + wizard. -->
             <!-- Configured/active summary — shown once setup is complete -->
             <div id="twoway-conn-ok" style="display:none;flex-direction:column;gap:10px">

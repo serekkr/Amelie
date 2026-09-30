@@ -437,6 +437,10 @@ async function switchTab(idx) {
   updateWordCount();
   statusPath.textContent = tab.path;
   setSavedState(!tab.isDirty);
+  // An empty note has nothing to read: it opens for writing — a note just created
+  // from the reading view came up as a blank page with no caret (asked 2026-09-29).
+  // Only this note: the remembered Edit/View choice is left as it is.
+  if (state.viewMode !== 'edit' && !String(tab.content || '').replace(/^---\r?\n[\s\S]*?\r?\n---(\r?\n|$)/, '').trim()) state.viewMode = 'edit';
   try { setViewMode(state.viewMode); } catch(_) {}
   loadFrontmatterPanel(tab);
   updateMetaRows(state.viewMode === 'edit');
@@ -2725,7 +2729,13 @@ async function checkDepsOnStartup() {
 // ─── File Tree ────────────────────────────────────────────────────────────────
 async function loadTree() {
   await loadTreeOrderFromVault();
+  _treeOrderGrew = false;
   state.notes = applyManualOrder(await window.inkwell.listNotes(), '');
+  // Every item on screen now has its place in the saved order (see applyManualOrder)
+  // — write that down, so the order travels with the vault instead of depending on
+  // file dates this disk made up. Never mid-sync: half a vault would be written as
+  // the whole, and the order file coming in from the other side must win.
+  if (_treeOrderGrew && !_syncEngineBusy) saveTreeOrder();
   pruneSidebarOrphans();
   requestAnimationFrame(() => renderTree());
 }
@@ -2867,6 +2877,30 @@ function renderNodes(nodes, container, folderPath = '') {
   }
 }
 
+// The sibling array of one tree level ('' = the root), or null.
+function levelArray(folderPath, nodes = state.notes) {
+  if (!folderPath) return nodes;
+  for (const n of nodes) {
+    if (n.type !== 'folder' || !n.children) continue;
+    if (n.path === folderPath) return n.children;
+    if (folderPath.startsWith(n.path + '/')) return levelArray(folderPath, n.children);
+  }
+  return null;
+}
+// Take the dragged item out of the tree. An attachment's path names no folder — the
+// same file is listed in every folder whose notes use it — so it is taken from the
+// level the drag started in, not from the first place that path turns up.
+function takeDragged(srcPath) {
+  if (state.dragSrcFolder != null) {
+    const arr = levelArray(state.dragSrcFolder);
+    const idx = arr ? arr.findIndex(n => n.path === srcPath) : -1;
+    if (idx !== -1) return { node: arr.splice(idx, 1)[0], parentArr: arr, level: state.dragSrcFolder };
+  }
+  const found = findAndRemoveFromTree(srcPath, state.notes);
+  if (found) found.level = srcPath.split('/').slice(0, -1).join('/');
+  return found;
+}
+
 function findAndRemoveFromTree(srcPath, nodes) {
   const idx = nodes.findIndex(n => n.path === srcPath);
   if (idx !== -1) return { node: nodes.splice(idx, 1)[0], parentArr: nodes };
@@ -2984,7 +3018,7 @@ function makeFolderEl(node, parentArray, folderPath = '') {
 
   // Accept note drops (move into folder) or folder drops (inside / reorder)
   row.addEventListener('dragover', e => {
-    if (!state.draggingNote && !state.draggingFolder) return;
+    if (!state.draggingNote && !state.draggingFolder && !state.draggingAttach) return;
     e.preventDefault(); e.stopPropagation();
     row.classList.remove('drag-over-folder', 'drag-over-top', 'drag-over-bottom');
     // Both notes AND folders can now land above / inside / below a folder: the
@@ -3001,10 +3035,36 @@ function makeFolderEl(node, parentArray, folderPath = '') {
     row.classList.remove('drag-over-folder', 'drag-over-top', 'drag-over-bottom');
   });
   row.addEventListener('drop', async e => {
-    if (!state.draggingNote && !state.draggingFolder) return;
+    if (!state.draggingNote && !state.draggingFolder && !state.draggingAttach) return;
     e.preventDefault(); e.stopPropagation();
     row.classList.remove('drag-over-folder', 'drag-over-top', 'drag-over-bottom');
     const srcPath = e.dataTransfer.getData('text/plain');
+
+    // A PDF, photo or recording stays in attachments/ on disk: moving it into a
+    // folder only records its place in the saved order, which is where the tree
+    // lists an attachment no note uses (see _attachmentHomes in main.js).
+    if (state.draggingAttach) {
+      state.draggingAttach = false;
+      const found = takeDragged(srcPath);
+      if (!found) return;
+      const rect = row.getBoundingClientRect();
+      const relY = (e.clientY - rect.top) / rect.height;
+      let destLevel, destArr;
+      if (relY >= 0.3 && relY <= 0.7) {
+        node.children = node.children || [];
+        node.children.push(found.node);
+        state.openFolders.add(node.path || node.name);
+        destLevel = node.path; destArr = node.children;
+      } else {
+        destArr = parentArray || state.notes; destLevel = folderPath;
+        const dstIdx = destArr.findIndex(n => n.path === node.path);
+        if (dstIdx === -1) destArr.push(found.node); else destArr.splice(relY > 0.7 ? dstIdx + 1 : dstIdx, 0, found.node);
+      }
+      saveManualOrder(destLevel, destArr);
+      if (found.parentArr !== destArr) saveManualOrder(found.level, found.parentArr);
+      renderTree();
+      return;
+    }
 
     if (state.draggingNote) {
       state.draggingNote = false;
@@ -3132,6 +3192,7 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   // Drag & drop reorder
   el.addEventListener('dragstart', e => {
     if (isAttach) state.draggingAttach = true; else state.draggingNote = true;
+    state.dragSrcFolder = folderPath || '';
     e.dataTransfer.setData('text/plain', node.path);
     e.dataTransfer.effectAllowed = 'move';
     el.style.opacity = '0.5';
@@ -3140,6 +3201,7 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   el.addEventListener('dragend', e => {
     state.draggingNote = false;
     state.draggingAttach = false;
+    state.dragSrcFolder = null;
     el.style.opacity = '';
     e.stopPropagation();
   });
@@ -3164,11 +3226,12 @@ function makeNoteEl(node, parentArray, folderPath = '') {
     const srcPath = e.dataTransfer.getData('text/plain');
     const wasNote = state.draggingNote, wasAttach = state.draggingAttach, wasFolder = state.draggingFolder;
     state.draggingNote = state.draggingAttach = state.draggingFolder = false;
-    if (srcPath === node.path) { renderTree(); return; }
-    const found = findAndRemoveFromTree(srcPath, state.notes);
+    if (srcPath === node.path && (!wasAttach || state.dragSrcFolder === (folderPath || ''))) { renderTree(); return; }
+    const found = takeDragged(srcPath);
+    state.dragSrcFolder = null;
     if (!found) return;
     const moved = found.node;
-    const srcFolder = srcPath.split('/').slice(0, -1).join('/');
+    const srcFolder = found.level;
     const arr = parentArray || state.notes;
     const rect = el.getBoundingClientRect();
     const insertAfter = e.clientY >= rect.top + rect.height / 2;
@@ -3660,6 +3723,63 @@ function showConfirmModal(message) {
     cancelBtn.addEventListener('click', onCancel);
     document.addEventListener('keydown', onKey, true);
   });
+}
+
+// The status line at the bottom of the sidebar: what the sync or backup is doing,
+// which file, how many are left. Asked for on 2026-09-29 after 1257 files came
+// down with no sign of it — photos first, notes minutes later, and nothing to say
+// the tree was only half there. The 30-second pass that finds nothing to do must
+// not flash it, so "reading the server" only appears if it takes over a second,
+// and a run that moved nothing ends silently.
+let _syncProgressTimer = null, _syncProgressOp = null;
+function renderSyncProgress(p) {
+  const box = $('sync-progress');
+  if (!box || !p) return;
+  const t = window.i18n.t;
+  const show = (text, file, frac, cls) => {
+    clearTimeout(_syncProgressTimer); _syncProgressTimer = null;
+    box.className = cls || '';
+    $('sync-progress-text').textContent = text;
+    // The path is shown right-aligned in an rtl box so a long one is cut at the START
+    // and the file name stays readable; the bidi marks keep its own order intact.
+    $('sync-progress-file').textContent = file ? '\u200E' + file + '\u200E' : '';
+    $('sync-progress-fill').style.width = frac == null ? '' : Math.round(frac * 100) + '%';
+    box.style.display = 'flex';
+  };
+  const hide = (afterMs) => {
+    clearTimeout(_syncProgressTimer);
+    _syncProgressTimer = setTimeout(() => { box.style.display = 'none'; _syncProgressOp = null; }, afterMs || 0);
+  };
+  const head = p.op === 'backup' ? t('sync.progress_backup') : t('sync.progress_sync');
+  if (p.final) {
+    if (p.op !== _syncProgressOp && box.style.display === 'none') return;   // nothing was shown
+    if (p.error || !p.total) { hide(0); return; }
+    show(t(p.op === 'backup' ? 'sync.progress_done_backup' : 'sync.progress_done_sync'), '', 1, 'done');
+    hide(2500);
+    return;
+  }
+  _syncProgressOp = p.op;
+  if (p.phase === 'listing') {
+    // Reading the server is shown only for a sync you asked for, and only if it is
+    // still at it a second later. The automatic pass every 30 s reads a thousand
+    // files on the share — some 15 s over the VPN — so it lit the line for half of
+    // every minute while nothing moved (2026-09-29). It shows up when a file does.
+    // (Returning before touching the timer: it may be the one fading out a
+    // "done" line, which would otherwise stay up for good.)
+    if (!p.manual) return;
+    clearTimeout(_syncProgressTimer);
+    _syncProgressTimer = setTimeout(() => show(head + ' · ' + t('sync.progress_listing'), '', null, 'indeterminate'), 1000);
+  } else if (p.phase === 'waiting') {
+    show(t('sync.progress_waiting', { n: p.total }), '', null, 'indeterminate');
+  } else if (p.phase === 'running') {
+    show(head + ' · ' + t('sync.progress_running'), '', null, 'indeterminate');
+  } else if (p.phase === 'transfer') {
+    const arrow = { upload: '↑', download: '↓', 'delete-remote': '✕', 'delete-local': '✕', conflict: '⚠' }[p.action] || '•';
+    // The arrow rides on the count line: on the path line it would be the first
+    // thing the ellipsis cuts off a long path.
+    show(`${arrow} ${head} ${p.done}/${p.total} · ${t('sync.progress_left', { n: Math.max(0, p.total - p.done) })}`,
+      p.file || '', p.total ? p.done / p.total : null, '');
+  }
 }
 
 // A two-way pass stopped before deleting most of one side (SyncManager._holdMassDelete)
@@ -7539,7 +7659,8 @@ function saveManualOrder(folderPath, arr) {
   // Save the FULL sibling order (folders AND files interleaved) so a note can sit
   // above/between folders — not just files-after-folders. A level with no saved
   // order still defaults to folders-first (see applyManualOrder).
-  const paths = arr.map(n => n.path).filter(Boolean);
+  // Once each: an attachment dropped where the same file is already listed is one item.
+  const paths = [...new Set(arr.map(n => n.path).filter(Boolean))];
   if (paths.length) treeOrder[folderPath] = paths; else delete treeOrder[folderPath];
   saveTreeOrder();
 }
@@ -7573,6 +7694,16 @@ function removeFromTreeOrder(path) {
 // note can sit above/between folders). A level with NO saved order keeps the
 // classic folders-first default. Items not in the saved order fall to the end,
 // folders-first among themselves (freshly created notes/folders).
+//
+// Anything that falls back to the default is then WRITTEN INTO the saved order, at
+// the place it is shown. Reported 2026-09-29: after a restore from the share, 31
+// attachments came back in a different order. Unsaved items are ordered by their
+// creation date (see listNotesRecursive), and a file's creation date on this disk
+// is the moment it was downloaded — it cannot be carried over. Once every item has
+// a saved place, the order file (which syncs with the notes) is the whole answer.
+// Places are only ever ADDED: a path missing right now — half-way through a sync,
+// say — keeps its place for when it comes back.
+let _treeOrderGrew = false;
 function applyManualOrder(nodes, folderPath = '') {
   const order = treeOrder[folderPath];
   let out;
@@ -7588,6 +7719,9 @@ function applyManualOrder(nodes, folderPath = '') {
   } else {
     out = [...nodes.filter(n => n.type === 'folder'), ...nodes.filter(isFileNode)];  // default: folders first
   }
+  const saved = new Set(order || []);
+  const unsaved = out.filter(n => n.path && !saved.has(n.path)).map(n => n.path);
+  if (unsaved.length) { treeOrder[folderPath] = [...(order || []), ...unsaved]; _treeOrderGrew = true; }
   out.forEach(n => { if (n.type === 'folder' && n.children) n.children = applyManualOrder(n.children, n.path); });
   return out;
 }
@@ -9036,7 +9170,55 @@ let mmScale = 1;
 let mmNodes = [], mmEdges = [], mmWikiLinks = [], mmAttachLinks = [];
 let mmRaw = null;                 // un-filtered model; the filters derive mmNodes/mmEdges from it
 let mmHover = null;
+// The note under the pointer, at once (cursor, clicks); `mmHover` — its title and
+// its links lit — only after the pointer has rested on it MM_HOVER_DELAY ms, so
+// sweeping across the map does not flash every name on the way (asked 2026-09-29).
+let mmHoverUnder = null, _mmHoverTimer = null;
+const MM_HOVER_DELAY = 1000;
+function mmClearHover() {
+  clearTimeout(_mmHoverTimer); _mmHoverTimer = null;
+  const was = mmHover || mmHoverUnder;
+  mmHoverUnder = null; mmHover = null;
+  if (was) drawMindmap();
+}
+// What the map is showing right now, for the tests: the lit note, and whose title.
+function mmFocusState() {
+  const L = (n) => n ? (n.displayLabel || n.label) : null;
+  return { lit: L(mmDraggingNode || mmHoverUnder || mmFocusNode), title: L(mmDraggingNode || (mmHoverUnder ? mmHover : mmFocusNode)) };
+}
 let mmDraggingNode = null;
+// The note you dragged last keeps a clearing around it: its linked notes on a ring,
+// everything else pushed out, and it stays where you dropped it — so what belongs
+// to it stays readable after you let go. Cleared by a click on empty space, Esc,
+// the reset button, or dragging another note (which takes the clearing with it).
+let mmFocusNode = null;
+function mmPinned(nd) { return nd === mmDraggingNode || nd === mmFocusNode || nd._mmFar; }
+// The graph's own centre, fixed — where the centre pull points. It used to point at
+// the middle of the SCREEN: zoomed in on one corner, every reheat dragged the whole
+// graph toward that corner and the far edge flew off (~300 units per drag,
+// measured). Taken when the graph is (re)built; see mmSimStep.
+let mmGravityCenter = null;
+function mmClearFocus() { if (mmFocusNode) { mmFocusNode = null; kickMindmap(0.25); drawMindmap(); } }
+// Radii of the clearing, in world units: the ring the linked notes sit on grows
+// with how many there are; the hole reaches a link-length beyond it.
+// Spacing on top of the "link distance" slider: more room between notes without
+// touching a setting people may have saved (asked 2026-09-29: "un po' di spazio
+// tra le note"). The charge scales with L², so the whole layout opens up evenly.
+const MM_SPACING = 1.35;
+// Clear space kept around every dot, in world units (was 2: dots almost touching).
+const MM_COLLIDE_PAD = 6;
+function mmLinkLen() { return mmSet.fDist * MM_SPACING; }
+// A handful of links reads best on one ring. Dozens do not: the ring an index
+// note's 68 pages needed ran off the screen, where Obsidian keeps them in a
+// compact disc round the note (video, 2026-09-29). Past MM_RING_MAX they fill a
+// disc instead, `ring` being its edge, sized so each keeps ~0.75 link-lengths.
+const MM_RING_MAX = 6;
+function mmBubble(k) {
+  const L = mmLinkLen();
+  const disc = k > MM_RING_MAX;
+  const ring = L * Math.max(1, Math.sqrt(k) * (disc ? 0.42 : 0.55));
+  return { ring, hole: ring + L * 0.9, disc, inner: L * 0.5 };
+}
 let mmConnectFrom = null;
 let mmMouseWorld = {x:0, y:0};
 let mmPhysicsRAF = null;
@@ -9077,15 +9259,39 @@ function mmNodeRadius(n) {
   return mmSet.nodeSize * Math.min(base + 2.1 * Math.sqrt(deg), 15);
 }
 
-function getNodeAtEvent(e) {
+// Zooming spreads the graph out; it does not blow the dots and names up with it.
+// World sizes shrink as the zoom grows (screen size ∝ zoom^0.4 for dots, ^0.2 for
+// text), so zooming in opens real space between neighbours — like Obsidian. With
+// plain magnification a crowded graph stayed exactly as crowded at any zoom, only
+// bigger (reported 2026-09-29, 1272 nodes: "anche zoomando non si vede").
+// mmNodeRadius stays zoom-independent: the physics uses it, and a layout must not
+// move because you zoomed.
+function mmSizeK()      { return Math.pow(mmScale, -0.6); }
+function mmDrawRadius(n) { return mmNodeRadius(n) * mmSizeK(); }
+function mmFontPx()     { return 11 * Math.pow(mmScale, -0.8); }   // world px → 11·zoom^0.2 on screen
+
+// A pointer position in the canvas's OWN pixels — the ones it draws in. Equal to
+// the on-screen offset while the canvas is sized to its box; if it ever is not
+// (the box changed and the redraw has not run yet), the drawing is stretched, and
+// reading the pointer unscaled picked a note ever further to the right of the one
+// under it (reported 2026-09-29, after the window had changed with the map open).
+function mmCanvasPoint(e) {
   const canvas = $('mindmap-canvas');
   const rect = canvas.getBoundingClientRect();
-  const mx = (e.clientX - rect.left - mmOffset.x) / mmScale;
-  const my = (e.clientY - rect.top  - mmOffset.y) / mmScale;
+  const dpr = canvas._dpr || 1;
+  const kx = rect.width  ? (canvas.width  / dpr) / rect.width  : 1;
+  const ky = rect.height ? (canvas.height / dpr) / rect.height : 1;
+  return { x: (e.clientX - rect.left) * kx, y: (e.clientY - rect.top) * ky };
+}
+
+function getNodeAtEvent(e) {
+  const pt = mmCanvasPoint(e);
+  const mx = (pt.x - mmOffset.x) / mmScale;
+  const my = (pt.y - mmOffset.y) / mmScale;
   const slack = 6 / mmScale;                 // constant grab margin on screen
   let best = null, bestD = Infinity;
   for (const n of mmNodes) {
-    const r = mmNodeRadius(n) + slack;
+    const r = mmDrawRadius(n) + slack;
     const dx = n.x - mx, dy = n.y - my;
     const d = Math.sqrt(dx*dx + dy*dy);
     if (d < r && d < bestD) { bestD = d; best = n; }
@@ -9102,13 +9308,14 @@ function setupMindmap() {
   $('btn-mindmap-close').addEventListener('click', closeMindmap);
 
   const canvas = $('mindmap-canvas');
+  watchMindmapCanvasSize();
 
   // Right-click on a wiki/custom edge → "Remove link" menu.
   canvas.addEventListener('contextmenu', e => {
     e.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const mx = (e.clientX - rect.left - mmOffset.x) / mmScale;
-    const my = (e.clientY - rect.top  - mmOffset.y) / mmScale;
+    const pt = mmCanvasPoint(e);
+    const mx = (pt.x - mmOffset.x) / mmScale;
+    const my = (pt.y - mmOffset.y) / mmScale;
     const hit = findMindmapEdgeAt(mx, my, 8 / mmScale);
     if (hit) showMindmapEdgeContextMenu(e.clientX, e.clientY, hit.edge);
   });
@@ -9153,7 +9360,11 @@ function setupMindmap() {
     }
     if (mmDraggingNode) {
       mmDraggingNode = null;
-      // physics keeps running to settle connected nodes
+      // It stays where it was dropped (mmFocusNode is pinned) and keeps its clearing;
+      // a last reheat lets the ring and the hole settle round the drop point.
+      kickMindmap(0.35);
+    } else if (!mmDownHit && mmDragging && Math.hypot(e.clientX - mmDownPos.x, e.clientY - mmDownPos.y) <= 5) {
+      mmClearFocus();                    // a click on empty space closes the clearing
     } else if (mmDownHit && !mmDragStarted) {
       // Click without drag → open note
       if (mmDownHit.type !== 'folder') {
@@ -9177,14 +9388,15 @@ function setupMindmap() {
 
   document.addEventListener('mousemove', e => {
     const canvas = $('mindmap-canvas');
-    const rect = canvas.getBoundingClientRect();
-    mmMouseWorld.x = (e.clientX - rect.left  - mmOffset.x) / mmScale;
-    mmMouseWorld.y = (e.clientY - rect.top   - mmOffset.y) / mmScale;
+    const pt = mmCanvasPoint(e);
+    mmMouseWorld.x = (pt.x - mmOffset.x) / mmScale;
+    mmMouseWorld.y = (pt.y - mmOffset.y) / mmScale;
 
     // Promote mousedown hit to a real drag after 5px movement
     if (mmDownHit && !mmDragStarted && Math.hypot(e.clientX - mmDownPos.x, e.clientY - mmDownPos.y) > 5) {
       mmDragStarted = true;
       mmDraggingNode = mmDownHit;
+      mmFocusNode = mmDownHit;           // the clearing follows the note being dragged
       canvas.style.cursor = 'grabbing';
       kickMindmap(0.3);        // reheat so the neighbours follow the dragged node
     }
@@ -9207,17 +9419,22 @@ function setupMindmap() {
 
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
-    const factor = e.deltaY < 0 ? 1.1 : 0.91;
     // Zoom toward the CURSOR (keep the point under the pointer fixed) instead of the
     // world origin — otherwise zooming drifted the graph off toward a corner.
-    const rect = canvas.getBoundingClientRect();
-    zoomMindmapAround(factor, e.clientX - rect.left, e.clientY - rect.top);
+    // How far the wheel turned, not just which way: a touchpad sends many small
+    // deltas, a mouse notch ~100 px (lines and pages scaled to match).
+    const px = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1);
+    const pt = mmCanvasPoint(e);
+    zoomMindmapSmooth(Math.exp(-Math.max(-300, Math.min(300, px)) * 0.001), pt.x, pt.y);
   }, { passive: false });
+  // Out of the map, nothing is being pointed at: no title may come up a second later.
+  canvas.addEventListener('mouseleave', () => mmClearHover());
 
   // Zoom controls (+ / · / −) in the bottom-right of the mindmap.
   const zoomBy = (factor) => {
     // Buttons zoom toward the VIEWPORT CENTRE so the notes stay centred.
     const rect = canvas.getBoundingClientRect();
+    mmStopZoomGlide();
     zoomMindmapAround(factor, rect.width / 2, rect.height / 2);
   };
   // Gentler steps (was 1.25 = 25% per click — too aggressive, a couple of zoom-outs
@@ -9227,7 +9444,10 @@ function setupMindmap() {
   // Reset: re-seed the layout (so nodes you dragged around go back), then frame at
   // EXACTLY 100% + centred — the user's kept preference, deliberately not fit-to-view —
   // and reheat so it settles in front of you.
-  $('btn-mm-zoom-reset')?.addEventListener('click', () => { layoutMindmap(); resetMindmapView(); kickMindmap(0.45); });
+  $('btn-mm-zoom-reset')?.addEventListener('click', () => { mmFocusNode = null; layoutMindmap(); resetMindmapView(); kickMindmap(0.45); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && mmFocusNode && $('mindmap-overlay')?.style.display !== 'none') mmClearFocus();
+  });
 
   setupMindmapPanel();
 }
@@ -9308,13 +9528,38 @@ function setupMindmapPanel() {
 // toward the world origin. Screen = mmOffset + world*mmScale, so to hold the point:
 //   newOffset = s − (s − offset) * (newScale / oldScale)
 function zoomMindmapAround(factor, sx, sy) {
-  const newScale = Math.max(0.3, Math.min(3, mmScale * factor));
+  // Deep enough to pull a cluster of a thousand-note vault apart.
+  const newScale = Math.max(0.05, Math.min(16, mmScale * factor));
   const k = newScale / mmScale;
   if (k === 1) return;
   mmOffset.x = sx - (sx - mmOffset.x) * k;
   mmOffset.y = sy - (sy - mmOffset.y) * k;
   mmScale = newScale;
   drawMindmap();
+}
+
+// The wheel glides instead of jumping: each notch moves a TARGET scale, and every
+// frame closes a share of the gap around the point under the cursor — a 10% jump
+// per notch read as a stutter next to Obsidian's graph (video, 2026-09-29).
+let _mmZoomTarget = null, _mmZoomAt = null, _mmZoomRAF = null;
+function zoomMindmapSmooth(factor, sx, sy) {
+  _mmZoomTarget = Math.max(0.05, Math.min(16, (_mmZoomTarget || mmScale) * factor));
+  _mmZoomAt = { x: sx, y: sy };
+  if (_mmZoomRAF) return;
+  const step = () => {
+    _mmZoomRAF = null;
+    if (_mmZoomTarget == null) return;
+    const gap = Math.log(_mmZoomTarget / mmScale);
+    if (Math.abs(gap) < 0.002) { zoomMindmapAround(_mmZoomTarget / mmScale, _mmZoomAt.x, _mmZoomAt.y); _mmZoomTarget = null; return; }
+    zoomMindmapAround(Math.exp(gap * 0.28), _mmZoomAt.x, _mmZoomAt.y);
+    _mmZoomRAF = requestAnimationFrame(step);
+  };
+  _mmZoomRAF = requestAnimationFrame(step);
+}
+// Any other change of view (buttons, fit, reset) takes over from a glide in progress.
+function mmStopZoomGlide() {
+  if (_mmZoomRAF) cancelAnimationFrame(_mmZoomRAF);
+  _mmZoomRAF = null; _mmZoomTarget = null;
 }
 
 // ── Live force simulation (the Obsidian graph feel) ─────────────────────────
@@ -9394,9 +9639,28 @@ function mmSimStep(alpha) {
   // The centre force pulls toward the middle of the GRAPH's own coordinate
   // space, i.e. wherever the viewport is looking — otherwise panning would drag
   // the whole graph along with it.
-  const wcx = (cx - mmOffset.x) / mmScale, wcy = (cy - mmOffset.y) / mmScale;
+  if (!mmGravityCenter) {
+    let sx = 0, sy = 0; for (const nd of mmNodes) { sx += nd.x || 0; sy += nd.y || 0; }
+    mmGravityCenter = { x: sx / n, y: sy / n };
+  }
+  const wcx = mmGravityCenter.x, wcy = mmGravityCenter.y;
 
-  const L = mmSet.fDist;
+  // While a note is dragged or holds its clearing, only its surroundings are
+  // alive: everything farther than a few link-lengths beyond the hole stays put.
+  // Reheating a thousand-node graph for one drag sent its loose outer edge off
+  // into the distance.
+  const Fz = mmDraggingNode || mmFocusNode;
+  if (Fz) {
+    const fi = mmNodes.indexOf(Fz);
+    let k = 0; for (const e of mmEdges) if (e.from === fi || e.to === fi) k++;
+    const reach = mmBubble(k).hole + mmLinkLen() * 4, reach2 = reach * reach;
+    for (const nd of mmNodes) { const dx = nd.x - Fz.x, dy = nd.y - Fz.y; nd._mmFar = (dx * dx + dy * dy) > reach2; }
+  } else if (mmNodes._mmHadFar) {
+    for (const nd of mmNodes) nd._mmFar = false;
+  }
+  mmNodes._mmHadFar = !!Fz;
+
+  const L = mmLinkLen();
   // Charge scaled with the link distance so the equilibrium spacing tracks the
   // "link distance" slider instead of collapsing when you widen it.
   const REP  = mmSet.fRepel * 3 * (L * L) / 900;
@@ -9421,8 +9685,8 @@ function mmSimStep(alpha) {
     const w = e.edgeType === 'tag' ? 0.3 : e.edgeType === 'folder' ? 0.7 : 1;
     const l = ((d - L) / d) * alpha * strength * w;
     const bias = (a._conns || 1) / ((a._conns || 1) + (b._conns || 1));
-    if (b !== mmDraggingNode) { b.vx -= dx * l * bias; b.vy -= dy * l * bias; }
-    if (a !== mmDraggingNode) { a.vx += dx * l * (1 - bias); a.vy += dy * l * (1 - bias); }
+    if (!mmPinned(b)) { b.vx -= dx * l * bias; b.vy -= dy * l * bias; }
+    if (!mmPinned(a)) { a.vx += dx * l * (1 - bias); a.vy += dy * l * (1 - bias); }
   }
 
   // 2) Charge — every node repels its neighbourhood at 1/d².
@@ -9442,8 +9706,8 @@ function mmSimStep(alpha) {
         if (d2 > CUT2) continue;
         if (d2 < 1e-4) { dx = (i - j) * 0.01 + 0.01; dy = 0.01; d2 = dx*dx + dy*dy; }
         const f = (REP * alpha) / d2;
-        if (a !== mmDraggingNode) { a.vx -= dx * f; a.vy -= dy * f; }
-        if (b !== mmDraggingNode) { b.vx += dx * f; b.vy += dy * f; }
+        if (!mmPinned(a)) { a.vx -= dx * f; a.vy -= dy * f; }
+        if (!mmPinned(b)) { b.vx += dx * f; b.vy += dy * f; }
       }
     }
   }
@@ -9453,7 +9717,7 @@ function mmSimStep(alpha) {
   if (g > 0) {
     for (let i = 0; i < n; i++) {
       const nd = mmNodes[i];
-      if (nd === mmDraggingNode) continue;
+      if (mmPinned(nd)) continue;
       nd.vx += (wcx - nd.x) * g;
       nd.vy += (wcy - nd.y) * g;
     }
@@ -9462,7 +9726,7 @@ function mmSimStep(alpha) {
   // 4) Integrate.
   for (let i = 0; i < n; i++) {
     const nd = mmNodes[i];
-    if (nd === mmDraggingNode) { nd.vx = 0; nd.vy = 0; continue; }
+    if (mmPinned(nd)) { nd.vx = 0; nd.vy = 0; continue; }
     nd.vx *= MM_VEL_DECAY;
     nd.vy *= MM_VEL_DECAY;
     nd.x += nd.vx;
@@ -9473,7 +9737,7 @@ function mmSimStep(alpha) {
   const grid2 = mmBuildGrid(CUT);
   for (let i = 0; i < n; i++) {
     const a = mmNodes[i];
-    const ra = mmNodeRadius(a) + 2;
+    const ra = mmNodeRadius(a) + MM_COLLIDE_PAD / 2;
     const gx = (a.x / CUT) | 0, gy = (a.y / CUT) | 0;
     for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
       const bucket = grid2.get((gx + ox) + ':' + (gy + oy));
@@ -9481,16 +9745,52 @@ function mmSimStep(alpha) {
       for (const j of bucket) {
         if (j <= i) continue;
         const b = mmNodes[j];
-        const min = ra + mmNodeRadius(b) + 2;
+        const min = ra + mmNodeRadius(b) + MM_COLLIDE_PAD / 2;
         let dx = b.x - a.x, dy = b.y - a.y;
         const d2 = dx*dx + dy*dy;
         if (d2 >= min * min || d2 === 0) continue;
         const d = Math.sqrt(d2);
         const push = ((min - d) / d) * 0.5;
         const px = dx * push, py = dy * push;
-        if (b !== mmDraggingNode) { b.x += px; b.y += py; }
-        if (a !== mmDraggingNode) { a.x -= px; a.y -= py; }
+        if (!mmPinned(b)) { b.x += px; b.y += py; }
+        if (!mmPinned(a)) { a.x -= px; a.y -= py; }
       }
+    }
+  }
+
+  // 6) The clearing around the dragged / last-dragged note: its linked notes are
+  //    eased onto a ring round it, every other node is pushed out of the hole.
+  //    Positional and eased, so it opens smoothly and holds once the rest cools.
+  const F = mmDraggingNode || mmFocusNode;
+  if (F) {
+    const fi = mmNodes.indexOf(F);
+    const nb = new Set();
+    for (const e of mmEdges) { if (e.from === fi) nb.add(e.to); else if (e.to === fi) nb.add(e.from); }
+    const { ring, hole, disc, inner } = mmBubble(nb.size);
+    for (let i = 0; i < n; i++) {
+      const nd = mmNodes[i];
+      if (nd === F || nd === mmDraggingNode) continue;
+      let dx = nd.x - F.x, dy = nd.y - F.y;
+      let d = Math.sqrt(dx * dx + dy * dy);
+      if (d < 1e-3) { dx = Math.cos(i); dy = Math.sin(i); d = 1; }
+      const linked = nb.has(i);
+      // In a disc a linked note may sit anywhere between `inner` and the edge: the
+      // charge spreads them out, this only keeps them in.
+      const target = !linked ? (d < hole ? hole : d)
+        : !disc ? ring
+        : d > ring ? ring : d < inner ? inner : d;
+      if (target === d) continue;
+      // Outsiders are put back on the edge AT ONCE: while you drag, the simulation
+      // is kept warm on purpose (so the linked notes follow) and its centre pull
+      // drives everything toward the dragged note — easing them out lost that race
+      // and ~60 nodes sat inside the hole for as long as the drag lasted.
+      const k = linked ? 0.3 : 1;
+      const ux = dx / d, uy = dy / d;
+      nd.x = F.x + ux * (d + (target - d) * k);
+      nd.y = F.y + uy * (d + (target - d) * k);
+      // Drop the part of its speed that points back across the edge.
+      const vr = nd.vx * ux + nd.vy * uy;
+      if ((target > d && vr < 0) || (target < d && vr > 0)) { nd.vx -= vr * ux; nd.vy -= vr * uy; }
     }
   }
 }
@@ -9512,6 +9812,9 @@ async function openMindmap() {
 }
 
 async function closeMindmap() {
+  mmFocusNode = null;
+  mmClearHover();
+  mmStopZoomGlide();
   stopMindmapPhysics();          // never keep a rAF loop alive behind a hidden overlay
   const idx = tabs.findIndex(t => t.type === 'mindmap');
   if (idx !== -1) {
@@ -9535,6 +9838,26 @@ function resizeMindmapCanvas() {
   canvas.width  = canvas.offsetWidth  * dpr;
   canvas.height = canvas.offsetHeight * dpr;
   canvas._dpr = dpr;
+}
+
+// The canvas box changes with the map open — the window resized or maximised, the
+// sidebar folded, a move to a screen of another scale. Its pixels used to be set
+// only on opening, so the browser stretched the old drawing over the new box.
+// Re-size them, keep what was in the middle in the middle, and redraw.
+function watchMindmapCanvasSize() {
+  const canvas = $('mindmap-canvas');
+  if (!canvas || canvas._mmSizeObs || typeof ResizeObserver === 'undefined') return;
+  canvas._mmSizeObs = new ResizeObserver(() => {
+    const w = canvas.offsetWidth, h = canvas.offsetHeight;
+    if (!w || !h) return;                          // hidden: sized again when shown
+    const dpr = window.devicePixelRatio || 1, old = canvas._dpr || 1;
+    const w0 = canvas.width / old, h0 = canvas.height / old;
+    if (Math.abs(w - w0) < 0.5 && Math.abs(h - h0) < 0.5 && dpr === old) return;
+    if (w0 && h0) { mmOffset.x += (w - w0) / 2; mmOffset.y += (h - h0) / 2; }
+    resizeMindmapCanvas();
+    drawMindmap();
+  });
+  canvas._mmSizeObs.observe(canvas);
 }
 
 // A cheap signature of the tree STRUCTURE (every folder/note/attachment path).
@@ -9589,6 +9912,11 @@ async function buildMindmapData() {
   const allNotes = flattenTree(state.notes);
   const wikiRe  = /\[\[([^\]|\n]+)(?:\|[^\]\n]+)?\]\]/g;
   const attMdRe = /!?\[[^\]\n]*\]\((attachments\/[^)\s]+)\)/g;   // ![](attachments/…) / [x](attachments/…)
+  // A plain markdown link to another note — `[Legacy - Easy](Legacy.md)`, or
+  // `<with spaces.md>` — is a link too, as Obsidian draws it. An imported index
+  // note links its sixty pages this way; counting only [[…]] left it an island.
+  const mdNoteRe = /(?<!!)\[[^\]\n]*\]\((?:<([^>\n]+?\.(?:md|markdown))>|([^)\s]+?\.(?:md|markdown)))(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/gi;
+  const byPathLower = new Map(allNotes.map(x => [x.path.toLowerCase(), x]));
   for (const n of allNotes) {
     const isAttach = isAttachNode(n);
     const colorKey = noteColors[n.path];
@@ -9623,6 +9951,23 @@ async function buildMindmapData() {
       if (resolved && resolved.path !== n.path) wikiLinks.push({ from: n.path, to: resolved.path });
       else attachLinks.push({ from: n.path, target });
     }
+    mdNoteRe.lastIndex = 0;
+    let ml;
+    while ((ml = mdNoteRe.exec(content)) !== null) {
+      let t = ml[1] || ml[2];
+      if (/^[a-z][a-z0-9+.-]*:/i.test(t)) continue;                 // https:, file:, …
+      try { t = decodeURIComponent(t); } catch (_) {}
+      // Relative to the note's own folder first (what Obsidian writes), then to the
+      // vault root, then by name like a [[link]].
+      const parts = [];
+      for (const seg of ((_folder ? _folder + '/' : '') + t.replace(/^\/+/, '')).split('/')) {
+        if (seg === '..') parts.pop(); else if (seg && seg !== '.') parts.push(seg);
+      }
+      const hit = byPathLower.get(parts.join('/').toLowerCase())
+        || byPathLower.get(t.replace(/^\.?\/+/, '').toLowerCase())
+        || resolveNoteLink(t);
+      if (hit && hit.path !== n.path && !isAttachNode(hit)) wikiLinks.push({ from: n.path, to: hit.path, md: true });
+    }
     // Markdown embeds/links into attachments/ (the Amelie/Obsidian-import form).
     attMdRe.lastIndex = 0;
     let am;
@@ -9644,6 +9989,7 @@ async function buildMindmapData() {
 // Nodes that were already on screen KEEP their coordinates, so flipping a filter
 // morphs the graph instead of reshuffling it.
 function rebuildMindmapGraph() {
+  mmGravityCenter = null;            // re-taken from the new layout on the next step
   if (!mmRaw) { mmNodes = []; mmEdges = []; return; }
   const prev = new Map();
   for (const n of mmNodes) prev.set(n.path, n);
@@ -9768,7 +10114,9 @@ function rebuildMindmapGraph() {
   mmEdges = edges;
   mmSeedMissingPositions();
   if (mmHover && !mmNodes.includes(mmHover)) mmHover = null;
+  if (mmHoverUnder && !mmNodes.includes(mmHoverUnder)) mmHoverUnder = null;
   if (mmDraggingNode && !mmNodes.includes(mmDraggingNode)) mmDraggingNode = null;
+  if (mmFocusNode && !mmNodes.includes(mmFocusNode)) mmFocusNode = null;
 }
 
 // Nodes that just entered the graph have no coordinates yet — drop them on a
@@ -9783,7 +10131,7 @@ function mmSeedMissingPositions() {
   for (const n of mmNodes) {
     if (typeof n.x === 'number' && typeof n.y === 'number' && isFinite(n.x) && isFinite(n.y)) continue;
     const a = (k * 2.399963) ;                       // golden angle → no clumping
-    const r = mmSet.fDist * (0.6 + 0.35 * Math.sqrt(k));
+    const r = mmLinkLen() * (0.6 + 0.35 * Math.sqrt(k));
     n.x = cx + r * Math.cos(a);
     n.y = cy + r * Math.sin(a);
     k++;
@@ -9830,7 +10178,11 @@ async function toggleMindmapLink(fromNode, toNode) {
   if (!fromNode || !toNode || fromNode === toNode) return;
   const fromPath = fromNode.path, toPath = toNode.path;
   try {
-    if (mmLinkBetween(fromPath, toPath)) {
+    const existing = mmLinkBetween(fromPath, toPath);
+    // A markdown link [x](note.md) is the user's own text: the graph never rewrites
+    // it, and writing a [[link]] next to it would draw the same line twice.
+    if (existing && existing.md && !mmRaw.wikiLinks.some(w => !w.md && ((w.from === fromPath && w.to === toPath) || (w.from === toPath && w.to === fromPath)))) return;
+    if (existing) {
       // The `[[…]]` can be in either note and in either spelling — clear them all.
       for (const [path, other] of [[fromPath, toNode], [toPath, fromNode]]) {
         const { target } = mmLinkTargetFor(other);
@@ -10124,6 +10476,7 @@ function flattenTree(nodes) {
 // caller then fits the view and reheats gently, which is the little settling
 // motion you see in Obsidian when the graph appears.
 function layoutMindmap() {
+  mmGravityCenter = null;            // re-taken from the new layout on the next step
   const N = mmNodes.length;
   if (N === 0) return;
 
@@ -10135,7 +10488,7 @@ function layoutMindmap() {
 
   // Phyllotaxis (golden-angle) spiral: an even, isotropic starting cloud with no
   // preferred direction — the force pass then does all the real arranging.
-  const spread = mmSet.fDist * 0.75;
+  const spread = mmLinkLen() * 0.75;
   for (let i = 0; i < N; i++) {
     const a = i * 2.399963229728653;
     const r = spread * Math.sqrt(i + 0.5);
@@ -10193,6 +10546,7 @@ function resetMindmapView() {
 // initial open uses this. Extra right/bottom margin leaves room for the node
 // LABELS, which extend to the right of each dot.
 function fitMindmapView() {
+  mmStopZoomGlide();
   if (!mmNodes || !mmNodes.length) return;
   const canvas = $('mindmap-canvas');
   const dpr = canvas._dpr || 1;
@@ -10252,7 +10606,11 @@ function drawMindmap() {
 
   // Hovering (or dragging) a node focuses its immediate neighbourhood: it and
   // its direct links stay lit, everything else fades back.
-  const focused = mmHover || mmDraggingNode;
+  // The note under the pointer lights up AT ONCE, with its links — and takes over
+  // from the last-dragged note, or pointing at one looked like selecting another far
+  // away. Only its title waits (see mmHover): `labelFocus` is null until then.
+  const focused = mmDraggingNode || mmHoverUnder || mmFocusNode;
+  const labelFocus = mmDraggingNode || (mmHoverUnder ? mmHover : mmFocusNode);
   const focusIdx = focused ? mmNodes.indexOf(focused) : -1;
   const highlightIdx = new Set();
   const highlightEdges = new Set();
@@ -10269,7 +10627,7 @@ function drawMindmap() {
   // ── Links ──────────────────────────────────────────────────────────────────
   // Hairlines: width is in world units so they thicken naturally as you zoom in,
   // exactly like Obsidian's. Highlighted links are drawn last, on top.
-  const lw = 0.9 * mmSet.linkWidth;
+  const lw = 0.9 * mmSet.linkWidth * mmSizeK();
   const order = mmEdges.map((_, i) => i)
     .sort((i, j) => (highlightEdges.has(i) ? 1 : 0) - (highlightEdges.has(j) ? 1 : 0));
 
@@ -10295,7 +10653,7 @@ function drawMindmap() {
       const dx = b.x - a.x, dy = b.y - a.y;
       const d = Math.hypot(dx, dy) || 1;
       const ux = dx / d, uy = dy / d;
-      const tip = mmNodeRadius(b) + 1.5;
+      const tip = mmDrawRadius(b) + 1.5 / mmScale;
       const hx = b.x - ux * tip, hy = b.y - uy * tip;
       const size = 4 + lw * 1.5;
       ctx.beginPath();
@@ -10323,13 +10681,25 @@ function drawMindmap() {
     ctx.globalAlpha = 1;
   }
 
+  // ── The clearing's edge, barely there: it says the space is on purpose ──────
+  const FB = mmDraggingNode || mmFocusNode;
+  if (FB) {
+    const fi = mmNodes.indexOf(FB);
+    let k = 0; for (const e of mmEdges) if (e.from === fi || e.to === fi) k++;
+    ctx.beginPath();
+    ctx.arc(FB.x, FB.y, mmBubble(k).hole, 0, Math.PI * 2);
+    ctx.strokeStyle = clrAccent; ctx.globalAlpha = 0.18; ctx.lineWidth = 1 / mmScale;
+    ctx.setLineDash([6 / mmScale, 6 / mmScale]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
+
   // ── Nodes ──────────────────────────────────────────────────────────────────
   for (let i = 0; i < mmNodes.length; i++) {
     const n = mmNodes[i];
     if (!onScreen(n)) continue;
     const isHover = focused === n;
     const lit = !focused || highlightIdx.has(i);
-    const r = mmNodeRadius(n);
+    const r = mmDrawRadius(n);
 
     ctx.globalAlpha = lit ? 1 : MM_DIM;
     ctx.beginPath();
@@ -10363,25 +10733,43 @@ function drawMindmap() {
   if (zoomFade > 0.02 || focused) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.font = `${11}px 'Roboto', system-ui, sans-serif`;
-    for (let i = 0; i < mmNodes.length; i++) {
+    const fpx = mmFontPx();
+    ctx.font = `${fpx}px 'Roboto', system-ui, sans-serif`;
+    // No name is written over another. The hovered neighbourhood goes first, then
+    // the most linked nodes; a name that would cover one already placed is left
+    // out, and comes back as the zoom makes room for it. Boxes are kept in SCREEN
+    // pixels in a coarse grid, so a thousand labels cost a thousand lookups.
+    const idx = [];
+    for (let i = 0; i < mmNodes.length; i++) if (onScreen(mmNodes[i])) idx.push(i);
+    const prio = (i) => (mmNodes[i] === labelFocus ? 3e6 : (labelFocus && highlightIdx.has(i) ? 2e6 : 0)) + (mmNodes[i]._conns || 0);
+    idx.sort((a, b) => prio(b) - prio(a));
+    const CELL = 64, grid = new Map(), boxes = [];
+    const cellsOf = (b) => { const out = []; for (let cx = Math.floor(b[0] / CELL); cx <= Math.floor(b[2] / CELL); cx++) for (let cy = Math.floor(b[1] / CELL); cy <= Math.floor(b[3] / CELL); cy++) out.push(cx + ',' + cy); return out; };
+    const clashes = (b) => cellsOf(b).some(k => (grid.get(k) || []).some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]));
+    const place = (b) => { boxes.push(b); for (const k of cellsOf(b)) { let a = grid.get(k); if (!a) grid.set(k, a = []); a.push(b); } };
+    for (const i of idx) {
       const n = mmNodes[i];
-      if (!onScreen(n)) continue;
-      const isHover = focused === n;
+      const isHover = labelFocus === n;
       const near = !focused || highlightIdx.has(i);
       // Zoomed out, only the focused neighbourhood keeps its text.
       let alpha = near ? zoomFade : zoomFade * MM_DIM;
-      if (isHover || (focused && near)) alpha = Math.max(alpha, 0.95);
+      if (isHover || (labelFocus && near)) alpha = Math.max(alpha, 0.95);
       if (alpha < 0.03) continue;
 
       const full = n.displayLabel || n.label;
       const label = full.length > 30 ? full.slice(0, 29) + '…' : full;
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = isHover ? '#ffffff' : (n.type === 'folder' ? '#a9bccd' : MM_TEXT);
       // Extra clearance on the hovered node so the highlight ring doesn't sit on
       // top of its own text.
-      const gap = isHover ? 5 + 2.5 / mmScale : 4;
-      ctx.fillText(label, n.x, n.y + mmNodeRadius(n) + gap);
+      const gap = (isHover ? 5 + 2.5 : 4) / mmScale;
+      const ty = n.y + mmDrawRadius(n) + gap;
+      const halfW = ctx.measureText(label).width / 2 * mmScale;
+      const sx = n.x * mmScale + mmOffset.x, sy = ty * mmScale + mmOffset.y;
+      const box = [sx - halfW - 3, sy - 1, sx + halfW + 3, sy + fpx * mmScale + 2];
+      if (clashes(box)) continue;
+      place(box);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = isHover ? '#ffffff' : (n.type === 'folder' ? '#a9bccd' : MM_TEXT);
+      ctx.fillText(label, n.x, ty);
     }
     ctx.globalAlpha = 1;
   }
@@ -10392,15 +10780,22 @@ function drawMindmap() {
   if (mmConnectFrom)        canvas.style.cursor = 'crosshair';
   else if (mmDraggingNode)  canvas.style.cursor = 'grabbing';
   else if (mmDragging)      canvas.style.cursor = 'grabbing';
-  else if (mmHover)         canvas.style.cursor = 'pointer';
+  else if (mmHoverUnder)    canvas.style.cursor = 'pointer';
   else                      canvas.style.cursor = 'grab';
 }
 
 function updateMindmapHover(e) {
   const found = getNodeAtEvent(e);
-  if (found !== mmHover) {
-    mmHover = found;
+  if (found !== mmHoverUnder) {
+    mmHoverUnder = found;
+    clearTimeout(_mmHoverTimer); _mmHoverTimer = null;
+    // The colour follows the pointer at once; leaving puts the title out at once.
+    if (mmHover && mmHover !== found) mmHover = null;
     drawMindmap();
+    if (found) _mmHoverTimer = setTimeout(() => {
+      _mmHoverTimer = null;
+      if (mmHoverUnder === found && !mmDraggingNode && !mmDragging) { mmHover = found; drawMindmap(); }
+    }, MM_HOVER_DELAY);
   }
   const canvas = $('mindmap-canvas');
   canvas.style.cursor = found ? 'pointer' : (mmDragging ? 'grabbing' : 'grab');
@@ -10684,6 +11079,12 @@ function setupSettings() {
   // The former "Salva configurazione" is now "Remove": wipe the (shared) VPN +
   // Samba params in both tabs.
   $('btn-vpn-save-config')?.addEventListener('click', () => _removeWgCompletely());
+
+  // "Use the VPN only for sync": the Backup and Sync boxes are one setting.
+  document.querySelectorAll('.vpn-sync-only').forEach(el => el.addEventListener('change', () => {
+    document.querySelectorAll('.vpn-sync-only').forEach(o => { o.checked = el.checked; });
+    saveSettings().catch(() => {});
+  }));
 
   // At least one backup mode is required to use the VPN backup flag.
   $('cfg-vpn-folder')?.addEventListener('change', updateVpnModeWarn);
@@ -11197,7 +11598,7 @@ function setupSettings() {
       if (res) { res.textContent = msg; res.className = 'test-result'; }
       showToast(msg);
     } else if (result && result.unchanged) {
-      const msg = window.i18n.t('notif.backup_unchanged');
+      const msg = window.i18n.t('notif.backup_unchanged_manual');
       if (res) { res.textContent = '✓ ' + msg; res.className = 'test-result ok'; }
       showToast('✓ ' + msg);
     } else if (result && result.success) {
@@ -12665,6 +13066,8 @@ function buildVpnConfig() {
     archive: !!$('cfg-backup-archived')?.checked,
     archiveOnly: !!$('cfg-backup-archived')?.checked && !$('cfg-backup-normal')?.checked,
     keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
+    // One setting for WireGuard and OpenVPN; the Backup and Sync boxes mirror it.
+    syncOnly: !!$('cfg-vpn-synconly')?.checked,
   };
 }
 
@@ -12839,6 +13242,7 @@ async function openSettings() {
   if ($('cfg-vpn-archive'))        $('cfg-vpn-archive').checked        = !!(cfg.sync?.vpn?.archive || cfg.sync?.samba?.archive);
   // Folder toggle = the inverse of archiveOnly (folder snapshot happens unless
   // "archive only" was set). Defaults to ON for a fresh config.
+  document.querySelectorAll('.vpn-sync-only').forEach(el => { el.checked = !!cfg.sync?.vpn?.syncOnly; });
   if ($('cfg-vpn-folder'))         $('cfg-vpn-folder').checked         = cfg.sync?.vpn?.folder !== undefined
     ? !!cfg.sync.vpn.folder
     : !(cfg.sync?.vpn?.archiveOnly || cfg.sync?.samba?.archiveOnly);
@@ -13307,7 +13711,9 @@ function updateTwowaySelection(which) {
   state.config = state.config || {}; state.config.sync = state.config.sync || {};
   state.config.sync.twoway = state.config.sync.twoway || {};
   state.config.sync.twoway.transportView = which;
-  try { updateTwowayConnView(); } catch (_) {}
+  // Selecting unfolds the method's section: a switch refused for want of a test
+  // must leave its fields in view, or the "test first" error points at nothing.
+  openOnlyTwowaySection(which);
 }
 
 // Has the Samba (LAN) sync method got a connection proven good? Its own, never
@@ -13441,7 +13847,7 @@ function setupSync() {
       // Nothing has changed since the last successful copy, so nothing was written:
       // with keepLast, a duplicate would have pushed a real snapshot out to fit.
       if (dot) dot.className = 'sync-ok';
-      showToast('✓ ' + window.i18n.t('notif.backup_unchanged'));
+      showToast('✓ ' + window.i18n.t('notif.backup_unchanged_manual'));
     } else if (result && result.success) {
       if (dot) dot.className = 'sync-ok';
       // Manual backup → say so, with the time (like the manual sync notif).
@@ -13481,6 +13887,7 @@ function setupSync() {
   });
 
   window.inkwell.onMassDelete?.(info => showMassDeleteModal(info));
+  window.inkwell.onSyncProgress?.(p => renderSyncProgress(p));
 
   window.inkwell.onSyncStatus(data => {
     // Automatic/background syncs (e.g. the initial one at startup) must NOT pulse
@@ -17022,33 +17429,53 @@ function initIpGroup(hiddenId) {
   fillFromHidden();
 }
 
+// The shared toast ("Syncing…", "File not supported", "✓ Backup saved"…). It sits at
+// the BOTTOM OF THE SIDEBAR, just above the sync status line, across the sidebar's
+// width — where the eye already goes for what the app is doing (asked 2026-09-30;
+// it used to float bottom-centre over the note). A soft dark halo at its edges
+// lifts it off a long list of notes and folders (style.css). With no sidebar on
+// screen (focus mode, folded) it falls back to the bottom centre, as before.
+function _toastPlace(toast) {
+  const sb = $('sidebar');
+  const r = sb && sb.offsetParent !== null ? sb.getBoundingClientRect() : null;
+  if (!r || r.width < 120 || r.height < 120) {
+    toast.classList.remove('in-sidebar');
+    toast.style.left = ''; toast.style.width = ''; toast.style.bottom = '';
+    return false;
+  }
+  const sp = $('sync-progress');
+  const spH = sp && sp.style.display !== 'none' ? sp.getBoundingClientRect().height : 0;
+  const bottom = Math.max(0, window.innerHeight - r.bottom) + spH;
+  toast.classList.add('in-sidebar');
+  toast.style.left = (r.left + 8) + 'px';
+  toast.style.width = (r.width - 16) + 'px';
+  toast.style.bottom = (bottom + 8) + 'px';
+  return true;
+}
 function showToast(msg, duration = 2800) {
   let toast = $('amelie-toast');
   if (!toast) {
     toast = document.createElement('div');
     toast.id = 'amelie-toast';
-    toast.style.cssText = `
-      position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(10px);
-      background:var(--bg-3);border:1px solid var(--border-light);border-radius:7px;
-      padding:9px 20px;font-family:var(--ui-font);font-size:14px;color:var(--text-0);
-      box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:9999;
-      opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;
-    `;
+    toast.setAttribute('role', 'status');
     document.body.appendChild(toast);
   }
   toast.textContent = msg;
-  requestAnimationFrame(() => {
-    toast.style.opacity = '1';
-    toast.style.transform = 'translateX(-50%) translateY(0)';
-  });
+  // A hidden toast JUMPS to its starting place (below, in the sidebar) — no
+  // transition — and only then rises. Otherwise the move itself was animated and
+  // it barely came up from the bottom-centre pose it was left in.
+  if (!toast.classList.contains('shown')) {
+    toast.style.transition = 'none';
+    _toastPlace(toast);
+    void toast.offsetWidth;
+    toast.style.transition = '';
+  } else {
+    _toastPlace(toast);
+  }
+  requestAnimationFrame(() => toast.classList.add('shown'));
   clearTimeout(toast._t);
   // duration <= 0 (or non-finite) → sticky: stays until replaced or hideToast().
-  if (duration > 0 && isFinite(duration)) {
-    toast._t = setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateX(-50%) translateY(10px)';
-    }, duration);
-  }
+  if (duration > 0 && isFinite(duration)) toast._t = setTimeout(hideToast, duration);
 }
 
 // Dismiss the shared toast now (used to clear a sticky "working…" message).
@@ -17056,8 +17483,7 @@ function hideToast() {
   const toast = $('amelie-toast');
   if (!toast) return;
   clearTimeout(toast._t);
-  toast.style.opacity = '0';
-  toast.style.transform = 'translateX(-50%) translateY(10px)';
+  toast.classList.remove('shown');
 }
 
 // ─── In-note search ───────────────────────────────────────────────────────────
@@ -18800,7 +19226,14 @@ function logSyncEventNotif(data) {
   // `status === 'ok'` on the
   // end: a FAILURE is never filtered, whatever the interval, because silence
   // there reads exactly like success. Runs the user pressed always speak too.
-  if (data.quiet && !data.manual && data.status === 'ok') return;
+  // A two-way pass that left a report (it moved files) speaks when the report is
+  // worth opening: you pressed Sync, it moved more than a handful, or it deleted or
+  // made a conflict copy — whatever the interval. Otherwise the half-minute passes
+  // stay out of the bell, as before.
+  const rep = data.op === 'twoway' ? data.report : null;
+  const rc = rep && rep.counts;
+  const repWorth = !!(rc && (data.manual || rc.total > 20 || rc.conflict || rc.delRemote || rc.delLocal));
+  if (data.quiet && !data.manual && data.status === 'ok' && !repWorth) return;
   const key = data.manual ? 'manual' : 'auto';
   const label = window.i18n.t(`notif.${data.op}_${key}`);
   // No time in the text: every row already prints the full date and time
@@ -18816,12 +19249,13 @@ function logSyncEventNotif(data) {
     // Two wordings: the scheduled pass says "Automatic backup skipped…", the one you
     // asked for by pressing the button cannot claim to be automatic. Same situation,
     // different sentence — `data.manual` already tells the two apart.
-    const unchangedKey = data.manual ? 'notif.backup_unchanged_manual' : 'notif.backup_unchanged';
+    // The two-way pass that moved nothing files the same kind of line (asked 2026-09-30).
+    const unchangedKey = `notif.${data.op === 'twoway' ? 'twoway' : 'backup'}_unchanged${data.manual ? '_manual' : ''}`;
     addEventNotif(window.i18n.t(unchangedKey), true, '', unchangedKey);
   } else if (data.status === 'ok') {
     // The destinations the engine actually wrote are recorded on the entry (they are
     // not shown: naming them read as noise on a local-only or WebDAV-only backup).
-    addEventNotif(label, true, data.dests, `notif.${data.op}_${key}`);
+    addEventNotif(label, true, data.dests, `notif.${data.op}_${key}`, rep);
   } else if (data.heldDeletes) {
     // Stopped before a mass delete, on purpose: say what it would have done, in the
     // user's language, instead of the engine's English message.
@@ -18836,7 +19270,7 @@ function logSyncEventNotif(data) {
     const failKey = `notif.${data.op}_failed`;
     let head = window.i18n.t(failKey);
     if (!head || head === failKey) head = label;
-    addEventNotif(`${head}: ${data.error || window.i18n.t('notif.unknown_error')}`, false);
+    addEventNotif(`${head}: ${data.error || window.i18n.t('notif.unknown_error')}`, false, '', '', rep);
   }
 }
 
@@ -18869,12 +19303,15 @@ function _destNames(dests) {
 // saying the old thing, and switching language left them in the previous one. Entries
 // saved before this have no key and keep their text, which is the best that can be
 // done for them.
-function addEventNotif(text, ok = true, dests = '', key = '') {
+// `report` ({ id, counts }) links the row to a sync report: its totals are shown on
+// the row, and a click opens it (openSyncReport).
+function addEventNotif(text, ok = true, dests = '', key = '', report = null) {
   // Switched off in Appearance: record NOTHING. Merely hiding the bell would
   // keep a backlog piling up behind it, to be dumped on the user the moment the
   // setting came back on — and an unread count with nowhere to show it.
   if (_notifHidden) return;
-  _eventNotifs.unshift({ text, key: key || undefined, ts: Date.now(), ok: !!ok, dests: Array.isArray(dests) ? dests : undefined, where: Array.isArray(dests) ? '' : (dests || '') });
+  _eventNotifs.unshift({ text, key: key || undefined, ts: Date.now(), ok: !!ok, dests: Array.isArray(dests) ? dests : undefined, where: Array.isArray(dests) ? '' : (dests || ''),
+                        report: report && report.id ? { id: report.id, counts: report.counts } : undefined });
   _eventNotifs = _eventNotifs.slice(0, 30);
   _eventUnread++;
   _saveEventNotifs();
@@ -18884,6 +19321,112 @@ function addEventNotif(text, ok = true, dests = '', key = '') {
 // The title to draw for a stored notification: from its key when it has one (so it
 // follows the current wording and the current language), otherwise the text it was
 // saved with.
+// ── Sync report ─────────────────────────────────────────────────────────────
+// What a two-way pass did, file by file (SyncManager._saveTwowayReport). Two
+// thousand files cannot be two thousand lines to read, so: the things to check
+// first (conflicts, deletions) at the top and open; what came and went below,
+// grouped by folder and folded; a search over every name. A folder's files are
+// only drawn when it is opened.
+function _fmtReportCounts(c) {
+  if (!c) return '';
+  const parts = [];
+  if (c.down) parts.push('↓ ' + c.down);
+  if (c.up) parts.push('↑ ' + c.up);
+  if (c.delLocal + c.delRemote) parts.push('✕ ' + (c.delLocal + c.delRemote));
+  if (c.conflict) parts.push('⚠ ' + c.conflict);
+  return parts.join(' · ');
+}
+const SYNC_REPORT_SECTIONS = [
+  // action → i18n key, icon, open by default
+  ['conflict',   'report.conflicts',  '⚠', true],
+  ['del-local',  'report.del_local',  '✕', true],
+  ['del-remote', 'report.del_remote', '✕', true],
+  ['up',         'report.up',         '↑', false],
+  ['down',       'report.down',       '↓', false],
+];
+// Where a report's file sits in the tree: notes/ is the tree's root, attachments/
+// keep their own prefix (that is their node path).
+function _reportTreePath(rel) { return rel.startsWith('notes/') ? rel.slice(6) : rel; }
+async function openSyncReport(id) {
+  const t = window.i18n.t;
+  const rep = await window.inkwell.syncReport?.(id).catch(() => null);
+  if (!rep) { showToast(t('report.gone')); return; }
+  let modal = $('syncreport-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'syncreport-modal';
+    modal.innerHTML = `<div class="sr-box" role="dialog" aria-modal="true">
+      <div class="sr-head"><div class="sr-title"></div><button class="sr-close" aria-label="close">✕</button></div>
+      <div class="sr-sum"></div>
+      <input class="sr-search" type="text" spellcheck="false" autocomplete="off" />
+      <div class="sr-body"></div></div>`;
+    document.body.appendChild(modal);
+    const close = () => { modal.style.display = 'none'; document.removeEventListener('keydown', modal._onKey, true); };
+    modal._close = close;
+    modal.addEventListener('mousedown', e => { if (e.target === modal) close(); });
+    modal.querySelector('.sr-close').addEventListener('click', close);
+    modal._onKey = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
+  }
+  const when = new Date(rep.at);
+  modal.querySelector('.sr-title').textContent = t('report.title') + ' · ' + _fmtNotifTime(when.getTime());
+  modal.querySelector('.sr-sum').textContent = _fmtReportCounts(rep.counts) + (rep.error ? ' · ' + t('report.failed', { error: rep.error }) : '');
+  const search = modal.querySelector('.sr-search');
+  search.placeholder = t('report.search');
+  search.value = '';
+  const body = modal.querySelector('.sr-body');
+  const tree = new Map(flattenTree(state.notes).map(n => [n.path, n]));
+  const fileRow = (entry) => {
+    const [action, rel, copy] = entry;
+    const row = document.createElement('div'); row.className = 'sr-file';
+    const name = rel.split('/').pop();
+    row.textContent = name + (copy ? '  →  ' + t('report.copy') + ': ' + copy.split('/').pop() : '');
+    row.title = rel;
+    const node = action.startsWith('del') ? null : tree.get(_reportTreePath(rel));
+    if (node) {
+      row.classList.add('sr-open');
+      row.addEventListener('click', () => { modal._close(); openNote(node); });
+    } else row.classList.add('sr-gone');
+    return row;
+  };
+  const draw = () => {
+    const q = search.value.trim().toLowerCase();
+    body.innerHTML = '';
+    let shown = 0;
+    for (const [action, key, icon, openByDefault] of SYNC_REPORT_SECTIONS) {
+      const files = rep.files.filter(f => f[0] === action && (!q || f[1].toLowerCase().includes(q)));
+      if (!files.length) continue;
+      shown += files.length;
+      const sec = document.createElement('details'); sec.className = 'sr-sec';
+      sec.open = !!q || openByDefault || files.length <= 30;
+      sec.innerHTML = `<summary>${icon} ${escHtml(t(key))} <span class="sr-n">${files.length}</span></summary>`;
+      // By folder, busiest first.
+      const byDir = new Map();
+      for (const f of files) {
+        const tp = _reportTreePath(f[1]);
+        const dir = tp.includes('/') ? tp.slice(0, tp.lastIndexOf('/')) : '';
+        (byDir.get(dir) || byDir.set(dir, []).get(dir)).push(f);
+      }
+      const dirs = [...byDir.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+      for (const [dir, list] of dirs) {
+        const d = document.createElement('details'); d.className = 'sr-dir';
+        d.innerHTML = `<summary><span class="sr-dirname">${escHtml(dir || '/')}</span> <span class="sr-n">${list.length}</span></summary>`;
+        const fill = () => { if (d._filled) return; d._filled = true; for (const f of list) d.appendChild(fileRow(f)); };
+        if (q || files.length <= 30 || dirs.length === 1) { d.open = true; fill(); }
+        d.addEventListener('toggle', () => { if (d.open) fill(); });
+        sec.appendChild(d);
+      }
+      body.appendChild(sec);
+    }
+    if (!shown) { const e = document.createElement('div'); e.className = 'sr-empty'; e.textContent = t('report.none'); body.appendChild(e); }
+  };
+  let tmr = null;
+  search.oninput = () => { clearTimeout(tmr); tmr = setTimeout(draw, 120); };
+  draw();
+  modal.style.display = 'flex';
+  document.addEventListener('keydown', modal._onKey, true);
+  setTimeout(() => search.focus(), 30);
+}
+
 function _notifText(ev) {
   if (ev.key) { try { const t = window.i18n.t(ev.key); if (t && t !== ev.key) return t; } catch (_) {} }
   return ev.text || '';
@@ -19018,7 +19561,9 @@ function renderNotificationsView() {
   _eventNotifs.forEach(ev => {
     const row = document.createElement('div'); row.className = 'simple-row notif-row';
     const info = document.createElement('div'); info.className = 'simple-main';
-    info.innerHTML = `<div class="simple-name">${ev.ok ? '✓' : '✗'} ${escHtml(_notifText(ev))}</div><div class="simple-sub">${_fmtNotifTime(ev.ts)}</div>`;
+    const tail = ev.report ? ' · ' + _fmtReportCounts(ev.report.counts) : '';
+    info.innerHTML = `<div class="simple-name">${ev.ok ? '✓' : '✗'} ${escHtml(_notifText(ev) + tail)}</div><div class="simple-sub">${_fmtNotifTime(ev.ts)}${ev.report ? ' · <span class="notif-report-link">' + escHtml(window.i18n.t('report.open')) + ' ›</span>' : ''}</div>`;
+    if (ev.report) { row.classList.add('has-report'); info.addEventListener('click', () => openSyncReport(ev.report.id)); }
     const dis = document.createElement('button'); dis.className = 'simple-remove'; dis.textContent = '×'; dis.title = window.i18n.t('todo.dismiss');
     dis.addEventListener('click', e => { e.stopPropagation(); _eventNotifs = _eventNotifs.filter(x => x !== ev); _saveEventNotifs(); updateNotifBell(); renderNotificationsView(); });
     row.append(info, dis);

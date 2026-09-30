@@ -73,10 +73,13 @@ ${extractFn('attachmentRefsIn')}
 ${extractLine('_noteLinkCache')}
 ${extractFn('_noteAttachmentLinks')}
 ${extractFn('_attachmentUsage')}
+${MAIN.match(/^function treeOrderFile\(\).*$/m)[0]}
+${extractFn('_attachmentHomes')}
+${extractFn('_recordImportedHomes')}
 ${extractFn('_attachmentPlacement')}
 ${extractFn('_collectAttachmentNodes')}
 ${extractFn('listNotesRecursive')}
-return { listNotesRecursive, attachmentRefsIn, _noteLinkCache, _attachmentUsage };
+return { listNotesRecursive, attachmentRefsIn, _noteLinkCache, _attachmentUsage, _recordImportedHomes };
 `;
 const api = new Function('_fs', '_path', '_NOTES_DIR', '_ATTACHMENTS_DIR', src)(
   fs, path, path.join(VAULT, 'notes'), path.join(VAULT, 'attachments'));
@@ -140,6 +143,49 @@ check('after one note changes, exactly that note is read again',
 check('and the photo it now links moves out of the root into that folder',
   mediaIn(folder(tree2, 'Archivio')).includes('orfana.png') && !mediaIn(tree2).includes('orfana.png'),
   `Archivio: ${names(folder(tree2, 'Archivio'))} | root: ${names(tree2)}`);
+
+// ── 6. an attachment NO note uses stays where it was put ────────────────────
+// Kept in the sidebar order, like notes and folders — dragged into a folder, or
+// placed by an import where the source vault held it (2026-09-29: 16 loose PDFs
+// from Obsidian folders piled at the root). Nothing moves on disk.
+w('attachments/pdf/sciolto.pdf', 's');
+w('attachments/pdf/altro.pdf', 'a');
+const ORDER = path.join(VAULT, 'notes/.amelie-order.json');
+const writeOrder = (o) => fs.writeFileSync(ORDER, JSON.stringify(o));
+writeOrder({ '': ['attachments/pdf/sciolto.pdf'], 'Progetti/2026': ['q3.md', 'attachments/pdf/sciolto.pdf'],
+             'Sparita': ['attachments/pdf/altro.pdf'],
+             'Archivio': ['attachments/videos/clip.mp4'] });
+{
+  const t = api.listNotesRecursive(path.join(VAULT, 'notes'));
+  check('an unlinked PDF the order keeps in a folder is listed in that folder',
+    mediaIn(folder(folder(t, 'Progetti'), '2026')).includes('sciolto.pdf'), names(folder(folder(t, 'Progetti'), '2026')));
+  check('…and not at the root, although the root still lists it too',
+    !mediaIn(t).includes('sciolto.pdf'), names(t));
+  check('a folder that no longer exists does not hide it: back to the root',
+    mediaIn(t).includes('altro.pdf'), names(t));
+  check('a file a note uses goes where its notes are, whatever the order says',
+    !mediaIn(folder(t, 'Archivio')).includes('clip.mp4') && mediaIn(folder(t, 'Progetti')).includes('clip.mp4'),
+    `Archivio: ${names(folder(t, 'Archivio'))}`);
+}
+{
+  fs.rmSync(ORDER, { force: true });
+  w('attachments/pdf/manuale-extra.pdf', 'm');
+  const n = api._recordImportedHomes([
+    { r: 'Lavoro/Clienti/sciolto.pdf', leaf: 'pdf/sciolto.pdf' },     // loose in a folder
+    { r: 'radice.pdf',                 leaf: 'pdf/altro.pdf' },       // loose at the source root
+    { r: 'Docs/manuale.pdf',           leaf: 'pdf/manuale.pdf' },     // used by diario.md
+  ], 'obsidian');
+  const o = JSON.parse(fs.readFileSync(ORDER, 'utf8'));
+  check('an import records each loose attachment in the folder it came from',
+    (o['obsidian/Lavoro/Clienti'] || []).includes('attachments/pdf/sciolto.pdf') && (o['obsidian'] || []).includes('attachments/pdf/altro.pdf'),
+    JSON.stringify(o));
+  check('but not one a note already uses', n === 2 && !JSON.stringify(o).includes('manuale.pdf'), `added ${n}: ${JSON.stringify(o)}`);
+  o['Archivio'] = ['attachments/pdf/sciolto.pdf']; delete o['obsidian/Lavoro/Clienti']; writeOrder(o);
+  api._recordImportedHomes([{ r: 'Lavoro/Clienti/sciolto.pdf', leaf: 'pdf/sciolto.pdf' }], 'obsidian');
+  const o2 = JSON.parse(fs.readFileSync(ORDER, 'utf8'));
+  check('importing again leaves a file where it has been moved since',
+    !o2['obsidian/Lavoro/Clienti'] && o2['Archivio'].includes('attachments/pdf/sciolto.pdf'), JSON.stringify(o2));
+}
 
 fs.rmSync(VAULT, { recursive: true, force: true });
 console.log(`\n${results.every(Boolean) ? `all ${results.length} passed` : `${results.filter(Boolean).length}/${results.length} —`}`);

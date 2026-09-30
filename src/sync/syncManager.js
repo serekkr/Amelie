@@ -196,6 +196,49 @@ class SyncManager {
   // every keystroke, so a value written from here would be raced away.
   _syncStatePath() { return path.join(path.dirname(this.configFile), 'sync-state.json'); }
 
+  // ── Sync reports: what each two-way pass did, file by file ───────────────────
+  // Asked 2026-09-30: after a sync of 2000 files, see WHAT came in — without 2000
+  // lines in the bell. The bell gets the totals; the report behind it holds every
+  // file. The last SYNC_REPORTS_KEEP passes that moved anything are kept on disk,
+  // so they outlive a restart; a pass that moved nothing leaves no report.
+  static get SYNC_REPORTS_KEEP() { return 20; }
+  _syncReportsPath() { return path.join(path.dirname(this.configFile), 'sync-reports.json'); }
+  /** Totals of a pass's log. PURE. */
+  static reportCounts(log) {
+    const c = { up: 0, down: 0, delRemote: 0, delLocal: 0, conflict: 0 };
+    for (const [a] of log || []) {
+      if (a === 'up') c.up++; else if (a === 'down') c.down++;
+      else if (a === 'del-remote') c.delRemote++; else if (a === 'del-local') c.delLocal++;
+      else if (a === 'conflict') c.conflict++;
+    }
+    c.total = c.up + c.down + c.delRemote + c.delLocal + c.conflict;
+    return c;
+  }
+  _readSyncReports() {
+    try { const r = JSON.parse(fs.readFileSync(this._syncReportsPath(), 'utf8')); return Array.isArray(r) ? r : []; }
+    catch (_) { return []; }
+  }
+  /** Save this pass's report (newest first) and return its summary, or null if it did nothing. */
+  _saveTwowayReport({ manual = false, error = null, dests = null } = {}) {
+    const log = this._twowayLog || [];
+    this._twowayLog = null;
+    if (!log.length) return null;
+    const counts = SyncManager.reportCounts(log);
+    const rep = { id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                  at: new Date().toISOString(), manual: !!manual, error: error || undefined,
+                  dests: dests || undefined, counts, files: log };
+    try {
+      const all = [rep, ...this._readSyncReports()].slice(0, SyncManager.SYNC_REPORTS_KEEP);
+      fs.mkdirSync(path.dirname(this._syncReportsPath()), { recursive: true });
+      fs.writeFileSync(this._syncReportsPath(), JSON.stringify(all));
+    } catch (e) { console.warn('[Sync] report not saved:', e.message); }
+    return { id: rep.id, counts };
+  }
+  /** Every saved report, without their file lists (for a list view). */
+  listSyncReports() { return this._readSyncReports().map(({ files, ...head }) => head); }
+  /** One report, with its files. */
+  getSyncReport(id) { return this._readSyncReports().find(r => r.id === id) || null; }
+
   _loadSyncState() {
     let st = null;
     try { st = JSON.parse(fs.readFileSync(this._syncStatePath(), 'utf8')); } catch (_) {}
@@ -817,6 +860,7 @@ class SyncManager {
     const meta = { op: 'backup', manual: !!manual,
                    quiet: !manual && this._quietInterval(this._backupIntervalMinutes()) };
     this._setStatus('syncing', null, meta);
+    this._progress({ op: 'backup', phase: 'running' });
     console.log('[Sync] Backup run...', forced ? '(forced)' : (reason === 'missing' ? '(copy was missing)' : ''));
     try {
       const results = await this._runBackupInner();
@@ -846,6 +890,8 @@ class SyncManager {
       console.error('[Sync] Backup failed:', e);
       this._setStatus('error', e.message, meta);
       return { success: false, error: SyncManager._publicError(e.message) };
+    } finally {
+      this._progress({ op: 'backup', final: true, total: 1 });
     }
   }
 
@@ -969,17 +1015,39 @@ class SyncManager {
                    quiet: !manual && this._quietInterval(this._twowayIntervalMinutes()) };
     this._setStatus('syncing', null, meta);
     console.log('[Sync] Two-way run...');
+    this._progress({ op: 'twoway', phase: 'listing', manual: !!manual });
+    this._twowayLog = null;
+    let moved = 0;
     try {
       const twoway = await this._syncTwoway();
+      moved = (twoway && ((twoway.uploaded || 0) + (twoway.downloaded || 0) + (twoway.deleted || 0))) || 0;
       this.lastSync = new Date().toISOString();
       this._recordTwowayState();   // so the next start knows if one is overdue
       // Name where it synced, as a backup names what it wrote to. One remote at a
       // time here, so it is whichever transport the two-way is set to use.
       meta.dests = [this.config.sync?.twoway?.transport === 'webdav' ? 'webdav' : 'samba'];
+      // Nothing moved either way: say so, as a backup that found nothing to copy
+      // does ("…skipped because nothing changed"). An automatic pass says it once
+      // per quiet stretch, like the backup's skip, so an idle vault does not file
+      // the same line at every pass.
+      // The report of what it did: the bell shows its totals and opens it.
+      const report = this._saveTwowayReport({ manual, dests: meta.dests });
+      if (report) meta.report = report;
+      if (!moved && !(twoway && twoway.conflicts)) {
+        meta.unchanged = true;
+        if (!manual) { if (this._twowaySkipNotified) meta.quiet = true; else this._twowaySkipNotified = true; }
+      } else {
+        this._twowaySkipNotified = false;
+      }
       this._setStatus('ok', null, meta);
+      this._progress({ op: 'twoway', final: true, total: moved });
       return { success: true, results: { twoway }, lastSync: this.lastSync };
     } catch (e) {
+      this._progress({ op: 'twoway', final: true, total: 0, error: true });
       console.error('[Sync] Two-way failed:', e);
+      // A pass can fail half-way: what it did do still gets a report.
+      const report = this._saveTwowayReport({ manual, error: SyncManager._publicError(e.message) });
+      if (report) meta.report = report;
       if (e.heldDeletes) meta.heldDeletes = e.heldDeletes;
       this._setStatus('error', e.message, meta);
       return { success: false, error: SyncManager._publicError(e.message) };
@@ -1036,8 +1104,17 @@ class SyncManager {
     const wantUp = !!((scfg && scfg.enabled && scfg.useWireGuard && backupHasContent) || twoWantsUp);
     try {
       const { WireGuardManager } = require('./wireguardManager');
+      // The "use the VPN only for sync" flag and the addresses it lets through,
+      // read before any activation — every one goes through applySyncOnlyRouting.
+      WireGuardManager.syncOnly = { enabled: !!this.config.sync?.vpn?.syncOnly, hosts: this._vpnSyncOnlyHosts() };
       const wg = new WireGuardManager();
       wg.loadSavedConf();
+      // Flag or share changed while the tunnel is up: apply now, and reconnect so
+      // the routes move — a modify alone only takes effect at the next activation.
+      const active = await wg.nmActiveAmelie();
+      if (active && ['set', 'reset'].includes(await wg.applySyncOnlyRouting(active))) {
+        try { await wg._nmDown(); } catch (_) {}
+      }
       // THE FLAG COMMANDS THE TUNNEL, in both directions: flag on → up (when
       // needed), flag off → down. Amelie's NM connections are imported with
       // autoconnect=no, so a down sticks (no flapping — the old reason for
@@ -1059,6 +1136,25 @@ class SyncManager {
     } catch (e) {
       console.warn('[Sync] ensureVpnTunnel:', e.message);
     }
+  }
+
+  /**
+   * Every share address that may travel through Amelie's VPN: the backup's VPN
+   * destination and the two-way's VPN connection. These, and only these, are
+   * routed into the tunnel when "use the VPN only for sync" is on.
+   */
+  _vpnSyncOnlyHosts() {
+    const s = this.config.sync || {};
+    const out = [];
+    const add = (h) => { h = String(h || '').trim(); if (h && !out.includes(h)) out.push(h); };
+    add(s.vpn?.smb?.ip); add(s.vpn?.peerIp);
+    if (s.samba && s.samba.useWireGuard !== false) add(s.samba.host || s.samba.ip);
+    const tw = s.twoway;
+    if (tw && SyncManager._twowayTransport(tw) === 'vpn') {
+      const c = this._twowaySambaConn();
+      if (c) add(c.host || c.ip);
+    }
+    return out;
   }
 
   _sambaConfig() {
@@ -1879,6 +1975,7 @@ class SyncManager {
       const total = where === 'remote' ? remoteTotal : localTotal;
       if (!SyncManager._isMassDelete(hits.length, total)) continue;
       console.warn(`[Two-way] would delete ${hits.length} of ${total} files (${where}) — asking first`);
+      this._progress({ op: 'twoway', phase: 'waiting', total: hits.length });
       const choice = await this._askMassDelete({ where, count: hits.length, total, target,
                                                  examples: hits.slice(0, 5).map(p => p.rel) });
       if (choice === 'delete') continue;
@@ -2067,17 +2164,22 @@ class SyncManager {
     });
 
     let uploaded = 0, downloaded = 0, conflicts = 0, deleted = 0;
+    // What this pass actually did, file by file — the sync report (see _saveTwowayReport).
+    const log = this._twowayLog = [];
+    const work = plan.filter(p => p.d.action !== 'adopt' && p.d.action !== 'skip').length;
+    let step = 0;
     for (const { rel, L, R, d } of plan) {
+      if (d.action !== 'adopt' && d.action !== 'skip') this._progress({ op: 'twoway', phase: 'transfer', done: ++step, total: work, action: d.action, file: rel });
       if (d.action === 'adopt' || d.action === 'skip') {
         st[rel] = { r: R || 0, l: L || 0 };
       } else if (d.action === 'upload') {
-        if (await uploadRel(rel)) { uploaded++; st[rel] = { r: Date.now(), l: L }; }
+        if (await uploadRel(rel)) { uploaded++; log.push(['up', rel]); st[rel] = { r: Date.now(), l: L }; }
       } else if (d.action === 'download') {
-        if (await downloadRel(rel)) { downloaded++; try { const t = R / 1000; fs.utimesSync(absOf(rel), t, t); } catch (_) {} st[rel] = { r: R, l: R }; }
+        if (await downloadRel(rel)) { downloaded++; log.push(['down', rel]); try { const t = R / 1000; fs.utimesSync(absOf(rel), t, t); } catch (_) {} st[rel] = { r: R, l: R }; }
       } else if (d.action === 'delete-remote') {
-        if (await deleteRemoteRel(rel)) { deleted++; delete st[rel]; console.warn('[Two-way] deleted on share (propagated):', rel); }
+        if (await deleteRemoteRel(rel)) { deleted++; log.push(['del-remote', rel]); delete st[rel]; console.warn('[Two-way] deleted on share (propagated):', rel); }
       } else if (d.action === 'delete-local') {
-        if (deleteLocalRel(rel)) { deleted++; delete st[rel]; console.warn('[Two-way] deleted locally (propagated from other PC):', rel); }
+        if (deleteLocalRel(rel)) { deleted++; log.push(['del-local', rel]); delete st[rel]; console.warn('[Two-way] deleted locally (propagated from other PC):', rel); }
       } else if (d.action === 'conflict') {
         const abs  = absOf(rel);
         // Stamp the conflict copy with the LOSING side's mtime.
@@ -2090,7 +2192,7 @@ class SyncManager {
           if (await downloadRel(rel, cAbs)) {
             if (await uploadRel(rel)) { uploaded++; st[rel] = { r: Date.now(), l: L }; }
             await pushConflictCopy(cRel);
-            conflicts++;
+            conflicts++; log.push(['conflict', rel, cRel]);
             console.warn('[Two-way] conflict on', rel, '→ kept both (local wins)');
           } else {
             console.warn('[Two-way] conflict on', rel, '→ could NOT preserve remote, skipped this round');
@@ -2102,7 +2204,7 @@ class SyncManager {
           if (await downloadRel(rel)) {
             downloaded++; try { const t = R / 1000; fs.utimesSync(abs, t, t); } catch (_) {} st[rel] = { r: R, l: R };
             await pushConflictCopy(cRel);
-            conflicts++;
+            conflicts++; log.push(['conflict', rel, cRel]);
             console.warn('[Two-way] conflict on', rel, '→ kept both (remote wins)');
           } else {
             try { fs.renameSync(cAbs, abs); } catch (_) {}   // restore: no data lost
@@ -2261,6 +2363,8 @@ class SyncManager {
       return true;
     };
     let uploaded = 0, downloaded = 0, conflicts = 0, deleted = 0;
+    // What this pass actually did, file by file — the sync report (see _saveTwowayReport).
+    const log = this._twowayLog = [];
     const pushConflictCopy = async (cRel) => {
       const cAbs = absOf(cRel);
       if (!fs.existsSync(cAbs)) return;
@@ -2294,17 +2398,20 @@ class SyncManager {
       target: host + base,
     });
 
+    const work = plan.filter(p => p.d.action !== 'adopt' && p.d.action !== 'skip').length;
+    let step = 0;
     for (const { rel, L, R, d } of plan) {
+      if (d.action !== 'adopt' && d.action !== 'skip') this._progress({ op: 'twoway', phase: 'transfer', done: ++step, total: work, action: d.action, file: rel });
       if (d.action === 'adopt' || d.action === 'skip') {
         st[rel] = { r: R || 0, l: L || 0 };
       } else if (d.action === 'upload') {
-        if (await uploadRel(rel)) { uploaded++; st[rel] = { r: Date.now(), l: L }; }
+        if (await uploadRel(rel)) { uploaded++; log.push(['up', rel]); st[rel] = { r: Date.now(), l: L }; }
       } else if (d.action === 'download') {
-        if (await downloadRel(rel)) { downloaded++; try { const t = R / 1000; fs.utimesSync(absOf(rel), t, t); } catch (_) {} st[rel] = { r: R, l: R }; }
+        if (await downloadRel(rel)) { downloaded++; log.push(['down', rel]); try { const t = R / 1000; fs.utimesSync(absOf(rel), t, t); } catch (_) {} st[rel] = { r: R, l: R }; }
       } else if (d.action === 'delete-remote') {
-        if (await deleteRemoteRel(rel)) { deleted++; delete st[rel]; console.warn('[Two-way WebDAV] deleted on server (propagated):', rel); }
+        if (await deleteRemoteRel(rel)) { deleted++; log.push(['del-remote', rel]); delete st[rel]; console.warn('[Two-way WebDAV] deleted on server (propagated):', rel); }
       } else if (d.action === 'delete-local') {
-        if (deleteLocalRel(rel)) { deleted++; delete st[rel]; console.warn('[Two-way WebDAV] deleted locally (propagated):', rel); }
+        if (deleteLocalRel(rel)) { deleted++; log.push(['del-local', rel]); delete st[rel]; console.warn('[Two-way WebDAV] deleted locally (propagated):', rel); }
       } else if (d.action === 'conflict') {
         const abs = absOf(rel);
         const cRel = this._conflictRel(rel, d.winner === 'local' ? R : L);
@@ -2313,14 +2420,14 @@ class SyncManager {
         if (d.winner === 'local') {
           if (await downloadRel(rel, cAbs)) {
             if (await uploadRel(rel)) { uploaded++; st[rel] = { r: Date.now(), l: L }; }
-            await pushConflictCopy(cRel); conflicts++;
+            await pushConflictCopy(cRel); conflicts++; log.push(['conflict', rel, cRel]);
             console.warn('[Two-way WebDAV] conflict on', rel, '→ kept both (local wins)');
           }
         } else {
           try { fs.renameSync(abs, cAbs); } catch (_) {}
           if (await downloadRel(rel)) {
             downloaded++; try { const t = R / 1000; fs.utimesSync(abs, t, t); } catch (_) {} st[rel] = { r: R, l: R };
-            await pushConflictCopy(cRel); conflicts++;
+            await pushConflictCopy(cRel); conflicts++; log.push(['conflict', rel, cRel]);
             console.warn('[Two-way WebDAV] conflict on', rel, '→ kept both (remote wins)');
           } else { try { fs.renameSync(cAbs, abs); } catch (_) {} }
         }
@@ -2583,6 +2690,24 @@ class SyncManager {
       return false;
     }
     return true;
+  }
+
+  /**
+   * Live progress for the sidebar's status line: what is running, which file, how
+   * many are left. { op, phase: 'listing'|'waiting'|'transfer'|'running', done,
+   * total, action, file } while it runs, { op, final: true, total, error } at the end.
+   * Sent at most every 150 ms — a thousand small files would otherwise be a
+   * thousand IPC messages — but the last of a run always goes out.
+   */
+  _progress(p) {
+    const now = Date.now();
+    const edge = p.final || p.phase !== 'transfer' || p.done === 1 || p.done === p.total;
+    if (!edge && this._progressAt && now - this._progressAt < 150) return;
+    this._progressAt = now;
+    try {
+      const { BrowserWindow } = require('electron');
+      for (const w of BrowserWindow.getAllWindows()) w.webContents.send('sync:progress', p);
+    } catch (_) {}
   }
 
   // `meta` tells the renderer WHAT finished — { op: 'backup' | 'twoway' | 'sync',

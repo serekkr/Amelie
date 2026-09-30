@@ -119,6 +119,8 @@ contextBridge.exposeInMainWorld('inkwell', {
   readTreeOrder: () => ipcRenderer.invoke('tree-order:read'),
   writeTreeOrder: (o) => ipcRenderer.invoke('tree-order:write', o),
   triggerTwoway: () => ipcRenderer.invoke('sync:triggerTwoway'),
+  syncReports: () => ipcRenderer.invoke('sync:reports'),
+  syncReport: (id) => ipcRenderer.invoke('sync:report', id),
   triggerBackup: () => ipcRenderer.invoke('sync:triggerBackup'),
   testLocalPath: (p) => ipcRenderer.invoke('sync:testLocalPath', p),
   testWebdav: (cfg) => ipcRenderer.invoke('sync:testWebdav', cfg),
@@ -143,6 +145,8 @@ contextBridge.exposeInMainWorld('inkwell', {
 
   // Events from main process
   onSyncStatus: (cb) => ipcRenderer.on('sync:statusUpdate', (_, data) => cb(data)),
+  // Live progress of a sync/backup run, for the sidebar's status line.
+  onSyncProgress: (cb) => ipcRenderer.on('sync:progress', (_, p) => cb(p)),
   // A two-way pass stopped before a mass delete: show the question, send the choice
   // ('delete' | 'restore' | 'cancel') back with answerMassDelete.
   onMassDelete: (cb) => ipcRenderer.on('sync:massDelete', (_, info) => cb(info)),

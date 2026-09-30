@@ -1583,6 +1583,47 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #status-path { display: none; }
 #status-saved.unsaved { color: var(--yellow); }
 
+/* ─── Sync progress, bottom of the sidebar ─────────────────── */
+#sync-progress {
+  flex-shrink: 0; margin-top: auto;
+  padding: 7px 12px 8px; border-top: 1px solid var(--border);
+  background: var(--bg-1); font-family: var(--ui-font); font-size: 12px; color: var(--text-2);
+  display: flex; flex-direction: column; gap: 4px; min-width: 0;
+}
+#sync-progress-text { color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sync-progress-file { font-family: var(--editor-font); font-size: 11px; color: var(--text-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+#sync-progress-file:empty { display: none; }
+#sync-progress-bar { height: 3px; border-radius: 2px; background: var(--bg-3, var(--border)); overflow: hidden; }
+#sync-progress-fill { height: 100%; width: 0; background: var(--accent); transition: width .2s linear; }
+#sync-progress.indeterminate #sync-progress-fill { width: 30%; animation: sync-progress-slide 1.2s ease-in-out infinite; }
+#sync-progress.done #sync-progress-fill { width: 100%; }
+@keyframes sync-progress-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+
+/* ─── The shared toast (see showToast) ─────────────────────────
+   Bottom of the sidebar when there is one, bottom centre when there is not. */
+#amelie-toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(10px);
+  background: var(--bg-3); border: 1px solid var(--border-light); border-radius: 7px;
+  padding: 9px 20px; font-family: var(--ui-font); font-size: 14px; color: var(--text-0);
+  box-shadow: 0 6px 20px rgba(0,0,0,.5); z-index: 9999;
+  opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none;
+}
+#amelie-toast.shown { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* In the sidebar it RISES from below into place and sinks back down to go — its
+   whole height plus the gap, so the movement reads (it used to shift 8px). */
+#amelie-toast.in-sidebar {
+  transform: translateY(calc(100% + 12px)); box-sizing: border-box;
+  transition: opacity .22s ease, transform .28s cubic-bezier(.2, .8, .2, 1);
+  padding: 8px 12px; font-size: 13px; line-height: 1.35;
+  white-space: normal; overflow-wrap: anywhere; text-align: left;
+}
+#amelie-toast.in-sidebar.shown { transform: translateY(0); }
+/* Over the tree it lifts off the rows with a soft dark halo at its edges only.
+   (v1.0.113 faded the whole bottom of the sidebar to black behind it: "troppo
+   brutto" — rejected 2026-09-30.) */
+#amelie-toast.in-sidebar { box-shadow: 0 0 6px 1px rgba(0,0,0,.28), 0 2px 6px rgba(0,0,0,.22); }   /* thinner: 14px/.45 was still too heavy (2026-09-30) */
+
 /* ─── Icon buttons ──────────────────────────────────────────── */
 .icon-btn {
   background: transparent; border: none; cursor: pointer;
@@ -3882,7 +3923,9 @@ body.split-open .pane-flash::after {
   border-radius: 4px; padding: 3px 9px; cursor: pointer; color: var(--text-2);
   transition: all .15s; flex-shrink: 0;
 }
-.sc-change-btn:hover { background: var(--accent); border-color: var(--accent); color: #000; }
+/* Like every other Settings button: lighter grey + (in the green-accent themes) the
+   thin green edge — it used to fill solid green with black text, the odd one out. */
+.sc-change-btn:hover { background: var(--bg-3); border-color: var(--border-light); color: var(--text-0); }
 kbd {
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--bg-3); border: 1px solid var(--border-light);
@@ -4768,18 +4811,18 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
   margin-top: -12px; margin-bottom: 0; align-self: center;
 }
 
-/* Hover = green border on the settings action buttons. Scoped to the DEFAULT
-   theme only (GitHub Dark = :root with no data-theme attr); every other theme
-   sets [data-theme] on <html> and is therefore excluded. */
-:root:not([data-theme]) #settings-modal .wiz-btn:hover,
-:root:not([data-theme]) #settings-modal .btn-test:hover,
-:root:not([data-theme]) #settings-modal .btn-test-run:hover,
-:root:not([data-theme]) #settings-modal .btn-save:hover,
-:root[data-theme="serekkr"] #settings-modal .wiz-btn:hover,
-:root[data-theme="serekkr"] #settings-modal .btn-test:hover,
-:root[data-theme="serekkr"] #settings-modal .btn-test-run:hover,
-:root[data-theme="serekkr"] #settings-modal .btn-save:hover {
-  border-color: var(--accent);
+/* Hover = a thin 1px green border on the settings action buttons, over their own
+   slightly lighter grey. (Tried 2026-09-30: green text + green fill as well — the
+   user preferred the border alone.) Every text button in Settings: Test/Remove/
+   Reset defaults/Restore (.btn-test, .btn-save, .btn-test-run, .wiz-btn), the
+   shortcut "Change" buttons, the WireGuard/OpenVPN choice. The red Delete/Disable
+   buttons keep their red hover: a green edge on a destructive action made it look
+   like the safe one. The themes whose accent IS green — Green Dark (:root with no
+   data-theme attr), Cyan Dark (serekkr) and Graphite; Graphite was left out, and it
+   is the one in use, so the change showed nowhere (2026-09-30). */
+:root:is(:not([data-theme]), [data-theme="serekkr"], [data-theme="graphite"]) #settings-modal
+  :is(.wiz-btn:not(.danger), .btn-test, .btn-test-run, .btn-save, .sc-change-btn, .vpn-type-btn:not(.active)):hover:not(:disabled) {
+  border: 1px solid var(--accent);
 }
 
 /* ── No selecting/dragging text out of the app ─────────────────────────────
@@ -4793,3 +4836,36 @@ body { -webkit-user-select: none; user-select: none; }
 input, textarea, [contenteditable="true"] {
   -webkit-user-select: text; user-select: text;
 }
+
+/* ─── Sync report (openSyncReport) ─────────────────────────── */
+.notif-row.has-report .simple-main { cursor: pointer; }
+.notif-report-link { color: var(--accent); }
+#syncreport-modal { position: fixed; inset: 0; z-index: 10002; background: rgba(0,0,0,.55);
+  display: none; align-items: center; justify-content: center; }
+#syncreport-modal .sr-box { background: var(--bg-1); border: 1px solid var(--border); border-radius: 10px;
+  width: 640px; max-width: calc(100vw - 32px); height: min(720px, calc(100vh - 64px));
+  display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5); font-family: var(--ui-font); color: var(--text-0); }
+#syncreport-modal .sr-head { display: flex; align-items: center; gap: 10px; }
+#syncreport-modal .sr-title { flex: 1; font-size: 16px; font-weight: 500; }
+#syncreport-modal .sr-close { background: none; border: none; color: var(--text-2); font-size: 16px; cursor: pointer; padding: 2px 6px; }
+#syncreport-modal .sr-close:hover { color: var(--text-0); }
+#syncreport-modal .sr-sum { font-size: 14px; color: var(--text-1); }
+#syncreport-modal .sr-search { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-0); font-family: var(--ui-font); font-size: 14px; padding: 7px 10px; outline: none; }
+#syncreport-modal .sr-search:focus { border-color: var(--accent); }
+#syncreport-modal .sr-body { flex: 1; overflow-y: auto; min-height: 0; padding-right: 4px; }
+#syncreport-modal summary { cursor: pointer; user-select: none; padding: 4px 2px; border-radius: 4px; }
+#syncreport-modal summary:hover { background: var(--bg-2); }
+#syncreport-modal .sr-sec { margin-bottom: 6px; }
+#syncreport-modal .sr-sec > summary { font-size: 14px; font-weight: 500; }
+#syncreport-modal .sr-dir { margin-left: 16px; }
+#syncreport-modal .sr-dir > summary { font-size: 13px; color: var(--text-1); }
+#syncreport-modal .sr-dirname { font-family: var(--editor-font); font-size: 12px; }
+#syncreport-modal .sr-n { color: var(--text-3); font-size: 12px; margin-left: 4px; }
+#syncreport-modal .sr-file { margin-left: 30px; padding: 2px 6px; font-size: 13px; color: var(--text-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 4px; }
+#syncreport-modal .sr-file.sr-open { cursor: pointer; }
+#syncreport-modal .sr-file.sr-open:hover { background: var(--bg-2); color: var(--text-0); }
+#syncreport-modal .sr-file.sr-gone { color: var(--text-3); }
+#syncreport-modal .sr-empty { color: var(--text-3); font-size: 13px; padding: 10px 2px; }
