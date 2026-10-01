@@ -1563,7 +1563,12 @@ function createMainWindow() {
 // ─── Vault setup window ───────────────────────────────────────────────────────
 function createVaultWindow() {
   vaultWindow = new BrowserWindow({
-    width: 880, height: 600, resizable: false,
+    // 760, not the 600 it shipped with: the wizard's card is a fixed height now
+    // (the same on all four steps) and at 600 it did not fit — body is
+    // overflow:hidden, so the bottom of the card, Back/Next included, was simply
+    // cut off. The height carries the TALLEST case, step 2 with encryption
+    // switched on; the card is centred, so the other steps just sit in more air.
+    width: 880, height: 760, resizable: false,
     backgroundColor: '#0a0e17', ...WINDOW_CHROME,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

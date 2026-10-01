@@ -104,14 +104,95 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
 .sw-line{height:3px;border-radius:2px}
 .tc-name{color:var(--text-0);text-align:center;line-height:1.2}
 .tc-def{display:block;color:var(--text-2)}
-/* Uniform WHITE text + single font across the setup screen (user request) */
+/* ── One family, one scale ──────────────────────────────────────────────────
+   EVERY character in the wizard is --uf. The monospaced --ef still surfaced in
+   the path and passphrase fields, the error line, the strength label and the
+   step numbers — four or five typefaces' worth of texture on one short screen,
+   which is what "non sono tutte uguali come font" was about (2026-10-01).
+   And the sizes are a SCALE again. They had been collapsed into one blanket
+   `#panel, #panel * {font-size:15px}` with a single exception for the welcome
+   title. That did two things at once: every heading on steps 2-4 became body
+   size — a title you could not tell from a paragraph — while every caption,
+   authored at 12-13px, was inflated to 15. Hence "piu grandi e sproporzionate".
+   Four sizes, no others: 20 heading / 14 body / 13 secondary / 12 caption.
+   The white-on-everything from the earlier pass stays: the hierarchy is carried
+   by SIZE and weight, not by greying text down. */
+#panel, #panel *{font-family:var(--uf)}
+#panel{font-size:14px}
+.step-title{font-size:20px;font-weight:600;letter-spacing:-.01em;color:var(--text-0)}
+.step-desc{font-size:14px;line-height:1.65}
+.toggle-name,.btn-next,.btn-back,.btn-browse,#lang-dd-btn,.lang-pill,
+.field input,#lang-label{font-size:14px}
+.step-label,.toggle-desc,.sec-row,.err,.tc-name{font-size:13px}
+.field label,.strength-label,.tc-def,.step-num{font-size:12px}
 #steps .step-label, #steps .step-arrow, #steps .step-num,
 .step-desc, .field label, .toggle-desc, .sec-row, .btn-browse, .btn-back{color:var(--text-0)}
-#steps .step-num, .field label, .step-desc, .sec-row, .strength-label, .err{font-family:var(--uf)}
-.field label{text-transform:none;letter-spacing:normal;font-size:13px}
-/* One uniform font size for the WHOLE wizard; only "Welcome to Amelie" is larger */
-#panel, #panel *{font-size:15px}
-#sp-1 .step-title{font-size:25px}
+.field label{text-transform:none;letter-spacing:normal}
+/* The wizard sits ON something. It used to be bare text floating in the middle of
+   an empty window, the eye with no edge to hold on to. */
+#panel{background:var(--bg-1);border:1px solid var(--border);border-radius:12px;
+  padding:30px 34px 26px;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+/* The mark sits in the card's top-right corner, the same size and the same place
+   on ALL FOUR steps (asked 2026-10-01) — it used to live inside #sp-1 and so only
+   appeared on the first. Equal inset above it and to its right.
+   Moving it out meant making room: on step 1 the content under it is narrow (a
+   short green line, a language row) and nothing collided, but steps 2-4 open with
+   a full-width paragraph, a summary box or a theme grid, which ran straight under
+   it. So the step indicator's gap carries the mark's height — the band across the
+   top of the card is now a header, and every step begins below it. */
+#panel{position:relative}
+#setup-logo{position:absolute;top:27px;right:27px;width:104px;height:104px;
+  object-fit:contain;opacity:.95;pointer-events:none}
+#steps{margin-bottom:84px}
+/* ── The About screen's green terminal reveal, on the first screen ──────────
+   Replaces the "Welcome to Amelie" heading (asked 2026-10-01). Same two phrases
+   and the same 13s cycle as Settings ▸ About, left-aligned here instead of
+   centred. This ONE element is monospaced on purpose and is the single exception
+   to the one-family rule above: the reveal widths are written in `ch`, which is
+   the width of one character only in a monospaced face — in Inter the text would
+   stop short of its own end. It is also what the effect IS, a terminal.
+   Both spans are absolutely positioned on the same line and share the cycle,
+   phrase B starting where A leaves off, so the row never changes height. */
+#panel .mr-robot-type, #panel .mr-robot-type *{font-family:var(--ef)}
+.mr-robot-type{position:relative;font-size:17px;font-weight:500;height:1.5em;
+  letter-spacing:0;color:#02F73A;text-shadow:0 0 6px rgba(2,247,58,.45)}
+.mr-robot-type .mrt{position:absolute;left:0;top:0;display:inline-block;overflow:hidden;
+  white-space:nowrap;line-height:1.5em;width:0;border-right:2px solid #02F73A}
+.mr-robot-type .mrt-a{--w:calc(13ch + 3px);animation:mrtRevealA 13s linear infinite,mrtCaret .75s step-end infinite}
+.mr-robot-type .mrt-b{--w:calc(38ch + 3px);animation:mrtRevealB 13s linear infinite,mrtCaret .75s step-end infinite}
+@keyframes mrtRevealA{0%{width:0;opacity:1}20%{width:var(--w);opacity:1}29%{width:var(--w);opacity:1}29.5%{width:0;opacity:0}100%{width:0;opacity:0}}
+@keyframes mrtRevealB{0%{width:0;opacity:0}29%{width:0;opacity:0}29.01%{width:0;opacity:1}88%{width:var(--w);opacity:1}97%{width:var(--w);opacity:1}97.5%{width:0;opacity:0}100%{width:0;opacity:0}}
+@keyframes mrtCaret{0%,100%{border-color:#02F73A}50%{border-color:transparent}}
+@media (prefers-reduced-motion:reduce){
+  .mr-robot-type .mrt{animation:none;position:static;border-right-color:transparent;opacity:1}
+  .mr-robot-type .mrt-a{display:none}
+  .mr-robot-type .mrt-b{width:auto}
+}
+/* Every step starts on the same rule, 139px below the card's top edge, which is
+   also the first line the mark leaves clear (it ends at 132). The green reveal is
+   the one thing ABOVE that rule, a level higher at 90 — and it is lifted OUT of
+   the flow rather than pushed up with a margin, so the language row under it
+   still begins at 139, level with every other step's first line. Asked
+   2026-10-01, measured rather than guessed. The reveal is narrow (~390px of
+   monospaced text against 521px of clear width), so sharing a line with the mark
+   costs it nothing. */
+#sp-1{position:relative}
+#sp-1 .mr-robot-type{position:absolute;top:-49px;left:0}
+/* ── The card is the SAME SIZE on all four steps ────────────────────────────
+   Asked 2026-10-01: "la finestra deve avere sempre la stessa dimensione non deve
+   cambiare di size". The steps are 349, 231, 387 and 219px of content, so the
+   card used to jump by 168px between Tema and Pronto and the buttons landed in a
+   different place every time. The floor is the tallest of the four; `margin-top:
+   auto` on the nav row pins Back/Next to the bottom edge instead of letting them
+   float up under short content. */
+.step-panel{min-height:390px}
+.step-panel .nav{margin-top:auto}
+/* Line icons, not emoji: emoji are a different typeface again (a colour bitmap
+   one), they ignore every colour here, and they render differently on each
+   machine. Same stroke style as the app's own icons. */
+.sec-icon{width:16px;height:16px;flex-shrink:0;margin-top:2px;color:var(--text-0)}
+.sec-icon svg{width:16px;height:16px;display:block}
+.sec-icon.warn{color:var(--yellow)}
 </style>
 </head>
 <body>
@@ -119,8 +200,16 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
   <div id="mac-dots"><div class="tbb c1"></div><div class="tbb c2"></div><div class="tbb c3"></div></div>
   <button id="win-close" onclick="window.inkwell.vaultClose()" title="Chiudi" style="display:none;margin-left:auto;background:transparent;border:none;color:var(--text-2);font-size:21px;line-height:1;cursor:pointer;padding:0 6px;-webkit-app-region:no-drag">×</button>
 </div>
+<script>
+// The summary's padlock, swapped when the encryption toggle changes. Kept as
+// markup rather than two <img>: one stroke colour, no extra files to ship.
+const ICON_LOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+const ICON_UNLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-1.9"/></svg>';
+</script>
 <div id="wrap">
 <div id="panel">
+
+  <img id="setup-logo" src="amelie-logo.png" alt="Amelie"/>
 
   <!-- Step indicator -->
   <div id="steps">
@@ -138,7 +227,7 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
     <!-- Header: title + language selector on the left, big Amelie logo on the right -->
     <div style="display:flex;align-items:center;justify-content:space-between;gap:28px">
       <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
-        <div class="step-title">Benvenuto in Amelie</div>
+        <div class="mr-robot-type" aria-label="Hello friend! Amelie · your data, private by default"><span class="mrt mrt-a">Hello friend!</span><span class="mrt mrt-b">Amelie · your data, private by default</span></div>
         <div style="display:flex;flex-direction:row;align-items:center;gap:12px">
           <span id="lang-label" style="color:var(--text-1);white-space:nowrap">Seleziona la lingua</span>
           <div id="lang-dd">
@@ -155,7 +244,6 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
           </div>
         </div>
       </div>
-      <img src="amelie-logo.png" alt="Amelie" style="height:112px;width:112px;object-fit:contain;flex-shrink:0"/>
     </div>
     <p class="step-desc" style="margin-top:24px">Scegli dove salvare i tuoi appunti. Il vault è una cartella normale sul tuo sistema.</p>
     <div class="field">
@@ -165,8 +253,7 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
       </div>
     </div>
     <div class="sec-box">
-      <div class="sec-row"><span class="sec-icon">📁</span><span>I tuoi appunti sono file <code>.md</code> standard — apribili con qualsiasi editor anche senza Amelie.</span></div>
-      <div class="sec-row"><span class="sec-icon">🔒</span><span>Nel passo successivo puoi abilitare la crittografia end-to-end con AES-256-GCM.</span></div>
+      <div class="sec-row"><span class="sec-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span><span>I tuoi appunti sono file <code>.md</code> standard — apribili con qualsiasi editor anche senza Amelie.</span></div>
     </div>
     <div class="nav">
       <div style="width:80px"></div>
@@ -182,7 +269,7 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
 
     <div class="toggle-row" id="enc-toggle-row">
       <div class="toggle-info">
-        <span class="toggle-name">🔐 Crittografia vault</span>
+        <span class="toggle-name">Crittografia vault</span>
         <span class="toggle-desc">I file .md vengono cifrati con AES-256-GCM + Argon2id</span>
       </div>
       <label class="tog"><input type="checkbox" id="enc-toggle"/><span class="sl"></span></label>
@@ -200,7 +287,7 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
         <div class="pass-wrap"><input type="text" id="enc-pass2" placeholder="Ripeti la passphrase" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/><button type="button" class="pass-eye" id="enc-pass2-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi"></button></div>
       </div>
       <div class="sec-box">
-        <div class="sec-row"><span class="sec-icon">⚠️</span><span>La passphrase <strong>non è recuperabile</strong>. Se la perdi, i tuoi appunti cifrati saranno inaccessibili. Conservala in un password manager.</span></div>
+        <div class="sec-row"><span class="sec-icon warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2.6 20h18.8z"/><path d="M12 10.5v3.6"/><path d="M12 17.3h.01"/></svg></span><span>La passphrase <strong>non è recuperabile</strong>. Se la perdi, i tuoi appunti cifrati saranno inaccessibili. Conservala in un password manager.</span></div>
       </div>
     </div>
 
@@ -215,7 +302,6 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
   <div class="step-panel" id="sp-3">
     <div class="step-title">Imposta l'aspetto di Amelie</div>
     <div class="field">
-      <label id="theme-label">Tema</label>
       <div id="theme-grid" class="theme-grid"></div>
     </div>
     <div class="nav">
@@ -227,10 +313,10 @@ html,body{height:100%;background:var(--bg-0);color:var(--text-0);font-family:var
 
   <!-- Step 4: Done -->
   <div class="step-panel" id="sp-4">
-    <div class="step-title">Tutto pronto 🎉</div>
+    <div class="step-title">Tutto pronto</div>
     <div class="sec-box">
-      <div class="sec-row"><span class="sec-icon">📁</span><span id="sum-vault">Vault: —</span></div>
-      <div class="sec-row"><span class="sec-icon" id="sum-enc-icon">🔓</span><span id="sum-enc">Crittografia: disabilitata</span></div>
+      <div class="sec-row"><span class="sec-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span><span id="sum-vault">Vault: —</span></div>
+      <div class="sec-row"><span class="sec-icon" id="sum-enc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-1.9"/></svg></span><span id="sum-enc">Crittografia: disabilitata</span></div>
     </div>
     <p class="step-desc">Puoi cambiare queste impostazioni in qualsiasi momento da <strong>Impostazioni → Vault &amp; Sicurezza</strong>.</p>
     <div class="nav">
@@ -272,12 +358,12 @@ const T = {
     next: 'Avanti →', back: '← Indietro',
     t2_title: 'Sicurezza e crittografia',
     t2_desc: 'Puoi abilitare la crittografia ora o in qualsiasi momento dalle impostazioni. Con la crittografia attiva, i file vengono cifrati con <strong>AES-256-GCM</strong> prima di essere scritti su disco.',
-    tog_name: '🔐 Crittografia vault',
+    tog_name: 'Crittografia vault',
     tog_desc: 'I file .md vengono cifrati con AES-256-GCM + Argon2id',
     pass_lbl: 'Passphrase', pass_ph: 'Usa una password forte',
     pass2_lbl: 'Conferma passphrase', pass2_ph: 'Ripeti la passphrase',
     warn: 'La passphrase <strong>non è recuperabile</strong>. Se la perdi, i tuoi appunti cifrati saranno inaccessibili. Conservala in un password manager.',
-    t3_title: 'Tutto pronto 🎉',
+    t3_title: 'Tutto pronto',
     t3_desc: 'Puoi cambiare queste impostazioni in qualsiasi momento da <strong>Impostazioni → Vault &amp; Sicurezza</strong>.',
     start: 'Apri Amelie',
     err_path: 'Inserisci un percorso.',
@@ -301,12 +387,12 @@ const T = {
     next: 'Next →', back: '← Back',
     t2_title: 'Security & encryption',
     t2_desc: 'You can enable encryption now or anytime from the settings. With encryption on, files are encrypted with <strong>AES-256-GCM</strong> before being written to disk.',
-    tog_name: '🔐 Vault encryption',
+    tog_name: 'Vault encryption',
     tog_desc: '.md files are encrypted with AES-256-GCM + Argon2id',
     pass_lbl: 'Passphrase', pass_ph: 'Use a strong password',
     pass2_lbl: 'Confirm passphrase', pass2_ph: 'Repeat the passphrase',
     warn: 'The passphrase is <strong>not recoverable</strong>. If you lose it, your encrypted notes will be inaccessible. Keep it in a password manager.',
-    t3_title: 'All set 🎉',
+    t3_title: 'All set',
     t3_desc: 'You can change these settings anytime from <strong>Settings → Vault &amp; Security</strong>.',
     start: 'Open Amelie',
     err_path: 'Enter a path.',
@@ -330,12 +416,12 @@ const T = {
     next: 'Weiter →', back: '← Zurück',
     t2_title: 'Sicherheit & Verschlüsselung',
     t2_desc: 'Du kannst die Verschlüsselung jetzt oder jederzeit in den Einstellungen aktivieren. Bei aktivierter Verschlüsselung werden die Dateien mit <strong>AES-256-GCM</strong> verschlüsselt, bevor sie auf die Festplatte geschrieben werden.',
-    tog_name: '🔐 Vault-Verschlüsselung',
+    tog_name: 'Vault-Verschlüsselung',
     tog_desc: '.md-Dateien werden mit AES-256-GCM + Argon2id verschlüsselt',
     pass_lbl: 'Passphrase', pass_ph: 'Verwende ein starkes Passwort',
     pass2_lbl: 'Passphrase bestätigen', pass2_ph: 'Passphrase wiederholen',
     warn: 'Die Passphrase ist <strong>nicht wiederherstellbar</strong>. Wenn du sie verlierst, sind deine verschlüsselten Notizen nicht mehr zugänglich. Bewahre sie in einem Passwort-Manager auf.',
-    t3_title: 'Alles bereit 🎉',
+    t3_title: 'Alles bereit',
     t3_desc: 'Du kannst diese Einstellungen jederzeit unter <strong>Einstellungen → Vault &amp; Sicherheit</strong> ändern.',
     start: 'Amelie öffnen',
     err_path: 'Gib einen Pfad ein.',
@@ -359,12 +445,12 @@ const T = {
     next: 'Siguiente →', back: '← Atrás',
     t2_title: 'Seguridad y cifrado',
     t2_desc: 'Puedes activar el cifrado ahora o en cualquier momento desde los ajustes. Con el cifrado activado, los archivos se cifran con <strong>AES-256-GCM</strong> antes de escribirse en el disco.',
-    tog_name: '🔐 Cifrado del vault',
+    tog_name: 'Cifrado del vault',
     tog_desc: 'Los archivos .md se cifran con AES-256-GCM + Argon2id',
     pass_lbl: 'Frase de contraseña', pass_ph: 'Usa una contraseña segura',
     pass2_lbl: 'Confirmar frase de contraseña', pass2_ph: 'Repite la frase de contraseña',
     warn: 'La frase de contraseña <strong>no se puede recuperar</strong>. Si la pierdes, tus notas cifradas serán inaccesibles. Guárdala en un gestor de contraseñas.',
-    t3_title: 'Todo listo 🎉',
+    t3_title: 'Todo listo',
     t3_desc: 'Puedes cambiar estos ajustes en cualquier momento desde <strong>Ajustes → Vault y seguridad</strong>.',
     start: 'Abrir Amelie',
     err_path: 'Introduce una ruta.',
@@ -388,12 +474,12 @@ const T = {
     next: 'Suivant →', back: '← Retour',
     t2_title: 'Sécurité et chiffrement',
     t2_desc: 'Vous pouvez activer le chiffrement maintenant ou à tout moment dans les paramètres. Avec le chiffrement activé, les fichiers sont chiffrés avec <strong>AES-256-GCM</strong> avant d\'être écrits sur le disque.',
-    tog_name: '🔐 Chiffrement du vault',
+    tog_name: 'Chiffrement du vault',
     tog_desc: 'Les fichiers .md sont chiffrés avec AES-256-GCM + Argon2id',
     pass_lbl: 'Phrase secrète', pass_ph: 'Utilisez un mot de passe fort',
     pass2_lbl: 'Confirmer la phrase secrète', pass2_ph: 'Répétez la phrase secrète',
     warn: 'La phrase secrète est <strong>irrécupérable</strong>. Si vous la perdez, vos notes chiffrées seront inaccessibles. Conservez-la dans un gestionnaire de mots de passe.',
-    t3_title: 'Tout est prêt 🎉',
+    t3_title: 'Tout est prêt',
     t3_desc: 'Vous pouvez modifier ces paramètres à tout moment depuis <strong>Paramètres → Vault et sécurité</strong>.',
     start: 'Ouvrir Amelie',
     err_path: 'Saisissez un chemin.',
@@ -417,12 +503,12 @@ const T = {
     next: 'Dalej →', back: '← Wstecz',
     t2_title: 'Bezpieczeństwo i szyfrowanie',
     t2_desc: 'Szyfrowanie możesz włączyć teraz lub w dowolnym momencie w ustawieniach. Przy włączonym szyfrowaniu pliki są szyfrowane algorytmem <strong>AES-256-GCM</strong> przed zapisaniem na dysku.',
-    tog_name: '🔐 Szyfrowanie vaulta',
+    tog_name: 'Szyfrowanie vaulta',
     tog_desc: 'Pliki .md są szyfrowane algorytmem AES-256-GCM + Argon2id',
     pass_lbl: 'Hasło', pass_ph: 'Użyj silnego hasła',
     pass2_lbl: 'Potwierdź hasło', pass2_ph: 'Powtórz hasło',
     warn: 'Hasła <strong>nie można odzyskać</strong>. Jeśli je zgubisz, Twoje zaszyfrowane notatki będą niedostępne. Przechowuj je w menedżerze haseł.',
-    t3_title: 'Wszystko gotowe 🎉',
+    t3_title: 'Wszystko gotowe',
     t3_desc: 'Te ustawienia możesz zmienić w dowolnym momencie w <strong>Ustawienia → Vault i bezpieczeństwo</strong>.',
     start: 'Otwórz Amelie',
     err_path: 'Podaj ścieżkę.',
@@ -446,12 +532,12 @@ const T = {
     next: 'Înainte →', back: '← Înapoi',
     t2_title: 'Securitate și criptare',
     t2_desc: 'Poți activa criptarea acum sau oricând din setări. Cu criptarea activată, fișierele sunt criptate cu <strong>AES-256-GCM</strong> înainte de a fi scrise pe disc.',
-    tog_name: '🔐 Criptarea vault-ului',
+    tog_name: 'Criptarea vault-ului',
     tog_desc: 'Fișierele .md sunt criptate cu AES-256-GCM + Argon2id',
     pass_lbl: 'Parolă', pass_ph: 'Folosește o parolă puternică',
     pass2_lbl: 'Confirmă parola', pass2_ph: 'Repetă parola',
     warn: 'Parola <strong>nu poate fi recuperată</strong>. Dacă o pierzi, notițele tale criptate vor deveni inaccesibile. Păstreaz-o într-un manager de parole.',
-    t3_title: 'Totul e gata 🎉',
+    t3_title: 'Totul e gata',
     t3_desc: 'Poți schimba aceste setări oricând din <strong>Setări → Vault și securitate</strong>.',
     start: 'Deschide Amelie',
     err_path: 'Introdu o cale.',
@@ -482,20 +568,26 @@ function applyLang(code, updateLabel) {
   document.querySelector('#si-2 .step-label').textContent = t.s2;
   document.querySelector('#si-3 .step-label').textContent = t.s3;
   document.querySelector('#si-4 .step-label').textContent = t.s4;
-  document.querySelector('#sp-1 .step-title').textContent = t.t1_title;
+  // Step 1 has no heading any more (2026-10-01): the green reveal took its place,
+  // and it carries the app's own name, which is the same in every language. The
+  // t1_title strings are left in the tables untranslated-into-use on purpose — the
+  // heading can come back without re-translating it into seven languages.
   { const ll = document.getElementById('lang-label'); if (ll) ll.textContent = t.lang_label; }
   // Theme step (3): title, description, label, hint, nav buttons
   { const tt = document.querySelector('#sp-3 .step-title'); if (tt) tt.textContent = t.theme_title;
     const td = document.getElementById('theme-desc'); if (td) td.innerHTML = t.theme_desc;
-    const tl = document.getElementById('theme-label'); if (tl) tl.textContent = t.theme_label;
+    // No label over the grid any more (2026-10-01): ten theme cards under a
+    // heading that already says "Set how Amelie looks" need no word "Theme".
     const th = document.getElementById('theme-hint'); if (th) th.textContent = t.theme_hint;
     if ($('btn-3-back')) $('btn-3-back').textContent = t.back;
     if ($('btn-3-next')) $('btn-3-next').textContent = t.next; }
   document.querySelector('#sp-1 .step-desc').innerHTML = t.t1_desc;
   $('btn-browse').textContent = t.browse;
+  // One line in the box, not two: the "next step you can enable encryption" note
+  // was dropped 2026-10-01 — step 2 is called Sicurezza and says it itself.
+  // t.sec2 is left in the tables so the line can come back without re-translating.
   const sec1 = document.querySelectorAll('#sp-1 .sec-row span:last-child');
   if (sec1[0]) sec1[0].innerHTML = t.sec1;
-  if (sec1[1]) sec1[1].innerHTML = t.sec2;
   $('btn-1-next').textContent = t.next;
   document.querySelector('#sp-2 .step-title').textContent = t.t2_title;
   document.querySelector('#sp-2 .step-desc').innerHTML = t.t2_desc;
@@ -535,16 +627,22 @@ applyLang(appLang, true);
 
 // Theme picker → saved to `inkwell-theme`, which the MAIN app reads on startup
 // (shared localStorage). Each card previews the theme's real palette.
+//
+// This list has to match THEMES in app.js EXACTLY. It drifted: it still offered
+// Gruvbox and Nord, both deleted from the app in v1.0.78, so picking either wrote
+// an id app.js does not know and the app opened on the default instead — a card
+// that did nothing. Removed 2026-10-01. Graphite was missing the other way round —
+// the app has it, the first-run picker never offered it — so it is in now and the
+// two lists hold the same ten themes. Add a theme here only when app.js has it too.
 const THEME_PALETTE = [
   { id:'serekkr',     name:'Cyan Dark',   def:true, bg:'#0a1014', acc:'#3fb950', txt:'#dfeae7' },
+  { id:'graphite',    name:'Graphite',    bg:'#212121', acc:'#3fb950', txt:'#d8d8d8' },
   { id:'github-dark', name:'Green Dark',   bg:'#111111', acc:'#3fb950', txt:'#e6edf3' },
   { id:'navy',        name:'Navy',        bg:'#0a0e17', acc:'#5b8def', txt:'#dde6f0' },
   { id:'amber',       name:'Amber Dark',  bg:'#0b0b0d', acc:'#c9a96e', txt:'#e8e6e0' },
   { id:'solarized',   name:'Solarized',   bg:'#002b36', acc:'#2aa198', txt:'#fdf6e3' },
   { id:'light',       name:'Light Paper', bg:'#f5f0e8', acc:'#2e6e45', txt:'#2c2825' },
   { id:'rose',        name:'Rosé Pine',   bg:'#191724', acc:'#c4a7e7', txt:'#e0def4' },
-  { id:'gruvbox',     name:'Gruvbox',     bg:'#1d2021', acc:'#b8bb26', txt:'#ebdbb2' },
-  { id:'nord',        name:'Nord',        bg:'#2e3440', acc:'#88c0d0', txt:'#eceff4' },
   { id:'onedark',     name:'One Dark',    bg:'#282c34', acc:'#61afef', txt:'#e6e6e6' },
   { id:'dracula',     name:'Dracula',     bg:'#282a36', acc:'#50fa7b', txt:'#f8f8f2' },
 ];
@@ -670,7 +768,7 @@ $('btn-2-next').addEventListener('click', () => {
 $('btn-3-next').addEventListener('click', () => {
   const vp = $('vault-path').value.trim();
   $('sum-vault').textContent = 'Vault: ' + vp;
-  $('sum-enc-icon').textContent = encEnabled ? '🔐' : '🔓';
+  $('sum-enc-icon').innerHTML = encEnabled ? ICON_LOCK : ICON_UNLOCK;
   $('sum-enc').textContent = T[wl()].sum_enc + (encEnabled ? T[wl()].enc_on : T[wl()].enc_off);
   goStep(4);
 });

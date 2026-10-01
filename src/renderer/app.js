@@ -129,6 +129,7 @@ function hideAllSpecialViews() {
 // (the `!tab.content` guard in switchTab). This keeps startup O(1) render, not O(N).
 function openTab(node, activate = true) {
   if (activate) _returnToFilesView();   // a real open (not lazy session-restore) → back to the tree
+  if (activate) clearFolderTarget();    // …and the folder that was only a target stops being lit
   // An attachment (PDF, photo, audio, video) needs its own viewer: the tab pushed
   // below is a NOTE tab, and reading a PDF or an MP3 as note text gives a broken
   // tab. Callers that don't know the kind — a click in Bookmarks/Recent, which come
@@ -3272,15 +3273,28 @@ function makeNoteEl(node, parentArray, folderPath = '') {
 }
 
 // ─── Note open/save ───────────────────────────────────────────────────────────
+// A clicked folder is where the NEXT new note goes — a target, not a place you
+// are. Anything that opens a document drops it: from here on a new note follows
+// the open document's folder again, until another folder is clicked.
+//
+// Called from openTab() (every note, and the Recent/Bookmarks/Tags/link routes
+// that come in by path), from newDraw(), and here. It used to live ONLY here,
+// and the two CREATE paths do not pass through openNote — createNewNote() ends
+// in openTab(), newDraw() in openDrawFile() — so making a note inside a folder
+// left that folder marked for good, lit under the note just made in it
+// (2026-10-01, on a clean install). The DOM is swept as well as the state: the
+// tree is already painted by then and nothing redraws it on its own.
+function clearFolderTarget() {
+  state.selectedFolder = null;
+  document.querySelectorAll('.tree-folder.selected').forEach(r => r.classList.remove('selected'));
+}
+
 // opts.inPlace — load the note into the tab that is already active instead of
 // jumping to whichever other tab happens to hold it. The prev/next arrows use
 // it so paging never wanders off the tab being read.
 async function openNote(node, opts) {
   _returnToFilesView();   // leaving Recent/Bookmarks/Tags/Notifications → back to the tree
-  // Opening a note clears any folder selection: from now on a new note follows
-  // the open note's folder again (until the user clicks another folder).
-  state.selectedFolder = null;
-  document.querySelectorAll('.tree-folder.selected').forEach(r => r.classList.remove('selected'));
+  clearFolderTarget();
   if (node.type === 'draw' || node.path?.endsWith('.draw')) {
     openDrawFile(node);
     return;
@@ -14599,6 +14613,7 @@ async function newDraw() {
   await window.inkwell.writeNote(filePath, EMPTY_DRAW);
   if (folder) openFolderAncestors(folder);
   await loadTree();
+  clearFolderTarget();   // the drawing is open now; the folder was only where to put it
   openDrawFile({ type: 'draw', name, path: filePath, modified: now.toISOString(), created: now.toISOString(), size: EMPTY_DRAW.length });
 }
 

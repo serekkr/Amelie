@@ -610,15 +610,22 @@ html.is-mac #titlebar { padding-left: 72px; }
   0%, 30% { background: var(--accent); color: #fff; }
   100%    { background: transparent; }
 }
-/* Folder selected as the target for a new note. It takes the accent LABEL as well
-   as the tint, the way an active note does: a tint is a fill, and a fill is what
-   hover uses too — with some accents the two land within ΔE 4 of each other no
-   matter how they are tuned (Solarized Dark; it also held for Nord, removed in
-   v1.0.78). The letters are the signal
-   hover never gives, so the two states can never be read for one another. */
+/* Folder selected as the target for a new note. A BAR down its left edge and the
+   accent on the name — no fill.
+   The fill is the open note's and nothing else's (2026-10-01). This rule used to be
+   byte-for-byte `.tree-note.active`: the same --active-bg tint, and the label it
+   claimed to recolour never arrived (`.tree-folder .tree-name` sets its own --text-0
+   and wins over the row), so a selected folder and the open note were the SAME two
+   rows lit the same way — "la riga selezionata rimane sia su la cartella che ho
+   sopra sia su la nota attuale". Nothing can tell a fill from a fill.
+   The bar is an inset box-shadow, not a border: a border would push the icon and the
+   name 2px right and the row would twitch as the target moves. It also keeps the
+   state readable against HOVER, which is a fill and now the only fill here. A folder
+   given a colour of its own keeps it — the bar alone marks it. */
 .tree-folder.selected {
-  background: var(--active-bg); color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
+.tree-folder.selected:not([data-color]) .tree-name { color: var(--accent); opacity: 1; }
 .tree-folder-icon { display: flex; align-items: center; color: var(--accent); flex-shrink: 0; }
 /* Folder style uses ONE shape (the closed folder) that fills with the accent
    colour when expanded — consistent with the other icon styles. The separate

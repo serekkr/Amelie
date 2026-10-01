@@ -1,6 +1,6 @@
 {
   "name": "amelie",
-  "version": "1.0.128",
+  "version": "1.0.129",
   "description": "Amelie — Your data, private by default",
   "main": "src/main/main.js",
   "scripts": {
@@ -19,6 +19,7 @@
     "test:attachplace": "node test/attachment-place.cdp.mjs",
     "test:mmhover": "node test/mindmap-hover-delay.cdp.mjs",
     "test:newnoteedit": "node test/new-note-opens-edit.cdp.mjs",
+    "test:treesel": "node test/folder-selection-single-row.cdp.mjs",
     "test:syncquiet": "node test/sync-progress-quiet.cdp.mjs",
     "test:mmlinks": "node test/mindmap-md-links.cdp.mjs",
     "test:mmresize": "node test/mindmap-resize-click.cdp.mjs",
