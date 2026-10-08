@@ -15,6 +15,7 @@
     "test": "node test/startup-flags.test.mjs && node test/editor-desync.test.mjs && node test/backup-destinations.test.mjs && node test/backup-catchup.test.mjs && node test/backup-archive-names.test.mjs && node test/preview-code-untouched.test.mjs && node test/media-in-folders.test.mjs && node test/samba-without-vpn.test.mjs && node test/sync-timers-all-transports.test.mjs && node test/empty-vault-no-backup.test.mjs && node test/mass-delete-guard.test.mjs && node test/sync-unchanged-notice.test.mjs",
     "test:app": "node test/editor-typing.cdp.mjs",
     "test:vpnsynconly": "node test/vpn-sync-only.nm.mjs",
+    "test:vpnwording": "node test/vpn-config-loaded-wording.cdp.mjs",
     "test:treeorder": "node test/tree-order-survives-sync.cdp.mjs",
     "test:attachplace": "node test/attachment-place.cdp.mjs",
     "test:mmhover": "node test/mindmap-hover-delay.cdp.mjs",

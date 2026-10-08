@@ -12391,14 +12391,18 @@ async function updateWgConfiguredView(forceEdit = false) {
   summary.style.display = showSummary ? 'flex' : 'none';
   wizard.style.display  = showSummary ? 'none' : '';
   if (!showSummary) {
-    // Wizard mode. The "already loaded — will be reused" note shows only when the
-    // .conf came from the OTHER tab (Sync); if imported HERE, show the config
-    // normally ("Show config") instead of a confusing reuse note.
+    // Wizard mode. The row shows whenever a .conf exists — it carries Show config /
+    // Modify / Remove, which this tab needs even when it did the import itself. Only
+    // the wording turns on where the config came from: "loaded" here, "already
+    // loaded — it will be reused" when it was imported in Sync (see
+    // setVpnLoadedText).
     const drop = $('wg-drop-zone'), already = $('wg-already');
-    const reuse = confExists && state._wgOrigin !== 'backup';
     if (drop)    drop.style.display    = confExists ? 'none' : '';
-    if (already) already.style.display = reuse ? 'flex' : 'none';
-    if (confExists && !reuse) { try { _armVpnConfigToggle('wg-parsed'); } catch (_) {} }
+    if (already) already.style.display = confExists ? 'flex' : 'none';
+    if (confExists) {
+      setVpnLoadedText('wg-already', state._wgOrigin === 'backup' ? 'sync.wg_loaded' : 'sync.tw_wg_already');
+      try { _armVpnConfigToggle('wg-parsed'); } catch (_) {}
+    }
     wizardGo(1); stopWgStatusPolling(); return;
   }
 
@@ -12908,21 +12912,38 @@ async function configuredVpnName() {
   return 'VPN';
 }
 
-// After a WireGuard .conf import, show the "config already loaded" row (with
-// the Import-another / Remove buttons) in BOTH tabs — the connection is shared.
+// The row that says a VPN config is loaded carries Show config / Modify / Remove,
+// so BOTH tabs need it as soon as a config exists — what changes between them is
+// what it SAYS. The tab you imported in says "config loaded"; the other one says
+// "already loaded — it will be reused", because from there it is someone else's
+// config being borrowed. Hiding the row in the importing tab was the first attempt
+// and it cost that tab its Remove/Reconfigure buttons; showing it everywhere with
+// the reuse wording was the second, and it told you your fresh import would be
+// "reused" the moment you made it.
+//
+// `origin` is runtime-only (set at import, not persisted), so after a restart it is
+// undefined and both tabs say "already loaded" — which is then true of both.
+//
+// The data-i18n attribute is swapped along with the text: without it a later
+// language change would re-translate the key the markup still carried and put the
+// wrong one of the two sentences back.
+function setVpnLoadedText(rowId, key) {
+  const span = $(rowId)?.querySelector('span[data-i18n]');
+  if (!span) return;
+  span.setAttribute('data-i18n', key);
+  span.textContent = window.i18n.t(key);
+}
+
+// After a WireGuard .conf import, show the "config loaded" row (with the
+// Import-another / Remove buttons) in BOTH tabs — the connection is shared.
 function showWgAlreadyRows(origin) {
   origin = origin || state._wgOrigin;
-  // Show the "already loaded — will be reused" note ONLY in the tab that did NOT
-  // import the config. In the importing tab the config is shown normally (the
-  // "Show config" button), not a confusing "it will be reused" note.
   [['backup', 'wg-already', 'wg-drop-zone', 'wg-parsed'],
    ['sync', 'tw-wg-already', 'tw-wg-drop-zone', 'tw-wg-parsed']].forEach(([tab, al, dz, parsed]) => {
     const a = $(al), d = $(dz);
     if (d) d.style.display = 'none';
-    // Sync ALWAYS shows the "config loaded" row (so Remove/Reconfigure are there
-    // even when the VPN was imported here). Backup keeps the original reuse rule.
-    const show = tab === 'sync' ? true : (origin !== tab);
-    if (a) a.style.display = show ? 'flex' : 'none';
+    if (a) a.style.display = 'flex';
+    setVpnLoadedText(al, origin === tab ? 'sync.wg_loaded' : 'sync.tw_wg_already');
     try { _armVpnConfigToggle(parsed); } catch (_) {}
   });
   // The .conf is on disk now — the Sync tab's cached flag must know it too
@@ -12930,19 +12951,16 @@ function showWgAlreadyRows(origin) {
   _twHasSavedConf = true;
 }
 
-// Same as showWgAlreadyRows but for OpenVPN: the "already loaded — will be reused"
-// note shows ONLY in the tab that did NOT import the .ovpn; the importing tab gets
-// the normal "Show config" instead.
+// Same as showWgAlreadyRows but for OpenVPN: both tabs get the row, the importing
+// one says "config loaded" and the other "already loaded — it will be reused".
 function showOvpnAlreadyRows(origin) {
   origin = origin || state._ovpnOrigin;
   [['backup', 'ovpn-already', 'ovpn-drop-zone', 'ovpn-parsed'],
    ['sync', 'tw-ovpn-already', 'tw-ovpn-drop-zone', 'tw-ovpn-parsed']].forEach(([tab, al, dz, parsed]) => {
     const a = $(al), d = $(dz);
     if (d) d.style.display = 'none';
-    // Sync ALWAYS shows the row (Remove/Reconfigure even when imported here);
-    // Backup keeps the original reuse rule.
-    const show = tab === 'sync' ? true : (origin !== tab);
-    if (a) a.style.display = show ? 'flex' : 'none';
+    if (a) a.style.display = 'flex';
+    setVpnLoadedText(al, origin === tab ? 'sync.ovpn_loaded' : 'sync.ovpn_already');
     try { _armVpnConfigToggle(parsed); } catch (_) {}
   });
 }
@@ -13811,9 +13829,14 @@ async function updateTwowayConnView(forceEdit = false) {
   // Show the "config loaded" row (with Show/Modify config · Import another ·
   // Remove) whenever a WireGuard config exists — even if it was imported HERE in
   // the Sync tab. Before, origin==='sync' hid it, leaving no Remove/Reconfigure.
+  // The wording still turns on where it came from: imported here it says "config
+  // loaded", imported in Backup "already loaded — it will be reused".
   if (drop)    drop.style.display    = confExists ? 'none' : '';
   if (already) already.style.display = confExists ? 'flex' : 'none';
-  if (confExists) { try { _armVpnConfigToggle('tw-wg-parsed'); } catch (_) {} }
+  if (confExists) {
+    setVpnLoadedText('tw-wg-already', state._wgOrigin === 'sync' ? 'sync.wg_loaded' : 'sync.tw_wg_already');
+    try { _armVpnConfigToggle('tw-wg-parsed'); } catch (_) {}
+  }
   _twHasSavedConf = confExists;
   // "Test connection" stays grey until a VPN config is loaded/saved (you can't
   // test before there's a connection to test).
