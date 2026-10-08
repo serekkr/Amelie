@@ -11180,9 +11180,11 @@ function setupSettings() {
     // The backup MODE toggles are cfg-backup-normal (dated folder snapshot) and
     // cfg-backup-archived (.tar.gz). They were previously reset via the wrong,
     // non-existent ids (cfg-vpn-folder/archive) — a no-op — so `cfg-backup-normal`
-    // (checked by default) stayed ON and folder backup auto-activated when a VPN was
-    // loaded. Reset the REAL toggles so a fresh VPN import leaves backup modes OFF
-    // until the user turns one on explicitly.
+    // (back then `checked` in the markup) stayed ON and folder backup auto-activated
+    // when a VPN was loaded. Reset the REAL toggles so a fresh VPN import leaves
+    // backup modes OFF until the user turns one on explicitly — which is also what
+    // a fresh install starts from now, and what ensureBackupFormat re-arms when the
+    // new destination is switched on.
     if ($('cfg-backup-normal'))   $('cfg-backup-normal').checked   = false;
     if ($('cfg-backup-archived')) $('cfg-backup-archived').checked = false;
     // A fresh import starts a FRESH setup: fields, old test results and
@@ -11272,11 +11274,6 @@ function setupSettings() {
     if (e.target.checked && !backupSmbTested()) {
       e.target.checked = false;
       showToast('✗ ' + window.i18n.t('sync.test_first'));
-      return;
-    }
-    if (e.target.checked && !$('cfg-backup-normal')?.checked && !$('cfg-backup-archived')?.checked) {
-      e.target.checked = false;
-      showToast('✗ ' + window.i18n.t('sync.vpn_need_mode'));
     }
   });
   // ONE remote backup destination at a time. Samba (LAN) and VPN both write to
@@ -11306,13 +11303,6 @@ function setupSettings() {
     if (e.target.checked && !sambaLanTested()) {
       e.target.checked = false;
       showToast('✗ ' + window.i18n.t('sync.test_first'));
-      return;
-    }
-    // Same rule as the VPN destination: with BOTH formats off there is nothing
-    // to write, so refuse to switch the destination on.
-    if (e.target.checked && !$('cfg-backup-normal')?.checked && !$('cfg-backup-archived')?.checked) {
-      e.target.checked = false;
-      showToast('✗ ' + window.i18n.t('sync.vpn_need_mode'));
     }
   });
   // Gate: can't enable WebDAV backup until the connection test passed.
@@ -11334,6 +11324,28 @@ function setupSettings() {
   });
   // Typing a new path retracts the pass the old one earned.
   $('cfg-local-path')?.addEventListener('input', () => { state._backupLocalTested = false; });
+
+  // A destination that has just been switched ON needs a FORMAT to write, and on
+  // a fresh install both are off: neither toggle is preselected any more, because
+  // a green switch in the Backup tab of an install where nothing is configured
+  // reads as "a backup is running" when nothing is. So the first destination to
+  // come on turns the folder snapshot on with it — the common case, and the one
+  // the preselection existed to serve.
+  //
+  // It only reacts to a DESTINATION switch, never to the format toggles, so
+  // turning both formats off by hand while a destination is on stays off: that is
+  // a deliberate state the config preserves (see the `folder` flag on load).
+  //
+  // Registered AFTER the gates above for the same reason the section-open handler
+  // below is: handlers run in the order they were added, a refused click is undone
+  // by setting `checked` back to false, and this one reads `checked`. Bound earlier
+  // it would arm a format for a destination that was refused.
+  const ensureBackupFormat = () => {
+    const f = $('cfg-backup-normal'), a = $('cfg-backup-archived');
+    if (f && !f.checked && !a?.checked) f.checked = true;
+  };
+  ['cfg-local-enabled', 'cfg-samba-enabled', 'cfg-vpn-enabled', 'cfg-webdav-enabled'].forEach(id =>
+    $(id)?.addEventListener('change', () => { if ($(id).checked) ensureBackupFormat(); }));
 
   // Switching a destination ON opens its settings — the point of the list: the names
   // are the main view, the configuration is what the switch reveals. Off folds it.
@@ -13349,7 +13361,10 @@ async function openSettings() {
     wantFolder = !!explicitFolder;
   } else {
     const archiveOnlyAll = !!(_L.archiveOnly || _W.archiveOnly);
-    wantFolder = anyConfigured ? !archiveOnlyAll : true;
+    // Nothing configured at all (a fresh install) → OFF, not on: there is no
+    // destination to write to, so a preselected format only looks like a backup
+    // that is running. The first destination switched on arms it.
+    wantFolder = anyConfigured ? !archiveOnlyAll : false;
   }
   if ($('cfg-backup-archived')) $('cfg-backup-archived').checked = wantArchive;
   if ($('cfg-backup-normal'))   $('cfg-backup-normal').checked   = wantFolder;
