@@ -11185,8 +11185,22 @@ function setupSettings() {
     // backup modes OFF until the user turns one on explicitly — which is also what
     // a fresh install starts from now, and what ensureBackupFormat re-arms when the
     // new destination is switched on.
-    if ($('cfg-backup-normal'))   $('cfg-backup-normal').checked   = false;
-    if ($('cfg-backup-archived')) $('cfg-backup-archived').checked = false;
+    // ...but ONLY when no other backup destination is armed. These two toggles are
+    // GLOBAL — the save writes them into local, webdav AND vpn alike (see the
+    // "GLOBAL format" comment on the local destination) — so clearing them for the
+    // sake of the VPN silently disarms a Local or WebDAV backup the user set up
+    // long ago and never touched. That is what happened to serekkr on 2026-10-09:
+    // Local stayed enabled with folder+archive off, so every run wrote nothing and
+    // still reported ok. The safety this reset is here for is unaffected: the same
+    // function switches cfg-vpn-enabled off, so the fresh import cannot back up
+    // with inherited modes either way, and ensureBackupFormat arms the folder
+    // snapshot again when the VPN destination is switched back on.
+    const otherDestOn = ['cfg-local-enabled', 'cfg-webdav-enabled', 'cfg-samba-enabled']
+      .some(id => !!$(id)?.checked);
+    if (!otherDestOn) {
+      if ($('cfg-backup-normal'))   $('cfg-backup-normal').checked   = false;
+      if ($('cfg-backup-archived')) $('cfg-backup-archived').checked = false;
+    }
     // A fresh import starts a FRESH setup: fields, old test results and
     // summaries of the previous connection must not leak into the new one.
     resetVpnWizardUi();
@@ -11800,6 +11814,11 @@ function setupSettings() {
     } else if (result && result.noDestination) {
       if (res) { res.textContent = '✗ ' + window.i18n.t('toast.no_backup_dest'); res.className = 'test-result fail'; }
       showToast('✗ ' + window.i18n.t('toast.no_backup_dest'));
+    } else if (result && result.noFormat) {
+      // Destination on, no format: the run would write nothing. Said here too,
+      // or the button answers "backup complete" over an empty folder.
+      if (res) { res.textContent = '✗ ' + window.i18n.t('toast.no_backup_format'); res.className = 'test-result fail'; }
+      showToast('✗ ' + window.i18n.t('toast.no_backup_format'));
     } else {
       const err = (result && result.error) ? ': ' + result.error : '';
       if (res) { res.textContent = '✗ ' + window.i18n.t('toast.backup_failed') + err; res.className = 'test-result fail'; }
@@ -14072,6 +14091,11 @@ function setupSync() {
       // Nothing selected — clear message, not a "failure".
       if (dot) dot.className = 'sync-idle';
       showToast(window.i18n.t('toast.no_backup_dest'));
+    } else if (result && result.noFormat) {
+      // A destination IS on, it just has no format to write — same kind of
+      // "nothing happened for a reason you can fix", not a failure.
+      if (dot) dot.className = 'sync-idle';
+      showToast(window.i18n.t('toast.no_backup_format'));
     } else {
       // No red flash on the icon — logSyncEventNotif files the failure in the bell.
       if (dot) dot.className = 'sync-idle';

@@ -12,7 +12,7 @@
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "build:excalidraw": "esbuild build/excalidraw-entry.js --bundle --format=iife --outfile=src/renderer/excalidraw-bundle.js --minify --legal-comments=none --conditions=production --define:process.env.NODE_ENV=\\\"production\\\" --loader:.woff2=empty --loader:.png=empty --loader:.svg=empty && node build/scrub-bundle.js",
-    "test": "node test/startup-flags.test.mjs && node test/editor-desync.test.mjs && node test/backup-destinations.test.mjs && node test/backup-catchup.test.mjs && node test/backup-archive-names.test.mjs && node test/preview-code-untouched.test.mjs && node test/media-in-folders.test.mjs && node test/samba-without-vpn.test.mjs && node test/sync-timers-all-transports.test.mjs && node test/empty-vault-no-backup.test.mjs && node test/mass-delete-guard.test.mjs && node test/sync-unchanged-notice.test.mjs",
+    "test": "node test/startup-flags.test.mjs && node test/editor-desync.test.mjs && node test/backup-destinations.test.mjs && node test/backup-catchup.test.mjs && node test/backup-archive-names.test.mjs && node test/preview-code-untouched.test.mjs && node test/media-in-folders.test.mjs && node test/samba-without-vpn.test.mjs && node test/sync-timers-all-transports.test.mjs && node test/empty-vault-no-backup.test.mjs && node test/mass-delete-guard.test.mjs && node test/backup-no-format.test.mjs && node test/sync-unchanged-notice.test.mjs",
     "test:app": "node test/editor-typing.cdp.mjs",
     "test:secondinstance": "node test/second-instance-no-segv.mjs",
     "test:vpnsynconly": "node test/vpn-sync-only.nm.mjs",

@@ -127,6 +127,35 @@ say('the destination goes off', await on('cfg-local-enabled') === false);
 await ev(`document.getElementById('cfg-local-enabled').click()`); await sleep(600);
 say('switching it back on arms the folder format again', await on('cfg-backup-normal') === true);
 
+// ── A VPN import must not disarm a destination it has nothing to do with ─────
+// The two format switches are GLOBAL — one pair in the UI, saved into local,
+// webdav AND vpn on every save — and a fresh VPN import clears them so the new
+// connection cannot inherit backup modes from the old one. Scoped wrong, that
+// reset reaches across and leaves a Local backup armed with NO format, which
+// writes nothing while still looking configured. That is what serekkr found on
+// 2026-10-09, a day after an import: Local enabled, both formats off, and
+// ~/Documents/amelie-backups unchanged.
+say('before the import: Local on, folder format armed',
+  await on('cfg-local-enabled') === true && await on('cfg-backup-normal') === true);
+const threw = await ev(`(() => { try { window._resetVpnBackupModeFlags(); return ''; }
+                                 catch (e) { return String(e && e.message || e); } })()`);
+await sleep(400);
+say('the reset runs', threw === '', threw);
+say('a VPN import leaves the format of the OTHER destination alone',
+  await on('cfg-backup-normal') === true,
+  'the Local backup lost its format to a VPN import it had nothing to do with');
+say('and leaves that destination enabled', await on('cfg-local-enabled') === true);
+
+// ...while still doing its job when the VPN is the only thing in play.
+await ev(`document.getElementById('cfg-local-enabled').click()`); await sleep(500);
+say('the destination goes off again', await on('cfg-local-enabled') === false);
+await ev(`document.getElementById('cfg-backup-normal').checked ||
+          document.getElementById('cfg-backup-normal').click()`); await sleep(300);
+await ev(`window._resetVpnBackupModeFlags()`); await sleep(400);
+say('with no other destination on, the import still clears the format',
+  await on('cfg-backup-normal') === false,
+  'the reset stopped working for the case it exists for');
+
 const bad = ok.filter(x => !x).length;
 console.log(`\n${ok.length - bad}/${ok.length} ok`);
 try { process.kill(-child.pid, 'SIGKILL'); } catch (_) {}

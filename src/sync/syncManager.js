@@ -793,6 +793,26 @@ class SyncManager {
       return { success: false, noDestination: true,
         error: 'Nessuna destinazione di backup attiva: attivane una (Locale, Samba, VPN o WebDAV) nelle impostazioni Backup.' };
     }
+    // A destination is on, but NO FORMAT is selected, so every enabled one would
+    // run and write nothing. Same rule as "no destination" right above: don't
+    // pretend "backup complete". This is reachable without ever choosing it —
+    // importing a VPN config clears the format toggles, which are global, so a
+    // Local destination configured long before can be left armed with no format
+    // (serekkr, 2026-10-09: local on, folder+archive off, every run reporting
+    // ok while `~/Documents/amelie-backups` stayed empty for a day).
+    // The Samba branch in _runBackupInner skips quietly on the same state because
+    // THERE it is a deliberate "no backup content over this link"; here it is the
+    // whole run writing nothing, which the user has to be told about.
+    const writesSomething = (d) => !!d && (d.folder !== false || !!d.archive || !!d.archiveOnly);
+    const sc = this._sambaConfig();
+    const anyFormat = (s.local?.enabled && writesSomething(s.local))
+      || (s.webdav?.enabled && writesSomething(s.webdav))
+      || (sc?.enabled && writesSomething(sc));
+    if (!anyFormat) {
+      this._setStatus('idle');
+      return { success: false, noFormat: true,
+        error: 'Nessun formato di backup selezionato: accendi "Backup normale (cartella)" oppure "Backup archiviato (.tar.gz)" nelle impostazioni Backup.' };
+    }
     // An empty vault is never copied — forced or not. See _vaultIsEmpty.
     if (this._vaultIsEmpty()) {
       console.log('[Sync] Vault empty — nothing to back up');
