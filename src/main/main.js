@@ -49,8 +49,27 @@ process.on('uncaughtException', (err) => {
 // Single instance: if Amelie is already open, a second invocation brings the
 // existing window to the foreground instead of opening a duplicate (which could
 // be a different version, causing confusion).
+// app.EXIT, not app.quit: losing the lock happens pre-'ready', and app.quit()
+// there does NOT stop the startup already in flight — it only asks the (not yet
+// running) message loop to drain. Chromium keeps initialising, and because
+// `in-process-gpu` puts the GPU thread INSIDE this process, the shutdown frees
+// the gbm device while that thread is still in eglInitialize → use-after-free:
+//
+//   #0 gbm_device_get_fd (libgbm.so.1)   rdi = 0xefefefefefefefef
+//   #1 dri2_initialize_drm (libEGL_mesa.so.0)
+//   #2 eglInitialize
+//
+// 0xEF is PartitionAlloc's freed-memory poison, i.e. the device was already
+// freed. Measured on the installed v1.0.130 build: 9 SIGSEGV out of 30 second
+// launches (30%), and 10/30 from these sources. The user hit it for real on
+// 2026-10-09 11:31:24 by starting Amelie twice ~1s apart — the first instance
+// was untouched, the second dumped core and KDE showed a crash dialog.
+// app.exit() tears the process down at once instead, with nothing left in
+// flight. Measured after this change: 0 out of 60. The window-raising of the
+// instance that DID keep the lock is unaffected — it runs over there, in the
+// 'second-instance' handler below.
 if (!app.requestSingleInstanceLock()) {
-  app.quit();
+  app.exit(0);
 } else {
   app.on('second-instance', () => {
     if (mainWindow) {
