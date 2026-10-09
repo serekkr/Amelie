@@ -125,6 +125,9 @@ app.whenReady().then(async () => {
     const ok = (n, cond, extra) => log.push((cond ? 'ok  ' : 'FAIL') + '  ' + n + (cond ? '' : '\\\\n        ' + JSON.stringify(extra)));
     const seen = [];
     const _returnToFilesView = () => {};
+    // openTab gained this call in v1.0.129; without the stub the slice throws on
+    // the first openTab() and the whole routing section reads as a failure.
+    const clearFolderTarget = () => {};
     const isAttachNode = (n) => ['pdf','image','audio','video'].includes(n && n.type);
     const openPdfFile = (n) => seen.push('pdf:' + n.path);
     const openAttachmentNode = (n) => seen.push('attach:' + n.path);
