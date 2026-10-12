@@ -3442,7 +3442,7 @@ body.split-open .pane-flash::after {
      margin, so nothing that keeps this rule level with the editor toolbar is touched. */
 }
 .sidebar-view-btn {
-  /* Five equal shares of the row, no width cap: the buttons fill the sidebar and the
+  /* Equal shares of the row, no width cap: the buttons fill the sidebar and the
      dividers land at even intervals, so the group reads as one uniform strip whatever
      the sidebar's width. There USED to be a cap (38px, then 28) to stop the buttons
      stretching into wide rectangles — that mattered while each one was a visible box;
@@ -3464,10 +3464,17 @@ body.split-open .pane-flash::after {
 .sidebar-view-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 .sidebar-view-btn:hover { color: var(--accent); }
 .sidebar-view-btn.active { color: var(--accent); }
+/* Collapse/expand-all: one button, two icons. Chevrons meeting in the middle while
+   something is open (the click will close it), spreading apart once everything is
+   closed (the click will open it). Same swap as #btn-focus-mode's arrow. */
+#btn-collapse-all .chev-expand-all { display: none; }
+#btn-collapse-all.all-closed .chev-collapse-all { display: none; }
+#btn-collapse-all.all-closed .chev-expand-all { display: inline; }
 /* A hairline between one icon and the next, now that no boxes separate them. Drawn as
    a pseudo-element in the MIDDLE of the 10px gap (left: -5px), not as a border on the
    button: a border would sit against the icon it belongs to and shrink its box by a
-   pixel. Only between — the `+` gives four lines for five buttons, none at the ends.
+   pixel. Only between — the `+` gives one line fewer than there are buttons, none at
+   the ends.
    It is inside the zoomed row, so it scales with the icon-size setting like everything
    else here. */
 .sidebar-view-btn + .sidebar-view-btn::before {

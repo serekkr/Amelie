@@ -60,6 +60,7 @@
     "test:imgpan": "node test/image-pan.cdp.mjs",
     "test:bkdest": "node test/backup-dest-list.cdp.mjs",
     "test:syncenable": "node test/sync-enable-after-restart.cdp.mjs",
+    "test:collapseall": "node test/sidebar-collapse-all.cdp.mjs",
     "test:bkfmt": "node test/backup-format-default.cdp.mjs",
     "test:gpuflags": "node test/startup-toggles.cdp.mjs",
     "test:restoreobs": "node test/restore-obsidian.cdp.mjs",

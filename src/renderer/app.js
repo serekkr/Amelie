@@ -38,6 +38,11 @@ const state = {
 // Persist which folders are expanded, so the sidebar reopens in the same state.
 function persistOpenFolders() {
   try { localStorage.setItem('amelie.openFolders', JSON.stringify([...state.openFolders])); } catch (_) {}
+  // Every change to the set passes through here — a folder clicked open, a redraw,
+  // a rename remap — so this is the one place the collapse/expand-all button has to
+  // be told to catch up. (Wrapped: this runs before the sidebar exists on the very
+  // first call.)
+  try { updateCollapseAllBtn(); } catch (_) {}
 }
 
 // Sticky view mode: once the user flips the Edit/View toggle, that choice is
@@ -2827,6 +2832,41 @@ function renderTree() {
   }
   renderNodes(filtered, fileTree);
   persistOpenFolders();
+}
+
+// Every folder key in the tree, flat — what "open everything" has to put into
+// state.openFolders. The key is the one makeFolderEl stores (path, or the name
+// for a folder that has none), or a reopened folder would not match its row.
+function allFolderKeys(nodes = state.notes, out = []) {
+  for (const n of nodes || []) {
+    if (n.type !== 'folder') continue;
+    out.push(n.path || n.name);
+    allFolderKeys(n.children, out);
+  }
+  return out;
+}
+
+// The sidebar's close/open-all button, the one Obsidian's file explorer has. One
+// button doing two opposite things, so the icon and the tooltip both have to name
+// the NEXT click, not the current state: chevrons together + "close all" while
+// anything is open, chevrons apart + "open all" once nothing is.
+function updateCollapseAllBtn() {
+  const btn = $('btn-collapse-all');
+  if (!btn) return;
+  const allClosed = state.openFolders.size === 0;
+  btn.classList.toggle('all-closed', allClosed);
+  btn.title = window.i18n.t(allClosed ? 'sidebar.expand_all' : 'sidebar.collapse_all');
+  btn.setAttribute('aria-label', btn.title);
+}
+
+// Close the whole tree, or open all of it. "Open" means every folder, not the ones
+// that happened to be open before: the button is a way to SEE the whole vault, and
+// restoring a remembered handful would make the second click do something different
+// from what its icon just promised.
+function toggleAllFolders() {
+  if (state.openFolders.size) state.openFolders.clear();
+  else allFolderKeys().forEach(k => state.openFolders.add(k));
+  renderTree();   // rebuilds the rows, then persists and refreshes the button
 }
 
 // A vault file that lives in attachments/ — PDF, photo, audio, video — as opposed to a
@@ -11030,6 +11070,11 @@ function setupSettings() {
 
   $('btn-new-note').addEventListener('click', () => createNewNote(newNoteFolder()));
   $('btn-new-folder').addEventListener('click', () => createNewFolder());
+  $('btn-collapse-all')?.addEventListener('click', () => toggleAllFolders());
+  // The tooltip is built from a translated string, so it has to be rebuilt when the
+  // language changes — same reason #btn-focus-mode listens for this.
+  document.addEventListener('amelie:lang-changed', () => { try { updateCollapseAllBtn(); } catch (_) {} });
+  try { updateCollapseAllBtn(); } catch (_) {}
 
   // Tab switching
   document.querySelectorAll('.tab-btn').forEach(btn => {
