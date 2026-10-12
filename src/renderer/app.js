@@ -11995,7 +11995,7 @@ function setupSettings() {
       if (res) { res.style.display = 'block'; res.className = 'test-result ' + (tf.ok ? 'ok' : 'fail'); res.innerHTML = stepsHtml; }
       if (!tf.ok) {
         const failed = tf.steps?.find(s => !s.ok);
-        const reason = failed ? (vpnStepLabel(failed) + (failed.detail ? ' — ' + vpnStepDetail(failed) : '')) : window.i18n.t('sync.test_failed');
+        const reason = failed ? vpnStepReason(failed) : window.i18n.t('sync.test_failed');
         try { addEventNotif(window.i18n.t('sync.smbtest_title') + ': ' + reason, false); } catch (_) {}
       }
       // Refresh the tunnel status (last handshake) after the test.
@@ -12203,7 +12203,7 @@ function setupTwowaySetup() {
         if (_vpnType === 'openvpn') setOvpnCredsVisible(false);
       } else {
         const failed = tf.steps?.find(s => !s.ok);
-        const reason = failed ? (vpnStepLabel(failed) + (failed.detail ? ' — ' + vpnStepDetail(failed) : '')) : window.i18n.t('sync.test_failed');
+        const reason = failed ? vpnStepReason(failed) : window.i18n.t('sync.test_failed');
         // Detailed reason lives in the checklist row; the box gives a short,
         // clearly visible failure signal (no duplication).
         res.className = 'test-summary fail';
@@ -12845,6 +12845,17 @@ function vpnStepLabel(step) {
   return (step && step.label) || '';
 }
 
+// One line for the bell when a connection test fails. The detail already names
+// what went wrong ("192.168.30.10 non raggiungibile su :445"); putting the step's
+// own label in front of it only said the same thing again in longer words —
+// "Verifica connessione: Samba share raggiungibile — 192.168.30.10 non
+// raggiungibile…" was the card on screen (serekkr, 12/10/2026). The label is
+// still what the checklist row shows, and still the fallback when a step fails
+// with no detail at all.
+function vpnStepReason(step) {
+  return vpnStepDetail(step) || vpnStepLabel(step) || window.i18n.t('sync.test_failed');
+}
+
 // FULL wizard UI reset (both tabs): Samba/credential fields, parsed info and
 // — crucially — the connection-test checklist rows and result boxes, which
 // otherwise keep showing the PREVIOUS connection's outcome after a Remove or a
@@ -13155,7 +13166,7 @@ async function runConnectionTest() {
   } else {
     const failedStep = result.steps?.find(s => !s.ok);
     const reason = failedStep
-      ? (vpnStepLabel(failedStep) + (failedStep.detail ? ' — ' + vpnStepDetail(failedStep) : ''))
+      ? vpnStepReason(failedStep)
       : (result.error || window.i18n.t('sync.test_failed'));
     // The failed step row shows the detailed message — the summary box gives a
     // SHORT visible failure signal (a long wait ending in a tiny row note went
@@ -13257,7 +13268,7 @@ async function runSambaLanTest() {
     state._sambaLanTested = null;
     const failed = (result.steps || []).find(s => !s.ok);
     if (summary) { summary.className = 'test-summary fail'; summary.textContent = '✗ ' + window.i18n.t('sync.test_failed'); }
-    if (failed) { try { addEventNotif(window.i18n.t('sync.smbtest_title') + ': ' + vpnStepLabel(failed) + (vpnStepDetail(failed) ? ' — ' + vpnStepDetail(failed) : ''), false); } catch (_) {} }
+    if (failed) { try { addEventNotif(window.i18n.t('sync.smbtest_title') + ': ' + vpnStepReason(failed), false); } catch (_) {} }
   }
   if (btn) btn.disabled = false;
 }
