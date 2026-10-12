@@ -4,8 +4,7 @@
 // goes wrong: the icon and the tooltip have to name what the NEXT click does, not
 // what the tree looks like now. Checked here, against the running app, on a vault
 // with a folder inside a folder:
-//   · the button sits in the TOP row, between Files and Recent, and never takes the
-//     green underline that marks the view you are on (it is an action, not a view),
+//   · the button sits in the sidebar strip, third of six, right after "new folder",
 //   · on a fresh profile (nothing open) it offers to OPEN, and one click opens every
 //     folder — the nested one included, with its note really in the DOM (folders
 //     render their children lazily, so an "open" folder that was never clicked used
@@ -13,8 +12,8 @@
 //   · the icon and the tooltip then flip to "close all", and a second click closes
 //     everything,
 //   · opening a single folder by hand flips them back on its own,
-//   · pressing it from another view (Recent) comes back to Files, so the click is
-//     never invisible,
+//   · it belongs to the Files pane, so another view takes it off screen with the
+//     rest of the strip,
 //   · and what the button did survives a reload, like any other open folder.
 //
 //   run: npm run test:collapseall     (needs a display; uses xvfb-run when present)
@@ -74,10 +73,10 @@ const look = () => ev(`(() => {
   const rows = [...document.querySelectorAll('#file-tree .tree-folder')].map(r => ({ name: r.dataset.folder, open: r.classList.contains('open') }));
   return {
     inStrip: btn ? btn.parentElement.id : null,
-    // Where it sits in the top row: the icons before it, and the one right after.
+    // Where it sits in the strip: its neighbours either side.
     before: btn && btn.nextElementSibling ? btn.nextElementSibling.id : null,
     after: btn && btn.previousElementSibling ? btn.previousElementSibling.id : null,
-    underlined: btn ? getComputedStyle(btn).borderBottomColor : null,
+    onScreen: vis(btn),
     tabs: document.querySelectorAll('#sidebar-section-tabs > button').length,
     siblings: document.querySelectorAll('#sidebar-views .sidebar-view-btn').length,
     view: typeof _sidebarView === 'string' ? _sidebarView : null,
@@ -94,12 +93,11 @@ const click = async () => { await ev(`document.getElementById('btn-collapse-all'
 
 {
   const s = await look();
-  check('the button is in the top row, right before Recent and after Files',
-    !!s && s.inStrip === 'sidebar-section-tabs' && s.before === 'view-recent' && s.after === 'view-files',
+  check('the button is in the strip, right after "new folder" and before "draw"',
+    !!s && s.inStrip === 'sidebar-views' && s.after === 'btn-new-folder' && s.before === 'btn-canvas',
     JSON.stringify(s));
-  check('and the strip below is back to its five buttons', !!s && s.siblings === 5, JSON.stringify(s));
-  check('it never wears the view-tab underline',
-    !!s && /rgba\(0, 0, 0, 0\)|transparent/.test(s.underlined || ''), `border-bottom-color = ${s && s.underlined}`);
+  check('which makes six in the strip, and leaves the top row at five',
+    !!s && s.siblings === 6 && s.tabs === 5, JSON.stringify(s));
   check('a fresh profile has nothing open, so the button offers to OPEN',
     !!s && s.open === 0 && s.icon === 'expand' && /open|apri|expand/i.test(s.title || ''),
     JSON.stringify(s));
@@ -138,16 +136,19 @@ await click();
   check('and from there the button still closes the tree', !!s && s.open === 0, JSON.stringify(s));
 }
 
-// Pressed from another view it has to come back to Files, or the click is invisible.
-await ev(`document.getElementById('view-recent').click()`); await sleep(600);
-check('the sidebar really switched to Recent', await ev(`_sidebarView`) === 'recent');
-await click();
+// It belongs to the Files pane: another view takes the whole strip off screen, so the
+// button cannot be pressed where the tree is not even visible.
+await ev(`document.getElementById('view-recent').click()`); await sleep(700);
 {
   const s = await look();
-  check('pressing it from Recent comes back to Files and opens the tree',
-    !!s && s.view === 'files' && s.folders.length === 3 && s.folders.every(f => f.open), JSON.stringify(s));
+  check('switching to Recent takes the button off screen with its strip',
+    !!s && s.view === 'recent' && s.onScreen === false, JSON.stringify(s));
 }
-await click();
+await ev(`document.getElementById('view-files').click()`); await sleep(700);
+{
+  const s = await look();
+  check('and coming back to Files brings it back', !!s && s.view === 'files' && s.onScreen === true, JSON.stringify(s));
+}
 
 // Reload: what the button did is an open-folder state like any other, so it lasts.
 await click(); await sleep(400);
