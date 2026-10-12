@@ -3760,6 +3760,13 @@ function renderSyncProgress(p) {
   const box = $('sync-progress');
   if (!box || !p) return;
   const t = window.i18n.t;
+  // A toast already on screen sits a fixed distance from the bottom, worked out when
+  // it was shown (_toastPlace). The panel appearing under it, or growing a file line,
+  // or going away, all move the floor it was measured against — and nothing told it:
+  // pressing Sync put "Sincronizzazione…" up first and the panel came up UNDER it, 36px
+  // of one over the other, for the whole pass (serekkr, 12/10/2026). Re-place it on
+  // every change of this panel; it is a no-op while no toast is up.
+  const reflowToast = () => { try { const t = $('amelie-toast'); if (t && t.classList.contains('shown')) _toastPlace(t); } catch (_) {} };
   const show = (text, file, frac, cls) => {
     clearTimeout(_syncProgressTimer); _syncProgressTimer = null;
     box.className = cls || '';
@@ -3769,10 +3776,11 @@ function renderSyncProgress(p) {
     $('sync-progress-file').textContent = file ? '\u200E' + file + '\u200E' : '';
     $('sync-progress-fill').style.width = frac == null ? '' : Math.round(frac * 100) + '%';
     box.style.display = 'flex';
+    reflowToast();
   };
   const hide = (afterMs) => {
     clearTimeout(_syncProgressTimer);
-    _syncProgressTimer = setTimeout(() => { box.style.display = 'none'; _syncProgressOp = null; }, afterMs || 0);
+    _syncProgressTimer = setTimeout(() => { box.style.display = 'none'; _syncProgressOp = null; reflowToast(); }, afterMs || 0);
   };
   const head = p.op === 'backup' ? t('sync.progress_backup') : t('sync.progress_sync');
   if (p.final) {
@@ -12583,7 +12591,7 @@ function setupSync() {
       // Manual backup → say so, with the time (like the manual sync notif).
       const when = (() => { const d = new Date(), p2 = n => String(n).padStart(2, '0'); return p2(d.getHours()) + ':' + p2(d.getMinutes()); })();
       const msgBase = window.i18n.t('toast.manual_backup_ok');
-      showToast('✓ ' + msgBase + ' (' + when + ')');
+      showToast('✓ ' + msgBase + ' (' + when + ')', 6000);   // the answer to a button: time to read it
       // Success is shown as a toast; the bell is reserved for failures.
     } else if (result && result.noDestination) {
       // Nothing selected — clear message, not a "failure".
@@ -12613,7 +12621,9 @@ function setupSync() {
       syncStatusDot.className = 'sync-ok';
       const r2 = (result.results && result.results.twoway) || {};
       // Success shows as a toast + the green dot; the bell is reserved for failures.
-      showToast(_fmtSyncResult(r2));
+      // 6 s, not the usual 2.8: this is the answer to a button you pressed and it
+      // carries numbers to read ("105 sent, 0 received"), not a one-word "saved".
+      showToast(_fmtSyncResult(r2), 6000);
     } else {
       // No error flash on the icon — logSyncEventNotif files the failure in the bell.
       syncStatusDot.className = 'sync-idle';

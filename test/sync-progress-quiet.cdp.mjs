@@ -8,6 +8,9 @@
 //
 // Feeds the real renderer the events SyncManager sends (sync:progress).
 //
+// The last two checks are about where the line SITS: a toast must never be drawn on
+// top of it.
+//
 //   run: npm run test:syncquiet     (uses xvfb-run when installed, else $DISPLAY)
 import fs from 'node:fs';
 import { spawn, execSync } from 'node:child_process';
@@ -85,6 +88,36 @@ await session(9451, async (ev) => {
   await ev(send({ op: 'twoway', phase: 'listing', manual: false }));
   await sleep(3200);
   check('a new automatic pass does not keep the "done" line up', (await ev(shown)) === false, await ev(text));
+
+  // ── The toast must not end up on top of this panel ─────────────────────────
+  // Pressing Sync shows the toast FIRST and the panel a moment later, underneath it:
+  // the toast had measured its place against a bottom that then moved, and the two
+  // overlapped by 36px for the whole pass (serekkr, 12/10/2026). Geometry, not a
+  // class: the question is literally whether one covers the other.
+  const geom = `(() => {
+    const t = document.getElementById('amelie-toast'), p = document.getElementById('sync-progress');
+    const tr = t ? t.getBoundingClientRect() : null;
+    const pr = p && getComputedStyle(p).display !== 'none' ? p.getBoundingClientRect() : null;
+    return { toastBottom: tr ? Math.round(tr.bottom) : null, panelTop: pr ? Math.round(pr.top) : null,
+             overlap: tr && pr ? Math.round(Math.max(0, Math.min(tr.bottom, pr.bottom) - Math.max(tr.top, pr.top))) : 0 };
+  })()`;
+  await ev(`showToast('Sincronizzazione…')`);
+  await sleep(400);
+  await ev(send({ op: 'twoway', phase: 'transfer', done: 1, total: 10, action: 'upload', file: 'notes/a.md', manual: true }));
+  await sleep(400);
+  {
+    const g = await ev(geom);
+    check('a toast already up moves clear when the panel appears under it',
+      !!g && g.overlap === 0 && g.toastBottom <= g.panelTop, JSON.stringify(g));
+  }
+  // The panel grows a second line when a file is named, and shrinks again: the toast
+  // has to follow that too, not just the first appearance.
+  await ev(send({ op: 'twoway', phase: 'running', manual: true }));
+  await sleep(300);
+  {
+    const g = await ev(geom);
+    check('and follows it when the panel changes height', !!g && g.overlap === 0 && g.toastBottom <= g.panelTop, JSON.stringify(g));
+  }
 });
 
 fs.rmSync(HOME, { recursive: true, force: true });
