@@ -3358,6 +3358,19 @@ function makeNoteEl(node, parentArray, folderPath = '') {
     const srcPath = e.dataTransfer.getData('text/plain');
     const wasNote = state.draggingNote, wasAttach = state.draggingAttach, wasFolder = state.draggingFolder;
     state.draggingNote = state.draggingAttach = state.draggingFolder = false;
+    // SEVERAL items dropped on a note row go to THAT row's level — which is how you
+    // take a handful back OUT of a folder: you drop them on a note that is already
+    // where you want them. Only the folder row knew about the selection, so this was
+    // moving one and leaving the rest behind (serekkr, 12/10/2026).
+    if (state.multiDrag && state.multiDrag.length > 1) {
+      const paths = state.multiDrag;
+      state.multiDrag = null;
+      state.dragSrcFolder = null;
+      const n = await moveManyInto(paths, folderPath || '');
+      if (n) showToast(window.i18n.t(folderPath ? 'tree.moved_n' : 'tree.moved_n_root',
+        { n, folder: folderPath.split('/').pop() || '' }));
+      return;
+    }
     if (srcPath === node.path && (!wasAttach || state.dragSrcFolder === (folderPath || ''))) { renderTree(); return; }
     const found = takeDragged(srcPath);
     state.dragSrcFolder = null;

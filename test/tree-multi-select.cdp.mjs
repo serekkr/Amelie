@@ -12,6 +12,9 @@
 //   · Ctrl+click adds and removes one,
 //   · a plain click clears it and opens the note, Escape clears it,
 //   · dragging one of them onto a folder moves THEM ALL on disk, into that folder,
+//   · and dropping them on a NOTE moves them all to that note's level — which is how
+//     a handful comes back OUT of a folder (only the folder row knew about the
+//     selection at first, so that way round moved one and left the rest, 12/10/2026),
 //   · right-click → Delete takes the whole selection, after asking once,
 //   · and a drag of a note that is not in the selection still moves just that one.
 //
@@ -166,6 +169,34 @@ check('the three picked are gone from disk, the fourth is not',
   JSON.stringify(inFolder()) === JSON.stringify(['delta.md']), JSON.stringify(inFolder()));
 check('and nothing else in the vault went with them',
   JSON.stringify(onDisk()) === JSON.stringify(['echo.md']), JSON.stringify(onDisk()));
+
+// ── Back out of the folder, by dropping on a note at the level above ────────
+// 'delta.md' is in Archivio with the others; 'echo.md' is at the root. Pick two from
+// inside the folder and drop them on the note at the root: both must land there.
+await clickRow('Archivio/delta.md');
+await clickRow('Archivio/delta.md', { ctrl: true });     // anchor + selected
+check('one picked inside the folder', (await sel()).length === 1, JSON.stringify(await sel()));
+// Put a second one back in the folder to have a pair to carry out.
+fs.writeFileSync(`${VAULT}/notes/Archivio/foxtrot.md`, fm + 'foxtrot\n');
+await ev(`loadTree()`); await sleep(900);
+await clickRow('Archivio/delta.md');
+await clickRow('Archivio/foxtrot.md', { shift: true });
+check('two picked inside the folder', (await sel()).length === 2, JSON.stringify(await sel()));
+await ev(`(async () => {
+  const row = [...document.querySelectorAll('#file-tree .tree-note')].find(x => x.dataset.path === 'Archivio/delta.md');
+  const onRoot = [...document.querySelectorAll('#file-tree .tree-note')].find(x => x.dataset.path === 'echo.md');
+  const dt = new DataTransfer();
+  row.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+  const r = onRoot.getBoundingClientRect();
+  onRoot.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt,
+    clientX: r.left + 20, clientY: r.top + r.height / 2 }));
+  return 1;
+})()`);
+for (let i = 0; i < 30 && onDisk().length < 3; i++) await sleep(300);
+check('dropped on a note at the root, BOTH come out of the folder',
+  JSON.stringify(onDisk()) === JSON.stringify(['delta.md', 'echo.md', 'foxtrot.md']),
+  JSON.stringify({ radice: onDisk(), dentro: inFolder() }));
+check('and the folder is left empty', inFolder().length === 0, JSON.stringify(inFolder()));
 
 const failed = results.filter(r => !r).length;
 console.log(`\n${results.length - failed}/${results.length} passed`);
