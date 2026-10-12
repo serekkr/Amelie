@@ -171,8 +171,8 @@ say('with no other destination on, the import still clears the format',
 {
   const opts = await ev(`[...document.querySelectorAll('#cfg-local-interval option')].map(o => o.value)`);
   say('the backup frequency offers no 30 seconds', !opts.includes('0.5'), JSON.stringify(opts));
-  say('and still offers hourly, daily and a custom count of days',
-    opts.join(',') === '60,1440,custom', JSON.stringify(opts));
+  say('and offers hourly, daily, weekly and a custom count of days',
+    opts.join(',') === '60,1440,10080,custom', JSON.stringify(opts));
   const twOpts = await ev(`[...document.querySelectorAll('#cfg-twoway-interval option')].map(o => o.value)`);
   say('the SYNC frequency keeps its 30 seconds — it is a different job', twOpts.includes('0.5'), JSON.stringify(twOpts));
   // The seeded config says 0.5. It must not come up as "Custom: 0 days".
@@ -180,6 +180,16 @@ say('with no other destination on, the import still clears the format',
                              custom: getComputedStyle(document.getElementById('local-interval-custom-wrap')).display })`);
   say('a config still saying 30 seconds opens on Hourly, not on Custom',
     shown && shown.value === '60' && shown.custom === 'none', JSON.stringify(shown));
+  // Weekly is a preset, so a config saying 10080 must come up as Weekly — not as
+  // "Custom: 7 days", which is the same length of time said in the one place where it
+  // would be rewritten into something else on the next save.
+  const weekly = await ev(`(() => { const s = document.getElementById('cfg-local-interval');
+    s.value = '10080'; s.dispatchEvent(new Event('change', { bubbles: true }));
+    return { value: s.value, custom: getComputedStyle(document.getElementById('local-interval-custom-wrap')).display,
+             label: s.options[s.selectedIndex].textContent.trim() }; })()`);
+  say('weekly can be chosen, and does not open the days field',
+    weekly && weekly.value === '10080' && weekly.custom === 'none' && weekly.label.length > 0, JSON.stringify(weekly));
+  say('and its label is translated, not the raw key', !/settings\.freq_weekly/.test(weekly?.label || 'x'), JSON.stringify(weekly));
 }
 
 const bad = ok.filter(x => !x).length;

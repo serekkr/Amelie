@@ -12074,7 +12074,9 @@ async function openSettings() {
   if (blMin < 60) blMin = 60;
   const blSel = $('cfg-local-interval');
   if (blSel) {
-    if (blMin === 60 || blMin === 1440) {
+    // 10080 = a week. Custom still counts in DAYS, so a week is reachable there too —
+    // the preset is there because it is a frequency people pick by name, not by sum.
+    if (blMin === 60 || blMin === 1440 || blMin === 10080) {
       blSel.value = String(blMin);
       if ($('local-interval-custom-wrap')) $('local-interval-custom-wrap').style.display = 'none';
     } else {
