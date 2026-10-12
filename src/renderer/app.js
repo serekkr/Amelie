@@ -11052,7 +11052,7 @@ function setupSettings() {
         // doesn't keep a half-edited wizard around.
         if (btn.dataset.tab === 'sync')   { _smbExpanded.backup = false; try { updateWgConfiguredView(); } catch (_) {} applySmbCollapse('backup'); collapseAllBackupSections(); }
         // Opening Sync shows ONE method — the pill's — like opening Backup does.
-        if (btn.dataset.tab === 'twoway') { _smbExpanded.sync   = false; try { updateTwowayConnView(); } catch (_) {} applySmbCollapse('sync'); openOnlyTwowaySection(null); }
+        if (btn.dataset.tab === 'twoway') { _smbExpanded.sync   = false; try { updateTwowayConnView(); refreshTwowayVpnOnDisk(); } catch (_) {} applySmbCollapse('sync'); openOnlyTwowaySection(null); }
       });
     });
   });
@@ -13448,6 +13448,7 @@ async function openSettings() {
   updateActionNowButtons();
   if ($('cfg-twoway-subpath'))  $('cfg-twoway-subpath').value  = cfg.sync?.twoway?.subPath || '';
   updateTwowayConnView();   // show the reused WireGuard+Samba connection
+  refreshTwowayVpnOnDisk(); // …and whether there is a VPN config at all (the Sync switch asks)
   // Restore two-way frequency: Real-time, a preset, or Custom.
   const twSel = $('cfg-twoway-interval');
   if (twSel) {
@@ -13824,6 +13825,10 @@ async function updateTwowayConnView(forceEdit = false) {
   let vpnOnDisk = false;
   try { const c = await window.inkwell.wg.getConf(); vpnOnDisk = !!(c && (c.exists || c.ovpnExists)); } catch (_) {}
   const configured = !!(host && share) && vpnOnDisk && !forceEdit;
+  // We have just read the disk: say so. The flag used to be set only in the wizard
+  // branch below, which a configured connection never reaches — so on a profile
+  // that arrives already set up it stayed false all session (see syncSmbTested).
+  if (vpnOnDisk) _twHasSavedConf = true;
   const ok = $('twoway-conn-ok'), missing = $('twoway-conn-missing'), shareEl = $('twoway-conn-share');
   if (ok) ok.style.display = configured ? 'flex' : 'none';
   if (missing) missing.style.display = configured ? 'none' : 'block';
@@ -14022,6 +14027,20 @@ function syncSmbTested() {
   // it through. A leftover share on its own used to be enough to switch the
   // method on, with no VPN imported anywhere.
   return !!_twHasSavedConf && !!(tw && (tw.ip || tw.host) && tw.share);
+}
+// …and _twHasSavedConf is only half an answer on its own: it was set while
+// IMPORTING or TESTING a VPN config, so a connection that was already finished —
+// what every restart finds — left it false, the switch bounced back with "test
+// the connection first" and the toolbar Sync icon never came back (2026-10-12).
+// Read the disk instead, when Settings opens and when the Sync tab is entered.
+// Never from inside the switch's own handler: an await there leaves the checkbox
+// reading ON while the gate is still deciding, and any save landing in that
+// window records a method that is about to be refused.
+async function refreshTwowayVpnOnDisk() {
+  try {
+    const c = await window.inkwell.wg.getConf();
+    _twHasSavedConf = !!(c && (c.exists || c.ovpnExists));
+  } catch (_) { /* leave the flag as it is */ }
 }
 function syncWebdavTested() {
   return !!state._twWebdavTested || !!state.config?.sync?.twoway?.webdav?.url;
