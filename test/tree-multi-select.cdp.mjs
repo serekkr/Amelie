@@ -16,8 +16,9 @@
 //     a handful comes back OUT of a folder (only the folder row knew about the
 //     selection at first, so that way round moved one and left the rest, 12/10/2026),
 //   · right-click → Delete takes the whole selection, after asking once,
-//   · the Canc/Delete key does the same (asked 12/10/2026) — but only on what is
-//     PICKED, never on the note being read, and never while typing,
+//   · the Canc/Delete key does the same (asked 12/10/2026): on what is picked, and
+//     with nothing picked on the row the tree points at — the open, highlighted note,
+//     as in Obsidian — but never while the caret is in a text field,
 //   · and a drag of a note that is not in the selection still moves just that one.
 //
 //   run: npm run test:multisel     (needs a display; uses xvfb-run when present)
@@ -54,6 +55,9 @@ child = xvfb
   ? spawn('xvfb-run', ['-a', '-s', '-screen 0 1400x900x24', ELECTRON, ...eargs, '--ozone-platform=x11', '--disable-gpu'],
       { cwd: REPO, env: { ...process.env, HOME, XDG_SESSION_TYPE: 'x11', WAYLAND_DISPLAY: '', ELECTRON_RUN_AS_NODE: undefined }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
   : spawn(ELECTRON, eargs, { cwd: REPO, env: { ...process.env, HOME, ELECTRON_RUN_AS_NODE: undefined }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+let appOut = '';
+child.stdout.on('data', d => { appOut += d; });
+child.stderr.on('data', d => { appOut += d; });
 let target = null;
 for (let i = 0; i < 60 && !target; i++) { await sleep(500); try { target = (await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()).find(t => t.type === 'page' && /index\.html/.test(t.url)); } catch (_) {} }
 if (!target) { console.error('no app'); process.exit(1); }
@@ -205,21 +209,33 @@ check('and the folder is left empty', inFolder().length === 0, JSON.stringify(in
 // editor, and not at all while the caret is in a text field.
 {
   const before = onDisk();
-  // Nothing picked → nothing happens, whatever is open.
-  await ev(`(() => { clearMultiSel(); document.body.focus(); return 1; })()`);
+  // Nothing picked, but a note open and highlighted: THAT one goes (what he asked for).
+  await clickRow('foxtrot.md');                       // plain click: opens it, clears the selection
+  check('a plain click opens it and picks nothing', await ev(`state.currentPath`) === 'foxtrot.md' && (await sel()).length === 0,
+    JSON.stringify({ aperta: await ev(`state.currentPath`), scelte: await sel() }));
+  await ev(`(() => { document.activeElement && document.activeElement.blur(); document.body.focus(); return 1; })()`);
   await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }))`);
-  await sleep(600);
-  check('with nothing picked, Canc deletes nothing',
-    JSON.stringify(onDisk()) === JSON.stringify(before), JSON.stringify({ prima: before, dopo: onDisk() }));
+  for (let i = 0; i < 30 && onDisk().includes('foxtrot.md'); i++) await sleep(300);
+  check('with nothing picked, Canc deletes the note the tree points at',
+    !onDisk().includes('foxtrot.md'), JSON.stringify(onDisk()));
+  const before2 = onDisk();
 
   // Picked, but the caret is in the editor: Canc is a character there, not a command.
   await clickRow('echo.md', { ctrl: true });
   check('one picked', (await sel()).length === 1, JSON.stringify(await sel()));
-  await ev(`(() => { const el = document.querySelector('#cm-mount .cm-content') || document.getElementById('markdown-editor'); if (el) el.focus(); return document.activeElement && document.activeElement.className; })()`);
+  // The caret has to BE there, or this case proves nothing: a note must be open for
+  // the editor to exist at all, so open one first and check the focus took.
+  await clickRow('delta.md'); await sleep(500);
+  await clickRow('echo.md', { ctrl: true });
+  const caretIn = await ev(`(() => { const el = document.querySelector('#cm-mount .cm-content') || document.getElementById('markdown-editor');
+    if (!el) return 'no editor'; el.focus();
+    const a = document.activeElement;
+    return a && (a.isContentEditable || a.tagName === 'TEXTAREA') ? 'in editor' : 'focus did not take: ' + (a && a.tagName); })()`);
+  check('the caret is in the editor for the next check', caretIn === 'in editor', String(caretIn));
   await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }))`);
   await sleep(600);
   check('with the caret in the editor, Canc does not delete the picked note',
-    JSON.stringify(onDisk()) === JSON.stringify(before), JSON.stringify({ prima: before, dopo: onDisk() }));
+    JSON.stringify(onDisk()) === JSON.stringify(before2), JSON.stringify({ prima: before2, dopo: onDisk() }));
 
   // Focus out of the editor: now it deletes, and only that one.
   await ev(`(() => { document.activeElement && document.activeElement.blur(); document.body.focus(); return 1; })()`);
@@ -227,7 +243,32 @@ check('and the folder is left empty', inFolder().length === 0, JSON.stringify(in
   for (let i = 0; i < 30 && onDisk().includes('echo.md'); i++) await sleep(300);
   check('out of the editor, Canc deletes what is picked',
     !onDisk().includes('echo.md'), JSON.stringify(onDisk()));
-  check('and leaves the rest alone', onDisk().length === before.length - 1, JSON.stringify({ prima: before, dopo: onDisk() }));
+  check('and leaves the rest alone', onDisk().length === before2.length - 1, JSON.stringify({ prima: before2, dopo: onDisk() }));
+}
+
+// ── Deleting puts things in the trash, not in nowhere ──────────────────────
+// What makes a delete without a question reasonable. Checked by name in the user's
+// trash — the test vault lives under /tmp, so the files land in the home trash with a
+// .trashinfo pointing back at the path they came from.
+{
+  // The app's HOME, not the test runner's: shell.trashItem files it under the HOME the
+  // app was started with (checked with a probe — trashItem works here and writes
+  // $HOME/.local/share/Trash), and this suite gives every app its own.
+  const trashInfo = `${HOME}/.local/share/Trash/info`;
+  let trashed = false;
+  try {
+    trashed = fs.readdirSync(trashInfo).some(f => {
+      if (!/^(echo|foxtrot)\.md/.test(f)) return false;
+      try { return fs.readFileSync(`${trashInfo}/${f}`, 'utf8').includes(`${VAULT}/notes/`); } catch (_) { return false; }
+    });
+  } catch (_) { trashed = false; }
+  // Under xvfb there is no desktop portal to take the file, and the handler says so
+  // before falling back to removing it. Either outcome is the code working; what must
+  // never happen is a delete that quietly leaves the file in place.
+  const fellBack = /trash unavailable/.test(appOut);
+  check('a deleted note goes to the system trash (or the fallback says why not)',
+    trashed || fellBack, trashed ? '' : `nessun .trashinfo e nessun avviso di ripiego nel log dell'app`);
+  if (!trashed && fellBack) console.log('      (questa macchina non ha un cestino per l\'app: ripiego usato, come previsto)');
 }
 
 const failed = results.filter(r => !r).length;

@@ -3316,11 +3316,28 @@ ipcMain.handle('fs:writeNote', async (_, filePath, content, opts) => {
   return true;
 });
 
+// Deleting goes to the system TRASH, not to nowhere.
+//
+// It used to be fs.unlinkSync / fs.rmSync: gone, with no undo anywhere in the app —
+// and a delete here asks no question by choice (serekkr's preference), which is only
+// sound if the thing deleted can come back. It is also what Obsidian does, and what
+// saved his afternoon on 12/10/2026, when the notes he had trashed by hand were still
+// there to restore. Falls back to removing the file when the desktop has no trash to
+// offer (a portal-less session, a vault on a filesystem the trash cannot serve):
+// better deleted than a delete that silently does nothing.
+async function trashOrRemove(fullPath, { recursive = false } = {}) {
+  if (!fs.existsSync(fullPath)) return;
+  try { await shell.trashItem(fullPath); return; }
+  catch (e) { console.warn('[delete] trash unavailable, removing:', e && e.message); }
+  if (recursive) fs.rmSync(fullPath, { recursive: true, force: true });
+  else fs.rmSync(fullPath, { force: true });
+}
+
 ipcMain.handle('fs:deleteNote', async (_, filePath) => {
   _internalWriteUntil = Date.now() + 1500;   // our own delete — the UI refreshes itself; don't fire the watcher
   const fullPath = noteFilePath(filePath);
   if (!fullPath.startsWith(NOTES_DIR + path.sep)) throw new Error('Invalid path');
-  if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+  await trashOrRemove(fullPath);
   if (syncManager) syncManager.scheduleSync();
   return true;
 });
@@ -3353,7 +3370,7 @@ ipcMain.handle('fs:deleteFolder', async (_, folderPath) => {
   const fullPath = path.join(NOTES_DIR, folderPath);
   // Guard: must be strictly inside NOTES_DIR (never the vault root itself)
   if (!fullPath.startsWith(NOTES_DIR + path.sep)) throw new Error('Invalid path');
-  if (fs.existsSync(fullPath)) fs.rmSync(fullPath, { recursive: true, force: true });
+  await trashOrRemove(fullPath, { recursive: true });
   if (syncManager) syncManager.scheduleSync();
   return true;
 });
@@ -3709,7 +3726,7 @@ ipcMain.handle('attachment:delete', async (_, name) => {
   _internalWriteUntil = Date.now() + 1500;   // our own delete — the UI refreshes itself; don't fire the watcher
   const fullPath = path.resolve(ATTACHMENTS_DIR, String(name || ''));
   if (!fullPath.startsWith(path.resolve(ATTACHMENTS_DIR) + path.sep)) throw new Error('Invalid path');
-  fs.rmSync(encDisk(fullPath), { force: true });   // delete whichever form exists
+  await trashOrRemove(encDisk(fullPath));   // whichever form exists, into the trash
   if (syncManager) syncManager.scheduleSync();   // realtime sync: removal counts as a change
   return true;
 });

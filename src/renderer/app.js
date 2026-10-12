@@ -9725,7 +9725,6 @@ function setupSettings() {
   document.addEventListener('keydown', async (e) => {
     if (e.key === 'Escape' && state.multiSel.size) { try { clearMultiSel(); } catch (_) {} return; }
     if (e.key !== 'Delete' || e.ctrlKey || e.altKey || e.metaKey) return;
-    if (!state.multiSel.size) return;
     const a = document.activeElement;
     if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
     // Asked of the browser, not of the style ATTRIBUTE: these are written
@@ -9735,18 +9734,20 @@ function setupSettings() {
       .some(m => getComputedStyle(m).display !== 'none');
     if (modalUp) return;
     e.preventDefault();
-    // One picked: the same straight delete the context menu does (no question, his
-    // standing preference). Several: deleteTreeSelection asks once.
-    if (state.multiSel.size === 1) {
-      const only = [...state.multiSel][0];
-      const byPath = new Map();
-      (function walk(nodes) { for (const n of nodes || []) { if (n.path) byPath.set(n.path, n); walk(n.children); } })(state.notes);
-      const node = byPath.get(only);
-      clearMultiSel();
-      if (node) { await deleteNote(node); await loadTree(); }
-      return;
-    }
-    try { await deleteTreeSelection(); } catch (_) {}
+    // Several picked: deleteTreeSelection asks once and takes them all.
+    if (state.multiSel.size > 1) { try { await deleteTreeSelection(); } catch (_) {} return; }
+    // Otherwise the row the tree is pointing at: the one picked with Ctrl+click, or —
+    // and this is what was asked for on 12/10/2026, "voglio cancellare anche la nota
+    // selezionata", the way Obsidian does it — the note that is open and highlighted.
+    // No question, like every other single delete here; what makes that safe is that
+    // deleting now goes to the system trash (main.js: trashOrRemove).
+    const only = state.multiSel.size === 1 ? [...state.multiSel][0] : (state.selAnchor || state.currentPath);
+    if (!only) return;
+    const byPath = new Map();
+    (function walk(nodes) { for (const n of nodes || []) { if (n.path) byPath.set(n.path, n); walk(n.children); } })(state.notes);
+    const node = byPath.get(only);
+    clearMultiSel();
+    if (node) { await deleteNote(node); await loadTree(); }
   });
 
   // Sync section accordion headers
