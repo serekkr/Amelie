@@ -15,11 +15,11 @@
 // it unchanged with no markdown of ours applied inside, closing and reopening the
 // note gives it back, and none of it is slow enough to feel broken.
 //
-// One shape is recorded rather than demanded: typing the third backtick CLOSES the
-// block at once ("```\n\n```", caret on the empty line), so the Enter a person
-// presses next adds a blank line and the paste lands below it. The text is untouched
-// — the block just opens with one empty line. Measured here (12/10/2026), and the
-// comparisons allow exactly that one newline and nothing else.
+// It also pins the shape of the block itself: typing the third backtick closes it at
+// once and leaves the caret on the empty middle line, so the Enter pressed next out of
+// habit must do NOTHING — it used to add a blank line and every hand-made block opened
+// with one (fixed 12/10/2026). The pasted text starts on the first line of the block,
+// and the comparisons here are byte for byte, with no newline allowed either side.
 //
 //   run: npm run test:bigpaste     (uses xvfb-run when installed, else $DISPLAY)
 import fs from 'node:fs';
@@ -118,11 +118,10 @@ check('the paste lands', val.length > PAYLOAD.length * 0.9, `${val.length} carat
 check('and it does not take long enough to look broken (under 8 s)', pasteMs < 8000, `${pasteMs} ms`);
 
 const inner = val.replace(/^```[^\n]*\n/, '').replace(/\n```\s*$/, '');
-check('the block opens with at most the one blank line the extra Enter makes',
-  inner.length - PAYLOAD.length <= 1 && /^\n?[^\n]/.test(inner.slice(0, 2) + 'x'),
-  `${inner.length - PAYLOAD.length} caratteri in più all'inizio`);
+check('the habitual Enter added nothing: the text starts on the first line of the block',
+  !inner.startsWith('\n'), `il blocco si apre con ${JSON.stringify(inner.slice(0, 30))}`);
 check('the editor holds every byte of it',
-  inner.replace(/^\n/, '') === PAYLOAD,
+  inner === PAYLOAD,
   (() => { let k = 0; while (k < inner.length && k < PAYLOAD.length && inner[k] === PAYLOAD[k]) k++;
            return `lunghezze ${inner.length} vs ${PAYLOAD.length}, prima differenza al carattere ${k}: ${JSON.stringify(inner.slice(k - 40, k + 40))} contro ${JSON.stringify(PAYLOAD.slice(k - 40, k + 40))}`; })());
 
@@ -132,7 +131,7 @@ await sleep(2500);
 const onDisk = fs.readFileSync(`${VAULT}/notes/incolla.md`, 'utf8');
 const body = onDisk.replace(/^---\n[\s\S]*?\n---\n\n?/, '');
 const diskInner = body.replace(/^```[^\n]*\n/, '').replace(/\n```\s*\n?$/, '');
-check('the FILE holds every byte of it', diskInner.replace(/^\n/, '') === PAYLOAD,
+check('the FILE holds every byte of it', diskInner === PAYLOAD,
   (() => { let k = 0; while (k < diskInner.length && k < PAYLOAD.length && diskInner[k] === PAYLOAD[k]) k++;
            return `lunghezze ${diskInner.length} vs ${PAYLOAD.length}, prima differenza al carattere ${k}: ${JSON.stringify(diskInner.slice(k - 40, k + 40))} contro ${JSON.stringify(PAYLOAD.slice(k - 40, k + 40))}`; })());
 check('…including the tabs and the trailing spaces',
@@ -145,7 +144,7 @@ for (let i = 0; i < 40; i++) { if (await ev(`!!document.querySelector('#preview-
 const renderMs = Date.now() - t1;
 console.log(`      reso in lettura in ${renderMs} ms`);
 const shown = await ev(`document.querySelector('#preview-content pre code')?.textContent || ''`);
-check('reading mode shows it unchanged', shown.replace(/\n$/, '').replace(/^\n/, '') === PAYLOAD,
+check('reading mode shows it unchanged', shown.replace(/\n$/, '') === PAYLOAD,
   (() => { const s = shown.replace(/\n$/, ''); let k = 0; while (k < s.length && k < PAYLOAD.length && s[k] === PAYLOAD[k]) k++;
            return `lunghezze ${s.length} vs ${PAYLOAD.length}, prima differenza al carattere ${k}: ${JSON.stringify(s.slice(k - 40, k + 40))}`; })());
 const html = await ev(`document.querySelector('#preview-content pre code')?.innerHTML || ''`);
@@ -162,7 +161,7 @@ await ev(`setViewMode('edit')`);
 await sleep(900);
 const again = await ev(`editor.value`);
 const againInner = again.replace(/^```[^\n]*\n/, '').replace(/\n```\s*$/, '');
-check('closed and reopened, it is still every byte', againInner.replace(/^\n/, '') === PAYLOAD,
+check('closed and reopened, it is still every byte', againInner === PAYLOAD,
   `lunghezze ${againInner.length} vs ${PAYLOAD.length}`);
 
 const failed = results.filter(r => !r).length;

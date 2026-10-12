@@ -19644,6 +19644,24 @@
       return true;
     }
   });
+  var fenceEnterNoop = {
+    key: "Enter",
+    run(view) {
+      const { state } = view;
+      const sel = state.selection.main;
+      if (!sel.empty) return false;
+      const line = state.doc.lineAt(sel.head);
+      if (!/^\s*$/.test(line.text)) return false;
+      if (line.number === 1 || line.number === state.doc.lines) return false;
+      const above = state.doc.line(line.number - 1).text;
+      const below = state.doc.line(line.number + 1).text;
+      if (!FENCE_RE.test(above) || !FENCE_RE.test(below)) return false;
+      let fencesBefore = 0;
+      for (let ln = 1; ln < line.number - 1; ln++) if (FENCE_RE.test(state.doc.line(ln).text)) fencesBefore++;
+      if (fencesBefore % 2 !== 0) return false;
+      return true;
+    }
+  };
   var fenceEnter = {
     key: "Enter",
     run(view) {
@@ -20287,7 +20305,7 @@
             EditorView.lineWrapping,
             fenceAutoClose,
             pasteNormalize,
-            keymap.of([fenceEnter, plainEnter, ...defaultKeymap, ...historyKeymap, indentWithTab]),
+            keymap.of([fenceEnterNoop, fenceEnter, plainEnter, ...defaultKeymap, ...historyKeymap, indentWithTab]),
             fenceField,
             codeBlockPlugin,
             codeHighlightPlugin,

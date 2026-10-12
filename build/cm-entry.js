@@ -311,6 +311,36 @@ const pasteNormalize = EditorView.domEventHandlers({
   },
 });
 
+// Enter on the empty line of an ALREADY EMPTY block does nothing. Typing the third
+// backtick closes the fence at once and leaves the caret on the empty middle line, so
+// the Enter a person presses next out of habit — not knowing the room is already made
+// — pushed their text down and every hand-made block opened with a blank line
+// (serekkr, 12/10/2026). Narrow on purpose: the line must be empty AND sit between the
+// opening fence and its closer with nothing else in the block. Anywhere else, Enter is
+// Enter. (A block that must START with a blank line: type the text first, then make
+// room above it.)
+const fenceEnterNoop = {
+  key: 'Enter',
+  run(view) {
+    const { state } = view;
+    const sel = state.selection.main;
+    if (!sel.empty) return false;
+    const line = state.doc.lineAt(sel.head);
+    if (!/^\s*$/.test(line.text)) return false;              // the caret's line must be empty
+    if (line.number === 1 || line.number === state.doc.lines) return false;
+    const above = state.doc.line(line.number - 1).text;
+    const below = state.doc.line(line.number + 1).text;
+    if (!FENCE_RE.test(above) || !FENCE_RE.test(below)) return false;
+    // `above` must be an OPENING fence: an even number of fences before it. Without
+    // this, the empty line between one block's closer and the next block's opener
+    // would swallow Enter too.
+    let fencesBefore = 0;
+    for (let ln = 1; ln < line.number - 1; ln++) if (FENCE_RE.test(state.doc.line(ln).text)) fencesBefore++;
+    if (fencesBefore % 2 !== 0) return false;
+    return true;                                             // the room is already there
+  },
+};
+
 // Enter at the end of a lone OPENING fence (``` / ~~~) with no closer below
 // auto-inserts the matching closing fence and drops the caret on the empty
 // middle line — same as Amelie's legacy editor (handleFenceEnterIndent), so a
@@ -1076,7 +1106,7 @@ window.AmelieCM = {
           EditorView.lineWrapping,
           fenceAutoClose,
           pasteNormalize,
-          keymap.of([fenceEnter, plainEnter, ...defaultKeymap, ...historyKeymap, indentWithTab]),
+          keymap.of([fenceEnterNoop, fenceEnter, plainEnter, ...defaultKeymap, ...historyKeymap, indentWithTab]),
           fenceField,
           codeBlockPlugin,
           codeHighlightPlugin,
