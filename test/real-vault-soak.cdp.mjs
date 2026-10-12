@@ -333,7 +333,16 @@ const reopened = await ev(`window.__open(${JSON.stringify(newPath)}, 'edit').the
 
 // ── 6. Edit an imported note ────────────────────────────────────────────────────────
 console.log('\n── 6. modifica di una nota importata');
-const victim = withShape.find((o) => o.p.startsWith('obsidian-sync/') && o.tables && o.fences && o.imgs) || withShape.find((o) => o.p.startsWith('obsidian-sync/'));
+// The note to edit: one of the Obsidian import when it is there, otherwise the richest
+// note the vault actually has. The import lived under obsidian-sync/ until the vault was
+// started over on 08/10/2026, and insisting on it crashed this section outright rather
+// than testing what is in front of it (12/10/2026).
+const victim = withShape.find((o) => o.p.startsWith('obsidian-sync/') && o.tables && o.fences && o.imgs)
+  || withShape.find((o) => o.p.startsWith('obsidian-sync/'))
+  || [...withShape].sort((a, b) => (b.tables + b.fences + b.imgs) - (a.tables + a.fences + a.imgs)
+                                 || b.body.length - a.body.length)[0];
+if (!victim) { console.log('      (nessuna nota da modificare: salto la sezione 6)'); }
+else {
 const vDisk0 = fs.readFileSync(`${VAULT}/notes/${victim.p}`, 'utf8');
 const vCreated = (vDisk0.match(/^created: (.+)$/m) || [])[1];
 await ev(`window.__open(${JSON.stringify(victim.p)}, 'edit')`);
@@ -351,6 +360,7 @@ info(`note: ${victim.p} (${victim.tables} tables, ${victim.fences} code, ${victi
 check('the added line is saved and nothing else in the note moved', stripFm(vDisk1) === stripFm(vDisk0) + '\nriga aggiunta dal test  ', (() => { const x = stripFm(vDisk1), y = stripFm(vDisk0) + '\nriga aggiunta dal test  '; let k = 0; while (k < x.length && x[k] === y[k]) k++;
     return `lengths ${stripFm(vDisk0).length} → ${x.length}; first difference at ${k}: ${JSON.stringify({ saved: x.slice(Math.max(0, k - 40), k + 60), expected: y.slice(Math.max(0, k - 40), k + 60) })}`; })());
 check('its created date is kept', vCreated && (vDisk1.match(/^created: (.+)$/m) || [])[1] === vCreated, `${vCreated} → ${(vDisk1.match(/^created: (.+)$/m) || [])[1]}`);
+}
 
 // ── 7. The largest note ─────────────────────────────────────────────────────────────
 console.log('\n── 7. la nota più grande');

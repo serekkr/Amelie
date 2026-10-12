@@ -124,19 +124,10 @@ const MEASURE = `(() => {
     }
   });
 
-  // How many gutter numbers land inside each body row.
-  const g = document.getElementById('preview-gutter');
-  const originY = pane.getBoundingClientRect().top + pane.clientTop - pane.scrollTop;
-  const nums = g ? [...g.children].map(d => ({ n: d.textContent, top: parseFloat(d.style.top) })) : [];
-  const perRow = [...t.querySelectorAll('tbody tr')].map(tr => {
-    const r = tr.getBoundingClientRect();
-    const top = r.top - originY;
-    return nums.filter(x => x.top >= top - 1 && x.top < top + r.height - 1).map(x => x.n);
-  });
   const rowHeights = [...t.querySelectorAll('tbody tr')].map(tr => Math.round(tr.getBoundingClientRect().height));
 
   return {
-    rendered, trueMin, worst, perRow, rowHeights,
+    rendered, trueMin, worst, rowHeights,
     floor: (typeof _columnContentMins === 'function') ? _columnContentMins(t)
          : (typeof _columnContentMin === 'function'
               ? [...t.querySelectorAll('colgroup col')].map((_, i) => _columnContentMin(t, [...t.querySelectorAll('colgroup col')], i))
@@ -178,12 +169,9 @@ check(`the table renders at the width it is pinned to (${m.tableW} vs ${m.pinned
   m.pinned > 0 && Math.abs(m.tableW - m.pinned) <= 2,
   `pinned ${m.pinned}px, rendered ${m.tableW}px — the browser overrode the saved widths`);
 
-// 5. One number per table row. Cells inside a row do not line up (a chip is taller
-//    than the text beside it; a wrapped cell starts higher), so each row used to
-//    collect two or three.
-const bad = m.perRow.filter(ns => ns.length !== 1).length;
-check(`each table row gets exactly one line number (${JSON.stringify(m.perRow)})`,
-  bad === 0, `${bad} of ${m.perRow.length} rows carry a number count other than 1`);
+// (The check that each table row carried exactly one reading-mode line number went
+//  with the feature: reading mode has had no line numbers since a5d768e, 16/09/2026.
+//  It had been failing ever since, on a gutter that is not in the page any more.)
 
 // 6. Drag the MAC column (index 3) far to the left: it must stop at its content, not
 //    hand the overflow to the column beside it, and what gets persisted must be a
