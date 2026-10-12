@@ -3008,6 +3008,33 @@ function handleTreeSelectClick(e, path) {
   clearMultiSel();
   return false;
 }
+// Delete everything picked. Returns false when there is nothing picked (or the row
+// asked about is not part of it), so the caller can fall back to deleting that one row.
+// A single delete still goes through without asking, as it always has; a bulk one asks
+// once and says how many, because there is no undo for it.
+async function deleteTreeSelection(target = null) {
+  const sel = [...state.multiSel];
+  if (sel.length < 2) return false;
+  if (target && target.path && !state.multiSel.has(target.path)) return false;
+  if (!(await showConfirmModal(window.i18n.t('tree.delete_n_confirm', { n: sel.length })))) return true;
+  const byPath = new Map();
+  (function walk(nodes) { for (const n of nodes || []) { if (n.path) byPath.set(n.path, n); walk(n.children); } })(state.notes);
+  // Deepest first: deleting a folder takes its children with it, and a child deleted
+  // afterwards would be a path that is no longer there.
+  const nodes = sel.map(p => byPath.get(p)).filter(Boolean)
+    .sort((a, b) => b.path.split('/').length - a.path.split('/').length);
+  const gone = new Set();
+  for (const n of nodes) {
+    if ([...gone].some(g => n.path.startsWith(g + '/'))) continue;   // its folder already went
+    await deleteNote(n);
+    gone.add(n.path);
+  }
+  clearMultiSel();
+  await loadTree();
+  showToast(window.i18n.t('tree.deleted_n', { n: gone.size }));
+  return true;
+}
+
 // What a drag is carrying: the whole selection when the row grabbed belongs to it,
 // otherwise just that row (so dragging an unselected note still works as it always did).
 function _dragPaths(path) {
@@ -8494,26 +8521,7 @@ function setupContextMenu() {
     // Several picked and the right-click landed on one of them → all of them go.
     // A single delete still goes through without asking, as it always has; a bulk
     // one asks once and says how many, because there is no undo for it.
-    const sel = [...state.multiSel];
-    if (sel.length > 1 && state.multiSel.has(target.path)) {
-      if (!(await showConfirmModal(window.i18n.t('tree.delete_n_confirm', { n: sel.length })))) return;
-      const byPath = new Map();
-      (function walk(nodes) { for (const n of nodes || []) { if (n.path) byPath.set(n.path, n); walk(n.children); } })(state.notes);
-      // Deepest first: deleting a folder takes its children with it, and a child
-      // deleted afterwards would be a path that is no longer there.
-      const nodes = sel.map(p => byPath.get(p)).filter(Boolean)
-        .sort((a, b) => b.path.split('/').length - a.path.split('/').length);
-      const gone = new Set();
-      for (const n of nodes) {
-        if ([...gone].some(g => n.path.startsWith(g + '/'))) continue;   // its folder already went
-        await deleteNote(n);
-        gone.add(n.path);
-      }
-      clearMultiSel();
-      await loadTree();
-      showToast(window.i18n.t('tree.deleted_n', { n: gone.size }));
-      return;
-    }
+    if (await deleteTreeSelection(target)) return;
     await deleteNote(target);
   });
   $('ctx-open-location').addEventListener('click', () => {
@@ -9709,8 +9717,36 @@ function setupSettings() {
 
   // Escape drops a tree selection — the way out of a gesture, before anything is done
   // with it. A plain click on a row already clears it (see handleTreeSelectClick).
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && state.multiSel.size) { try { clearMultiSel(); } catch (_) {} }
+  // Canc/Delete deletes what is picked: asked for on 12/10/2026, "devo poter cancellare
+  // le note con il pulsante cancel". It acts ONLY on an explicit selection, never on
+  // "the note you are reading": a key that deletes whatever happens to be open, pressed
+  // by someone who thought they were typing, is not a shortcut but a trap. And not
+  // while the caret is in the editor, a field or a modal — there Canc is a character.
+  document.addEventListener('keydown', async (e) => {
+    if (e.key === 'Escape' && state.multiSel.size) { try { clearMultiSel(); } catch (_) {} return; }
+    if (e.key !== 'Delete' || e.ctrlKey || e.altKey || e.metaKey) return;
+    if (!state.multiSel.size) return;
+    const a = document.activeElement;
+    if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
+    // Asked of the browser, not of the style ATTRIBUTE: these are written
+    // `style="display:none;position:fixed…"`, with no space, so a string match on
+    // "display: none" called every hidden modal visible and swallowed the key.
+    const modalUp = [...document.querySelectorAll('.modal, #confirm-modal, #input-modal')]
+      .some(m => getComputedStyle(m).display !== 'none');
+    if (modalUp) return;
+    e.preventDefault();
+    // One picked: the same straight delete the context menu does (no question, his
+    // standing preference). Several: deleteTreeSelection asks once.
+    if (state.multiSel.size === 1) {
+      const only = [...state.multiSel][0];
+      const byPath = new Map();
+      (function walk(nodes) { for (const n of nodes || []) { if (n.path) byPath.set(n.path, n); walk(n.children); } })(state.notes);
+      const node = byPath.get(only);
+      clearMultiSel();
+      if (node) { await deleteNote(node); await loadTree(); }
+      return;
+    }
+    try { await deleteTreeSelection(); } catch (_) {}
   });
 
   // Sync section accordion headers

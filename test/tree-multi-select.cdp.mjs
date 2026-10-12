@@ -16,6 +16,8 @@
 //     a handful comes back OUT of a folder (only the folder row knew about the
 //     selection at first, so that way round moved one and left the rest, 12/10/2026),
 //   · right-click → Delete takes the whole selection, after asking once,
+//   · the Canc/Delete key does the same (asked 12/10/2026) — but only on what is
+//     PICKED, never on the note being read, and never while typing,
 //   · and a drag of a note that is not in the selection still moves just that one.
 //
 //   run: npm run test:multisel     (needs a display; uses xvfb-run when present)
@@ -197,6 +199,36 @@ check('dropped on a note at the root, BOTH come out of the folder',
   JSON.stringify(onDisk()) === JSON.stringify(['delta.md', 'echo.md', 'foxtrot.md']),
   JSON.stringify({ radice: onDisk(), dentro: inFolder() }));
 check('and the folder is left empty', inFolder().length === 0, JSON.stringify(inFolder()));
+
+// ── The Canc key ────────────────────────────────────────────────────────────
+// It must act on the selection and on nothing else: not on the note open in the
+// editor, and not at all while the caret is in a text field.
+{
+  const before = onDisk();
+  // Nothing picked → nothing happens, whatever is open.
+  await ev(`(() => { clearMultiSel(); document.body.focus(); return 1; })()`);
+  await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }))`);
+  await sleep(600);
+  check('with nothing picked, Canc deletes nothing',
+    JSON.stringify(onDisk()) === JSON.stringify(before), JSON.stringify({ prima: before, dopo: onDisk() }));
+
+  // Picked, but the caret is in the editor: Canc is a character there, not a command.
+  await clickRow('echo.md', { ctrl: true });
+  check('one picked', (await sel()).length === 1, JSON.stringify(await sel()));
+  await ev(`(() => { const el = document.querySelector('#cm-mount .cm-content') || document.getElementById('markdown-editor'); if (el) el.focus(); return document.activeElement && document.activeElement.className; })()`);
+  await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }))`);
+  await sleep(600);
+  check('with the caret in the editor, Canc does not delete the picked note',
+    JSON.stringify(onDisk()) === JSON.stringify(before), JSON.stringify({ prima: before, dopo: onDisk() }));
+
+  // Focus out of the editor: now it deletes, and only that one.
+  await ev(`(() => { document.activeElement && document.activeElement.blur(); document.body.focus(); return 1; })()`);
+  await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }))`);
+  for (let i = 0; i < 30 && onDisk().includes('echo.md'); i++) await sleep(300);
+  check('out of the editor, Canc deletes what is picked',
+    !onDisk().includes('echo.md'), JSON.stringify(onDisk()));
+  check('and leaves the rest alone', onDisk().length === before.length - 1, JSON.stringify({ prima: before, dopo: onDisk() }));
+}
 
 const failed = results.filter(r => !r).length;
 console.log(`\n${results.length - failed}/${results.length} passed`);
