@@ -591,6 +591,14 @@ html.is-mac #titlebar { padding-left: 72px; }
 .tree-folder:hover, .tree-note:hover {
   background: color-mix(in srgb, var(--text-1) 10%, transparent);
 }
+/* Picked with Shift/Ctrl+click, waiting to be moved or deleted. A fill, not the
+   accent text colour the OPEN note uses: the two mean different things and must not
+   be read for each other — one is where you are, the other is what you are about to
+   act on. */
+.tree-folder.multi-selected, .tree-note.multi-selected {
+  background: var(--active-bg);
+  box-shadow: inset 2px 0 0 0 var(--accent);
+}
 .tree-note.active {
   background: var(--active-bg); color: var(--accent);
 }

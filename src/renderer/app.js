@@ -30,6 +30,11 @@ const state = {
   // Persisted across sessions so folders stay expanded after reopening the app.
   openFolders: new Set((() => { try { return JSON.parse(localStorage.getItem('amelie.openFolders') || '[]'); } catch (_) { return []; } })()),
   selectedFolder: null,
+  // Multi-selection in the tree (Shift/Ctrl+click), as paths. Only for acting on
+  // several items at once — moving them into a folder, deleting them. The ANCHOR is
+  // the last item clicked on its own: a Shift+click selects from there to here.
+  multiSel: new Set(),
+  selAnchor: null,
   draggingNote: false,
   draggingFolder: false,
   draggingAttach: false,   // dragging a pdf/image node (reorder-only, never moves on disk)
@@ -2795,6 +2800,11 @@ function renderTree() {
     return;
   }
   renderNodes(filtered, fileTree);
+  // A redraw builds new rows: paint the selection back onto them, and forget whatever
+  // is no longer in the tree (deleted, moved, filtered out by a search).
+  const alive = new Set(_treeRows().map(r => r.path));
+  [...state.multiSel].forEach(p => { if (!alive.has(p)) state.multiSel.delete(p); });
+  _paintMultiSel();
   persistOpenFolders();
 }
 
@@ -2949,6 +2959,99 @@ async function moveFolderOnDisk(oldPath, newPath) {
   renderTabBar();
 }
 
+// ── Multi-selection in the tree (Shift / Ctrl + click) ──────────────────────
+// Obsidian's gesture, for Obsidian's two reasons: drag a handful of notes into a
+// folder, or delete them in one go. A plain click is untouched — it opens the note
+// and becomes the anchor the next Shift+click measures from.
+//
+// The rows in document order, which is the order they are seen in. A folder row
+// carries its key in data-folder, a file row in data-path.
+function _treeRows() {
+  return [...fileTree.querySelectorAll('.tree-folder, .tree-note')]
+    .map(el => ({ el, path: el.dataset.path || el.dataset.folder }))
+    .filter(r => r.path);
+}
+function _paintMultiSel() {
+  for (const { el, path } of _treeRows()) el.classList.toggle('multi-selected', state.multiSel.has(path));
+}
+function clearMultiSel() {
+  if (!state.multiSel.size) return;
+  state.multiSel.clear();
+  _paintMultiSel();
+}
+// Shift+click: everything between the anchor and here. Ctrl/Cmd+click: this one in
+// or out. Returns true when the click was a selection gesture and must NOT also open
+// the note or fold the folder.
+function handleTreeSelectClick(e, path) {
+  if (e.shiftKey) {
+    const rows = _treeRows();
+    const to = rows.findIndex(r => r.path === path);
+    let from = rows.findIndex(r => r.path === state.selAnchor);
+    if (from === -1) from = to;                       // no anchor yet: start here
+    const [a, b] = from <= to ? [from, to] : [to, from];
+    state.multiSel.clear();
+    for (let i = a; i <= b; i++) state.multiSel.add(rows[i].path);
+    _paintMultiSel();
+    // The browser selects the text of every row swept over; the rows are what is
+    // being picked here, not their letters.
+    try { window.getSelection()?.removeAllRanges(); } catch (_) {}
+    return true;
+  }
+  if (e.ctrlKey || e.metaKey) {
+    if (state.multiSel.has(path)) state.multiSel.delete(path); else state.multiSel.add(path);
+    state.selAnchor = path;
+    _paintMultiSel();
+    return true;
+  }
+  // A plain click starts over: this row is the new anchor and the selection goes.
+  state.selAnchor = path;
+  clearMultiSel();
+  return false;
+}
+// What a drag is carrying: the whole selection when the row grabbed belongs to it,
+// otherwise just that row (so dragging an unselected note still works as it always did).
+function _dragPaths(path) {
+  return (state.multiSel.size > 1 && state.multiSel.has(path)) ? [...state.multiSel] : [path];
+}
+// Move several items into `destFolder` ('' = the vault root). Notes, drawings and
+// attachments are renamed; a folder is moved whole. The tree is then re-read rather
+// than patched by hand: with N items from N different levels, the array surgery the
+// single-item drop does is where this would go wrong, and a re-read cannot.
+async function moveManyInto(paths, destFolder) {
+  const flat = flattenTree(state.notes);
+  const byPath = new Map(flat.map(n => [n.path, n]));
+  const folders = [];
+  (function walk(nodes) { for (const n of nodes || []) if (n.type === 'folder') { folders.push(n); walk(n.children); } })(state.notes);
+  folders.forEach(f => byPath.set(f.path, f));
+  let moved = 0;
+  for (const p of paths) {
+    const node = byPath.get(p);
+    if (!node) continue;
+    const name = p.split('/').pop();
+    const newPath = destFolder ? `${destFolder}/${name}` : name;
+    if (newPath === p) continue;
+    if (node.type === 'folder') {
+      if (destFolder === p || destFolder.startsWith(p + '/')) continue;   // never into itself
+      updateNodePaths(node, p, newPath);
+      await moveFolderOnDisk(p, newPath);
+    } else if (isAttachNode(node)) {
+      continue;                        // attachments live in attachments/, they never move
+    } else {
+      await _flushBeforePathChange(p);
+      await window.inkwell.renameNote(p, newPath);
+      migrateNoteColorPath(p, newPath);
+      if (_cmLoadedPath === p) _cmLoadedPath = newPath;
+      const tab = tabs.find(t => t.path === p);
+      if (tab) { tab.path = newPath; if (state.currentPath === p) state.currentPath = newPath; renderTabBar(); }
+    }
+    moved++;
+  }
+  if (destFolder) state.openFolders.add(destFolder);
+  clearMultiSel();
+  await loadTree();
+  return moved;
+}
+
 function makeFolderEl(node, parentArray, folderPath = '') {
   const folderKey = node.path || node.name;
   const wrap = document.createElement('div');
@@ -2990,8 +3093,10 @@ function makeFolderEl(node, parentArray, folderPath = '') {
   if (state.selectedFolder === node.path) row.classList.add('selected');
 
   let folderClickAllowed = true;
-  row.addEventListener('click', () => {
+  row.addEventListener('click', (e) => {
     if (!folderClickAllowed) return;
+    // Shift/Ctrl+click picks rows; it must not also fold the folder.
+    if (handleTreeSelectClick(e, folderKey)) return;
     const open = row.classList.toggle('open');
     if (open) ensureChildren();   // lazy: build child DOM only on first expand
     children.style.display = open ? 'block' : 'none';
@@ -3011,6 +3116,7 @@ function makeFolderEl(node, parentArray, folderPath = '') {
   row.addEventListener('dragstart', e => {
     folderClickAllowed = false;
     state.draggingFolder = true;
+    state.multiDrag = _dragPaths(folderKey);
     e.dataTransfer.setData('text/plain', node.path);
     e.dataTransfer.effectAllowed = 'move';
     row.style.opacity = '0.5';
@@ -3018,6 +3124,7 @@ function makeFolderEl(node, parentArray, folderPath = '') {
   });
   row.addEventListener('dragend', () => {
     state.draggingFolder = false;
+    state.multiDrag = null;
     row.style.opacity = '';
     setTimeout(() => { folderClickAllowed = true; }, 0);
   });
@@ -3045,6 +3152,19 @@ function makeFolderEl(node, parentArray, folderPath = '') {
     e.preventDefault(); e.stopPropagation();
     row.classList.remove('drag-over-folder', 'drag-over-top', 'drag-over-bottom');
     const srcPath = e.dataTransfer.getData('text/plain');
+
+    // SEVERAL items dragged together land INSIDE this folder, whichever third of the
+    // row they were dropped on: a handful of notes dragged onto a folder means "put
+    // these in there", and the top/bottom thirds — which reorder one item around the
+    // folder — have no meaning for a group that came from several levels at once.
+    if (state.multiDrag && state.multiDrag.length > 1) {
+      const paths = state.multiDrag;
+      state.multiDrag = null;
+      state.draggingNote = state.draggingAttach = state.draggingFolder = false;
+      const n = await moveManyInto(paths, node.path);
+      if (n) showToast(window.i18n.t('tree.moved_n', { n, folder: node.name }));
+      return;
+    }
 
     // A PDF, photo or recording stays in attachments/ on disk: moving it into a
     // folder only records its place in the saved order, which is where the tree
@@ -3186,7 +3306,11 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   _tipWhenClipped(el, displayName);
   el.dataset.path = node.path;
 
-  el.addEventListener('click', () => openNote(node));
+  el.addEventListener('click', (e) => {
+    // Shift/Ctrl+click picks rows; it must not also open the note.
+    if (handleTreeSelectClick(e, node.path)) return;
+    openNote(node);
+  });
   el.addEventListener('contextmenu', e => showContextMenu(e, node));
 
   // Files (notes, draws, pdfs, images) are all freely re-orderable via drag.
@@ -3198,6 +3322,7 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   // Drag & drop reorder
   el.addEventListener('dragstart', e => {
     if (isAttach) state.draggingAttach = true; else state.draggingNote = true;
+    state.multiDrag = _dragPaths(node.path);
     state.dragSrcFolder = folderPath || '';
     e.dataTransfer.setData('text/plain', node.path);
     e.dataTransfer.effectAllowed = 'move';
@@ -3207,6 +3332,7 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   el.addEventListener('dragend', e => {
     state.draggingNote = false;
     state.draggingAttach = false;
+    state.multiDrag = null;
     state.dragSrcFolder = null;
     el.style.opacity = '';
     e.stopPropagation();
@@ -8351,7 +8477,31 @@ function setupContextMenu() {
   $('ctx-delete').addEventListener('click', async () => {
     const target = state.contextTarget;
     menu.style.display = 'none';
-    if (target) await deleteNote(target);
+    if (!target) return;
+    // Several picked and the right-click landed on one of them → all of them go.
+    // A single delete still goes through without asking, as it always has; a bulk
+    // one asks once and says how many, because there is no undo for it.
+    const sel = [...state.multiSel];
+    if (sel.length > 1 && state.multiSel.has(target.path)) {
+      if (!(await showConfirmModal(window.i18n.t('tree.delete_n_confirm', { n: sel.length })))) return;
+      const byPath = new Map();
+      (function walk(nodes) { for (const n of nodes || []) { if (n.path) byPath.set(n.path, n); walk(n.children); } })(state.notes);
+      // Deepest first: deleting a folder takes its children with it, and a child
+      // deleted afterwards would be a path that is no longer there.
+      const nodes = sel.map(p => byPath.get(p)).filter(Boolean)
+        .sort((a, b) => b.path.split('/').length - a.path.split('/').length);
+      const gone = new Set();
+      for (const n of nodes) {
+        if ([...gone].some(g => n.path.startsWith(g + '/'))) continue;   // its folder already went
+        await deleteNote(n);
+        gone.add(n.path);
+      }
+      clearMultiSel();
+      await loadTree();
+      showToast(window.i18n.t('tree.deleted_n', { n: gone.size }));
+      return;
+    }
+    await deleteNote(target);
   });
   $('ctx-open-location').addEventListener('click', () => {
     if (state.contextTarget?.path) {
@@ -8442,6 +8592,13 @@ function showContextMenu(e, node) {
   $('ctx-sort-name').style.display    = isFolder ? '' : 'none';
   $('ctx-sort-date').style.display    = isFolder ? '' : 'none';
   $('ctx-delete').style.display       = hasTarget ? '' : 'none';
+  // With several picked, the entry says so — "Elimina (3)" — instead of looking like
+  // it will take only the row under the pointer.
+  {
+    const n = state.multiSel.size;
+    const many = n > 1 && node && state.multiSel.has(node.path);
+    $('ctx-delete').textContent = many ? window.i18n.t('tree.delete_n', { n }) : window.i18n.t('ctx.delete');
+  }
   // Show, then clamp inside the window so the menu (e.g. on a file near the
   // bottom) is never cut off — flip up / shift left when it would overflow.
   menu.style.display = 'block';
@@ -9536,6 +9693,12 @@ function setupSettings() {
   setupSettingsPanelSizeMemory();
   setupColorCustomization();
   setupFolderIconStyle();
+
+  // Escape drops a tree selection — the way out of a gesture, before anything is done
+  // with it. A plain click on a row already clears it (see handleTreeSelectClick).
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.multiSel.size) { try { clearMultiSel(); } catch (_) {} }
+  });
 
   // Sync section accordion headers
   // Samba belongs here and was missing: while the pills existed they expanded the

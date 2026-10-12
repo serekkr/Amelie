@@ -60,6 +60,7 @@
     "test:treesort": "node test/tree-sort.cdp.mjs",
     "test:ramsoak": "node test/ram-soak.cdp.mjs",
     "test:bigpaste": "node test/big-paste-in-fence.cdp.mjs",
+    "test:multisel": "node test/tree-multi-select.cdp.mjs",
     "test:bkfmt": "node test/backup-format-default.cdp.mjs",
     "test:gpuflags": "node test/startup-toggles.cdp.mjs",
     "test:restoreobs": "node test/restore-obsidian.cdp.mjs",
