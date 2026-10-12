@@ -3023,14 +3023,47 @@ async function deleteTreeSelection(target = null) {
   // afterwards would be a path that is no longer there.
   const nodes = sel.map(p => byPath.get(p)).filter(Boolean)
     .sort((a, b) => b.path.split('/').length - a.path.split('/').length);
-  const gone = new Set();
+  const t0 = performance.now();
+  // Only the items that are not already inside another item being deleted: a folder
+  // takes its contents with it, and the path of something already gone is nothing.
+  const tops = [];
   for (const n of nodes) {
-    if ([...gone].some(g => n.path.startsWith(g + '/'))) continue;   // its folder already went
-    await deleteNote(n);
-    gone.add(n.path);
+    if (tops.some(t => n.path === t.path || n.path.startsWith(t.path + '/'))) continue;
+    tops.push(n);
   }
+  // The tabs, ONCE and before anything is removed: with the affected ones already out
+  // of the way, the per-item code below finds nothing to splice, which is what makes it
+  // safe to run several deletions at the same time.
+  const doomed = (p) => tops.some(t => p === t.path || p.startsWith(t.path + '/'));
+  for (let i = tabs.length - 1; i >= 0; i--) {
+    if (tabs[i].path && doomed(tabs[i].path)) { tabs.splice(i, 1); if (activeTabIdx >= i) activeTabIdx--; }
+  }
+  // Six at a time. The slow part of a delete is not ours: each file goes to the system
+  // trash through the desktop's own service, ~250 ms a piece, and thirty of those in a
+  // row is the eight and a half seconds serekkr sat through. They do not depend on each
+  // other — the list above made sure of that — so they can go together. Six, not thirty:
+  // a burst that size is where a portal starts refusing.
+  const gone = new Set();
+  const queue = [...tops];
+  const worker = async () => {
+    for (let n = queue.shift(); n; n = queue.shift()) {
+      try { await deleteNote(n, { bulk: true }); gone.add(n.path); }
+      catch (e) { console.error('[tree] delete failed:', n.path, e && e.message); }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(6, queue.length) }, worker));
+  // Everything the per-item path skipped, once: the tab bar, the note to land on if the
+  // open one went with them, and ONE re-read of the vault.
+  if (tabs.length === 0) {
+    activeTabIdx = -1; state.currentPath = null;
+    editorContainer.style.display = 'none'; emptyState.style.display = 'flex';
+  } else if (activeTabIdx >= 0 && tabs[activeTabIdx] && tabs[activeTabIdx].path !== state.currentPath) {
+    await switchTab(Math.min(Math.max(activeTabIdx, 0), tabs.length - 1));
+  }
+  renderTabBar();
   clearMultiSel();
   await loadTree();
+  console.log(`[tree] ${gone.size} elementi eliminati in ${Math.round(performance.now() - t0)} ms`);
   showToast(window.i18n.t('tree.deleted_n', { n: gone.size }));
   return true;
 }
@@ -4299,7 +4332,13 @@ function folderNodeAtPath(nodes, targetPath) {
   return null;
 }
 
-async function deleteNote(node) {
+// `bulk`: one of many being deleted in one go. Everything that costs a whole screen —
+// re-reading the vault, re-rendering the tab bar, loading the neighbouring note — is
+// skipped and left to the caller to do ONCE at the end. Deleting 30 items ran 30 full
+// loadTree()s, each reading the vault over IPC and rebuilding the tree, and sat there
+// for seconds (serekkr, 12/10/2026). The per-item work that must still happen — the
+// file itself, the manual order, the tabs that pointed at it — is unchanged.
+async function deleteNote(node, { bulk = false } = {}) {
   // No confirmation dialog — delete immediately (notes, folders, draws, PDF, images).
   // (User preference: delete goes through without asking.)
   removeFromTreeOrder(node.path);   // forget the deleted item's manual order
@@ -4316,24 +4355,26 @@ async function deleteNote(node) {
     if (tabs.length === 0) {
       activeTabIdx = -1;
       state.currentPath = null;
-      editorContainer.style.display = 'none';
-      emptyState.style.display = 'flex';
-    } else {
+      if (!bulk) { editorContainer.style.display = 'none'; emptyState.style.display = 'flex'; }
+    } else if (!bulk) {
       await switchTab(Math.min(Math.max(activeTabIdx, 0), tabs.length - 1));
     }
-    renderTabBar();
+    if (!bulk) renderTabBar();
     // Drop the folder (and descendants) from the persisted open-state set
     state.openFolders.forEach(p => {
       if (p === node.path || p.startsWith(prefix)) state.openFolders.delete(p);
     });
-    await loadTree();
+    if (!bulk) await loadTree();
     return;
   }
   if (isAttachNode(node)) {
     await window.inkwell.deleteAttachment(node.attachmentName || node.name);
     const tabIdx = tabs.findIndex(t => t.type === node.type && t.attachmentName === (node.attachmentName || node.name));
-    if (tabIdx !== -1) closeTab(tabIdx);
-    await loadTree();
+    if (tabIdx !== -1) {
+      if (bulk) { tabs.splice(tabIdx, 1); if (activeTabIdx >= tabIdx) activeTabIdx--; }
+      else closeTab(tabIdx);
+    }
+    if (!bulk) await loadTree();
     return;
   }
   await window.inkwell.deleteNote(node.path);
@@ -4345,19 +4386,19 @@ async function deleteNote(node) {
     if (tabs.length === 0) {
       activeTabIdx = -1;
       state.currentPath = null;
-      editorContainer.style.display = 'none';
-      emptyState.style.display = 'flex';
+      if (!bulk) { editorContainer.style.display = 'none'; emptyState.style.display = 'flex'; }
     } else if (wasActive) {
       // Deleted the note the user was on → switch to its neighbour and load it.
-      await switchTab(Math.min(tabIdx, tabs.length - 1));
+      if (bulk) activeTabIdx = Math.min(tabIdx, tabs.length - 1);
+      else await switchTab(Math.min(tabIdx, tabs.length - 1));
     } else if (activeTabIdx > tabIdx) {
       // Deleted a BACKGROUND note → keep the SAME note active; only its index
       // shifted. Same data-loss fix as closeTab: never reselect by slot index.
       activeTabIdx--;
     }
-    renderTabBar();
+    if (!bulk) renderTabBar();
   }
-  await loadTree();
+  if (!bulk) await loadTree();
 }
 
 // Apply a rename once a new name is known (shared by inline editor + any caller).

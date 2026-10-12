@@ -271,6 +271,41 @@ check('and the folder is left empty', inFolder().length === 0, JSON.stringify(in
   if (!trashed && fellBack) console.log('      (questa macchina non ha un cestino per l\'app: ripiego usato, come previsto)');
 }
 
+// ── Thirty at once ──────────────────────────────────────────────────────────
+// Deleting 30 items (notes AND folders) took 8.5 s and locked the window up:
+// deleteNote re-read the whole vault after EVERY item, and each file goes to the
+// system trash through the desktop's own service, one at a time. Now the re-read
+// happens once and six files travel together. The ceiling here is deliberately
+// loose — this is a guard against going back to a redraw per item, not a benchmark.
+{
+  fs.mkdirSync(`${VAULT}/notes/massa`, { recursive: true });
+  for (let i = 1; i <= 20; i++) fs.writeFileSync(`${VAULT}/notes/massa/n-${i}.md`, fm + 'n' + i + '\n');
+  for (let i = 1; i <= 10; i++) {
+    fs.mkdirSync(`${VAULT}/notes/massa/c-${i}`, { recursive: true });
+    fs.writeFileSync(`${VAULT}/notes/massa/c-${i}/dentro.md`, fm + 'dentro\n');
+  }
+  await ev(`loadTree()`); await sleep(1200);
+  await ev(`(() => { state.openFolders.add('massa'); renderTree(); return 1; })()`); await sleep(800);
+  const n = await ev(`(() => {
+    const rows = [...document.querySelectorAll('#file-tree .tree-folder, #file-tree .tree-note')]
+      .map(e => e.dataset.path || e.dataset.folder).filter(p => p && p.startsWith('massa/'));
+    state.multiSel = new Set(rows);
+    window.__bulkMs = null;
+    const t0 = performance.now();
+    deleteTreeSelection().then(() => { window.__bulkMs = Math.round(performance.now() - t0); });
+    return rows.length;
+  })()`);
+  check('thirty items picked', n === 30, String(n));
+  await sleep(400);
+  await ev(`(() => { const b = document.getElementById('confirm-modal-ok'); if (b) b.click(); return !!b; })()`);
+  let ms = null;
+  for (let i = 0; i < 60 && ms == null; i++) { await sleep(400); ms = await ev('window.__bulkMs'); }
+  const left = fs.existsSync(`${VAULT}/notes/massa`) ? fs.readdirSync(`${VAULT}/notes/massa`) : [];
+  check('all thirty are gone from disk', left.length === 0, JSON.stringify(left));
+  check(`and it took under 6 s (${ms} ms for 30 items)`, typeof ms === 'number' && ms < 6000, String(ms));
+  console.log(`      30 elementi eliminati in ${ms} ms`);
+}
+
 const failed = results.filter(r => !r).length;
 console.log(`\n${results.length - failed}/${results.length} passed`);
 try { process.kill(-child.pid, 'SIGKILL'); } catch (_) {}
