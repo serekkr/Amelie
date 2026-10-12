@@ -54,14 +54,15 @@ development:
 
 ### Beyond text
 - **To-do lists** — built-in task lists / checklists.
-- **Mind maps** with zoom and reset.
 - **PDF** — built-in viewer, editor and export.
 - **Audio & video player** — play media inline in a note or straight from the
   sidebar, with seeking.
 - **Infinite canvas / whiteboard** powered by Excalidraw.
 
 ### Organization
-- **Folder-based vault** with a navigable file tree.
+- **Folder-based vault** with a navigable file tree — drag items into the order
+  you want and it is kept with the vault, or sort the whole tree by name, by
+  modified or by created date; one button folds and unfolds every folder.
 - **Live vault watcher** — external changes (file manager, sync) refresh the
   tree automatically, no restart needed.
 - **Session & tab restore** — reopen exactly where you left off.
