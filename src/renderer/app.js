@@ -49,7 +49,7 @@ function persistOpenFolders() {
 // remembered and applied to EVERY note they open next — and across restarts —
 // so switching to preview stays in preview as you click through notes. Set only
 // by the explicit user toggle (toggleViewMode); programmatic setViewMode calls
-// don't change it. Special tabs (pdf/mindmap/canvas) return early and ignore it.
+// don't change it. Special tabs (pdf/canvas) return early and ignore it.
 let _stickyViewMode = (() => { try { return localStorage.getItem('amelie.viewMode') === 'view' ? 'view' : 'edit'; } catch (_) { return 'edit'; } })();
 function setStickyViewMode(m) {
   _stickyViewMode = (m === 'view') ? 'view' : 'edit';
@@ -105,23 +105,20 @@ function pauseMediaViewUnlessActive() {
   }
 }
 
-// Hide ALL special full-screen views (mindmap / canvas / pdf / todo) and clear
+// Hide ALL special full-screen views (canvas / pdf / todo) and clear
 // their toolbar-active state. Central helper so every view-switch is consistent:
 // whichever view you open next first calls this, guaranteeing the others are
 // dismissed. Does NOT touch the editor/empty-state — the caller decides those.
 function hideAllSpecialViews() {
-  const mm = $('mindmap-overlay'); if (mm) mm.style.display = 'none';
   const cv = $('canvas-overlay');  if (cv) cv.style.display = 'none';
   const pdf = $('pdf-overlay');    if (pdf) pdf.style.display = 'none';
   const iv = $('img-view-overlay'); if (iv) iv.style.display = 'none';
   const mv = $('media-view-overlay'); if (mv) mv.style.display = 'none';
   pauseMediaViewUnlessActive();
   const tv = $('todo-view');       if (tv) tv.style.display = 'none';
-  const mmTip = $('mindmap-tooltip'); if (mmTip) mmTip.style.display = 'none';
-  const bm = $('btn-mindmap'); if (bm) bm.classList.remove('active');
   const bc = $('btn-canvas');  if (bc) bc.classList.remove('active');
   _kanbanOpen = false;
-  // Restore the Files icon: leaving the ToDo board (for mindmap/draw/pdf/note)
+  // Restore the Files icon: leaving the ToDo board (for draw/pdf/note)
   // must drop the "kanban-active" hint so the tab shows the folder icon again,
   // not the ToDo check.
   const vf = $('view-files'); if (vf) vf.classList.remove('kanban-active');
@@ -156,7 +153,7 @@ function openTab(node, activate = true) {
   // Focus-based routing: with the split pane open and last focused, a click on
   // a note (sidebar tree, recent/bookmarks/tags lists, links) loads it into
   // the SPLIT pane instead of the main tabs. Only regular .md notes — special
-  // views (canvas/pdf/mindmap) always go through the normal tab flow.
+  // views (canvas/pdf) always go through the normal tab flow.
   if (_splitPath && _focusedPane === 'split' && node && node.path
       && (!node.type || node.type === 'note') && /\.md$/i.test(node.path)) {
     openSplitView(node.path, node.name, _splitOrient);
@@ -263,7 +260,7 @@ async function switchTab(idx) {
   if (!tab) return;
 
   // Close the TOC/index when this navigation leaves the note it was built for —
-  // a different note, or any special view (mindmap/draw/pdf). A same-note
+  // a different note, or any special view (draw/pdf). A same-note
   // refresh (sync, spurious re-open) keeps it: tab.path still matches _tocPath.
   if (tocVisible && (tab.type || tab.path !== _tocPath)) closeTOC();
 
@@ -277,36 +274,10 @@ async function switchTab(idx) {
   // Clickable path breadcrumb under the title (hidden for special tabs).
   try { renderBreadcrumb(tab); } catch (_) {}
 
-  // Always reset every special view (mindmap / canvas / pdf / todo) so the new
+  // Always reset every special view (canvas / pdf / todo) so the new
   // tab starts from a clean slate, no matter which view we were in before.
   hideAllSpecialViews();
 
-  // Special tab: mindmap
-  if (tab.type === 'mindmap') {
-    emptyState.style.display = 'none';
-    editorContainer.style.display = 'none';
-    $('mindmap-overlay').style.display = 'flex';
-    $('btn-mindmap').classList.add('active');
-    renderTabBar();
-    // Resize the canvas FIRST so layoutMindmap reads the correct dimensions.
-    resizeMindmapCanvas();
-    buildMindmapData().then(() => {
-      // Re-resize + re-layout: at the time the mindmap-overlay was made
-      // visible the browser hadn't finished its layout pass yet, so the
-      // canvas may have been 0px during the first sizing. Doing it again
-      // here (after the data is ready and the overlay is visible) ensures
-      // the notes are spread across the full viewport, not crammed in a
-      // tiny circle from a stale canvas size.
-      resizeMindmapCanvas();
-      layoutMindmap();    // seed + headless pre-warm, so the entry framing is right
-      mmRememberOpeningLayout();
-      fitMindmapView();   // fit the WHOLE graph in view on entry (nothing cut off at the edges)
-      // Then let the live simulation take over warm: the graph visibly breathes
-      // into its final shape, the way Obsidian's does when you open it.
-      kickMindmap(0.45);
-    });
-    return;
-  }
   // Special tab: canvas (draw file)
   if (tab.type === 'canvas') {
     emptyState.style.display = 'none';
@@ -527,24 +498,19 @@ function renderTabBar() {
   // because renderTabBar runs on every tab change, so it is derived from what is on
   // screen and cannot be left behind by an exit path that forgot to undo it: that is
   // exactly how a hidden strip becomes permanently hidden.
-  const STRIPLESS_VIEWS = ['todo', 'mindmap'];
+  const STRIPLESS_VIEWS = ['todo'];
   const bar = $('tab-bar');
   if (bar) bar.classList.toggle('on-todo', !!(tabs[activeTabIdx] && STRIPLESS_VIEWS.includes(tabs[activeTabIdx].type)));
   list.innerHTML = '';
   tabs.forEach((tab, i) => {
     const el = document.createElement('div');
     el.className = 'note-tab' + (i === activeTabIdx ? ' active' : '') + (tab.isDirty ? ' unsaved' : '');
-    // Pathless special tabs (e.g. the graph) must not tooltip "null".
-    el.title = tab.path || tab.name
-      || (tab.type === 'mindmap' ? window.i18n.t('tab.graph') : '');
+    // A pathless tab must not tooltip "null".
+    el.title = tab.path || tab.name || '';
 
     const name = document.createElement('span');
     name.className = 'tab-name';
-    if (tab.type === 'mindmap') {
-      // Inline SVG hexagon (not the ⬡ glyph: it renders via a taller fallback
-      // font, inflating the line box — the label visibly jumped vs other tabs).
-      name.innerHTML = `<svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 2.5l8 4.6v9.8l-8 4.6-8-4.6V7.1z"/></svg>${escHtml(window.i18n.t('tab.graph'))}`;
-    } else if (tab.type === 'canvas') {
+    if (tab.type === 'canvas') {
       name.innerHTML = `<svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3.5a2.121 2.121 0 0 1 3 3L7 18l-4 1 1-4L15.5 3.5z"/><path d="M13 6l3 3"/></svg>${escHtml(tab.name || 'Draw')}.draw`;
     } else {
       name.textContent = tab.name;
@@ -2474,10 +2440,10 @@ let _sessionReady = false;
 function saveSession() {
   if (!_sessionReady) return;
   try {
-    // `paths` drops pathless tabs (mindmap / unsaved new note), so `activeIdx`
+    // `paths` drops pathless tabs (an unsaved new note), so `activeIdx`
     // (an index into the FULL tabs array) can point PAST the restored set and
     // land you on the wrong tab. Also record the active tab by PATH and TYPE so
-    // restore can find it unambiguously (and re-open the mindmap if it was active).
+    // restore can find it unambiguously.
     const active = tabs[activeTabIdx];
     localStorage.setItem('amelie-session', JSON.stringify({
       paths: tabs.map(t => t.path).filter(Boolean),
@@ -2506,16 +2472,15 @@ async function restoreSession() {
     const { paths = [], activePath, activeType } = JSON.parse(raw);
     const flat = flattenTree(state.notes);
     // Restore ONLY plain notes, and LAZILY (activate=false): create the tab in the
-    // bar but don't read/render its file. Drawings, PDFs, images, audio/video and the
-    // mindmap are intentionally NOT reopened at startup (user preference: notes only) —
-    // this also avoids building the mindmap during init, which could error.
+    // bar but don't read/render its file. Drawings, PDFs, images and audio/video are
+    // intentionally NOT reopened at startup (user preference: notes only).
     for (const path of paths) {
       const node = flat.find(n => n.path === path);
       if (node && (!node.type || node.type === 'note')) openTab(node, false);
     }
     if (tabs.length === 0) { renderTabBar(); return; }
     // Land on the note that was active (matched by path). If the active tab was a
-    // drawing / PDF / image / player / mindmap (not restored), fall back to the LAST note.
+    // drawing / PDF / image / player (not restored), fall back to the LAST note.
     let idx = (activePath && (!activeType || activeType === 'note'))
       ? tabs.findIndex(t => t.path === activePath) : -1;
     if (idx < 0) idx = tabs.length - 1;
@@ -2671,7 +2636,6 @@ async function init() {
   _initCmEditor();   // CM engine — the ONLY editor; always on (bails only if the bundle is missing)
   setupTOC();
   setupExportPdf();
-  setupMindmap();
   setupCanvas();
   setupNoteSearch();
   setupTableContextMenu();
@@ -2817,10 +2781,6 @@ function renderTree() {
   // (Waiting for that frame before renaming is not an option: an occluded
   // window gets no animation frames at all, and the rename would never start.)
   if (_inlineRenameOpen) { _treeRefreshHeld = true; return; }
-  // Live-refresh the graph if it's on screen and the tree structure changed
-  // (move/rename/add/delete, incl. external vault edits — loadTree ends here,
-  // and drag-moves call renderTree directly). No-op otherwise.
-  try { refreshMindmapIfActive(); } catch (_) {}
   const query = state.searchQuery.toLowerCase();
   fileTree.innerHTML = '';
   // The "ToDo" entry is no longer shown in the tree: the ToDo board is
@@ -3902,7 +3862,7 @@ function openFolderAncestors(folderPath) {
 function renderBreadcrumb(tab) {
   const bc = $('note-breadcrumb');
   if (!bc) return;
-  // Hide for special tabs (mindmap/canvas/pdf) and when there's no path.
+  // Hide for special tabs (canvas/pdf) and when there's no path.
   if (!tab || !tab.path || tab.type) {
     bc.style.display = 'none';
     bc.innerHTML = '';
@@ -4865,7 +4825,7 @@ function setupEditor() {
       }
       if (node.path === state.currentPath) return;   // a note linking to itself
       const label = (node.name || srcPath.split('/').pop()).replace(/\.(md|markdown)$/i, '');
-      const { target, alias } = mmLinkTargetFor({ label, path: node.path });
+      const { target, alias } = wikiLinkTargetFor({ label, path: node.path });
       const link = `[[${target}${alias ? '|' + alias : ''}]]`;
       if (at != null) insertAtCursor(link, at, at); else insertAtCursor(link);
       return;
@@ -7013,7 +6973,7 @@ function toggleTOC() {
 }
 
 // Close the TOC/index panel. Called when navigating to a DIFFERENT note or to a
-// special view (mindmap / draw / pdf / todo): the index belongs to the note it
+// special view (draw / pdf / todo): the index belongs to the note it
 // was opened on, so it must not linger — stale — over the next thing you open.
 function closeTOC() {
   if (!tocVisible) return;
@@ -7854,7 +7814,7 @@ function saveNoteColors() {
 // A note/folder/attachment changed path (rename OR move): carry its label colour
 // — and, for a folder, every descendant's colour (both keyed by path) — over to
 // the new path so the colour is never dropped. Prefix remap mirrors
-// renameInTreeOrder. [[amelie-visual-mindmap-prefs]]
+// renameInTreeOrder.
 function migrateNoteColorPath(oldPath, newPath) {
   if (!oldPath || !newPath || oldPath === newPath) return;
   const remap = p =>
@@ -8559,7 +8519,7 @@ function showTabContextMenu(e, idx) {
   _tabCtxIdx = idx;
   const menu = $('tab-context-menu');
   if (!menu) return;
-  // Split view only makes sense for a real, file-backed note (not mindmap/
+  // Split view only makes sense for a real, file-backed note (not
   // canvas/pdf special tabs, and not an unsaved blank tab).
   const canSplit = !tab.type && !!tab.path;
   $('tctx-split-right').style.display = canSplit ? '' : 'none';
@@ -8569,7 +8529,7 @@ function showTabContextMenu(e, idx) {
   if (det) det.style.display = (!tab.type && !!tab.path) ? '' : 'none';
   // Rename — for any file-backed tab (notes, draw, pdf), not the graph.
   const rn = $('tctx-rename');
-  if (rn) rn.style.display = (tab.type !== 'mindmap' && !!tab.path) ? '' : 'none';
+  if (rn) rn.style.display = tab.path ? '' : 'none';
   // Duplicate — for markdown notes and draw files (not pdf/graph).
   const dup = $('tctx-duplicate');
   if (dup) dup.style.display = ((!tab.type || tab.type === 'canvas') && !!tab.path) ? '' : 'none';
@@ -8818,7 +8778,7 @@ function updateTitleForFocus() {
   }
   // The ACTIVE tab's visible label in the tab bar mirrors the focused pane's
   // note too (display only — tab.name stays bound to the real file). ONLY for
-  // plain note tabs: special tabs (mindmap/canvas/pdf/image) carry decorated
+  // plain note tabs: special tabs (canvas/pdf/image) carry decorated
   // labels (icon + suffix) that a bare textContent write would wipe — the
   // label visibly flip-flopped between "⬡ Graph" and "Graph" on every focus
   // change.
@@ -9272,1027 +9232,17 @@ function sortFolderChildren(folderNode, mode) {
   renderTree();
 }
 
-// ─── Mindmap ──────────────────────────────────────────────────────────────────
-
-// The graph is modelled on Obsidian's: only FILES are nodes and only `[[wiki
-// links]]` / embeds are edges by default. Folder nodes and shared-tag edges —
-// Amelie extras — are opt-in filters, exactly like Obsidian's Tags/Attachments
-// toggles. Layout is a LIVE d3-force-style simulation (link + charge + centre +
-// collide) that cools down on its own and reheats on any interaction, instead of
-// the old bake-once layout plus a scripted sine "wobble".
-let mmDragging = false, mmDragStart = {x:0,y:0}, mmOffset = {x:0,y:0};
-let mmScale = 1;
-let mmNodes = [], mmEdges = [], mmWikiLinks = [], mmAttachLinks = [];
-let mmRaw = null;                 // un-filtered model; the filters derive mmNodes/mmEdges from it
-let mmHover = null;
-// The note under the pointer, at once (cursor, clicks); `mmHover` — its title and
-// its links lit — only after the pointer has rested on it MM_HOVER_DELAY ms, so
-// sweeping across the map does not flash every name on the way (asked 2026-09-29).
-let mmHoverUnder = null, _mmHoverTimer = null;
-const MM_HOVER_DELAY = 1000;
-function mmClearHover() {
-  clearTimeout(_mmHoverTimer); _mmHoverTimer = null;
-  const was = mmHover || mmHoverUnder;
-  mmHoverUnder = null; mmHover = null;
-  if (was) drawMindmap();
-}
-// What the map is showing right now, for the tests: the lit note, and whose title.
-function mmFocusState() {
-  const L = (n) => n ? (n.displayLabel || n.label) : null;
-  return { lit: L(mmDraggingNode || mmHoverUnder || mmFocusNode), title: L(mmDraggingNode || (mmHoverUnder ? mmHover : mmFocusNode)) };
-}
-let mmDraggingNode = null;
-// The note you dragged last keeps a clearing around it: its linked notes on a ring,
-// everything else pushed out, and it stays where you dropped it — so what belongs
-// to it stays readable after you let go. Cleared by a click on empty space, Esc,
-// the reset button, or dragging another note (which takes the clearing with it).
-let mmFocusNode = null;
-function mmPinned(nd) { return nd === mmDraggingNode || nd === mmFocusNode || nd._mmFar; }
-// The graph's own centre, fixed — where the centre pull points. It used to point at
-// the middle of the SCREEN: zoomed in on one corner, every reheat dragged the whole
-// graph toward that corner and the far edge flew off (~300 units per drag,
-// measured). Taken when the graph is (re)built; see mmSimStep.
-let mmGravityCenter = null;
-function mmClearFocus() { if (mmFocusNode) { mmFocusNode = null; kickMindmap(0.25); drawMindmap(); } }
-// Radii of the clearing, in world units: the ring the linked notes sit on grows
-// with how many there are; the hole reaches a link-length beyond it.
-// Spacing on top of the "link distance" slider: more room between notes without
-// touching a setting people may have saved (asked 2026-09-29: "un po' di spazio
-// tra le note"). The charge scales with L², so the whole layout opens up evenly.
-const MM_SPACING = 1.35;
-// Clear space kept around every dot, in world units (was 2: dots almost touching).
-const MM_COLLIDE_PAD = 6;
-function mmLinkLen() { return mmSet.fDist * MM_SPACING; }
-// A handful of links reads best on one ring. Dozens do not: the ring an index
-// note's 68 pages needed ran off the screen, where Obsidian keeps them in a
-// compact disc round the note (video, 2026-09-29). Past MM_RING_MAX they fill a
-// disc instead, `ring` being its edge, sized so each keeps ~0.75 link-lengths.
-const MM_RING_MAX = 6;
-function mmBubble(k) {
-  const L = mmLinkLen();
-  const disc = k > MM_RING_MAX;
-  const ring = L * Math.max(1, Math.sqrt(k) * (disc ? 0.42 : 0.55));
-  return { ring, hole: ring + L * 0.9, disc, inner: L * 0.5 };
-}
-let mmConnectFrom = null;
-let mmMouseWorld = {x:0, y:0};
-let mmPhysicsRAF = null;
-let mmPhysicsRunning = false;
-let mmAlpha = 0;                  // simulation temperature (d3 semantics: 1 = hot, <0.001 = stopped)
-let mmAlphaTarget = 0;            // >0 while dragging, so the graph keeps reacting
-// Retired: connections live in the notes' markdown, nowhere else. Drop the old
-// shadow list so leftovers can't keep drawing edges no note actually has.
-try { localStorage.removeItem('amelie-mm-edges'); } catch (_) {}
-
-// ── Graph settings (the Obsidian-like panel) ────────────────────────────────
-// Filters decide WHAT is in the graph, Display how it's drawn, Forces how the
-// simulation behaves. Persisted so the graph reopens exactly as you left it.
-const MM_DEFAULTS = {
-  // Filters
-  fSearch: '', fTags: false, fFolders: false, fAttach: true, fOrphans: true,
-  // Display
-  // textFade 0.35 = labels start fading out below ~35% zoom. Kept low on purpose:
-  // a big vault is fitted well under 100% on entry, and a threshold near 1 would
-  // open the graph with every label already invisible.
-  textFade: 0.35, nodeSize: 1, linkWidth: 1, arrows: false,
-  // Forces
-  fCenter: 0.35, fRepel: 10, fLink: 1, fDist: 90,
-};
-let mmSet = (() => {
-  try { return Object.assign({}, MM_DEFAULTS, JSON.parse(localStorage.getItem('amelie-mm-settings') || '{}')); }
-  catch (_) { return Object.assign({}, MM_DEFAULTS); }
-})();
-function saveMmSettings() {
-  try { localStorage.setItem('amelie-mm-settings', JSON.stringify(mmSet)); } catch (_) {}
-}
-
-// Node radius grows with the number of links (Obsidian scales by degree too).
-// sqrt so a 40-link hub doesn't dwarf everything else.
-function mmNodeRadius(n) {
-  const deg = n._conns || 0;
-  const base = n.type === 'folder' ? 4.5 : 3.4;
-  return mmSet.nodeSize * Math.min(base + 2.1 * Math.sqrt(deg), 15);
-}
-
-// Zooming spreads the graph out; it does not blow the dots and names up with it.
-// World sizes shrink as the zoom grows (screen size ∝ zoom^0.4 for dots, ^0.2 for
-// text), so zooming in opens real space between neighbours — like Obsidian. With
-// plain magnification a crowded graph stayed exactly as crowded at any zoom, only
-// bigger (reported 2026-09-29, 1272 nodes: "anche zoomando non si vede").
-// mmNodeRadius stays zoom-independent: the physics uses it, and a layout must not
-// move because you zoomed.
-function mmSizeK()      { return Math.pow(mmScale, -0.6); }
-function mmDrawRadius(n) { return mmNodeRadius(n) * mmSizeK(); }
-function mmFontPx()     { return 11 * Math.pow(mmScale, -0.8); }   // world px → 11·zoom^0.2 on screen
-
-// A pointer position in the canvas's OWN pixels — the ones it draws in. Equal to
-// the on-screen offset while the canvas is sized to its box; if it ever is not
-// (the box changed and the redraw has not run yet), the drawing is stretched, and
-// reading the pointer unscaled picked a note ever further to the right of the one
-// under it (reported 2026-09-29, after the window had changed with the map open).
-function mmCanvasPoint(e) {
-  const canvas = $('mindmap-canvas');
-  const rect = canvas.getBoundingClientRect();
-  const dpr = canvas._dpr || 1;
-  const kx = rect.width  ? (canvas.width  / dpr) / rect.width  : 1;
-  const ky = rect.height ? (canvas.height / dpr) / rect.height : 1;
-  return { x: (e.clientX - rect.left) * kx, y: (e.clientY - rect.top) * ky };
-}
-
-function getNodeAtEvent(e) {
-  const pt = mmCanvasPoint(e);
-  const mx = (pt.x - mmOffset.x) / mmScale;
-  const my = (pt.y - mmOffset.y) / mmScale;
-  const slack = 6 / mmScale;                 // constant grab margin on screen
-  let best = null, bestD = Infinity;
-  for (const n of mmNodes) {
-    const r = mmDrawRadius(n) + slack;
-    const dx = n.x - mx, dy = n.y - my;
-    const d = Math.sqrt(dx*dx + dy*dy);
-    if (d < r && d < bestD) { bestD = d; best = n; }
-  }
-  return best;
-}
-
-function setupMindmap() {
-  $('btn-mindmap').addEventListener('click', viewIconToggle({
-    isOpen: () => { const ov = $('mindmap-overlay'); return !!(ov.style.display && ov.style.display !== 'none'); },
-    close: closeMindmap,
-    open: openMindmap,
-  }));
-  $('btn-mindmap-close').addEventListener('click', closeMindmap);
-
-  const canvas = $('mindmap-canvas');
-  watchMindmapCanvasSize();
-
-  // Right-click on a wiki/custom edge → "Remove link" menu.
-  canvas.addEventListener('contextmenu', e => {
-    e.preventDefault();
-    const pt = mmCanvasPoint(e);
-    const mx = (pt.x - mmOffset.x) / mmScale;
-    const my = (pt.y - mmOffset.y) / mmScale;
-    const hit = findMindmapEdgeAt(mx, my, 8 / mmScale);
-    if (hit) showMindmapEdgeContextMenu(e.clientX, e.clientY, hit.edge);
-  });
-
-  let mmDownPos = { x: 0, y: 0 };
-  let mmDownHit = null;
-  let mmDragStarted = false;
-
-  canvas.addEventListener('mousedown', e => {
-    if (e.button !== 0) return;
-    mmDownPos = { x: e.clientX, y: e.clientY };
-    mmDragStarted = false;
-    const hit = getNodeAtEvent(e);
-    mmDownHit = hit;
-
-    if (hit && e.shiftKey) {
-      mmConnectFrom = hit;
-      mmDownHit = null;
-    } else if (!hit) {
-      // Pan
-      mmDragging = true;
-      mmDragStart = { x: e.clientX - mmOffset.x, y: e.clientY - mmOffset.y };
-      canvas.style.cursor = 'grabbing';
-    }
-    // hit without shift: wait to see if it's a click or drag
-  });
-
-  document.addEventListener('mouseup', e => {
-    if (mmConnectFrom) {
-      const hit = getNodeAtEvent(e);
-      if (hit && hit !== mmConnectFrom) {
-        // The MARKDOWN is the only source of truth for a connection. (There used
-        // to be a parallel `amelie-mm-edges` list in localStorage; when a note
-        // write failed or was reverted the two drifted apart and the graph drew
-        // an edge no note actually had — and a second shift+drag then just
-        // deleted that phantom instead of writing the link. Gone.)
-        toggleMindmapLink(mmConnectFrom, hit);
-      } else {
-        drawMindmap();
-      }
-      mmConnectFrom = null;
-    }
-    if (mmDraggingNode) {
-      mmDraggingNode = null;
-      // It stays where it was dropped (mmFocusNode is pinned) and keeps its clearing;
-      // a last reheat lets the ring and the hole settle round the drop point.
-      kickMindmap(0.35);
-    } else if (!mmDownHit && mmDragging && Math.hypot(e.clientX - mmDownPos.x, e.clientY - mmDownPos.y) <= 5) {
-      mmClearFocus();                    // a click on empty space closes the clearing
-    } else if (mmDownHit && !mmDragStarted) {
-      // Click without drag → open note
-      if (mmDownHit.type !== 'folder') {
-        // Pass type + attachmentName through so PDFs/images open via their real
-        // loader (a bare {path,name} would drop the 'pdf/…' attachmentName).
-        openNote({ path: mmDownHit.path, name: mmDownHit.label, modified: mmDownHit.modified,
-          type: mmDownHit.type, attachmentName: mmDownHit.attachmentName });
-        // You have left the graph: close its tab instead of leaving it in the bar behind the
-        // note you just opened (every node clicked used to add a tab and keep 'Graph' around,
-        // so it still looked like you were in the graph).
-        try {
-          const gi = tabs.findIndex(t => t.type === 'mindmap');
-          if (gi !== -1) closeTab(gi);
-        } catch (_) {}
-      }
-    }
-    mmDownHit = null;
-    mmDragging = false;
-    canvas.style.cursor = 'grab';
-  });
-
-  document.addEventListener('mousemove', e => {
-    const canvas = $('mindmap-canvas');
-    const pt = mmCanvasPoint(e);
-    mmMouseWorld.x = (pt.x - mmOffset.x) / mmScale;
-    mmMouseWorld.y = (pt.y - mmOffset.y) / mmScale;
-
-    // Promote mousedown hit to a real drag after 5px movement
-    if (mmDownHit && !mmDragStarted && Math.hypot(e.clientX - mmDownPos.x, e.clientY - mmDownPos.y) > 5) {
-      mmDragStarted = true;
-      mmDraggingNode = mmDownHit;
-      mmFocusNode = mmDownHit;           // the clearing follows the note being dragged
-      canvas.style.cursor = 'grabbing';
-      kickMindmap(0.3);        // reheat so the neighbours follow the dragged node
-    }
-
-    if (mmDraggingNode) {
-      mmDraggingNode.x = mmMouseWorld.x;
-      mmDraggingNode.y = mmMouseWorld.y;
-      drawMindmap();
-    } else if (mmDragging) {
-      mmOffset.x = e.clientX - mmDragStart.x;
-      mmOffset.y = e.clientY - mmDragStart.y;
-      drawMindmap();
-    } else if (mmConnectFrom) {
-      canvas.style.cursor = 'crosshair';
-      drawMindmap();
-    } else {
-      updateMindmapHover(e);
-    }
-  });
-
-  canvas.addEventListener('wheel', e => {
-    e.preventDefault();
-    // Zoom toward the CURSOR (keep the point under the pointer fixed) instead of the
-    // world origin — otherwise zooming drifted the graph off toward a corner.
-    // How far the wheel turned, not just which way: a touchpad sends many small
-    // deltas, a mouse notch ~100 px (lines and pages scaled to match).
-    const px = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1);
-    const pt = mmCanvasPoint(e);
-    zoomMindmapSmooth(Math.exp(-Math.max(-300, Math.min(300, px)) * 0.001), pt.x, pt.y);
-  }, { passive: false });
-  // Out of the map, nothing is being pointed at: no title may come up a second later.
-  canvas.addEventListener('mouseleave', () => mmClearHover());
-
-  // Zoom controls (+ / · / −) in the bottom-right of the mindmap.
-  const zoomBy = (factor) => {
-    // Buttons zoom toward the VIEWPORT CENTRE so the notes stay centred.
-    const rect = canvas.getBoundingClientRect();
-    mmStopZoomGlide();
-    zoomMindmapAround(factor, rect.width / 2, rect.height / 2);
-  };
-  // Gentler steps (was 1.25 = 25% per click — too aggressive, a couple of zoom-outs
-  // and the labels were unreadable). 1.15 = 15% per click.
-  $('btn-mm-zoom-in')?.addEventListener('click',  () => zoomBy(1.15));
-  $('btn-mm-zoom-out')?.addEventListener('click', () => zoomBy(1 / 1.15));
-  // Reset: re-seed the layout (so nodes you dragged around go back), then frame at
-  // EXACTLY 100% + centred — the user's kept preference, deliberately not fit-to-view —
-  // and reheat so it settles in front of you.
-  // Reset puts the VIEW back — the whole map framed, as on opening — and nothing
-  // else. It used to re-run the layout too: ~0.7 s frozen on a 1272-note vault, then
-  // seconds of the map settling live, so "reset" seemed to take a couple of seconds
-  // (2026-09-30). A wheel glide still under way is stopped, or it zoomed on after.
-  $('btn-mm-zoom-reset')?.addEventListener('click', () => {
-    mmStopZoomGlide();
-    if (mmFocusNode) { mmFocusNode = null; kickMindmap(0.15); }   // the clearing closes gently
-    fitMindmapView();
-  });
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && mmFocusNode && $('mindmap-overlay')?.style.display !== 'none') mmClearFocus();
-  });
-
-  setupMindmapPanel();
-}
-
-// ── Settings panel (Filters / Display / Forces), Obsidian-style ─────────────
-// Every control writes straight into `mmSet`, persists, and reheats the
-// simulation so you SEE the change immediately. Filter changes rebuild the
-// graph (keeping the positions of nodes that survive, so it never reshuffles).
-function setupMindmapPanel() {
-  const panel = $('mm-settings-panel');
-  if (!panel) return;
-
-  $('btn-mm-settings')?.addEventListener('click', () => {
-    const open = panel.classList.toggle('open');
-    $('btn-mm-settings').classList.toggle('active', open);
-  });
-
-  // key → [element id, kind]. 'filter' controls change the graph's contents,
-  // 'display' only how it's painted, 'force' the simulation.
-  const CONTROLS = [
-    ['fSearch',  'mm-f-search',    'filter', 'text'],
-    ['fTags',    'mm-f-tags',      'filter', 'bool'],
-    ['fFolders', 'mm-f-folders',   'filter', 'bool'],
-    ['fAttach',  'mm-f-attach',    'filter', 'bool'],
-    ['fOrphans', 'mm-f-orphans',   'filter', 'bool'],
-    ['textFade', 'mm-d-textfade',  'display','num'],
-    ['nodeSize', 'mm-d-nodesize',  'display','num'],
-    ['linkWidth','mm-d-linkw',     'display','num'],
-    ['arrows',   'mm-d-arrows',    'display','bool'],
-    ['fCenter',  'mm-fo-center',   'force',  'num'],
-    ['fRepel',   'mm-fo-repel',    'force',  'num'],
-    ['fLink',    'mm-fo-link',     'force',  'num'],
-    ['fDist',    'mm-fo-dist',     'force',  'num'],
-  ];
-
-  const syncUI = () => {
-    for (const [key, id, , kind] of CONTROLS) {
-      const el = $(id); if (!el) continue;
-      if (kind === 'bool') el.checked = !!mmSet[key];
-      else el.value = mmSet[key];
-    }
-  };
-  syncUI();
-
-  let _filterT = null;
-  for (const [key, id, kind, type] of CONTROLS) {
-    const el = $(id); if (!el) continue;
-    const apply = () => {
-      mmSet[key] = type === 'bool' ? el.checked : type === 'num' ? parseFloat(el.value) : el.value;
-      saveMmSettings();
-      if (kind === 'filter') {
-        // Debounced: typing in the search box shouldn't rebuild per keystroke.
-        if (_filterT) clearTimeout(_filterT);
-        _filterT = setTimeout(() => { rebuildMindmapGraph(); kickMindmap(0.5); }, type === 'text' ? 180 : 0);
-      } else if (kind === 'force') {
-        kickMindmap(0.4);
-      } else {
-        drawMindmap();
-      }
-    };
-    el.addEventListener('input', apply);
-    el.addEventListener('change', apply);
-  }
-
-  // Back to the default settings AND to the picture the map opens with. The layout
-  // is recomputed, as on opening, but a few steps per frame (layoutMindmapAsync):
-  // done in one block it froze the window for ~0.7 s on 1272 notes ("si freeza").
-  $('btn-mm-restore')?.addEventListener('click', () => {
-    mmStopZoomGlide();
-    mmFocusNode = null;
-    mmSet = Object.assign({}, MM_DEFAULTS);
-    saveMmSettings();
-    syncUI();
-    rebuildMindmapGraph();
-    // What opening the map shows — the same layout, framed the same way, breathing
-    // into shape the same way — without the freeze (asked 2026-09-30).
-    if (mmRestoreOpeningLayout()) { stopMindmapPhysics(); fitMindmapView(); kickMindmap(0.45); }
-    else layoutMindmapAsync(() => { mmRememberOpeningLayout(); fitMindmapView(); kickMindmap(0.45); });
-  });
-}
-
-// Zoom the mindmap by `factor`, keeping the world point currently under screen
-// pixel (sx, sy) fixed — so the graph zooms toward that point instead of sliding
-// toward the world origin. Screen = mmOffset + world*mmScale, so to hold the point:
-//   newOffset = s − (s − offset) * (newScale / oldScale)
-function zoomMindmapAround(factor, sx, sy) {
-  // Deep enough to pull a cluster of a thousand-note vault apart.
-  const newScale = Math.max(0.05, Math.min(16, mmScale * factor));
-  const k = newScale / mmScale;
-  if (k === 1) return;
-  mmOffset.x = sx - (sx - mmOffset.x) * k;
-  mmOffset.y = sy - (sy - mmOffset.y) * k;
-  mmScale = newScale;
-  drawMindmap();
-}
-
-// The wheel glides instead of jumping: each notch moves a TARGET scale, and every
-// frame closes a share of the gap around the point under the cursor — a 10% jump
-// per notch read as a stutter next to Obsidian's graph (video, 2026-09-29).
-let _mmZoomTarget = null, _mmZoomAt = null, _mmZoomRAF = null;
-function zoomMindmapSmooth(factor, sx, sy) {
-  _mmZoomTarget = Math.max(0.05, Math.min(16, (_mmZoomTarget || mmScale) * factor));
-  _mmZoomAt = { x: sx, y: sy };
-  if (_mmZoomRAF) return;
-  const step = () => {
-    _mmZoomRAF = null;
-    if (_mmZoomTarget == null) return;
-    const gap = Math.log(_mmZoomTarget / mmScale);
-    if (Math.abs(gap) < 0.002) { zoomMindmapAround(_mmZoomTarget / mmScale, _mmZoomAt.x, _mmZoomAt.y); _mmZoomTarget = null; return; }
-    zoomMindmapAround(Math.exp(gap * 0.28), _mmZoomAt.x, _mmZoomAt.y);
-    _mmZoomRAF = requestAnimationFrame(step);
-  };
-  _mmZoomRAF = requestAnimationFrame(step);
-}
-// Any other change of view (buttons, fit, reset) takes over from a glide in progress.
-function mmStopZoomGlide() {
-  if (_mmZoomRAF) cancelAnimationFrame(_mmZoomRAF);
-  _mmZoomRAF = null; _mmZoomTarget = null;
-}
-
-// ── Live force simulation (the Obsidian graph feel) ─────────────────────────
-// d3-force semantics: `alpha` is the temperature. Every tick applies link,
-// charge (repulsion), centring and collision forces scaled by alpha, then alpha
-// decays exponentially until the graph freezes. Any interaction "reheats" it, so
-// the graph is organically alive instead of playing a canned wobble animation.
-const MM_ALPHA_MIN   = 0.0015;
-const MM_ALPHA_DECAY = 0.0228;   // ≈ settles in 300 ticks, same as d3's default
-const MM_VEL_DECAY   = 0.6;      // velocity kept per tick (d3 velocityDecay 0.4)
-
-// Reheat the simulation. `a` = starting temperature (1 = full re-layout energy).
-function kickMindmap(a = 1) {
-  if (!mmNodes || !mmNodes.length) return;
-  mmAlpha = Math.max(mmAlpha, a);
-  startMindmapPhysics();
-}
-
-function startMindmapPhysics() {
-  if (mmPhysicsRunning) return;
-  mmPhysicsRunning = true;
-  mmPhysicsRAF = requestAnimationFrame(tickMindmapPhysics);
-}
-
-function stopMindmapPhysics() {
-  if (mmPhysicsRAF) cancelAnimationFrame(mmPhysicsRAF);
-  mmPhysicsRAF = null;
-  mmPhysicsRunning = false;
-}
-
-// Uniform grid over the nodes so charge repulsion is O(n·k) instead of O(n²).
-// Cell size = the repulsion cut-off, so each node only tests the 9 cells around
-// it. Far-apart pairs contribute almost nothing at 1/d² anyway, and the centre
-// force is what keeps detached components from drifting away.
-// A grid cell as one number, not the string "x:y" — the lookups below run a few
-// hundred thousand times per step on a thousand-note vault.
-function mmCellKey(gx, gy) { return (gx + 32768) * 65536 + (gy + 32768); }
-function mmBuildGrid(cell) {
-  const grid = new Map();
-  for (let i = 0; i < mmNodes.length; i++) {
-    const n = mmNodes[i];
-    const key = mmCellKey((n.x / cell) | 0, (n.y / cell) | 0);
-    let bucket = grid.get(key);
-    if (!bucket) { bucket = []; grid.set(key, bucket); }
-    bucket.push(i);
-  }
-  return grid;
-}
-
-function tickMindmapPhysics() {
-  mmPhysicsRAF = null;
-  if (!mmNodes.length) { mmPhysicsRunning = false; return; }
-
-  mmAlphaTarget = mmDraggingNode ? 0.3 : 0;
-  mmAlpha += (mmAlphaTarget - mmAlpha) * MM_ALPHA_DECAY;
-
-  mmSimStep(mmAlpha);
-  drawMindmap();
-
-  if (mmAlpha < MM_ALPHA_MIN && !mmDraggingNode) {
-    for (const nd of mmNodes) { nd.vx = 0; nd.vy = 0; }
-    mmAlpha = 0;
-    mmPhysicsRunning = false;
-    drawMindmap();
-    return;
-  }
-  mmPhysicsRAF = requestAnimationFrame(tickMindmapPhysics);
-}
-
-// One simulation step at temperature `alpha`. Pure physics, no drawing — the
-// entry pre-warm (layoutMindmap) runs it in a tight headless loop, the rAF loop
-// runs it once per frame.
-function mmSimStep(alpha) {
-  const n = mmNodes.length;
-  if (!n) return;
-
-  const canvas = $('mindmap-canvas');
-  const dpr = canvas._dpr || 1;
-  const cx = (canvas.width / dpr) / 2, cy = (canvas.height / dpr) / 2;
-  // The centre force pulls toward the middle of the GRAPH's own coordinate
-  // space, i.e. wherever the viewport is looking — otherwise panning would drag
-  // the whole graph along with it.
-  if (!mmGravityCenter) {
-    let sx = 0, sy = 0; for (const nd of mmNodes) { sx += nd.x || 0; sy += nd.y || 0; }
-    mmGravityCenter = { x: sx / n, y: sy / n };
-  }
-  const wcx = mmGravityCenter.x, wcy = mmGravityCenter.y;
-
-  // While a note is dragged or holds its clearing, only its surroundings are
-  // alive: everything farther than a few link-lengths beyond the hole stays put.
-  // Reheating a thousand-node graph for one drag sent its loose outer edge off
-  // into the distance.
-  const Fz = mmDraggingNode || mmFocusNode;
-  if (Fz) {
-    const fi = mmNodes.indexOf(Fz);
-    let k = 0; for (const e of mmEdges) if (e.from === fi || e.to === fi) k++;
-    const reach = mmBubble(k).hole + mmLinkLen() * 4, reach2 = reach * reach;
-    for (const nd of mmNodes) { const dx = nd.x - Fz.x, dy = nd.y - Fz.y; nd._mmFar = (dx * dx + dy * dy) > reach2; }
-  } else if (mmNodes._mmHadFar) {
-    for (const nd of mmNodes) nd._mmFar = false;
-  }
-  mmNodes._mmHadFar = !!Fz;
-
-  const L = mmLinkLen();
-  // Charge scaled with the link distance so the equilibrium spacing tracks the
-  // "link distance" slider instead of collapsing when you widen it.
-  const REP  = mmSet.fRepel * 3 * (L * L) / 900;
-  const CUT  = Math.max(160, L * 5);
-
-  for (let i = 0; i < n; i++) {
-    const nd = mmNodes[i];
-    if (nd.vx === undefined) { nd.vx = 0; nd.vy = 0; }
-  }
-
-  // 1) Link force — a spring toward `fDist`, weakened for busy endpoints (d3
-  //    uses 1/min(degree) so a hub isn't torn apart by its own children).
-  for (const e of mmEdges) {
-    const a = mmNodes[e.from], b = mmNodes[e.to];
-    if (!a || !b) continue;
-    let dx = (b.x + b.vx) - (a.x + a.vx);
-    let dy = (b.y + b.vy) - (a.y + a.vy);
-    const d = Math.sqrt(dx*dx + dy*dy) || 1e-6;
-    const strength = mmSet.fLink / Math.max(1, Math.min(a._conns || 1, b._conns || 1));
-    // Shared-tag links are deliberately loose: two notes that merely share a tag
-    // shouldn't be yanked as tight as an explicit [[link]].
-    const w = e.edgeType === 'tag' ? 0.3 : e.edgeType === 'folder' ? 0.7 : 1;
-    const l = ((d - L) / d) * alpha * strength * w;
-    const bias = (a._conns || 1) / ((a._conns || 1) + (b._conns || 1));
-    if (!mmPinned(b)) { b.vx -= dx * l * bias; b.vy -= dy * l * bias; }
-    if (!mmPinned(a)) { a.vx += dx * l * (1 - bias); a.vy += dy * l * (1 - bias); }
-  }
-
-  // 2) Charge — every node repels its neighbourhood at 1/d².
-  const grid = mmBuildGrid(CUT);
-  const CUT2 = CUT * CUT;
-  for (let i = 0; i < n; i++) {
-    const a = mmNodes[i];
-    const gx = (a.x / CUT) | 0, gy = (a.y / CUT) | 0;
-    for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
-      const bucket = grid.get(mmCellKey(gx + ox, gy + oy));
-      if (!bucket) continue;
-      for (const j of bucket) {
-        if (j <= i) continue;
-        const b = mmNodes[j];
-        let dx = b.x - a.x, dy = b.y - a.y;
-        let d2 = dx*dx + dy*dy;
-        if (d2 > CUT2) continue;
-        if (d2 < 1e-4) { dx = (i - j) * 0.01 + 0.01; dy = 0.01; d2 = dx*dx + dy*dy; }
-        const f = (REP * alpha) / d2;
-        if (!mmPinned(a)) { a.vx -= dx * f; a.vy -= dy * f; }
-        if (!mmPinned(b)) { b.vx += dx * f; b.vy += dy * f; }
-      }
-    }
-  }
-
-  // 3) Centre gravity — holds the cloud together and brings orphans home.
-  const g = mmSet.fCenter * alpha * 0.09;
-  if (g > 0) {
-    for (let i = 0; i < n; i++) {
-      const nd = mmNodes[i];
-      if (mmPinned(nd)) continue;
-      nd.vx += (wcx - nd.x) * g;
-      nd.vy += (wcy - nd.y) * g;
-    }
-  }
-
-  // 4) Integrate.
-  for (let i = 0; i < n; i++) {
-    const nd = mmNodes[i];
-    if (mmPinned(nd)) { nd.vx = 0; nd.vy = 0; continue; }
-    nd.vx *= MM_VEL_DECAY;
-    nd.vy *= MM_VEL_DECAY;
-    nd.x += nd.vx;
-    nd.y += nd.vy;
-  }
-
-  // 5) Collision — resolve dot overlaps positionally so nodes never stack. Its own
-  // grid, with cells as wide as two of the biggest dots and their gap: sharing the
-  // charge grid (cells ~5 link-lengths wide) made every node test a few hundred
-  // neighbours it could never touch — the costliest part of a step (2026-09-30).
-  const CCELL = Math.max(24, 2 * (15 * mmSet.nodeSize + MM_COLLIDE_PAD));
-  const grid2 = mmBuildGrid(CCELL);
-  for (let i = 0; i < n; i++) {
-    const a = mmNodes[i];
-    const ra = mmNodeRadius(a) + MM_COLLIDE_PAD / 2;
-    const gx = (a.x / CCELL) | 0, gy = (a.y / CCELL) | 0;
-    for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
-      const bucket = grid2.get(mmCellKey(gx + ox, gy + oy));
-      if (!bucket) continue;
-      for (const j of bucket) {
-        if (j <= i) continue;
-        const b = mmNodes[j];
-        const min = ra + mmNodeRadius(b) + MM_COLLIDE_PAD / 2;
-        let dx = b.x - a.x, dy = b.y - a.y;
-        const d2 = dx*dx + dy*dy;
-        if (d2 >= min * min || d2 === 0) continue;
-        const d = Math.sqrt(d2);
-        const push = ((min - d) / d) * 0.5;
-        const px = dx * push, py = dy * push;
-        if (!mmPinned(b)) { b.x += px; b.y += py; }
-        if (!mmPinned(a)) { a.x -= px; a.y -= py; }
-      }
-    }
-  }
-
-  // 6) The clearing around the dragged / last-dragged note: its linked notes are
-  //    eased onto a ring round it, every other node is pushed out of the hole.
-  //    Positional and eased, so it opens smoothly and holds once the rest cools.
-  const F = mmDraggingNode || mmFocusNode;
-  if (F) {
-    const fi = mmNodes.indexOf(F);
-    const nb = new Set();
-    for (const e of mmEdges) { if (e.from === fi) nb.add(e.to); else if (e.to === fi) nb.add(e.from); }
-    const { ring, hole, disc, inner } = mmBubble(nb.size);
-    for (let i = 0; i < n; i++) {
-      const nd = mmNodes[i];
-      if (nd === F || nd === mmDraggingNode) continue;
-      let dx = nd.x - F.x, dy = nd.y - F.y;
-      let d = Math.sqrt(dx * dx + dy * dy);
-      if (d < 1e-3) { dx = Math.cos(i); dy = Math.sin(i); d = 1; }
-      const linked = nb.has(i);
-      // In a disc a linked note may sit anywhere between `inner` and the edge: the
-      // charge spreads them out, this only keeps them in.
-      const target = !linked ? (d < hole ? hole : d)
-        : !disc ? ring
-        : d > ring ? ring : d < inner ? inner : d;
-      if (target === d) continue;
-      // Outsiders are put back on the edge AT ONCE: while you drag, the simulation
-      // is kept warm on purpose (so the linked notes follow) and its centre pull
-      // drives everything toward the dragged note — easing them out lost that race
-      // and ~60 nodes sat inside the hole for as long as the drag lasted.
-      const k = linked ? 0.3 : 1;
-      const ux = dx / d, uy = dy / d;
-      nd.x = F.x + ux * (d + (target - d) * k);
-      nd.y = F.y + uy * (d + (target - d) * k);
-      // Drop the part of its speed that points back across the edge.
-      const vr = nd.vx * ux + nd.vy * uy;
-      if ((target > d && vr < 0) || (target < d && vr > 0)) { nd.vx -= vr * ux; nd.vy -= vr * uy; }
-    }
-  }
-}
-
-
-// The note to come back to when the graph closes. Its tab is appended at the END, so closing
-// it used to land on whatever tab sat last in the bar — not on the note you opened it from.
-let _mmReturnPath = null;
-
-async function openMindmap() {
-  mmOffset = { x: 0, y: 0 };
-  mmScale = 1;
-  const cur = getActiveTab();
-  if (cur && cur.path && !cur.type) _mmReturnPath = cur.path;
-  const existing = tabs.findIndex(t => t.type === 'mindmap');
-  if (existing !== -1) { await switchTab(existing); return; }
-  tabs.push({ type: 'mindmap', name: 'Graph', path: null, isDirty: false });
-  await switchTab(tabs.length - 1);
-}
-
-async function closeMindmap() {
-  mmFocusNode = null;
-  _mmLayoutJob++;                // a layout still being computed is dropped
-  mmClearHover();
-  mmStopZoomGlide();
-  stopMindmapPhysics();          // never keep a rAF loop alive behind a hidden overlay
-  const idx = tabs.findIndex(t => t.type === 'mindmap');
-  if (idx !== -1) {
-    const back = _mmReturnPath;
-    await closeTab(idx);
-    // Back to the note the graph was opened from, if it is still open.
-    if (back) {
-      const i = tabs.findIndex(t => t.path === back && !t.type);
-      if (i !== -1 && i !== activeTabIdx) await switchTab(i);
-    }
-    return;
-  }
-  $('mindmap-overlay').style.display = 'none';
-  $('btn-mindmap').classList.remove('active');
-  $('mindmap-tooltip').style.display = 'none';
-}
-
-function resizeMindmapCanvas() {
-  const canvas = $('mindmap-canvas');
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width  = canvas.offsetWidth  * dpr;
-  canvas.height = canvas.offsetHeight * dpr;
-  canvas._dpr = dpr;
-}
-
-// The canvas box changes with the map open — the window resized or maximised, the
-// sidebar folded, a move to a screen of another scale. Its pixels used to be set
-// only on opening, so the browser stretched the old drawing over the new box.
-// Re-size them, keep what was in the middle in the middle, and redraw.
-function watchMindmapCanvasSize() {
-  const canvas = $('mindmap-canvas');
-  if (!canvas || canvas._mmSizeObs || typeof ResizeObserver === 'undefined') return;
-  canvas._mmSizeObs = new ResizeObserver(() => {
-    const w = canvas.offsetWidth, h = canvas.offsetHeight;
-    if (!w || !h) return;                          // hidden: sized again when shown
-    const dpr = window.devicePixelRatio || 1, old = canvas._dpr || 1;
-    const w0 = canvas.width / old, h0 = canvas.height / old;
-    if (Math.abs(w - w0) < 0.5 && Math.abs(h - h0) < 0.5 && dpr === old) return;
-    if (w0 && h0) { mmOffset.x += (w - w0) / 2; mmOffset.y += (h - h0) / 2; }
-    resizeMindmapCanvas();
-    drawMindmap();
-  });
-  canvas._mmSizeObs.observe(canvas);
-}
-
-// A cheap signature of the tree STRUCTURE (every folder/note/attachment path).
-// Changes on move / rename / add / delete — but NOT on a pure reorder or a
-// sidebar folder expand (same path set) — so the live refresh below only rebuilds
-// the graph when something that actually affects it changed.
-let _mmSig = '';
-let _mmRefreshTimer = null;
-function _mmSignature() {
-  const paths = [];
-  const walk = (nodes) => { if (!nodes) return; for (const n of nodes) { paths.push(n.path); if (n.children) walk(n.children); } };
-  try { walk(state.notes); } catch (_) {}
-  return paths.sort().join('|');
-}
-// Live-refresh the mindmap when it's ON SCREEN and the tree structure changed
-// (a note/PDF moved, renamed, added or removed — including external vault edits).
-// Keeps the current zoom/pan so the view doesn't jump. Debounced.
-function refreshMindmapIfActive() {
-  const ov = document.getElementById('mindmap-overlay');
-  if (!ov || ov.style.display === 'none') return;      // graph not visible → nothing to do
-  const sig = _mmSignature();
-  if (sig === _mmSig) return;                          // structure unchanged
-  _mmSig = sig;
-  if (_mmRefreshTimer) clearTimeout(_mmRefreshTimer);
-  _mmRefreshTimer = setTimeout(() => {
-    // Nodes that survive keep their coordinates, so the graph absorbs the change
-    // with a short settling animation instead of jumping to a new arrangement.
-    buildMindmapData().then(() => { try { kickMindmap(0.4); drawMindmap(); } catch (_) {} }).catch(() => {});
-  }, 250);
-}
-
-// Read the vault ONCE into an un-filtered model. The Filters panel then derives
-// the actual graph from it (rebuildMindmapGraph), so ticking a checkbox never
-// re-reads a file — it just re-projects what we already parsed.
-async function buildMindmapData() {
-  const folders = [], files = [], wikiLinks = [], attachLinks = [];
-
-  // Every folder (nested included) is available as a node; whether it ends up in
-  // the graph is up to the "Folders as nodes" filter.
-  const walkFolders = (nodes, parentPath) => {
-    for (const n of nodes) {
-      if (n.type !== 'folder') continue;
-      const colorKey = noteColors[n.path];
-      const color = colorKey ? NOTE_COLORS.find(c => c.key === colorKey)?.hex : null;
-      folders.push({ path: n.path, label: n.name, type: 'folder', color: color || null,
-        tags: [], modified: null, _folder: parentPath });
-      if (n.children) walkFolders(n.children, n.path);
-    }
-  };
-  walkFolders(state.notes, null);
-
-  const allNotes = flattenTree(state.notes);
-  const wikiRe  = /\[\[([^\]|\n]+)(?:\|[^\]\n]+)?\]\]/g;
-  const attMdRe = /!?\[[^\]\n]*\]\((attachments\/[^)\s]+)\)/g;   // ![](attachments/…) / [x](attachments/…)
-  // A plain markdown link to another note — `[Legacy - Easy](Legacy.md)`, or
-  // `<with spaces.md>` — is a link too, as Obsidian draws it. An imported index
-  // note links its sixty pages this way; counting only [[…]] left it an island.
-  const mdNoteRe = /(?<!!)\[[^\]\n]*\]\((?:<([^>\n]+?\.(?:md|markdown))>|([^)\s]+?\.(?:md|markdown)))(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/gi;
-  // Every note's text, read in parallel batches: one IPC round trip after another
-  // for a thousand notes was half of the time the map took to appear (2026-09-30).
-  const texts = new Map();
-  const toRead = allNotes.filter(n => !isAttachNode(n) && !(getTab(n.path)?.content));
-  for (let i = 0; i < toRead.length; i += 48) {
-    await Promise.all(toRead.slice(i, i + 48).map(n => window.inkwell.readNote(n.path)
-      .then(c => texts.set(n.path, c || ''), () => texts.set(n.path, ''))));
-  }
-  for (const n of allNotes) {
-    const isAttach = isAttachNode(n);
-    const colorKey = noteColors[n.path];
-    const color = colorKey ? NOTE_COLORS.find(c => c.key === colorKey)?.hex : null;
-    const _folder = n.path.includes('/') ? n.path.split('/').slice(0, -1).join('/') : null;
-
-    if (isAttach) {
-      // Binary — never read as text. Keeps its real type + attachmentName so a
-      // click opens it through the right loader (a PDF under attachments/pdf/
-      // needs the 'pdf/…' attachmentName, not just the basename).
-      files.push({ path: n.path, label: n.name, type: n.type, attachmentName: n.attachmentName,
-        isAttach: true, tags: [], color, modified: n.modified, _folder });
-      continue;
-    }
-
-    let tags = [];
-    const tab = getTab(n.path);
-    // Lazy tab restore: an OPEN tab may not have loaded its content yet (empty
-    // sentinel) — read the file so the graph isn't missing its links/tags.
-    const content = (tab && tab.content) ? tab.content : (texts.get(n.path) || '');
-    const { fm } = parseFrontmatter(content);
-    if (fm.tags) tags = fm.tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-    files.push({ path: n.path, label: n.name, type: 'note', tags, color, modified: n.modified, _folder });
-
-    // `[[target]]`: a note→note link, or — when it doesn't resolve to a note —
-    // possibly an attachment embed like `![[file.pdf]]`, resolved later.
-    wikiRe.lastIndex = 0;
-    let m;
-    while ((m = wikiRe.exec(content)) !== null) {
-      const target = m[1].trim();
-      const resolved = resolveNoteLink(target);
-      if (resolved && resolved.path !== n.path) wikiLinks.push({ from: n.path, to: resolved.path });
-      else attachLinks.push({ from: n.path, target });
-    }
-    mdNoteRe.lastIndex = 0;
-    let ml;
-    while ((ml = mdNoteRe.exec(content)) !== null) {
-      const hit = resolveMdNoteHref(ml[1] || ml[2], n.path);
-      if (hit) wikiLinks.push({ from: n.path, to: hit.path, md: true });
-    }
-    // Markdown embeds/links into attachments/ (the Amelie/Obsidian-import form).
-    attMdRe.lastIndex = 0;
-    let am;
-    while ((am = attMdRe.exec(content)) !== null) {
-      let ap = am[1].trim(); try { ap = decodeURIComponent(ap); } catch (_) {}
-      attachLinks.push({ from: n.path, target: ap });
-    }
-  }
-
-  mmRaw = { folders, files, wikiLinks, attachLinks };
-  mmWikiLinks = wikiLinks;      // kept for the edge-removal helpers
-  mmAttachLinks = attachLinks;
-
-  rebuildMindmapGraph();
-  _mmSig = _mmSignature();      // baseline for the live-refresh diff
-}
-
-// Project `mmRaw` through the Filters into the drawable graph (mmNodes/mmEdges).
-// Nodes that were already on screen KEEP their coordinates, so flipping a filter
-// morphs the graph instead of reshuffling it.
-function rebuildMindmapGraph() {
-  mmGravityCenter = null;            // re-taken from the new layout on the next step
-  if (!mmRaw) { mmNodes = []; mmEdges = []; return; }
-  const prev = new Map();
-  for (const n of mmNodes) prev.set(n.path, n);
-
-  const q = (mmSet.fSearch || '').trim().toLowerCase();
-  const matches = (src) => !q
-    || (src.label || '').toLowerCase().includes(q)
-    || (src.path  || '').toLowerCase().includes(q)
-    || (src.tags || []).some(t => t.includes(q));
-
-  // ── Nodes ────────────────────────────────────────────────────────────────
-  let nodes = [];
-  const add = (src) => {
-    const old = prev.get(src.path);
-    const n = Object.assign({}, src, { _conns: 0, vx: 0, vy: 0 });
-    if (old) { n.x = old.x; n.y = old.y; }
-    nodes.push(n);
-  };
-  if (mmSet.fFolders) for (const f of mmRaw.folders) { if (matches(f)) add(f); }
-  for (const f of mmRaw.files) {
-    if (f.isAttach && !mmSet.fAttach) continue;
-    if (!matches(f)) continue;
-    add(f);
-  }
-
-  const byPath = new Map();
-  nodes.forEach((n, i) => byPath.set(n.path, i));
-
-  // ── Edges ────────────────────────────────────────────────────────────────
-  let edges = [];
-  const seen = new Set();
-  const addEdge = (a, b, edgeType, extra) => {
-    if (a == null || b == null || a === b) return;
-    const key = Math.min(a, b) + '-' + Math.max(a, b);
-    if (seen.has(key)) return;                 // one line per pair, whatever its kind
-    seen.add(key);
-    edges.push(Object.assign({ from: a, to: b, edgeType }, extra || {}));
-  };
-
-  // Wiki links — the Obsidian graph's only native edge type, and the only thing
-  // shift+drag creates (it writes `[[…]]` into the note).
-  for (const wl of mmRaw.wikiLinks) addEdge(byPath.get(wl.from), byPath.get(wl.to), 'wiki');
-
-  // Embedded/linked attachments sit next to the note that references them.
-  if (mmSet.fAttach && mmRaw.attachLinks.length) {
-    const attachByPath = {}, attachByName = {};
-    nodes.forEach((nd, i) => {
-      if (!nd.isAttach) return;
-      attachByPath[nd.path.toLowerCase()] = i;
-      const base = nd.path.split('/').pop().toLowerCase();
-      attachByName[base] = i;
-      const lbl = (nd.label || '').toLowerCase();
-      if (lbl && lbl !== base) attachByName[lbl] = i;
-    });
-    for (const al of mmRaw.attachLinks) {
-      const fi = byPath.get(al.from);
-      if (fi == null) continue;
-      const t = String(al.target || '').toLowerCase();
-      let ai = attachByPath[t];
-      if (ai == null) {
-        const base = t.split('/').pop();
-        ai = attachByName[base];
-        if (ai == null && !/\.[a-z0-9]+$/.test(base)) ai = attachByName[base + '.pdf'];   // wiki ref without extension
-      }
-      addEdge(fi, ai, 'attach');
-    }
-  }
-
-  // Amelie extra: folder → child (note and sub-folder) containment edges.
-  if (mmSet.fFolders) {
-    for (let i = 0; i < nodes.length; i++) {
-      const n = nodes[i];
-      if (n._folder == null || n.isAttach) continue;
-      addEdge(byPath.get(n._folder), i, 'folder');
-    }
-  }
-
-  // Amelie extra: notes that share a frontmatter tag.
-  if (mmSet.fTags) {
-    const byTag = new Map();
-    nodes.forEach((n, i) => {
-      if (n.type !== 'note') return;
-      for (const t of (n.tags || [])) {
-        if (!byTag.has(t)) byTag.set(t, []);
-        byTag.get(t).push(i);
-      }
-    });
-    for (const [tag, idxs] of byTag) {
-      if (idxs.length < 2 || idxs.length > 60) continue;   // a tag on 60+ notes is noise, not structure
-      for (let a = 0; a < idxs.length; a++)
-        for (let b = a + 1; b < idxs.length; b++)
-          addEdge(idxs[a], idxs[b], 'tag', { tags: [tag] });
-    }
-  }
-
-  // ── Degrees, then the orphan filter ──────────────────────────────────────
-  for (const e of edges) { nodes[e.from]._conns++; nodes[e.to]._conns++; }
-
-  if (!mmSet.fOrphans) {
-    const keep = nodes.map(n => n._conns > 0);
-    const remap = new Array(nodes.length).fill(-1);
-    const kept = [];
-    nodes.forEach((n, i) => { if (keep[i]) { remap[i] = kept.length; kept.push(n); } });
-    // Every edge touches two non-orphans by construction, so none is lost here.
-    edges = edges.filter(e => remap[e.from] >= 0 && remap[e.to] >= 0)
-                 .map(e => Object.assign({}, e, { from: remap[e.from], to: remap[e.to] }));
-    nodes = kept;
-  }
-
-  // Same-named notes (a vault full of `README.md` is the usual case) are
-  // indistinguishable as bare dots — you can't tell which one you just linked.
-  // Suffix the parent folder on the DISPLAY label only; `label` stays the real
-  // note name, because that's what gets written inside `[[…]]`.
-  const nameCount = new Map();
-  for (const n of nodes) nameCount.set(n.label, (nameCount.get(n.label) || 0) + 1);
-  for (const n of nodes) {
-    const parent = n._folder ? n._folder.split('/').pop() : null;
-    n.displayLabel = (nameCount.get(n.label) > 1 && parent) ? `${n.label} — ${parent}` : n.label;
-  }
-
-  mmNodes = nodes;
-  mmEdges = edges;
-  mmSeedMissingPositions();
-  if (mmHover && !mmNodes.includes(mmHover)) mmHover = null;
-  if (mmHoverUnder && !mmNodes.includes(mmHoverUnder)) mmHoverUnder = null;
-  if (mmDraggingNode && !mmNodes.includes(mmDraggingNode)) mmDraggingNode = null;
-  if (mmFocusNode && !mmNodes.includes(mmFocusNode)) mmFocusNode = null;
-}
-
-// Nodes that just entered the graph have no coordinates yet — drop them on a
-// small ring around the viewport centre and let the simulation place them.
-function mmSeedMissingPositions() {
-  const canvas = $('mindmap-canvas');
-  if (!canvas) return;
-  const dpr = canvas._dpr || 1;
-  const cx = ((canvas.width  / dpr) / 2 - mmOffset.x) / mmScale;
-  const cy = ((canvas.height / dpr) / 2 - mmOffset.y) / mmScale;
-  let k = 0;
-  for (const n of mmNodes) {
-    if (typeof n.x === 'number' && typeof n.y === 'number' && isFinite(n.x) && isFinite(n.y)) continue;
-    const a = (k * 2.399963) ;                       // golden angle → no clumping
-    const r = mmLinkLen() * (0.6 + 0.35 * Math.sqrt(k));
-    n.x = cx + r * Math.cos(a);
-    n.y = cy + r * Math.sin(a);
-    k++;
-  }
-}
-
-// Older call sites (shift+drag connect, edge removal) still say "edges".
-function rebuildMindmapEdges() { rebuildMindmapGraph(); }
-
-// Are these two notes linked, in either direction?
-function mmLinkBetween(pathA, pathB) {
-  if (!mmRaw) return null;
-  return mmRaw.wikiLinks.find(w => (w.from === pathA && w.to === pathB) ||
-                                   (w.from === pathB && w.to === pathA)) || null;
-}
-
-function mmForgetLink(pathA, pathB) {
-  if (!mmRaw) return;
-  mmRaw.wikiLinks = mmRaw.wikiLinks.filter(w => !((w.from === pathA && w.to === pathB) ||
-                                                  (w.from === pathB && w.to === pathA)));
-  mmWikiLinks = mmRaw.wikiLinks;
-}
+// ─── Note links ───────────────────────────────────────────────────────────────
+// Everything that turns a `[[wiki link]]` or a `[markdown](link.md)` into a note
+// of this vault, and back. It sat in the graph section until the graph was
+// removed on 12/10/2026; the reading view, the editor and drag-and-drop all use
+// it, and none of them ever needed a graph.
 
 // How to spell a link to `node` inside markdown. A bare `[[README]]` is a lie
 // when the vault holds seven of them — it always resolves to the first one — so
 // an ambiguous name is written as a path, with the short name as the alias:
 // `[[Web Applications/Web Attacks/README|README]]`.
-function mmLinkTargetFor(node) {
+function wikiLinkTargetFor(node) {
   const name = node.label || '';
   let twins = 0;
   try {
@@ -10304,253 +9254,6 @@ function mmLinkTargetFor(node) {
   return { target: node.path.replace(/\.(md|markdown|txt)$/i, ''), alias: name };
 }
 
-// Shift+drag between two nodes: write `[[link]]` into the source note, or remove
-// it if the pair is already linked. The graph then re-derives the edge from the
-// note content, so what you see always matches what's on disk.
-async function toggleMindmapLink(fromNode, toNode) {
-  if (!fromNode || !toNode || fromNode === toNode) return;
-  const fromPath = fromNode.path, toPath = toNode.path;
-  try {
-    const existing = mmLinkBetween(fromPath, toPath);
-    // A markdown link [x](note.md) is the user's own text: the graph never rewrites
-    // it, and writing a [[link]] next to it would draw the same line twice.
-    if (existing && existing.md && !mmRaw.wikiLinks.some(w => !w.md && ((w.from === fromPath && w.to === toPath) || (w.from === toPath && w.to === fromPath)))) return;
-    if (existing) {
-      // The `[[…]]` can be in either note and in either spelling — clear them all.
-      for (const [path, other] of [[fromPath, toNode], [toPath, fromNode]]) {
-        const { target } = mmLinkTargetFor(other);
-        await removeWikiLinkFromNote(path, other.label).catch(() => {});
-        if (target !== other.label) await removeWikiLinkFromNote(path, target).catch(() => {});
-      }
-      mmForgetLink(fromPath, toPath);
-    } else {
-      const { target, alias } = mmLinkTargetFor(toNode);
-      await addWikiLinkToNote(fromPath, target, alias);
-      if (mmRaw) { mmRaw.wikiLinks.push({ from: fromPath, to: toPath }); mmWikiLinks = mmRaw.wikiLinks; }
-    }
-  } catch (err) {
-    console.error('[graph] link toggle failed', err);
-  }
-  rebuildMindmapGraph();
-  kickMindmap(0.3);
-  drawMindmap();
-}
-
-// ── Editing a note the graph is pointing at, not the one on screen ──────────
-// The graph writes links into notes while the GRAPH is the active tab, so these
-// two helpers exist to keep every copy of that note's text in step. Skipping
-// them is silent data loss: switchTab flushes CodeMirror's live buffer back into
-// tab.content, so a stale buffer quietly reverts whatever we wrote to disk.
-
-// The freshest text for a note, without touching the disk. CM's buffer wins when
-// it holds the note (tab.content lags it by up to 300ms), then the tab, then
-// null so the caller reads the file.
-function readNoteBufferSync(sourcePath) {
-  if (_cmActive && _cmHandle && _cmLoadedPath === sourcePath) {
-    try { const live = editor.value; if (live && live.length) return live; } catch (_) {}
-  }
-  const tab = getTab(sourcePath);
-  if (tab && tab.content) return tab.content;
-  return null;
-}
-
-// Push text we just wrote to disk into the tab AND into CM if it's holding that
-// note — even when the note isn't the visible tab.
-function applyExternalNoteEdit(sourcePath, content) {
-  const tab = getTab(sourcePath);
-  if (tab) tab.content = content;
-  const cmHasIt = _cmActive && _cmHandle && _cmLoadedPath === sourcePath;
-  const isActive = getActiveTab()?.path === sourcePath;
-  if (!cmHasIt && !isActive) return;
-  _cmSuppressChange = true;
-  try {
-    editor.value = content;
-    if (!_cmActive) { try { editor.dispatchEvent(new Event('input')); } catch (_) {} }
-  } catch (_) {
-  } finally {
-    _cmSuppressChange = false;
-  }
-  // Everything is in sync with the file now, so the note is NOT dirty.
-  if (tab) tab.isDirty = false;
-  if (isActive) { try { setSavedState(true); } catch (_) {} }
-}
-
-// Work out where "under the title" is and splice the link in there:
-//   1. skip the managed frontmatter block,
-//   2. skip the leading blank lines,
-//   3. skip the title itself (`# Heading`, or a `====` underlined one),
-//   4. if links are already sitting there, append to that SAME line separated by
-//      a comma — `[[uno]], [[due]], [[tre]]` — instead of stacking new lines.
-// A note with no title at all gets the link at the very top of its body.
-function insertWikiLinkAfterTitle(content, markup) {
-  if (!content.trim()) return `${markup}\n`;   // empty note: the link IS the note
-  const lines = content.split('\n');
-  // A "link line" holds nothing but wiki links and their separators, so both
-  // `[[a]] [[b]]` (older notes) and `[[a]], [[b]]` (what we write now) count.
-  const isLinkLine = (s) => /\[\[[^\]\n]+\]\]/.test(s)
-    && s.replace(/\[\[[^\]\n]+\]\]/g, '').replace(/,/g, '').trim() === '';
-  let i = 0;
-
-  if (lines[0] !== undefined && lines[0].trim() === '---') {
-    let j = 1;
-    while (j < lines.length && lines[j].trim() !== '---') j++;
-    if (j < lines.length) i = j + 1;             // first line after the closing ---
-  }
-  while (i < lines.length && lines[i].trim() === '') i++;
-
-  if (i < lines.length && /^#{1,6}\s/.test(lines[i])) {
-    i++;                                          // ATX title
-  } else if (i + 1 < lines.length && lines[i].trim() !== '' && /^=+\s*$/.test(lines[i + 1])) {
-    i += 2;                                       // setext title (only `===`, `---` is too ambiguous)
-  }
-
-  // Already links right below the title? Extend that line instead of adding one.
-  let k = i;
-  while (k < lines.length && lines[k].trim() === '') k++;
-  if (k < lines.length && isLinkLine(lines[k])) {
-    let last = k;
-    while (last + 1 < lines.length && isLinkLine(lines[last + 1])) last++;   // legacy multi-line block
-    const cur = lines[last].replace(/[\s,]+$/, '');
-    lines[last] = `${cur}, ${markup}`;
-    let joined = lines.join('\n');
-    if (!joined.endsWith('\n')) joined += '\n';
-    return joined;
-  }
-
-  const ins = [];
-  if (i > 0 && lines[i - 1] !== undefined && lines[i - 1].trim() !== '') ins.push('');
-  ins.push(markup);
-  if (i < lines.length && lines[i].trim() !== '') ins.push('');
-  lines.splice(i, 0, ...ins);
-
-  let out = lines.join('\n');
-  if (!out.endsWith('\n')) out += '\n';
-  return out;
-}
-
-// Insert `[[targetName]]` near the TOP of the source note — right under the
-// title, not appended at the bottom where you'd never see it. Idempotent, and
-// it updates the open tab too. Used by the mindmap shift+drag-connect.
-async function addWikiLinkToNote(sourcePath, targetName, alias) {
-  if (!sourcePath || !targetName) return;
-  const markup = alias ? `[[${targetName}|${alias}]]` : `[[${targetName}]]`;
-  // Lazy tab restore: an OPEN-but-unloaded tab has an empty `content` sentinel.
-  // Reading THAT (instead of the file) would put the link in "" and then
-  // writeNote would WIPE the note on disk — so fall back to the file when empty.
-  let content = readNoteBufferSync(sourcePath);
-  if (content == null) content = await window.inkwell.readNote(sourcePath).catch(() => '');
-  if (content == null) content = '';
-  // Already linked? Match with or without an alias (`[[a]]` and `[[a|b]]`).
-  const escT = targetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  if (new RegExp(`\\[\\[${escT}(?:\\|[^\\]\\n]*)?\\]\\]`).test(content)) return;
-  content = insertWikiLinkAfterTitle(content, markup);
-  await window.inkwell.writeNote(sourcePath, content);
-  applyExternalNoteEdit(sourcePath, content);
-}
-
-// Strip every `[[targetName]]` from the source note's content.
-async function removeWikiLinkFromNote(sourcePath, targetName) {
-  if (!sourcePath || !targetName) return;
-  // Lazy tab restore: fall back to the file when the open tab hasn't loaded yet
-  // (empty sentinel) so we edit the real content, not an empty string.
-  let content = readNoteBufferSync(sourcePath);
-  if (content == null) content = await window.inkwell.readNote(sourcePath).catch(() => '');
-  if (!content) return;
-  const esc = targetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Links written by the graph share one comma-separated line, so the separator
-  // has to go with the link — otherwise removing the middle of
-  // `[[a]], [[b]], [[c]]` would leave `[[a]], , [[c]]`. Take the comma BEFORE the
-  // link when there is one, otherwise the comma after it.
-  const L = `\\[\\[${esc}(?:\\|[^\\]\\n]*)?\\]\\]`;   // the link, with or without an |alias
-  let next = content
-    .replace(new RegExp(`[ \\t]*,[ \\t]*${L}`, 'g'), '')
-    .replace(new RegExp(`${L}[ \\t]*,[ \\t]*`, 'g'), '');
-  // Whatever is left stands alone. Swallow the surrounding blanks: on its own
-  // line that means the line goes too (no leftover empty line), and inline in a
-  // sentence the two spaces around it collapse back into one.
-  next = next
-    .replace(new RegExp(`(\\n?)[ \\t]*${L}[ \\t]*(\\n?)`, 'g'), (_m, a, b) => (a || b) ? '\n' : ' ')
-    .replace(/\n{3,}/g, '\n\n');
-  if (next === content) return;
-  await window.inkwell.writeNote(sourcePath, next);
-  applyExternalNoteEdit(sourcePath, next);
-}
-
-function pointToSegmentDist(px, py, ax, ay, bx, by) {
-  const dx = bx - ax, dy = by - ay;
-  const len2 = dx*dx + dy*dy;
-  if (len2 < 1e-3) return Math.hypot(px - ax, py - ay);
-  let t = ((px - ax) * dx + (py - ay) * dy) / len2;
-  t = Math.max(0, Math.min(1, t));
-  return Math.hypot(px - (ax + t*dx), py - (ay + t*dy));
-}
-
-// Find the nearest user-editable mindmap edge within `threshold` of (mx,my)
-// in world coords. Only `custom` and `wiki` edges are considered removable.
-function findMindmapEdgeAt(mx, my, threshold) {
-  let best = null;
-  let bestDist = threshold;
-  for (let i = 0; i < mmEdges.length; i++) {
-    const e = mmEdges[i];
-    if (e.edgeType !== 'wiki') continue;   // folder/tag/attachment edges aren't user-editable
-    const a = mmNodes[e.from], b = mmNodes[e.to];
-    if (!a || !b) continue;
-    const d = pointToSegmentDist(mx, my, a.x, a.y, b.x, b.y);
-    if (d < bestDist) { bestDist = d; best = { edge: e, idx: i }; }
-  }
-  return best;
-}
-
-async function removeMindmapEdge(edge) {
-  if (!edge) return;
-  const fromNode = mmNodes[edge.from];
-  const toNode   = mmNodes[edge.to];
-  if (!fromNode || !toNode) return;
-
-  if (edge.edgeType === 'wiki') {
-    // The `[[…]]` can be in either note (the edge is drawn undirected), so try
-    // both sides — removing a link that isn't there is a no-op.
-    await removeWikiLinkFromNote(fromNode.path, toNode.label).catch(() => {});
-    await removeWikiLinkFromNote(toNode.path, fromNode.label).catch(() => {});
-    mmForgetLink(fromNode.path, toNode.path);
-  }
-  rebuildMindmapEdges();
-  kickMindmap(0.3);
-  drawMindmap();
-}
-
-function showMindmapEdgeContextMenu(clientX, clientY, edge) {
-  document.querySelectorAll('.mm-edge-ctx-menu').forEach(el => el.remove());
-  const menu = document.createElement('div');
-  menu.className = 'mm-edge-ctx-menu';
-  Object.assign(menu.style, {
-    position: 'fixed', left: clientX + 'px', top: clientY + 'px', zIndex: 9999,
-    background: 'var(--bg-3)', border: '1px solid var(--border-light)',
-    borderRadius: '6px', padding: '4px 0', minWidth: '170px',
-    boxShadow: '0 6px 18px rgba(0,0,0,.5)',
-    fontFamily: 'var(--ui-font)', fontSize: '12px', color: 'var(--text-1)',
-  });
-  const item = document.createElement('div');
-  item.textContent = window.i18n.t('toolbar.remove_link');
-  Object.assign(item.style, { padding: '8px 14px', cursor: 'pointer' });
-  item.addEventListener('mouseenter', () => { item.style.background = 'var(--bg-4)'; });
-  item.addEventListener('mouseleave', () => { item.style.background = ''; });
-  item.addEventListener('click', async () => {
-    menu.remove();
-    await removeMindmapEdge(edge);
-  });
-  menu.appendChild(item);
-  document.body.appendChild(menu);
-  setTimeout(() => {
-    const close = (ev) => {
-      if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('mousedown', close); }
-    };
-    document.addEventListener('mousedown', close);
-  }, 0);
-}
-
-// Drag-to-resize for YouTube embeds — bottom-right handle, aspect-ratio
-// keeps the height in sync automatically.
 // Resolve a wiki-link target like `[[vista 2]]` to a note node in state.notes.
 // Tries (in order): exact name, exact filename (basename minus extension),
 // space/dash/underscore-normalized name, alphanumeric-only match. The last
@@ -10602,8 +9305,7 @@ function resolveNoteLink(rawTarget) {
 // `(Heist%20Box.md#enum)` — resolved the way Obsidian writes them: relative to the
 // folder of the note it is in, then from the vault root, then by name like a
 // [[link]]. null for web addresses, anchors, attachments and anything not a note.
-// Shared by the mind map (which draws these links) and the reading view (which
-// opens them); the reading view used to treat them as unknown addresses and do
+// Used by the reading view, which used to treat them as unknown addresses and do
 // nothing on a click (2026-09-30: 161 such links in the user's vault).
 function resolveMdNoteHref(href, fromPath, allowSelf = false) {
   let t = String(href || '').trim().replace(/^<|>$/g, '');
@@ -10645,377 +9347,6 @@ function flattenTree(nodes) {
   return result;
 }
 
-// Seed the node positions and PRE-WARM the simulation headlessly, so opening the
-// graph frames an already-organised layout instead of an exploding hairball. The
-// caller then fits the view and reheats gently, which is the little settling
-// motion you see in Obsidian when the graph appears.
-function layoutMindmap() {
-  mmGravityCenter = null;            // re-taken from the new layout on the next step
-  const N = mmNodes.length;
-  if (N === 0) return;
-
-  const canvas = $('mindmap-canvas');
-  const dpr = canvas._dpr || 1;
-  const W = (canvas.width  || 1000) / dpr;
-  const H = (canvas.height || 700)  / dpr;
-  const cx = W / 2, cy = H / 2;
-
-  // Phyllotaxis (golden-angle) spiral: an even, isotropic starting cloud with no
-  // preferred direction — the force pass then does all the real arranging.
-  const spread = mmLinkLen() * 0.75;
-  for (let i = 0; i < N; i++) {
-    const a = i * 2.399963229728653;
-    const r = spread * Math.sqrt(i + 0.5);
-    const n = mmNodes[i];
-    n.x = cx + r * Math.cos(a);
-    n.y = cy + r * Math.sin(a);
-    n.vx = 0; n.vy = 0;
-  }
-
-  // Headless anneal. Big graphs get fewer iterations so opening never stalls the
-  // UI — they just finish converging live in the rAF loop afterwards.
-  const ITER = mmLayoutIterations(N);
-  const savedOffset = { x: mmOffset.x, y: mmOffset.y }, savedScale = mmScale;
-  mmOffset = { x: 0, y: 0 }; mmScale = 1;      // pre-warm in plain canvas coords
-  for (let i = 0; i < ITER; i++) mmSimStep(mmLayoutAlpha(i, ITER));
-  mmOffset = savedOffset; mmScale = savedScale;
-  for (const n of mmNodes) { n.vx = 0; n.vy = 0; }
-  mmAlpha = 0;
-}
-// The layout the map opened with, kept so "Restore defaults" can bring it back at
-// once instead of computing it again (~0.8 s, spread over frames). Valid only for the
-// same settings, the same notes and the same canvas size: anything else and the
-// layout is recomputed, as it would be on opening.
-let _mmOpening = null;
-function _mmLayoutSig() {
-  const c = $('mindmap-canvas');
-  const f = ['fDist', 'fRepel', 'fLink', 'fCenter', 'fSearch', 'fTags', 'fFolders', 'fAttach', 'fOrphans'].map(k => mmSet[k]);
-  return JSON.stringify([f, c ? [c.width, c.height] : null, mmNodes.length, mmEdges.length, mmNodes.map(n => n.path).join('|')]);
-}
-function mmRememberOpeningLayout() {
-  _mmOpening = { sig: _mmLayoutSig(), pos: new Map(mmNodes.map(n => [n.path, [n.x, n.y]])) };
-}
-function mmRestoreOpeningLayout() {
-  if (!_mmOpening || _mmOpening.sig !== _mmLayoutSig()) return false;
-  for (const n of mmNodes) { const p = _mmOpening.pos.get(n.path); if (!p) return false; }
-  for (const n of mmNodes) { const p = _mmOpening.pos.get(n.path); n.x = p[0]; n.y = p[1]; n.vx = 0; n.vy = 0; }
-  mmGravityCenter = null; mmAlpha = 0;
-  return true;
-}
-function mmLayoutIterations(N) { return N > 900 ? 90 : N > 300 ? 160 : 260; }
-function mmLayoutAlpha(i, ITER) { return Math.max(0.03, Math.pow(0.02, i / ITER)); }
-
-// The same layout as layoutMindmap — the one the map opens with — computed a few
-// steps per frame, so the window never freezes (~0.7 s in one block on 1272 notes).
-// The old picture stays on screen until the new one is ready; then `done` runs.
-// A second call, or closing the map, cancels the one under way.
-let _mmLayoutJob = 0;
-function layoutMindmapAsync(done) {
-  const job = ++_mmLayoutJob;
-  const N = mmNodes.length;
-  if (!N) { done && done(); return; }
-  stopMindmapPhysics();
-  // Seed exactly as layoutMindmap does, on copies, so the screen keeps the old map.
-  const canvas = $('mindmap-canvas');
-  const dpr = canvas._dpr || 1;
-  const cx = ((canvas.width || 1000) / dpr) / 2, cy = ((canvas.height || 700) / dpr) / 2;
-  const spread = mmLinkLen() * 0.75;
-  const shown = mmNodes.map(n => ({ x: n.x, y: n.y }));
-  const seeded = mmNodes.map((_, i) => { const a = i * 2.399963229728653, r = spread * Math.sqrt(i + 0.5); return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }; });
-  const ITER = mmLayoutIterations(N);
-  let i = 0;
-  const step = () => {
-    if (job !== _mmLayoutJob) return;
-    const t0 = performance.now();
-    // Swap the layout's positions in, run a slice of steps, swap the picture back.
-    mmNodes.forEach((n, k) => { n.x = seeded[k].x; n.y = seeded[k].y; n.vx = seeded[k].vx || 0; n.vy = seeded[k].vy || 0; });
-    const savedOffset = { x: mmOffset.x, y: mmOffset.y }, savedScale = mmScale, savedFocus = mmFocusNode;
-    mmOffset = { x: 0, y: 0 }; mmScale = 1; mmFocusNode = null;
-    if (i === 0) mmGravityCenter = null;
-    while (i < ITER && performance.now() - t0 < 12) mmSimStep(mmLayoutAlpha(i++, ITER));
-    mmOffset = savedOffset; mmScale = savedScale; mmFocusNode = savedFocus;
-    mmNodes.forEach((n, k) => { seeded[k] = { x: n.x, y: n.y, vx: n.vx, vy: n.vy }; n.x = shown[k].x; n.y = shown[k].y; });
-    if (i < ITER) { requestAnimationFrame(step); return; }
-    mmNodes.forEach((n, k) => { n.x = seeded[k].x; n.y = seeded[k].y; n.vx = 0; n.vy = 0; });
-    mmAlpha = 0;
-    done && done();
-  };
-  requestAnimationFrame(step);
-}
-
-function centerMindmap() {
-  const canvas = $('mindmap-canvas');
-  const dpr = canvas._dpr || 1;
-  if (!mmNodes.length) return;
-  const xs = mmNodes.map(n=>n.x), ys = mmNodes.map(n=>n.y);
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const cxN = (minX+maxX)/2, cyN = (minY+maxY)/2;
-  mmOffset.x = (canvas.width/dpr)/2  - cxN;
-  mmOffset.y = (canvas.height/dpr)/2 - cyN;
-}
-
-// ENTRY view: fit the whole graph into the viewport so nothing is cut off at the
-// edges — but never zoom IN past 100% (a small graph stays 1:1; a big one zooms
-// OUT to fit). The Reset button keeps its 100%-centred behaviour above; only the
-// initial open uses this. Extra right/bottom margin leaves room for the node
-// LABELS, which extend to the right of each dot.
-function fitMindmapView() {
-  mmStopZoomGlide();
-  if (!mmNodes || !mmNodes.length) return;
-  const canvas = $('mindmap-canvas');
-  const dpr = canvas._dpr || 1;
-  const W = canvas.width / dpr, H = canvas.height / dpr;
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const n of mmNodes) { if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x; if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y; }
-  // Labels are centred UNDER each dot now, so the frame needs symmetric side
-  // padding plus a little extra at the bottom for the last row of text.
-  const PAD = 70;
-  minX -= PAD; maxX += PAD; minY -= 40; maxY += 46;
-  const gw = (maxX - minX) || 1, gh = (maxY - minY) || 1;
-  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  const fit = Math.min(W / gw, H / gh);
-  mmScale = Math.min(1.0, Math.max(0.2, fit));
-  mmOffset.x = W / 2 - cx * mmScale;
-  mmOffset.y = H / 2 - cy * mmScale;
-  drawMindmap();
-}
-
-// ── Rendering (Obsidian look) ───────────────────────────────────────────────
-// Flat dots, hairline links, and a centred label UNDER each node that fades in
-// as you zoom past the "text fade threshold". No glow, no per-type link colours,
-// no collision-avoided label placement — Obsidian just draws them all and lets
-// the fade + zoom keep it readable.
-const MM_BG          = '#0d0d0f';
-const MM_NODE        = '#8d97a5';   // resting node fill
-const MM_NODE_ORPHAN = '#4e5661';   // no links → dimmer, like Obsidian's orphans
-const MM_NODE_FOLDER = '#6e8598';   // only visible with the "folders as nodes" filter on
-const MM_LINK        = '#5a6472';
-const MM_TEXT        = '#b9c2ce';
-const MM_DIM         = 0.15;        // alpha for everything outside the hovered neighbourhood
-
-function drawMindmap() {
-  const canvas = $('mindmap-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const dpr = canvas._dpr || 1;
-  const W = canvas.width, H = canvas.height;
-
-  ctx.fillStyle = MM_BG;
-  ctx.fillRect(0, 0, W, H);
-
-  ctx.save();
-  ctx.scale(dpr, dpr);          // normalize to CSS pixels
-  ctx.translate(mmOffset.x, mmOffset.y);
-  ctx.scale(mmScale, mmScale);
-
-  const cs = getComputedStyle(document.documentElement);
-  const clrAccent = cs.getPropertyValue('--accent').trim() || '#3d9970';
-
-  // Visible world rectangle, with a margin, so off-screen nodes and links cost
-  // nothing on a big vault.
-  const vw = (W / dpr) / mmScale, vh = (H / dpr) / mmScale;
-  const vx0 = -mmOffset.x / mmScale - 60, vy0 = -mmOffset.y / mmScale - 60;
-  const vx1 = vx0 + vw + 120, vy1 = vy0 + vh + 120;
-  const onScreen = (n) => n.x > vx0 && n.x < vx1 && n.y > vy0 && n.y < vy1;
-
-  // Hovering (or dragging) a node focuses its immediate neighbourhood: it and
-  // its direct links stay lit, everything else fades back.
-  // The note under the pointer lights up AT ONCE, with its links — and takes over
-  // from the last-dragged note, or pointing at one looked like selecting another far
-  // away. Only its title waits (see mmHover): `labelFocus` is null until then.
-  const focused = mmDraggingNode || mmHoverUnder || mmFocusNode;
-  const labelFocus = mmDraggingNode || (mmHoverUnder ? mmHover : mmFocusNode);
-  const focusIdx = focused ? mmNodes.indexOf(focused) : -1;
-  const highlightIdx = new Set();
-  const highlightEdges = new Set();
-  if (focusIdx >= 0) {
-    highlightIdx.add(focusIdx);
-    mmEdges.forEach((e, i) => {
-      if (e.from === focusIdx || e.to === focusIdx) {
-        highlightEdges.add(i);
-        highlightIdx.add(e.from); highlightIdx.add(e.to);
-      }
-    });
-  }
-
-  // ── Links ──────────────────────────────────────────────────────────────────
-  // Hairlines: width is in world units so they thicken naturally as you zoom in,
-  // exactly like Obsidian's. Highlighted links are drawn last, on top.
-  const lw = 0.9 * mmSet.linkWidth * mmSizeK();
-  const order = mmEdges.map((_, i) => i)
-    .sort((i, j) => (highlightEdges.has(i) ? 1 : 0) - (highlightEdges.has(j) ? 1 : 0));
-
-  ctx.setLineDash([]);
-  ctx.lineCap = 'round';
-  for (const ei of order) {
-    const e = mmEdges[ei];
-    const a = mmNodes[e.from], b = mmNodes[e.to];
-    if (!a || !b) continue;
-    if (!onScreen(a) && !onScreen(b)) continue;
-    const lit = highlightEdges.has(ei);
-
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.strokeStyle = lit ? clrAccent : MM_LINK;
-    ctx.lineWidth = lit ? lw * 1.7 : lw;
-    ctx.globalAlpha = lit ? 0.95 : (focused ? MM_DIM * 0.7 : 0.42);
-    ctx.stroke();
-
-    // Optional direction arrows (Display → Arrows), pointing at the target.
-    if (mmSet.arrows && (lit || !focused)) {
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const d = Math.hypot(dx, dy) || 1;
-      const ux = dx / d, uy = dy / d;
-      const tip = mmDrawRadius(b) + 1.5 / mmScale;
-      const hx = b.x - ux * tip, hy = b.y - uy * tip;
-      const size = 4 + lw * 1.5;
-      ctx.beginPath();
-      ctx.moveTo(hx, hy);
-      ctx.lineTo(hx - ux * size + -uy * size * 0.5, hy - uy * size + ux * size * 0.5);
-      ctx.lineTo(hx - ux * size - -uy * size * 0.5, hy - uy * size - ux * size * 0.5);
-      ctx.closePath();
-      ctx.fillStyle = lit ? clrAccent : MM_LINK;
-      ctx.fill();
-    }
-  }
-  ctx.globalAlpha = 1;
-
-  // ── Connection preview (shift+drag) ────────────────────────────────────────
-  if (mmConnectFrom) {
-    ctx.beginPath();
-    ctx.moveTo(mmConnectFrom.x, mmConnectFrom.y);
-    ctx.lineTo(mmMouseWorld.x, mmMouseWorld.y);
-    ctx.strokeStyle = clrAccent;
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 4]);
-    ctx.globalAlpha = 0.7;
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-  }
-
-  // ── The clearing's edge, barely there: it says the space is on purpose ──────
-  const FB = mmDraggingNode || mmFocusNode;
-  if (FB) {
-    const fi = mmNodes.indexOf(FB);
-    let k = 0; for (const e of mmEdges) if (e.from === fi || e.to === fi) k++;
-    ctx.beginPath();
-    ctx.arc(FB.x, FB.y, mmBubble(k).hole, 0, Math.PI * 2);
-    ctx.strokeStyle = clrAccent; ctx.globalAlpha = 0.18; ctx.lineWidth = 1 / mmScale;
-    ctx.setLineDash([6 / mmScale, 6 / mmScale]); ctx.stroke(); ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-  }
-
-  // ── Nodes ──────────────────────────────────────────────────────────────────
-  for (let i = 0; i < mmNodes.length; i++) {
-    const n = mmNodes[i];
-    if (!onScreen(n)) continue;
-    const isHover = focused === n;
-    const lit = !focused || highlightIdx.has(i);
-    const r = mmDrawRadius(n);
-
-    ctx.globalAlpha = lit ? 1 : MM_DIM;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = isHover
-      ? clrAccent
-      : (n.color
-          || (n.type === 'folder' ? MM_NODE_FOLDER
-              : n._conns ? MM_NODE : MM_NODE_ORPHAN));
-    ctx.fill();
-
-    // A thin ring marks the hovered node without the old blur/glow.
-    if (isHover) {
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, r + 2.5 / mmScale, 0, Math.PI * 2);
-      ctx.strokeStyle = clrAccent;
-      ctx.lineWidth = 1.4 / mmScale;
-      ctx.stroke();
-    }
-  }
-  ctx.globalAlpha = 1;
-
-  // ── Labels ─────────────────────────────────────────────────────────────────
-  // Centred under the dot and scaled with the zoom, fading in around the "text
-  // fade threshold" — that fade is what keeps a zoomed-out graph readable, so no
-  // label ever has to be dropped or masked. The hovered neighbourhood is always
-  // legible whatever the zoom.
-  const fadeThr = mmSet.textFade;
-  const zoomFade = fadeThr <= 0.01 ? 1
-    : Math.max(0, Math.min(1, (mmScale / fadeThr - 1) * 1.6));
-  if (zoomFade > 0.02 || focused) {
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    const fpx = mmFontPx();
-    ctx.font = `${fpx}px 'Roboto', system-ui, sans-serif`;
-    // No name is written over another. The hovered neighbourhood goes first, then
-    // the most linked nodes; a name that would cover one already placed is left
-    // out, and comes back as the zoom makes room for it. Boxes are kept in SCREEN
-    // pixels in a coarse grid, so a thousand labels cost a thousand lookups.
-    const idx = [];
-    for (let i = 0; i < mmNodes.length; i++) if (onScreen(mmNodes[i])) idx.push(i);
-    const prio = (i) => (mmNodes[i] === labelFocus ? 3e6 : (labelFocus && highlightIdx.has(i) ? 2e6 : 0)) + (mmNodes[i]._conns || 0);
-    idx.sort((a, b) => prio(b) - prio(a));
-    const CELL = 64, grid = new Map(), boxes = [];
-    const cellsOf = (b) => { const out = []; for (let cx = Math.floor(b[0] / CELL); cx <= Math.floor(b[2] / CELL); cx++) for (let cy = Math.floor(b[1] / CELL); cy <= Math.floor(b[3] / CELL); cy++) out.push(cx + ',' + cy); return out; };
-    const clashes = (b) => cellsOf(b).some(k => (grid.get(k) || []).some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]));
-    const place = (b) => { boxes.push(b); for (const k of cellsOf(b)) { let a = grid.get(k); if (!a) grid.set(k, a = []); a.push(b); } };
-    for (const i of idx) {
-      const n = mmNodes[i];
-      const isHover = labelFocus === n;
-      const near = !focused || highlightIdx.has(i);
-      // Zoomed out, only the focused neighbourhood keeps its text.
-      let alpha = near ? zoomFade : zoomFade * MM_DIM;
-      if (isHover || (labelFocus && near)) alpha = Math.max(alpha, 0.95);
-      if (alpha < 0.03) continue;
-
-      const full = n.displayLabel || n.label;
-      const label = full.length > 30 ? full.slice(0, 29) + '…' : full;
-      // Extra clearance on the hovered node so the highlight ring doesn't sit on
-      // top of its own text.
-      const gap = (isHover ? 5 + 2.5 : 4) / mmScale;
-      const ty = n.y + mmDrawRadius(n) + gap;
-      const halfW = ctx.measureText(label).width / 2 * mmScale;
-      const sx = n.x * mmScale + mmOffset.x, sy = ty * mmScale + mmOffset.y;
-      const box = [sx - halfW - 3, sy - 1, sx + halfW + 3, sy + fpx * mmScale + 2];
-      if (clashes(box)) continue;
-      place(box);
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = isHover ? '#ffffff' : (n.type === 'folder' ? '#a9bccd' : MM_TEXT);
-      ctx.fillText(label, n.x, ty);
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  ctx.restore();
-
-  // ── Cursor ─────────────────────────────────────────────────────────────────
-  if (mmConnectFrom)        canvas.style.cursor = 'crosshair';
-  else if (mmDraggingNode)  canvas.style.cursor = 'grabbing';
-  else if (mmDragging)      canvas.style.cursor = 'grabbing';
-  else if (mmHoverUnder)    canvas.style.cursor = 'pointer';
-  else                      canvas.style.cursor = 'grab';
-}
-
-function updateMindmapHover(e) {
-  const found = getNodeAtEvent(e);
-  if (found !== mmHoverUnder) {
-    mmHoverUnder = found;
-    clearTimeout(_mmHoverTimer); _mmHoverTimer = null;
-    // The colour follows the pointer at once; leaving puts the title out at once.
-    if (mmHover && mmHover !== found) mmHover = null;
-    drawMindmap();
-    if (found) _mmHoverTimer = setTimeout(() => {
-      _mmHoverTimer = null;
-      if (mmHoverUnder === found && !mmDraggingNode && !mmDragging) { mmHover = found; drawMindmap(); }
-    }, MM_HOVER_DELAY);
-  }
-  const canvas = $('mindmap-canvas');
-  canvas.style.cursor = found ? 'pointer' : (mmDragging ? 'grabbing' : 'grab');
-  $('mindmap-tooltip').style.display = 'none';
-}
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 // ─── Settings & Wizard ───────────────────────────────────────────────────────
@@ -14245,7 +12576,6 @@ const DEFAULT_SHORTCUTS = {
   undo:       { ctrl:true,  shift:false, alt:false, key:'z',   group:'Editor',  gk:'sc.group_editor', label:'Annulla',             lk:'sc.undo' },
   redo:       { ctrl:true,  shift:false, alt:false, key:'y',   group:'Editor',  gk:'sc.group_editor', label:'Ripeti',              lk:'sc.redo' },
   toc:        { ctrl:true,  shift:true,  alt:false, key:'o',   group:'Vista',   gk:'sc.group_view',   label:'Indice',              lk:'sc.toc' },
-  graph:      { ctrl:true,  shift:false, alt:false, key:'m',   group:'Vista',   gk:'sc.group_view',   label:'Graph view',          lk:'sc.graph' },
   canvas:     { ctrl:true,  shift:true,  alt:false, key:'c',   group:'Vista',   gk:'sc.group_view',   label:'Canvas',              lk:'sc.canvas' },
 };
 const shortcuts = {};
@@ -14447,7 +12777,6 @@ function setupKeyboard() {
       if (fires('search'))     { e.preventDefault(); toggleNoteSearch(); return; }
       if (fires('closeTab'))   { e.preventDefault(); if (activeTabIdx !== -1) closeTab(activeTabIdx); return; }
       if (fires('toc'))        { e.preventDefault(); toggleTOC(); return; }
-      if (fires('graph'))      { e.preventDefault(); const ov=$('mindmap-overlay'); if(!ov.style.display||ov.style.display==='none') openMindmap(); else closeMindmap(); return; }
       if (fires('canvas'))     { e.preventDefault(); toggleCanvas(); return; }
       if (fires('nextTab') || fires('prevTab')) {
         e.preventDefault();
@@ -18051,7 +16380,7 @@ function clearNoteSearchHighlights() {
 
 // ─── Sidebar view buttons ─────────────────────────────────────────────────────
 // Wire graph/canvas buttons that are now in the sidebar
-// (setupMindmap and setupCanvas already bind btn-mindmap and btn-canvas)
+// (setupCanvas already binds btn-canvas)
 
 // ─── Custom text colors ───────────────────────────────────────────────────────
 
@@ -19139,7 +17468,7 @@ function _fmtDate(ms) { const d = new Date(ms); if (isNaN(d)) return '—'; retu
 function _fmtDateDMY(ms) { const d = new Date(ms); if (isNaN(d)) return '—'; const p = n => String(n).padStart(2, '0'); return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear(); }
 function _isOverdue(due) { const d = new Date(due); return !isNaN(d) && d.getTime() < Date.now(); }
 
-// The board lives in a TAB of its own, like the graph: opening it from a notification (or
+// The board lives in a TAB of its own: opening it from a notification (or
 // the sections bar) used to leave the tab bar showing the note you had open before, so the
 // tab said "shopping list" while the ToDo board was on screen.
 function openTodoView() {

@@ -1,6 +1,6 @@
-// Draw, Graph and ToDo: one gesture, and a double click that lands on the notes.
+// Draw and ToDo: one gesture, and a double click that lands on the notes.
 //
-// The three icons toggle — click to open, click again to go back. A double click flipped
+// The two icons toggle — click to open, click again to go back. A double click flipped
 // that twice, so double-clicking while inside a drawing closed it and opened a NEW one:
 // you asked to leave and arrived somewhere you had never been (reported 2026-09-20).
 //
@@ -72,15 +72,6 @@ say('the drawing really is closed',
   await ev(`getComputedStyle(document.getElementById('canvas-overlay')).display === 'none'`) === true);
 say('and no second .draw was created on the way out', drawFiles() === afterFirst, `${afterFirst} -> ${drawFiles()}`);
 
-// ── Graph ────────────────────────────────────────────────────────────────────
-await single('btn-mindmap'); await sleep(1500);
-say('a single click opens the graph',
-  await ev(`getComputedStyle(document.getElementById('mindmap-overlay')).display !== 'none'`) === true);
-await dbl('btn-mindmap'); await sleep(1500);
-say('double-clicking from inside the graph lands on the notes', await onNotes() === true);
-say('the graph really is closed',
-  await ev(`getComputedStyle(document.getElementById('mindmap-overlay')).display === 'none'`) === true);
-
 // ── ToDo ─────────────────────────────────────────────────────────────────────
 await single('btn-new-todo'); await sleep(1600);
 say('a single click opens the ToDo board', await ev(`!!_kanbanOpen`) === true);
@@ -106,14 +97,6 @@ say('leaving the board brings the tabs back', await tabsShown() === true, String
 say('and the + comes back with them',
   await ev(`getComputedStyle(document.getElementById('tab-new-btn')).display !== 'none'`) === true);
 
-// The graph hides them too (asked 2026-09-21), and for the same reason: it is a tab.
-await single('btn-mindmap'); await sleep(1500);
-say('the graph hides the tabs as well', await tabsShown() === false, String(await tabsShown()));
-say('and the + with them',
-  await ev(`getComputedStyle(document.getElementById('tab-new-btn')).display === 'none'`) === true);
-await dbl('btn-mindmap'); await sleep(1500);
-say('leaving the graph brings them back', await tabsShown() === true, String(await tabsShown()));
-
 // A drawing is a document, not a view: its tabs stay, so you can switch back to a note.
 await single('btn-canvas'); await sleep(2500);
 say('a drawing keeps its tabs — it is a document you keep open beside notes',
@@ -121,9 +104,10 @@ say('a drawing keeps its tabs — it is a document you keep open beside notes',
 await dbl('btn-canvas'); await sleep(2000);
 
 // ── Clicking notes from a view does not breed tabs ───────────────────────────
-// The ToDo board and the graph are places you visit, not documents you keep. A note
-// clicked from one used to get a tab of ITS own, so going back and forth grew a tab per
-// visit — board, click, graph, click gave five tabs out of two notes (2026-09-21).
+// The ToDo board is a place you visit, not a document you keep. A note clicked from it
+// used to get a tab of ITS own, so going back and forth grew a tab per visit — board,
+// click, graph, click gave five tabs out of two notes (2026-09-21; the graph has since
+// been removed, the board kept the behaviour).
 const tabState = () => ev(`({ n: tabs.length, types: tabs.map(t => t.type || 'note') })`);
 const clickNote = async (i) => { await ev(`document.querySelectorAll('.tree-note')[${i}].click()`); await sleep(800); };
 
@@ -140,19 +124,13 @@ say('a note opened from the ToDo board reuses that tab, it does not add one',
   t.types.filter(x => x === 'note').length === 1, JSON.stringify(t));
 say('and the board is still open behind it', t.types.includes('todo'), JSON.stringify(t));
 
-await single('btn-mindmap'); await sleep(1500);
-await clickNote(1);
-t = await tabState();
-say('the same from the graph', t.types.filter(x => x === 'note').length === 1, JSON.stringify(t));
-say('and the graph stays too', t.types.includes('mindmap'), JSON.stringify(t));
-
-await clickNote(2); await clickNote(0);
+await clickNote(1); await clickNote(2); await clickNote(0);
 t = await tabState();
 say('and going round again adds nothing', t.types.filter(x => x === 'note').length === 1, JSON.stringify(t));
 
 // ── The single click is untouched ────────────────────────────────────────────
-await single('btn-mindmap'); await sleep(1200);
-await single('btn-mindmap'); await sleep(1200);
+await single('btn-new-todo'); await sleep(1400);
+await single('btn-new-todo'); await sleep(1400);
 say('two SEPARATE single clicks still toggle open then shut', await onNotes() === true);
 console.log(`\n${ok.every(Boolean) ? `all ${ok.length} passed` : `${ok.filter(Boolean).length}/${ok.length}`}`);
 process.exit(ok.every(Boolean) ? 0 : 1);

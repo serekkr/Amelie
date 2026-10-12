@@ -314,4 +314,4 @@ amelie/
 ---
 
 *Amelie is an Electron app for Linux. AES-256-GCM encrypted vault, WebDAV/SMB
-sync, Markdown notes, tldraw canvas, mindmaps.*
+sync, Markdown notes, Excalidraw drawings.*
