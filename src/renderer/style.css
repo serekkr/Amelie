@@ -382,23 +382,13 @@
      #2c2c2c, which is #tab-bar's own colour exactly (ΔE00 0.00) — so the box is, and is
      meant to be, invisible: three darker greys were tried on it (#171717, #1a1a1a,
      #212121) and all three were turned down. The label stays WHITE, as in every other
-     theme, and carries the distinction by WEIGHT instead. Colours were tried first and
-     all failed on the same wall: against #2c2c2c black scores 1.50 of contrast and a
-     dark brown 1.11 — both a shape rather than text, and note that a dark brown scores
-     WORSE than black, being very nearly the background at that lightness. Lighten it
-     enough to read (#c08552, 4.47) and at 57% saturation it stops looking brown and
-     reads ORANGE; desaturate to ~21% and you get #87736a, legible at 3.12 but dimmer
-     than the closed tabs' own #8a8a8a label, so the open tab ended up the quietest
-     thing in the strip. White at 9.80 with more weight is the way that works.
-     600 is SYNTHETIC here and that is not a slip: Inter is bundled as a single face
-     declared three times, at 300, 400 and 500 — the six woff2 files behind those three
-     weights are byte-identical (md5 f072=f074=f076, f073=f075=f077), so the family has
-     no real bold to reach for, and 600/700/800 all render at the same width (103.98 vs
-     93.96), the fixed-factor signature of Chromium thickening the outlines itself. It
-     is clean enough at 13px. A real Inter SemiBold would have to be added to fonts.css
-     to do it properly. The label also gets ~10% wider, so a long note name reaches its
-     ellipsis a character or two earlier than on a closed tab. */
-  --tab-fw-active: 600;
+     theme; colours were tried first and all failed on contrast (black 1.50 against
+     #2c2c2c, dark brown 1.11 — a shape rather than text; lighten it enough to read and
+     it stops looking brown and reads orange). It carried MORE WEIGHT too, a synthetic
+     600 (Inter is bundled without a real bold), until serekkr asked for it off on
+     12/10/2026 — the white label, the --bg-1 fill and the accent underline say which
+     tab is open on their own, which is how every other theme has always said it. The
+     var stays as a hook for a custom theme that wants the weight back. */
   /* The note tree, a hair below the sidebar's own #2c2c2c. The value is boxed in from
      both sides and there is no comfortable answer: the tree's two neighbours — the
      controls stacked above it (#2c2c2c) and the page beside it (#212121) — are only
