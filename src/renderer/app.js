@@ -12057,20 +12057,24 @@ async function openSettings() {
   }
   if ($('cfg-backup-archived')) $('cfg-backup-archived').checked = wantArchive;
   if ($('cfg-backup-normal'))   $('cfg-backup-normal').checked   = wantFolder;
-  // Restore backup frequency: a preset (30 s / hourly / daily) or Custom (in days).
+  // Restore backup frequency: a preset (hourly / daily) or Custom (in days).
   //
-  // parseFloat, not parseInt — the same rule the SAVE side already follows, and
-  // the same one the engine's _readInterval follows. The shortest choice is 0.5
-  // (30 s), which parseInt truncated to 0; 0 is falsy, so it fell through to the
-  // daily default. The dropdown then read "Giornaliero" over a config that said
-  // thirty seconds, and the next save — any save, this screen rewrites the whole
-  // block — made that true and threw the choice away.
-  // The preset list must hold exactly the <option> values, 0.5 included, or a
-  // stored 30 s lands in Custom and is reinterpreted as DAYS.
-  const blMin = parseFloat(cfg.sync?.local?.intervalMinutes) || 1440;
+  // parseFloat, not parseInt — the same rule the SAVE side already follows, and the
+  // same one the engine's _readInterval follows: a fractional value must survive the
+  // round trip or the dropdown reads one thing over a config that says another, and
+  // the next save (this screen rewrites the whole block) makes the wrong one true.
+  // The preset list must hold exactly the <option> values, or a stored value lands in
+  // Custom and is reinterpreted as DAYS.
+  //
+  // 30 seconds was a choice here until 12/10/2026 and is not any more: a config still
+  // carrying 0.5 — or anything under the shortest preset — comes up as HOURLY rather
+  // than as "Custom: 0 days", and the next save writes that. Nothing is lost that the
+  // list can still express.
+  let blMin = parseFloat(cfg.sync?.local?.intervalMinutes) || 1440;
+  if (blMin < 60) blMin = 60;
   const blSel = $('cfg-local-interval');
   if (blSel) {
-    if (blMin === 0.5 || blMin === 60 || blMin === 1440) {
+    if (blMin === 60 || blMin === 1440) {
       blSel.value = String(blMin);
       if ($('local-interval-custom-wrap')) $('local-interval-custom-wrap').style.display = 'none';
     } else {

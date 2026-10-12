@@ -51,7 +51,15 @@ fs.writeFileSync(`${VAULT}/notes/uno.md`, '---\ncreated: 2026-08-27 10:00\n---\n
 fs.writeFileSync(`${HOME}/.local/share/amelie/amelie.json`, JSON.stringify({ vaultPath: VAULT, encryption: { enabled: false } }));
 // A FRESH profile: sync off, no destination, no format flag of any kind. This is
 // exactly the state an install straight out of the .run is in.
-fs.writeFileSync(SET, JSON.stringify({ autoSaveSeconds: 30, sync: { enabled: false } }));
+// `intervalMinutes: 0.5` is the 30-second backup frequency, offered until 12/10/2026
+// and taken out since: a config written before that must still open on something the
+// list can say.
+// Nothing switched on and no format chosen — this file is about a FRESH install — with
+// one thing carried over: `intervalMinutes: 0.5`, the 30-second backup frequency that
+// was offered until 12/10/2026, so the checks at the end see a config written before
+// it was taken out.
+fs.writeFileSync(SET, JSON.stringify({ autoSaveSeconds: 30, sync: { enabled: false,
+  local: { enabled: false, folder: false, archive: false, intervalMinutes: 0.5 } } }));
 const ELECTRON = `${REPO}/node_modules/electron/dist/electron`;
 const eargs = ['.', `--remote-debugging-port=${PORT}`, '--no-sandbox', '--password-store=basic'];
 child = xvfb
@@ -155,6 +163,24 @@ await ev(`window._resetVpnBackupModeFlags()`); await sleep(400);
 say('with no other destination on, the import still clears the format',
   await on('cfg-backup-normal') === false,
   'the reset stopped working for the case it exists for');
+
+// ── The backup frequency has no 30 seconds any more ─────────────────────────
+// A backup writes a whole snapshot of the vault; twice a minute is a frequency for
+// the two-way sync, which moves what changed. Taken out of the Backup tab on
+// 12/10/2026 — and the Sync tab keeps its own.
+{
+  const opts = await ev(`[...document.querySelectorAll('#cfg-local-interval option')].map(o => o.value)`);
+  say('the backup frequency offers no 30 seconds', !opts.includes('0.5'), JSON.stringify(opts));
+  say('and still offers hourly, daily and a custom count of days',
+    opts.join(',') === '60,1440,custom', JSON.stringify(opts));
+  const twOpts = await ev(`[...document.querySelectorAll('#cfg-twoway-interval option')].map(o => o.value)`);
+  say('the SYNC frequency keeps its 30 seconds — it is a different job', twOpts.includes('0.5'), JSON.stringify(twOpts));
+  // The seeded config says 0.5. It must not come up as "Custom: 0 days".
+  const shown = await ev(`({ value: document.getElementById('cfg-local-interval').value,
+                             custom: getComputedStyle(document.getElementById('local-interval-custom-wrap')).display })`);
+  say('a config still saying 30 seconds opens on Hourly, not on Custom',
+    shown && shown.value === '60' && shown.custom === 'none', JSON.stringify(shown));
+}
 
 const bad = ok.filter(x => !x).length;
 console.log(`\n${ok.length - bad}/${ok.length} ok`);

@@ -592,8 +592,11 @@
             <div id="backup-top-panel" style="border:1px solid var(--border);border-radius:10px;background:var(--bg-2,rgba(255,255,255,0.02));padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:14px">
               <div class="field-group">
                 <label data-i18n="settings.backup_freq">Frequenza backup</label>
+                <!-- No 30 seconds here (taken out on 12/10/2026, serekkr): a backup writes a
+                     whole snapshot of the vault, and twice a minute is a frequency for the
+                     two-way sync — which moves what changed — not for this. Hourly is the
+                     shortest the list offers; Custom counts in DAYS. -->
                 <select id="cfg-local-interval" class="export-select">
-                  <option value="0.5" data-i18n="settings.freq_30s">Ogni 30 secondi</option>
                   <option value="60" data-i18n="settings.freq_hourly">Ogni ora</option>
                   <option value="1440" selected data-i18n="settings.freq_daily">Giornaliero</option>
                   <option value="custom" data-i18n="settings.interval_custom">Custom</option>
