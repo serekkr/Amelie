@@ -1926,9 +1926,9 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   content: '✓'; position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
   color: var(--accent); font-size: 12px;
 }
-/* The button shows the accent while the tree is NOT in its hand-made order: a sort is
-   a mode you are in, and it must be visible without opening the menu. */
-#btn-sort.sorted { color: var(--accent); }
+/* No accent on the button once a sort is chosen (asked 12/10/2026): it stays a plain
+   icon like its neighbours. Which sort is in force is said by its tooltip and by the
+   tick in the menu. */
 
 /* Color palette popup for tree label colors */
 #color-palette-menu {

@@ -9272,13 +9272,13 @@ function sortTreeNodes(nodes, mode) {
   return out;
 }
 
-// The button says which sort is in force: the accent while the tree is not in its
-// hand-made order, and the tooltip naming the mode (a menu you have to open to read
-// is no answer to "why is this note first?").
+// Which sort is in force is said by the tooltip and by the tick in the menu — not by
+// the icon's colour: it used to turn accent while the tree was not in its hand-made
+// order, and that was taken back out on 12/10/2026 (it reads as "this button is on",
+// which the other icons in the strip never do).
 function updateSortBtn() {
   const btn = $('btn-sort');
   if (!btn) return;
-  btn.classList.toggle('sorted', treeSortMode !== 'manual');
   btn.title = window.i18n.t('sort.title') + ': ' + window.i18n.t(SORT_LABEL_KEY[treeSortMode] || 'sort.manual');
   btn.setAttribute('aria-label', btn.title);
   document.querySelectorAll('#sort-menu .sort-item').forEach(b => b.classList.toggle('active', b.dataset.sort === treeSortMode));

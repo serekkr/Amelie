@@ -13,8 +13,8 @@
 //   · the default is Manual, and the saved drag order is what you see,
 //   · each of the six sorts really reorders the tree, folders always first,
 //   · sorting is a view: .amelie-order.json is not rewritten by it,
-//   · the choice survives a reload, the button shows it (accent + tooltip) and the
-//     menu ticks it,
+//   · the choice survives a reload, and is readable without guessing: the tooltip
+//     names it and the menu ticks it — the icon itself never lights up (asked),
 //   · and Manual gives the hand-made order back, unchanged.
 //
 //   run: npm run test:treesort     (needs a display; uses xvfb-run when present)
@@ -94,6 +94,9 @@ const pick = async (mode) => {
 };
 const btnState = () => ev(`(() => { const b = document.getElementById('btn-sort');
   return { accent: b.classList.contains('sorted'), title: b.title,
+           // Measured, not assumed: the same colour as the icon beside it means "not lit".
+           colour: getComputedStyle(b).color,
+           plainColour: getComputedStyle(document.getElementById('btn-collapse-all')).color,
            ticked: [...document.querySelectorAll('#sort-menu .sort-item.active')].map(i => i.dataset.sort) }; })()`);
 const MANUAL = ['Zeta', 'Alfa', 'dino', 'anna', 'carla', 'bruno'];
 const orderFile = () => { try { return JSON.parse(fs.readFileSync(ORDER, 'utf8'))['']; } catch (_) { return null; } };
@@ -102,7 +105,7 @@ check('the tree opens in the hand-made order', JSON.stringify(await rows()) === 
   JSON.stringify(await rows()));
 {
   const b = await btnState();
-  check('and the button is quiet, because Manual is not a sort', !!b && b.accent === false && /manual/i.test(b.title), JSON.stringify(b));
+  check('and the tooltip says so', !!b && /manual/i.test(b.title), JSON.stringify(b));
 }
 
 await pick('name-asc');
@@ -110,8 +113,11 @@ check('Name (A → Z): folders first, then the notes by name',
   JSON.stringify(await rows()) === JSON.stringify(['Alfa', 'Zeta', 'anna', 'bruno', 'carla', 'dino']), JSON.stringify(await rows()));
 {
   const b = await btnState();
-  check('the button turns accent and names the sort', !!b && b.accent === true && /a → z|a → z/i.test(b.title), JSON.stringify(b));
+  check('the tooltip names the sort now in force', !!b && /a → z/i.test(b.title), JSON.stringify(b));
   check('and the menu ticks exactly that one', !!b && JSON.stringify(b.ticked) === JSON.stringify(['name-asc']), JSON.stringify(b));
+  // Asked 12/10/2026: choosing a sort must not leave the icon lit.
+  check('and the icon stays a plain icon, not a lit one', !!b && b.accent === false && b.colour === b.plainColour,
+    JSON.stringify(b));
 }
 
 await pick('name-desc');
@@ -141,12 +147,19 @@ await pick('name-asc');
 await ev(`location.reload()`); await sleep(3200);
 check('the chosen sort survives a reload',
   JSON.stringify(await rows()) === JSON.stringify(['Alfa', 'Zeta', 'anna', 'bruno', 'carla', 'dino']), JSON.stringify(await rows()));
-check('and the button still shows it', (await btnState())?.accent === true);
+{
+  const b = await btnState();
+  check('and the tooltip still names it after the reload', !!b && /a → z/i.test(b.title), JSON.stringify(b));
+  check('with the icon still unlit', !!b && b.colour === b.plainColour, JSON.stringify(b));
+}
 
 await pick('manual');
 check('Manual gives the hand-made order back, to the item',
   JSON.stringify(await rows()) === JSON.stringify(MANUAL), JSON.stringify(await rows()));
-check('and the button goes quiet again', (await btnState())?.accent === false);
+{
+  const b = await btnState();
+  check('and the tooltip goes back to Manual', !!b && /manual/i.test(b.title), JSON.stringify(b));
+}
 
 const failed = results.filter(r => !r).length;
 console.log(`\n${results.length - failed}/${results.length} passed`);
