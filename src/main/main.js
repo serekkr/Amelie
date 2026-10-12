@@ -5213,22 +5213,36 @@ function refreshInstalledIcon() {
 }
 refreshInstalledIcon();
 
+// Can a backup be written there? A test, and a test leaves nothing behind: it used to
+// create the folder and keep it, so trying a path out left an empty folder on disk
+// ("non deve lasciare il folder creato se è un test", 12/10/2026). The folders it had
+// to make to try are removed again afterwards — and ONLY those: a folder that already
+// existed is never touched, and rmdir refuses a folder with anything in it, so nothing
+// of the user's can go this way even if something else lands there meanwhile.
 ipcMain.handle('sync:testLocalPath', async (_, localPath) => {
+  const made = [];
   try {
     if (!localPath) return { ok: false, error: 'Percorso vuoto' };
-    let created = false;
-    if (!fs.existsSync(localPath)) {
-      fs.mkdirSync(localPath, { recursive: true });
-      created = true;
+    // Every ancestor that is missing now is one this test is about to create.
+    for (let p = path.resolve(localPath); ; p = path.dirname(p)) {
+      if (fs.existsSync(p)) break;
+      made.unshift(p);
+      if (path.dirname(p) === p) break;
     }
+    if (made.length) fs.mkdirSync(localPath, { recursive: true });
     fs.accessSync(localPath, fs.constants.R_OK | fs.constants.W_OK);
     // Quick write test
     const testFile = path.join(localPath, '.k7tz-test');
     fs.writeFileSync(testFile, 'ok');
     fs.unlinkSync(testFile);
-    return { ok: true, created };
+    // `created` now means "it is not there yet" — the first backup will make it.
+    return { ok: true, created: made.length > 0 };
   } catch (e) {
     return { ok: false, error: e.message };
+  } finally {
+    // Deepest first, and never with force: an rmdir that fails because something is
+    // inside is the right outcome, not a reason to insist.
+    for (const dir of [...made].reverse()) { try { fs.rmdirSync(dir); } catch (_) {} }
   }
 });
 

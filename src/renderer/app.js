@@ -10397,7 +10397,9 @@ function setupSettings() {
     const result = await window.inkwell.testLocalPath(p);
     if (result.ok) {
       state._backupLocalTested = true;    // unlocks the Local backup toggle
-      resultEl.textContent = '✓ ' + window.i18n.t('sync.path_ok') + (result.created ? ' ' + window.i18n.t('sync.folder_created') : '');
+      // `created` means the folder is NOT there yet: the test made it, tried it and
+      // took it away again, so say what will happen rather than what was done.
+      resultEl.textContent = '✓ ' + window.i18n.t('sync.path_ok') + (result.created ? ' ' + window.i18n.t('sync.folder_will_be_created') : '');
       resultEl.className = 'test-result ok';
     } else {
       state._backupLocalTested = false;

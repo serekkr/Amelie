@@ -98,6 +98,12 @@ class SyncManager {
     this._firstBackupTimer = setTimeout(() => {
       this._firstBackupTimer = null;
       if (!this._anyBackupDestination()) return;      // switched back off meanwhile
+      // A vault that holds only the welcome note the app wrote has nothing of the
+      // user's in it yet: no first copy, and no notification saying one was made.
+      if (this._vaultIsOnlyWelcome()) {
+        console.log('[Sync] New backup destination, but the vault holds only the welcome note — no first copy');
+        return;
+      }
       console.log('[Sync] New backup destination (' + reason.join(', ') + ') — first backup now');
       // force: the vault may be untouched, and this copy still has to be made.
       // manual: false — nobody pressed a button, so the notification reads as the
@@ -350,6 +356,38 @@ class SyncManager {
       return false;
     };
     return !hasFile(this.notesDir) && !hasFile(this.attachmentsDir);
+  }
+
+  /**
+   * Nothing in the vault but the welcome note the app wrote itself.
+   *
+   * A brand-new install is not an empty vault — main.js writes `Welcome.md` into it —
+   * so switching a destination on fired the first copy and announced a completed
+   * backup to someone who had not written a line yet ("non vedo il senso di creare un
+   * backup automatico con solo la nota welcome", 12/10/2026). That first copy is
+   * skipped in this one state; the moment anything else exists, or the welcome note
+   * itself is edited, the vault fingerprint changes and the scheduled pass copies it
+   * like any other change. Nothing is left unprotected — it is only not copied BEFORE
+   * there is anything of the user's to copy.
+   */
+  _vaultIsOnlyWelcome() {
+    const list = (dir) => {
+      try { return fs.readdirSync(dir, { withFileTypes: true }).filter(e => !e.name.startsWith('.')); }
+      catch (_) { return []; }
+    };
+    if (list(this.attachmentsDir).some(e => e.isDirectory() ? list(path.join(this.attachmentsDir, e.name)).length : true)) return false;
+    const notes = list(this.notesDir);
+    if (notes.length !== 1 || notes[0].isDirectory()) return false;
+    if (notes[0].name !== 'Welcome.md') return false;
+    // Still what main.js wrote — a date heading and one line — or has the user
+    // started writing in it? An edited welcome note is their own writing and must be
+    // backed up like anything else. (main.js: `# <date>\n\nStart writing your thoughts…`)
+    try {
+      const txt = fs.readFileSync(path.join(this.notesDir, 'Welcome.md'), 'utf8');
+      const body = txt.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n*/, '').trim();
+      const lines = body.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      return lines.length === 2 && /^#\s+\S/.test(lines[0]) && /^Start writing your thoughts/.test(lines[1]);
+    } catch (_) { return false; }
   }
 
   /**
