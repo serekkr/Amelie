@@ -1930,18 +1930,38 @@ class SyncManager {
    *
    * An empty ARRAY from the helper is a real, empty folder: {} and no throw.
    */
-  async _smbListRecursive(cfg, base) {
+  async _smbListRecursive(cfg, base, { withDirs = false } = {}) {
     const entries = await this._smbJson(cfg, ['listr', base], { timeout: 120000, maxBuffer: 64 * 1024 * 1024 });
     // _smbJson answers null when the helper printed something that is not JSON —
     // a failure it may well have exited 0 on. Anything but an array means we did
     // not get a listing, which is not the same as getting an empty one.
     if (!Array.isArray(entries)) throw new Error(`Samba: impossibile leggere la cartella remota "${base}"`);
     const map = {};
+    const dirs = [];
     for (const e of entries) {
-      if (e.dir) continue;              // files only (as before)
+      if (e.dir) { dirs.push(e.path); continue; }   // kept for the empty-folder sweep
       map[e.path] = +e.mtime || 0;      // path already relative to base, mtime already in ms
     }
-    return map;
+    return withDirs ? { map, dirs } : map;
+  }
+
+  /**
+   * Folders left on the share with nothing in them, deepest first.
+   *
+   * Deleting a file never removed the folder it was in, so a vault emptied on one PC
+   * left the whole tree standing on the share: after serekkr's test on 12/10/2026,
+   * 1233 files were deleted and 162 empty folders stayed, which is exactly what he
+   * saw when he said the files were still there. A folder is only on the share
+   * because a file was put in it (the helper's `put` creates the parents), so one
+   * with no files left under it is a leftover, not something to keep.
+   */
+  static _emptyDirsDeepestFirst(dirs, filesLeft) {
+    const keep = new Set();
+    for (const f of filesLeft) {
+      let d = path.posix.dirname(f);
+      while (d && d !== '.' && d !== '/') { keep.add(d); d = path.posix.dirname(d); }
+    }
+    return dirs.filter(d => !keep.has(d)).sort((a, b) => b.split('/').length - a.split('/').length);
   }
 
   // Build a conflict-copy relative path:
@@ -2035,7 +2055,12 @@ class SyncManager {
    * baselines still listed 1258 files, and the first new note would have removed
    * all of them from the NAS without a word.
    */
+  // Returns the remote paths the user agreed to delete, so the caller can remember
+  // them: whatever is still on the server at the next pass has to be deleted then,
+  // not read as a new file and downloaded back. That is how three images serekkr had
+  // deleted came back into an emptied vault (12/10/2026).
   async _holdMassDelete(plan, { remoteTotal, localTotal, target }) {
+    const approvedRemote = [];
     for (const where of ['remote', 'local']) {
       const act = where === 'remote' ? 'delete-remote' : 'delete-local';
       const hits = plan.filter(p => p.d.action === act);
@@ -2045,7 +2070,10 @@ class SyncManager {
       this._progress({ op: 'twoway', phase: 'waiting', total: hits.length });
       const choice = await this._askMassDelete({ where, count: hits.length, total, target,
                                                  examples: hits.slice(0, 5).map(p => p.rel) });
-      if (choice === 'delete') continue;
+      if (choice === 'delete') {
+        if (where === 'remote') approvedRemote.push(...hits.map(h => h.rel));
+        continue;
+      }
       if (choice === 'restore') {
         for (const p of hits) p.d = { action: where === 'remote' ? 'download' : 'upload' };
         continue;
@@ -2055,6 +2083,7 @@ class SyncManager {
       e.heldDeletes = { where, count: hits.length, total, target };
       throw e;
     }
+    return approvedRemote;
   }
 
   /**
@@ -2132,6 +2161,12 @@ class SyncManager {
     const stateKey = `${service}/${base.replace(/\//g, '\\')}`;   // backslash base → same key as pre-migration
     const firstRun = !allState[stateKey];
     const st = allState[stateKey] || {};
+    // Paths the user said to delete on the server in an earlier pass and that are
+    // still there. Kept beside the baseline (own key, prefixed so it can never be
+    // mistaken for a file) because the next pass has no other way to tell a file the
+    // user killed from a file somebody else just added.
+    const pendKey = `__massdel__${stateKey}`;
+    const approvedDel = new Set(Array.isArray(allState[pendKey]) ? allState[pendKey] : []);
 
     // "Copie-conflitto" preference (sync.twoway.conflictCopies). Default ON
     // (no silent data loss) unless explicitly turned off.
@@ -2224,11 +2259,20 @@ class SyncManager {
     // Decide everything first, so a mass delete can be stopped before any of it runs.
     const plan = [...allRels].map(rel => ({ rel, L: localMap[rel], R: remote[rel],
       d: this._twowayDecide(localMap[rel], remote[rel], getBase(rel), firstRun, conflictCopies, pd, TOL) }));
-    await this._holdMassDelete(plan, {
+    // A leftover of an approved mass delete is not a new file: delete it, do not
+    // fetch it. Only while it is absent locally — if it is back on this PC, the user
+    // put it back and it is theirs again.
+    for (const p of plan) {
+      if (approvedDel.has(p.rel) && localMap[p.rel] === undefined && p.d.action === 'download') {
+        p.d = { action: 'delete-remote' };
+      }
+    }
+    const approved = await this._holdMassDelete(plan, {
       remoteTotal: Object.keys(remote).filter(r => r.startsWith('notes/') || r.startsWith('attachments/')).length,
       localTotal: local.length,
       target: `${cfg.host || cfg.ip}/${cfg.share}/${base}`,
     });
+    for (const rel of approved || []) approvedDel.add(rel);
 
     let uploaded = 0, downloaded = 0, conflicts = 0, deleted = 0;
     // What this pass actually did, file by file — the sync report (see _saveTwowayReport).
@@ -2244,7 +2288,7 @@ class SyncManager {
       } else if (d.action === 'download') {
         if (await downloadRel(rel)) { downloaded++; log.push(['down', rel]); try { const t = R / 1000; fs.utimesSync(absOf(rel), t, t); } catch (_) {} st[rel] = { r: R, l: R }; }
       } else if (d.action === 'delete-remote') {
-        if (await deleteRemoteRel(rel)) { deleted++; log.push(['del-remote', rel]); delete st[rel]; console.warn('[Two-way] deleted on share (propagated):', rel); }
+        if (await deleteRemoteRel(rel)) { deleted++; log.push(['del-remote', rel]); delete st[rel]; approvedDel.delete(rel); console.warn('[Two-way] deleted on share (propagated):', rel); }
       } else if (d.action === 'delete-local') {
         if (deleteLocalRel(rel)) { deleted++; log.push(['del-local', rel]); delete st[rel]; console.warn('[Two-way] deleted locally (propagated from other PC):', rel); }
       } else if (d.action === 'conflict') {
@@ -2288,9 +2332,34 @@ class SyncManager {
     // spurious re-downloads. Re-list once and pin baseline.r to the REAL remote
     // mtime so subsequent comparisons are against the server's own clock.
     try {
-      const after = await this._smbListRecursive(cfg, base);
+      const { map: after, dirs } = await this._smbListRecursive(cfg, base, { withDirs: true });
       for (const rel of Object.keys(st)) {
         if (st[rel] && typeof st[rel] === 'object' && (rel in after)) st[rel].r = after[rel];
+      }
+      // …and while the listing is in hand, take away the folders nothing is left in.
+      // They are only there because files were put in them, so an empty one is the
+      // shadow of a deletion — 162 of them stood on serekkr's share after a vault was
+      // emptied, which is what "the files are still there" looked like (12/10/2026).
+      // Six at a time: each removal is its own SMB session, and 162 in a row is a
+      // minute of nothing happening.
+      const empties = SyncManager._emptyDirsDeepestFirst(dirs, Object.keys(after));
+      if (empties.length) {
+        console.log(`[Two-way] ${empties.length} cartelle rimaste vuote sulla share — le tolgo`);
+        this._progress({ op: 'twoway', phase: 'transfer', done: 0, total: empties.length, action: 'delete-remote', file: '' });
+        // Deepest first, and level by level: a parent can only go once its children
+        // have, so the batches follow the depth instead of racing it.
+        let done = 0;
+        const byDepth = new Map();
+        for (const d of empties) { const k = d.split('/').length; (byDepth.get(k) || byDepth.set(k, []).get(k)).push(d); }
+        for (const depth of [...byDepth.keys()].sort((a, b) => b - a)) {
+          const level = byDepth.get(depth);
+          for (let i = 0; i < level.length; i += 6) {
+            await Promise.all(level.slice(i, i + 6).map(async (d) => {
+              try { await this._smb(cfg, ['del', base + '/' + d], { timeout: 60000 }); } catch (_) { /* someone put a file back */ }
+              this._progress({ op: 'twoway', phase: 'transfer', done: ++done, total: empties.length, action: 'delete-remote', file: d });
+            }));
+          }
+        }
       }
     } catch (_) {}
 
@@ -2316,6 +2385,10 @@ class SyncManager {
     }
 
     // Persist the baseline for the next run.
+    // What is still waiting to go from the server. Anything no longer there is done
+    // with; the key disappears when the list empties, so this cannot grow for ever.
+    for (const rel of [...approvedDel]) if (!(rel in remote)) approvedDel.delete(rel);
+    if (approvedDel.size) allState[pendKey] = [...approvedDel]; else delete allState[pendKey];
     try { allState[stateKey] = st; fs.writeFileSync(stateFile, JSON.stringify(allState), 'utf8'); } catch (_) {}
     console.log(`[Two-way] Samba done: ↑${uploaded} ↓${downloaded}${deleted ? ` ✗${deleted} eliminati` : ''}${conflicts ? ` ⚠${conflicts} conflitti (entrambe le versioni tenute)` : ''}`);
     return { method: 'smb-twoway', uploaded, downloaded, deleted, conflicts };
@@ -2378,6 +2451,10 @@ class SyncManager {
     const stateKey = `webdav:${url}/${base}`;
     const firstRun = !allState[stateKey];
     const st = allState[stateKey] || {};
+    // Same memory as the Samba side (see there): what the user agreed to delete on
+    // the server and is still up.
+    const pendKey = `__massdel__${stateKey}`;
+    const approvedDel = new Set(Array.isArray(allState[pendKey]) ? allState[pendKey] : []);
     const conflictCopies = this.config?.sync?.twoway?.conflictCopies !== false;
     const propagateDeletes = this.config?.sync?.twoway?.propagateDeletes !== false;
 
@@ -2457,13 +2534,21 @@ class SyncManager {
     // Decide everything first, so a mass delete can be stopped before any of it runs.
     const plan = [...allRels].map(rel => ({ rel, L: localMap[rel], R: remote[rel],
       d: this._twowayDecide(localMap[rel], remote[rel], getBase(rel), firstRun, conflictCopies, pd, TOL) }));
+    // Same rule as the Samba side: a leftover of an approved mass delete goes, it
+    // does not come back.
+    for (const p of plan) {
+      if (approvedDel.has(p.rel) && localMap[p.rel] === undefined && p.d.action === 'download') {
+        p.d = { action: 'delete-remote' };
+      }
+    }
     let host = url;
     try { host = new URL(url).host; } catch (_) {}
-    await this._holdMassDelete(plan, {
+    const approved = await this._holdMassDelete(plan, {
       remoteTotal: Object.keys(remote).filter(r => r.startsWith('notes/') || r.startsWith('attachments/')).length,
       localTotal: local.length,
       target: host + base,
     });
+    for (const rel of approved || []) approvedDel.add(rel);
 
     const work = plan.filter(p => p.d.action !== 'adopt' && p.d.action !== 'skip').length;
     let step = 0;
@@ -2476,7 +2561,7 @@ class SyncManager {
       } else if (d.action === 'download') {
         if (await downloadRel(rel)) { downloaded++; log.push(['down', rel]); try { const t = R / 1000; fs.utimesSync(absOf(rel), t, t); } catch (_) {} st[rel] = { r: R, l: R }; }
       } else if (d.action === 'delete-remote') {
-        if (await deleteRemoteRel(rel)) { deleted++; log.push(['del-remote', rel]); delete st[rel]; console.warn('[Two-way WebDAV] deleted on server (propagated):', rel); }
+        if (await deleteRemoteRel(rel)) { deleted++; log.push(['del-remote', rel]); delete st[rel]; approvedDel.delete(rel); console.warn('[Two-way WebDAV] deleted on server (propagated):', rel); }
       } else if (d.action === 'delete-local') {
         if (deleteLocalRel(rel)) { deleted++; log.push(['del-local', rel]); delete st[rel]; console.warn('[Two-way WebDAV] deleted locally (propagated):', rel); }
       } else if (d.action === 'conflict') {
@@ -2518,6 +2603,8 @@ class SyncManager {
       try { fs.mkdirSync(path.dirname(localHdr), { recursive: true }); const buf = await client.getFileContents(base + '/' + HDR, { format: 'binary' }); fs.writeFileSync(localHdr, Buffer.from(buf)); const t = remoteHdrMtime / 1000; fs.utimesSync(localHdr, t, t); downloaded++; } catch (_) {}
     }
 
+    for (const rel of [...approvedDel]) if (!(rel in remote)) approvedDel.delete(rel);
+    if (approvedDel.size) allState[pendKey] = [...approvedDel]; else delete allState[pendKey];
     try { allState[stateKey] = st; fs.writeFileSync(stateFile, JSON.stringify(allState), 'utf8'); } catch (_) {}
     // Claim this folder for SYNC so a future BACKUP to the same folder refuses it.
     try { await this._webdavWriteFile(client, base, SyncManager._MARK_SYNC); } catch (_) {}
