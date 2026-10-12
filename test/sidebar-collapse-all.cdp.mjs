@@ -4,7 +4,8 @@
 // goes wrong: the icon and the tooltip have to name what the NEXT click does, not
 // what the tree looks like now. Checked here, against the running app, on a vault
 // with a folder inside a folder:
-//   · the button is in the sidebar strip, with the other five,
+//   · the button sits in the TOP row, between Files and Recent, and never takes the
+//     green underline that marks the view you are on (it is an action, not a view),
 //   · on a fresh profile (nothing open) it offers to OPEN, and one click opens every
 //     folder — the nested one included, with its note really in the DOM (folders
 //     render their children lazily, so an "open" folder that was never clicked used
@@ -12,6 +13,8 @@
 //   · the icon and the tooltip then flip to "close all", and a second click closes
 //     everything,
 //   · opening a single folder by hand flips them back on its own,
+//   · pressing it from another view (Recent) comes back to Files, so the click is
+//     never invisible,
 //   · and what the button did survives a reload, like any other open folder.
 //
 //   run: npm run test:collapseall     (needs a display; uses xvfb-run when present)
@@ -71,7 +74,13 @@ const look = () => ev(`(() => {
   const rows = [...document.querySelectorAll('#file-tree .tree-folder')].map(r => ({ name: r.dataset.folder, open: r.classList.contains('open') }));
   return {
     inStrip: btn ? btn.parentElement.id : null,
+    // Where it sits in the top row: the icons before it, and the one right after.
+    before: btn && btn.nextElementSibling ? btn.nextElementSibling.id : null,
+    after: btn && btn.previousElementSibling ? btn.previousElementSibling.id : null,
+    underlined: btn ? getComputedStyle(btn).borderBottomColor : null,
+    tabs: document.querySelectorAll('#sidebar-section-tabs > button').length,
     siblings: document.querySelectorAll('#sidebar-views .sidebar-view-btn').length,
+    view: typeof _sidebarView === 'string' ? _sidebarView : null,
     title: btn ? btn.title : null,
     icon: btn ? (vis(btn.querySelector('.chev-expand-all')) ? 'expand' : vis(btn.querySelector('.chev-collapse-all')) ? 'collapse' : 'none') : null,
     folders: rows,
@@ -85,8 +94,12 @@ const click = async () => { await ev(`document.getElementById('btn-collapse-all'
 
 {
   const s = await look();
-  check('the button is in the sidebar strip with the others',
-    !!s && s.inStrip === 'sidebar-views' && s.siblings === 6, JSON.stringify(s));
+  check('the button is in the top row, right before Recent and after Files',
+    !!s && s.inStrip === 'sidebar-section-tabs' && s.before === 'view-recent' && s.after === 'view-files',
+    JSON.stringify(s));
+  check('and the strip below is back to its five buttons', !!s && s.siblings === 5, JSON.stringify(s));
+  check('it never wears the view-tab underline',
+    !!s && /rgba\(0, 0, 0, 0\)|transparent/.test(s.underlined || ''), `border-bottom-color = ${s && s.underlined}`);
   check('a fresh profile has nothing open, so the button offers to OPEN',
     !!s && s.open === 0 && s.icon === 'expand' && /open|apri|expand/i.test(s.title || ''),
     JSON.stringify(s));
@@ -124,6 +137,17 @@ await click();
   const s = await look();
   check('and from there the button still closes the tree', !!s && s.open === 0, JSON.stringify(s));
 }
+
+// Pressed from another view it has to come back to Files, or the click is invisible.
+await ev(`document.getElementById('view-recent').click()`); await sleep(600);
+check('the sidebar really switched to Recent', await ev(`_sidebarView`) === 'recent');
+await click();
+{
+  const s = await look();
+  check('pressing it from Recent comes back to Files and opens the tree',
+    !!s && s.view === 'files' && s.folders.length === 3 && s.folders.every(f => f.open), JSON.stringify(s));
+}
+await click();
 
 // Reload: what the button did is an open-folder state like any other, so it lasts.
 await click(); await sleep(400);

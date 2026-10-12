@@ -2864,6 +2864,11 @@ function updateCollapseAllBtn() {
 // restoring a remembered handful would make the second click do something different
 // from what its icon just promised.
 function toggleAllFolders() {
+  // The button sits in the row of view icons, so it can be pressed while the sidebar
+  // is showing Recent, Bookmarks or Tags — where the tree is not on screen and the
+  // click would look like it did nothing. Come back to Files first: the button is
+  // about the file tree, and this way it always shows its own effect.
+  if (_sidebarView !== 'files') { try { switchSidebarView('files'); } catch (_) {} }
   if (state.openFolders.size) state.openFolders.clear();
   else allFolderKeys().forEach(k => state.openFolders.add(k));
   renderTree();   // rebuilds the rows, then persists and refreshes the button

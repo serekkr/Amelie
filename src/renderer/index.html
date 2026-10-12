@@ -32,6 +32,20 @@
           <span class="sst-default-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
           <span class="sst-check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg></span>
         </button>
+        <!-- Close / open every folder at once, the button Obsidian's file explorer has.
+             Two chevrons that come together to close the tree and spread apart to open
+             it (CSS swaps the second group in once nothing is open). It sits among the
+             view icons but it is an ACTION, not a view: it never takes the green
+             underline, and clicking it from another view comes back to Files so the
+             click always shows its effect. No data-i18n-title — the tooltip names what
+             the NEXT click will do, so it is set from JS (updateCollapseAllBtn) and a
+             fixed one would come back on every language change. -->
+        <button id="btn-collapse-all" class="sst sst-action">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <g class="chev-collapse-all"><path d="M7 20l5-5 5 5"/><path d="M7 4l5 5 5-5"/></g>
+            <g class="chev-expand-all"><path d="M7 15l5 5 5-5"/><path d="M7 9l5-5 5 5"/></g>
+          </svg>
+        </button>
         <button class="sst" id="view-recent" title="Recenti" data-i18n-title="section.recent" aria-label="Recenti">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
         </button>
@@ -120,18 +134,6 @@
             </button>
             <button id="btn-new-todo" class="sidebar-view-btn" title="Nuovo todo" data-i18n-title="sidebar.new_todo">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>
-            </button>
-            <!-- Close / open every folder at once, the button Obsidian's file explorer
-                 has. Two chevrons that come together to close the tree and spread apart
-                 to open it (the second group is swapped in by CSS once nothing is open).
-                 No data-i18n-title: the tooltip names what the NEXT click will do, so it
-                 changes with the tree and is set from JS (updateCollapseAllBtn) — a fixed
-                 one would come back on every language change. -->
-            <button id="btn-collapse-all" class="sidebar-view-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <g class="chev-collapse-all"><path d="M7 20l5-5 5 5"/><path d="M7 4l5 5 5-5"/></g>
-                <g class="chev-expand-all"><path d="M7 15l5 5 5-5"/><path d="M7 9l5-5 5 5"/></g>
-              </svg>
             </button>
           </div>
           <div id="file-tree"></div>
