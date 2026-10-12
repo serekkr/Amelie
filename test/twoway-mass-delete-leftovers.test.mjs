@@ -12,6 +12,11 @@
 //   2. deleting files never removed the folders they were in, so the tree stayed
 //      standing and the share looked untouched.
 //
+// What did NOT change, on purpose: the question. The leftovers are asked about again,
+// like any other mass delete — "perché voglio che mi chieda, quando manca" (serekkr,
+// 12/10/2026). Remembering the answer decides what to DO with what is left, not
+// whether to ask.
+//
 // Driven against a fake share: the SMB helper calls are stubbed, so what is checked
 // is the engine's decisions — which file it deletes, which it fetches, which folder
 // it sweeps — not whether Samba works.
@@ -72,7 +77,8 @@ function mgr(share, { answer = 'delete' } = {}) {
   m._smbGet = async () => true;
   // Downloading is what must NOT happen to a leftover: record it and write the file.
   m._twowayDownload = async () => true;
-  m._askMassDelete = async () => answer;
+  m.asked = [];
+  m._askMassDelete = async (info) => { m.asked.push(info); return answer; };
   return m;
 }
 
@@ -124,9 +130,34 @@ async function runPass(m) {
     !fs.existsSync(path.join(ATT, 'images', 'foto.png')), 'il file è tornato in locale');
   check('the empty folders went too',
     share.dirs.length === 0, JSON.stringify(share.dirs));
+  check('one file alone is not a mass delete, so nothing was asked',
+    m.asked.length === 0, JSON.stringify(m.asked));
   const after = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
   check('and the pending list is cleared once there is nothing left of it',
     !after[`__massdel__${key}`], JSON.stringify(after[`__massdel__${key}`]));
+  if (before == null) fs.rmSync(stateFile, { force: true }); else fs.writeFileSync(stateFile, before);
+}
+
+// ── The question stays, every time ──────────────────────────────────────────
+// Eight leftovers of an approved delete, with the vault still empty: that is a mass
+// delete by any measure, and it must be ASKED about again — not remembered away.
+{
+  const files = {}; for (let i = 1; i <= 8; i++) files[`notes/vecchia-${i}.md`] = Date.now() - 60000;
+  const share = fakeShare(files, ['notes']);
+  const stateFile = path.join(os.homedir(), '.local', 'share', 'amelie', 'twoway-state.json');
+  const before = fs.existsSync(stateFile) ? fs.readFileSync(stateFile, 'utf8') : null;
+  const key = `//${SMB.host}/${SMB.share}/amelie\\sync`;
+  fs.writeFileSync(stateFile, JSON.stringify({
+    [key]: { 'notes/.amelie-order.json': { r: 1, l: 1 } },
+    [`__massdel__${key}`]: Object.keys(files),
+  }));
+  const m = mgr(share);
+  await runPass(m);
+  check('a pile of leftovers is asked about again, like any mass delete',
+    m.asked.length >= 1 && m.asked[0].where === 'remote' && m.asked[0].count === 8,
+    JSON.stringify(m.asked));
+  check('and once the answer is given they go, all of them',
+    Object.keys(share.files).length === 0, JSON.stringify(Object.keys(share.files)));
   if (before == null) fs.rmSync(stateFile, { force: true }); else fs.writeFileSync(stateFile, before);
 }
 

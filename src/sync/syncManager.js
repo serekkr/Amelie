@@ -2063,6 +2063,12 @@ class SyncManager {
     const approvedRemote = [];
     for (const where of ['remote', 'local']) {
       const act = where === 'remote' ? 'delete-remote' : 'delete-local';
+      // Every mass delete is asked about, every time — including the leftovers of one
+      // already agreed to. Tried the other way on 12/10/2026 (remember the answer, do
+      // not ask again for the same paths) and serekkr said no: "perché voglio che mi
+      // chieda". Cancelling a lot of files on the other side is exactly the moment a
+      // question is worth its interruption, and the memory of the approval is there to
+      // decide WHAT to do with the leftovers, not to skip asking.
       const hits = plan.filter(p => p.d.action === act);
       const total = where === 'remote' ? remoteTotal : localTotal;
       if (!SyncManager._isMassDelete(hits.length, total)) continue;
