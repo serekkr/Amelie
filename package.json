@@ -58,6 +58,7 @@
     "test:bkdest": "node test/backup-dest-list.cdp.mjs",
     "test:syncenable": "node test/sync-enable-after-restart.cdp.mjs",
     "test:collapseall": "node test/sidebar-collapse-all.cdp.mjs",
+    "test:treesort": "node test/tree-sort.cdp.mjs",
     "test:bkfmt": "node test/backup-format-default.cdp.mjs",
     "test:gpuflags": "node test/startup-toggles.cdp.mjs",
     "test:restoreobs": "node test/restore-obsidian.cdp.mjs",

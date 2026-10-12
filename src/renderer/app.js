@@ -2701,7 +2701,11 @@ async function checkDepsOnStartup() {
 async function loadTree() {
   await loadTreeOrderFromVault();
   _treeOrderGrew = false;
+  // The manual order is applied FIRST in every mode, sort or no sort: it is what
+  // keeps each item's hand-made place recorded (and gives a new file one), so going
+  // back to Manual finds the arrangement exactly as it was left.
   state.notes = applyManualOrder(await window.inkwell.listNotes(), '');
+  if (treeSortMode !== 'manual') state.notes = sortTreeNodes(state.notes, treeSortMode);
   // Every item on screen now has its place in the saved order (see applyManualOrder)
   // — write that down, so the order travels with the vault instead of depending on
   // file dates this disk made up. Never mid-sync: half a vault would be written as
@@ -3267,6 +3271,11 @@ function makeNoteEl(node, parentArray, folderPath = '') {
     // interleaved folder/note order sticks. (Attach drags also reach here.)
     saveManualOrder(folderPath, arr);
     if (found.parentArr && found.parentArr !== arr) saveManualOrder(srcFolder, found.parentArr);
+    // Dropped back into the same folder while a sort is in force: the place has been
+    // saved, but the view is sorted, so the item goes straight back where the sort
+    // wants it. Say so, instead of looking broken. (A drag into ANOTHER folder is a
+    // move, not a reorder: that one is visible whatever the sort.)
+    if (treeSortMode !== 'manual' && srcFolder === (folderPath || '')) showToast(window.i18n.t('sort.manual_hint'), 4000);
     renderTree();
   });
   return el;
@@ -9232,6 +9241,88 @@ function sortFolderChildren(folderNode, mode) {
   renderTree();
 }
 
+// ── Sort order of the whole tree (the ⇅ button) ─────────────────────────────
+// Obsidian's file explorer offers one sort for the whole tree; this is the same
+// idea, with the one choice Obsidian cannot have — Manual, Amelie's saved drag
+// order — kept as the DEFAULT, because every vault here was arranged by hand
+// before this button existed.
+const TREE_SORTS = ['manual', 'name-asc', 'name-desc', 'mod-desc', 'mod-asc', 'cre-desc', 'cre-asc'];
+let treeSortMode = (() => {
+  try { const v = localStorage.getItem('amelie-tree-sort'); return TREE_SORTS.includes(v) ? v : 'manual'; }
+  catch (_) { return 'manual'; }
+})();
+
+// Folders FIRST at every level, whatever the sort — as in Obsidian, and as the
+// manual order's own default does. A date sort reads the date of the item itself;
+// a folder has none on this tree, so folders keep their names' order among
+// themselves instead of all piling up at one end.
+function sortTreeNodes(nodes, mode) {
+  const ts = (v) => { const t = Date.parse(v); return Number.isFinite(t) ? t : 0; };
+  const key = mode.startsWith('name') ? null : (mode.startsWith('mod') ? 'modified' : 'created');
+  const desc = mode.endsWith('-desc');
+  const byName = (a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' });
+  const cmp = (a, b) => {
+    if ((a.type === 'folder') !== (b.type === 'folder')) return a.type === 'folder' ? -1 : 1;
+    if (!key || a.type === 'folder') return desc && !key ? -byName(a, b) : byName(a, b);
+    const d = ts(a[key]) - ts(b[key]);
+    return (desc ? -d : d) || byName(a, b);     // same timestamp → by name, never at random
+  };
+  const out = [...nodes].sort(cmp);
+  out.forEach(n => { if (n.type === 'folder' && n.children) n.children = sortTreeNodes(n.children, mode); });
+  return out;
+}
+
+// The button says which sort is in force: the accent while the tree is not in its
+// hand-made order, and the tooltip naming the mode (a menu you have to open to read
+// is no answer to "why is this note first?").
+function updateSortBtn() {
+  const btn = $('btn-sort');
+  if (!btn) return;
+  btn.classList.toggle('sorted', treeSortMode !== 'manual');
+  btn.title = window.i18n.t('sort.title') + ': ' + window.i18n.t(SORT_LABEL_KEY[treeSortMode] || 'sort.manual');
+  btn.setAttribute('aria-label', btn.title);
+  document.querySelectorAll('#sort-menu .sort-item').forEach(b => b.classList.toggle('active', b.dataset.sort === treeSortMode));
+}
+const SORT_LABEL_KEY = {
+  'manual': 'sort.manual', 'name-asc': 'sort.name_asc', 'name-desc': 'sort.name_desc',
+  'mod-desc': 'sort.mod_desc', 'mod-asc': 'sort.mod_asc',
+  'cre-desc': 'sort.cre_desc', 'cre-asc': 'sort.cre_asc',
+};
+
+function setTreeSort(mode) {
+  if (!TREE_SORTS.includes(mode)) return;
+  treeSortMode = mode;
+  try { localStorage.setItem('amelie-tree-sort', mode); } catch (_) {}
+  updateSortBtn();
+  // Reload rather than re-sort in place: going back to Manual has to read the saved
+  // order again, and a sort must start from it too, not from the last sort's result.
+  loadTree();
+}
+
+function setupTreeSort() {
+  const btn = $('btn-sort'), menu = $('sort-menu');
+  if (!btn || !menu) return;
+  const close = () => { menu.style.display = 'none'; btn.setAttribute('aria-expanded', 'false'); };
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (menu.style.display === 'block') { close(); return; }
+    const r = btn.getBoundingClientRect();
+    menu.style.display = 'block';
+    btn.setAttribute('aria-expanded', 'true');
+    // Under the button, and pulled back inside the window if it would run off the
+    // right edge — the sidebar can be narrow and the menu is wider than the button.
+    menu.style.left = Math.max(6, Math.min(r.left, window.innerWidth - menu.offsetWidth - 6)) + 'px';
+    menu.style.top = (r.bottom + 4) + 'px';
+  });
+  menu.querySelectorAll('.sort-item').forEach(item => {
+    item.addEventListener('click', (e) => { e.stopPropagation(); close(); setTreeSort(item.dataset.sort); });
+  });
+  document.addEventListener('click', () => { if (menu.style.display === 'block') close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && menu.style.display === 'block') close(); });
+  document.addEventListener('amelie:lang-changed', () => { try { updateSortBtn(); } catch (_) {} });
+  updateSortBtn();
+}
+
 // ─── Note links ───────────────────────────────────────────────────────────────
 // Everything that turns a `[[wiki link]]` or a `[markdown](link.md)` into a note
 // of this vault, and back. It sat in the graph section until the graph was
@@ -9402,6 +9493,7 @@ function setupSettings() {
   $('btn-new-note').addEventListener('click', () => createNewNote(newNoteFolder()));
   $('btn-new-folder').addEventListener('click', () => createNewFolder());
   $('btn-collapse-all')?.addEventListener('click', () => toggleAllFolders());
+  setupTreeSort();
   // The tooltip is built from a translated string, so it has to be rebuilt when the
   // language changes — same reason #btn-focus-mode listens for this.
   document.addEventListener('amelie:lang-changed', () => { try { updateCollapseAllBtn(); } catch (_) {} });

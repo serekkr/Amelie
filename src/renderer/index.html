@@ -126,6 +126,15 @@
                 <g class="chev-expand-all"><path d="M7 15l5 5 5-5"/><path d="M7 9l5-5 5 5"/></g>
               </svg>
             </button>
+            <!-- Sort order for the whole tree, the way Obsidian's file explorer offers it,
+                 next to the collapse button. Amelie has one choice Obsidian has not —
+                 Manual, the drag order — and it stays the default: everything that was
+                 arranged by hand before this button existed must still be where it was
+                 put. The tooltip names the sort in force, so it is set from JS
+                 (updateSortBtn); the menu itself is #sort-menu, below. -->
+            <button id="btn-sort" class="sidebar-view-btn" aria-haspopup="true" aria-expanded="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8l3.5-3.5L11 8"/><path d="M7.5 4.5v15"/><path d="M14 10h3"/><path d="M14 14h5"/><path d="M14 18h7"/></svg>
+            </button>
             <button id="btn-canvas" class="sidebar-view-btn" title="Draw (Excalidraw)" data-i18n-title="sidebar.draw">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3.5a2.121 2.121 0 0 1 3 3L7 18l-4 1 1-4L15.5 3.5z"/><path d="M13 6l3 3"/></svg>
             </button>
@@ -1956,6 +1965,20 @@
       <button id="ctx-sort-name" style="display:none" data-i18n="ctx.sort_name">Ordina per nome</button>
       <button id="ctx-sort-date" style="display:none" data-i18n="ctx.sort_date">Ordina per data modifica</button>
       <button id="ctx-delete" style="display:none" data-i18n="ctx.delete">Elimina</button>
+    </div>
+
+    <!-- Sort order of the note tree (the ⇅ button in the sidebar strip). One choice at a
+         time, the one in force ticked. "Manual" is the drag order Amelie saves per folder;
+         the others are a VIEW over it and never touch what was arranged by hand. -->
+    <div id="sort-menu" style="display:none">
+      <button class="sort-item" data-sort="manual" data-i18n="sort.manual">Manuale (trascinamento)</button>
+      <div class="ctx-sep"></div>
+      <button class="sort-item" data-sort="name-asc"  data-i18n="sort.name_asc">Nome (A → Z)</button>
+      <button class="sort-item" data-sort="name-desc" data-i18n="sort.name_desc">Nome (Z → A)</button>
+      <button class="sort-item" data-sort="mod-desc"  data-i18n="sort.mod_desc">Modificato (prima i recenti)</button>
+      <button class="sort-item" data-sort="mod-asc"   data-i18n="sort.mod_asc">Modificato (prima i vecchi)</button>
+      <button class="sort-item" data-sort="cre-desc"  data-i18n="sort.cre_desc">Creato (prima i recenti)</button>
+      <button class="sort-item" data-sort="cre-asc"   data-i18n="sort.cre_asc">Creato (prima i vecchi)</button>
     </div>
 
     <!-- Color palette popup (set the tree label color of a note/folder) -->

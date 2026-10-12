@@ -4,7 +4,7 @@
 // goes wrong: the icon and the tooltip have to name what the NEXT click does, not
 // what the tree looks like now. Checked here, against the running app, on a vault
 // with a folder inside a folder:
-//   · the button sits in the sidebar strip, third of five, right after "new folder",
+//   · the button sits in the sidebar strip, third of six, right after "new folder",
 //   · on a fresh profile (nothing open) it offers to OPEN, and one click opens every
 //     folder — the nested one included, with its note really in the DOM (folders
 //     render their children lazily, so an "open" folder that was never clicked used
@@ -93,11 +93,11 @@ const click = async () => { await ev(`document.getElementById('btn-collapse-all'
 
 {
   const s = await look();
-  check('the button is in the strip, right after "new folder" and before "draw"',
-    !!s && s.inStrip === 'sidebar-views' && s.after === 'btn-new-folder' && s.before === 'btn-canvas',
+  check('the button is in the strip, right after "new folder" and before the sort one',
+    !!s && s.inStrip === 'sidebar-views' && s.after === 'btn-new-folder' && s.before === 'btn-sort',
     JSON.stringify(s));
-  check('which makes five in the strip, and leaves the top row at five',
-    !!s && s.siblings === 5 && s.tabs === 5, JSON.stringify(s));
+  check('which makes six in the strip, and leaves the top row at five',
+    !!s && s.siblings === 6 && s.tabs === 5, JSON.stringify(s));
   check('a fresh profile has nothing open, so the button offers to OPEN',
     !!s && s.open === 0 && s.icon === 'expand' && /open|apri|expand/i.test(s.title || ''),
     JSON.stringify(s));
