@@ -10,6 +10,9 @@
 // A plain open (tree click, link, Recent) must STILL switch to the existing tab: that is
 // the last check here, and it is what tells the two behaviours apart.
 //
+// The last pair of checks is about the arrows' LOOK, not their job: green on hover,
+// measured with a real mouse move, in more than one theme.
+//
 //   run: npm run test:nav     (needs xvfb-run: dnf install xorg-x11-server-Xvfb)
 import fs from 'node:fs';
 import path from 'node:path';
@@ -177,6 +180,38 @@ r = await ev(`(async () => {
 })()`);
 check('clicking a note open elsewhere still switches to that tab',
   r.active === 1 && r.path === nav[3] && r.len === 2, JSON.stringify(r));
+
+// ── Hover colour, in the theme the user actually runs ────────────────────────
+// Green on hover was asked for twice: the rule existed, but scoped to two themes,
+// and Graphite — the one in use — was not among them, so it showed nowhere
+// (12/10/2026; the same trap as v1.0.111). Hovered for real with a mouse event and
+// the colour read off the element, in every theme, so no scoping can hide it again.
+{
+  const ACCENT = await ev(`getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()`);
+  const hoverColour = async (theme) => {
+    await ev(`(() => { document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)}); return 1; })()`);
+    await sleep(250);
+    const box = await ev(`(() => { const b = document.getElementById('btn-prev-note').getBoundingClientRect();
+      return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }; })()`);
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y, buttons: 0 });
+    await sleep(250);
+    const got = await ev(`(() => { const b = document.getElementById('btn-prev-note');
+      const c = getComputedStyle(b);
+      const acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      // Paint the accent into a throwaway element so both sides are rgb() and comparable.
+      const probe = document.createElement('span'); probe.style.color = acc; document.body.appendChild(probe);
+      const want = getComputedStyle(probe).color; probe.remove();
+      return { got: c.color, want, disabled: b.disabled }; })()`);
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 5, y: 400, buttons: 0 });
+    return got;
+  };
+  for (const theme of ['graphite', 'serekkr']) {
+    const r = await hoverColour(theme);
+    check(`the prev arrow goes accent on hover in the ${theme} theme`,
+      !!r && !r.disabled && r.got === r.want, JSON.stringify(r));
+  }
+  await ev(`document.documentElement.setAttribute('data-theme', 'graphite')`);
+}
 
 const failed = results.filter((x) => !x.pass).length;
 console.log(failed ? `\n${failed} of ${results.length} FAILED` : `\nall ${results.length} checks passed`);

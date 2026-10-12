@@ -926,7 +926,11 @@ kbd {
    same mark the 18 × 18 box drew, with the empty width around it gone. It replaced a
    13 × 13 box, where the sign was only ~6px tall and you had to look for it. */
 .note-nav-btn svg { width: 7.5px; height: 18px; }
-.note-nav-btn:hover { color: var(--text-0); }
+/* Accent on hover in EVERY theme (asked 12/10/2026). It was white here and green only
+   under the two themes listed further down — and the user's is Graphite, so the green
+   he had asked for showed nowhere. :not(:disabled) so the greyed-out arrow at the end
+   of the vault stays greyed out. */
+.note-nav-btn:hover:not(:disabled) { color: var(--accent); }
 .note-nav-btn:active { color: var(--text-1); }
 .note-nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .note-nav-btn:disabled:hover { color: var(--icon-strong); }
@@ -3997,8 +4001,6 @@ html:not([data-theme]) .sst:hover,
 html[data-theme="serekkr"] .sst:hover,
 html:not([data-theme]) .tool-btn:hover:not(.danger),
 html[data-theme="serekkr"] .tool-btn:hover:not(.danger),
-html:not([data-theme]) .note-nav-btn:hover:not(:disabled),
-html[data-theme="serekkr"] .note-nav-btn:hover:not(:disabled),
 html:not([data-theme]) #tab-new-btn:hover,
 html[data-theme="serekkr"] #tab-new-btn:hover,
 html:not([data-theme]) #btn-settings:hover,
