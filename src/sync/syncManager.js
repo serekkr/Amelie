@@ -98,12 +98,6 @@ class SyncManager {
     this._firstBackupTimer = setTimeout(() => {
       this._firstBackupTimer = null;
       if (!this._anyBackupDestination()) return;      // switched back off meanwhile
-      // A vault that holds only the welcome note the app wrote has nothing of the
-      // user's in it yet: no first copy, and no notification saying one was made.
-      if (this._vaultIsOnlyWelcome()) {
-        console.log('[Sync] New backup destination, but the vault holds only the welcome note — no first copy');
-        return;
-      }
       console.log('[Sync] New backup destination (' + reason.join(', ') + ') — first backup now');
       // force: the vault may be untouched, and this copy still has to be made.
       // manual: false — nobody pressed a button, so the notification reads as the
@@ -864,6 +858,21 @@ class SyncManager {
       // overdue and say it again.
       this._updateSyncState({ lastBackupAt: new Date().toISOString() });
       return { success: true, skipped: true, empty: true };
+    }
+    // Nothing in the vault but the welcome note the app wrote itself: there is nothing
+    // of the user's to copy yet. Every AUTOMATIC run skips it in silence — the first
+    // copy after switching a destination on, the scheduled pass, and the catch-up that
+    // fires at the next start because there is "no record of a previous backup".
+    // Pressing "Back up now" still copies: that one was asked for.
+    // (Not with the empty-vault branch above: that one SAYS "nothing to back up",
+    // which here would be a notification about the app's own welcome note.)
+    if (!manual && this._vaultIsOnlyWelcome()) {
+      console.log('[Sync] Only the welcome note in the vault — nothing of the user\'s to back up yet');
+      // The clock moves like any other skip, or every start would find a backup
+      // overdue and come straight back here.
+      this._updateSyncState({ lastBackupAt: new Date().toISOString() });
+      this._setStatus('idle');
+      return { success: true, skipped: true, onlyWelcome: true };
     }
     this._emptyBackupNotified = false;
     const sig = this._vaultSignature();

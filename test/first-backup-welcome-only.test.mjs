@@ -9,10 +9,16 @@
 // just held the app's own welcome note. His answer: "non vedo il senso di creare un
 // backup automatico con solo la nota welcome".
 //
-// So that first copy is skipped in exactly that state — and in no other. What this
-// pins down is the "and in no other", because the dangerous mistake here is a guard
-// that grows: a SECOND note, an attachment, a folder, or the welcome note edited by
-// the user all make it a normal vault again, and nothing of theirs ever goes uncopied.
+// So every AUTOMATIC run is skipped in exactly that state — and in no other. The first
+// try guarded only the timer that fires after switching a destination on, and he saw
+// the notice again: the CATCH-UP ("no record of a previous backup") runs one too, at
+// the next start. The rule now sits at the one door every backup goes through, which
+// is also where the empty-vault rule lives.
+//
+// What this pins down is the "and in no other", because the dangerous mistake here is
+// a guard that grows: a SECOND note, an attachment, a folder, or the welcome note
+// edited by the user all make it a normal vault again, and nothing of theirs ever goes
+// uncopied. And pressing "Back up now" copies even then — that one was asked for.
 //
 //   run: npm test
 import fs from 'node:fs';
@@ -98,8 +104,30 @@ const archives = () => fs.readdirSync(DEST).filter((f) => f.endsWith('.tar.gz'))
   m.config = { sync: {} };
   m.reloadConfig(CFG());
   await new Promise((r) => setTimeout(r, 300));
-  check('no first copy, and nothing said, on a vault holding only the welcome note',
-    archives().length === 0 && m.sent.length === 0, JSON.stringify({ archives: archives(), sent: m.sent }));
+  // "Nothing said" means nothing the bell would print: logSyncEventNotif only ever
+  // speaks for 'ok' and 'error', so an 'idle' is the skip passing through quietly.
+  const speaks = (sent) => sent.filter(x => x.status === 'ok' || x.status === 'error');
+  check('no first copy, and nothing the bell would say, on a vault holding only the welcome note',
+    archives().length === 0 && speaks(m.sent).length === 0, JSON.stringify({ archives: archives(), sent: m.sent }));
+
+  // The catch-up, which is what he saw the second time: at the next start there is
+  // "no record of a previous backup", so one is queued — and it must skip too.
+  {
+    const m3 = mgr();
+    const caught = await m3.runBackup({ manual: false });
+    check('the catch-up run skips it as well, silently',
+      caught.onlyWelcome === true && archives().length === 0 && speaks(m3.sent).length === 0,
+      JSON.stringify({ caught, archives: archives(), sent: m3.sent }));
+  }
+  // Pressing the button is a different matter: it was asked for.
+  {
+    const m4 = mgr();
+    const pressed = await m4.runBackup({ force: true, manual: true });
+    check('"Back up now" still copies, even with only the welcome note',
+      pressed.success === true && !pressed.onlyWelcome && archives().length === 1,
+      JSON.stringify({ pressed, archives: archives() }));
+    fs.rmSync(path.join(DEST, archives()[0]));
+  }
 
   // The user writes something: from here on it is an ordinary vault.
   fs.writeFileSync(path.join(NOTES, 'prima.md'), '# la mia prima nota\n');
