@@ -1106,6 +1106,19 @@ class SyncManager {
       // does ("…skipped because nothing changed"). An automatic pass says it once
       // per quiet stretch, like the backup's skip, so an idle vault does not file
       // the same line at every pass.
+      // What this pass changed ON THIS COMPUTER, so the renderer can refresh a note
+      // you are LOOKING AT instead of leaving the old text on screen until you walk
+      // to another note and come back (serekkr, 13/10/2026). Paths are relative to
+      // notes/, which is what a tab carries. A conflict counts too: when the remote
+      // wins, the file under the canonical name is replaced as well. Read HERE,
+      // before _saveTwowayReport — that one consumes the log. A first pass can pull
+      // hundreds; past 300 nothing is listed and the renderer re-reads the few notes
+      // it has open instead, which is cheaper than sending the lot through IPC.
+      const _down = (this._twowayLog || [])
+        .filter(e => (e[0] === 'down' || e[0] === 'conflict') && String(e[1] || '').startsWith('notes/'))
+        .map(e => String(e[1]).slice('notes/'.length));
+      if (_down.length > 300) meta.refreshAll = true;
+      else if (_down.length) meta.refreshed = _down;
       // The report of what it did: the bell shows its totals and opens it.
       const report = this._saveTwowayReport({ manual, dests: meta.dests });
       if (report) meta.report = report;
@@ -2994,6 +3007,10 @@ class SyncManager {
       empty: !!(meta && meta.empty),
       // A two-way pass stopped before a mass delete: { where, count, total, target }.
       heldDeletes: (meta && meta.heldDeletes) || null,
+      // Notes this pass rewrote on disk (relative to notes/) → the renderer reloads
+      // the ones it has open. `refreshAll` means "too many to list, check yours".
+      refreshed: (meta && meta.refreshed) || null,
+      refreshAll: !!(meta && meta.refreshAll),
     }));
   }
 

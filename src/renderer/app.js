@@ -12817,6 +12817,50 @@ function updateSyncButtonVisibility() {
   }
 }
 
+/**
+ * Put back on screen the notes a sync pass just rewrote on disk.
+ *
+ * A tab keeps its own copy of the text, and only a fresh openNote re-reads the file —
+ * so a pass that pulled a newer version of the note you were LOOKING AT left the old
+ * text up, and the way to see what had arrived was to walk to another note and come
+ * back (serekkr, 13/10/2026). `paths` is what the pass wrote (relative to notes/);
+ * null means it wrote too many to list, so every open note is checked.
+ *
+ * A tab with UNSAVED edits is never overwritten — what you typed wins, it goes up at
+ * the next pass — and you are told the share was carrying something else.
+ */
+async function refreshOpenNotesFromDisk(paths) {
+  const want = Array.isArray(paths) && paths.length ? new Set(paths) : null;
+  const active = getActiveTab();
+  let held = 0;
+  for (const t of tabs) {
+    if (!t || t.type || !t.path) continue;
+    if (want && !want.has(t.path)) continue;
+    // Dirty: leave it alone. Only say so when the pass really did write THIS file —
+    // on a refreshAll there is no list to be sure with, and a guess would cry wolf.
+    if (t.isDirty) { if (want) held++; continue; }
+    const fresh = await window.inkwell.readNote(t.path).catch(() => null);
+    if (fresh == null || fresh === t.content) continue;
+    t.content = fresh;
+    if (t !== active) continue;        // a background tab reads it when you go back
+    // On screen now. The caret and the scroll stay where they were, clamped to what
+    // is still there — the text under them just changed.
+    const pos = Math.min(editor.selectionStart || 0, fresh.length);
+    const top = editor.scrollTop;
+    editor.value = fresh;
+    try { editor.setSelectionRange(pos, pos); } catch (_) {}
+    try { editor.scrollTop = top; } catch (_) {}
+    applyEditorHighlight();
+    try { updatePreview(); } catch (_) {}
+    try { updateWordCount(); } catch (_) {}
+    try { updateNoteMeta(t); } catch (_) {}
+    try { loadFrontmatterPanel(t); } catch (_) {}
+    if (tocVisible) { try { renderTOC(); } catch (_) {} }
+    try { decorateEditorCodeBlocks(); } catch (_) {}
+  }
+  if (held) showToast(window.i18n.t('sync.note_kept_yours'), 5000);
+}
+
 function setupSync() {
   updateSyncButtonVisibility();
 
@@ -12905,6 +12949,11 @@ function setupSync() {
     if (data.status === 'ok') {
       syncStatusDot.className = 'sync-ok';
       if (!data.unchanged) loadTree();   // a pass that copied nothing changed nothing to re-read
+      // …and a note that came DOWN goes back on screen, instead of sitting there as
+      // the old version until you leave it and return.
+      if (data.refreshed || data.refreshAll) {
+        refreshOpenNotesFromDisk(data.refreshed).catch(e => console.error('[Sync] refresh of open notes failed:', e));
+      }
       setTimeout(() => syncStatusDot.className = 'sync-idle', 4000);
     } else if (data.status === 'error') {
       // Don't flash the icon orange/red; the error is reported via notifications.
