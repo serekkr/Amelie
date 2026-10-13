@@ -691,6 +691,7 @@ const TRANSLATIONS = {
     'about.update_to':          'Aggiornamento a {v} disponibile',
     'about.check_failed':       'Non riesco a raggiungere GitHub',
     'about.open_releases':      'Scaricalo da GitHub',
+    'about.download_update':    'Scarica l\'aggiornamento',
 
     // Context menu extra
     'ctx.new_note':             'Crea nota',
@@ -1613,6 +1614,7 @@ const TRANSLATIONS = {
     'about.update_to':          'Update to {v} available',
     'about.check_failed':       'Could not reach GitHub',
     'about.open_releases':      'Get it on GitHub',
+    'about.download_update':    'Download the update',
 
     // Context menu extra
     'ctx.new_note':             'New note',
@@ -2466,6 +2468,7 @@ const TRANSLATIONS = {
     'about.update_to':          'Update auf {v} verfügbar',
     'about.check_failed':       'GitHub nicht erreichbar',
     'about.open_releases':      'Auf GitHub holen',
+    'about.download_update':    'Update herunterladen',
     'ctx.new_note': 'Neue Notiz',
     'ctx.new_folder': 'Neuer Ordner',
     'ctx.open_new_tab': 'In neuem Tab öffnen',
@@ -3293,6 +3296,7 @@ const TRANSLATIONS = {
     'about.update_to':          'Actualización a {v} disponible',
     'about.check_failed':       'No se puede contactar con GitHub',
     'about.open_releases':      'Descárgalo en GitHub',
+    'about.download_update':    'Descargar la actualización',
     'ctx.new_note': 'Nueva nota',
     'ctx.new_folder': 'Nueva carpeta',
     'ctx.open_new_tab': 'Abrir en una pestaña nueva',
@@ -4120,6 +4124,7 @@ const TRANSLATIONS = {
     'about.update_to':          'Mise à jour vers {v} disponible',
     'about.check_failed':       'Impossible de joindre GitHub',
     'about.open_releases':      'Télécharger sur GitHub',
+    'about.download_update':    'Télécharger la mise à jour',
     'ctx.new_note': 'Nouvelle note',
     'ctx.new_folder': 'Nouveau dossier',
     'ctx.open_new_tab': 'Ouvrir dans un nouvel onglet',
@@ -4947,6 +4952,7 @@ const TRANSLATIONS = {
     'about.update_to':          'Dostępna aktualizacja do {v}',
     'about.check_failed':       'Nie można połączyć się z GitHub',
     'about.open_releases':      'Pobierz z GitHuba',
+    'about.download_update':    'Pobierz aktualizację',
     'ctx.new_note': 'Nowa notatka',
     'ctx.new_folder': 'Nowy folder',
     'ctx.open_new_tab': 'Otwórz w nowej karcie',
@@ -5774,6 +5780,7 @@ const TRANSLATIONS = {
     'about.update_to':          'Actualizare la {v} disponibilă',
     'about.check_failed':       'Nu pot contacta GitHub',
     'about.open_releases':      'Descarcă de pe GitHub',
+    'about.download_update':    'Descarcă actualizarea',
     'ctx.new_note': 'Notă nouă',
     'ctx.new_folder': 'Folder nou',
     'ctx.open_new_tab': 'Deschide în filă nouă',

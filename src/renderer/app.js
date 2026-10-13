@@ -1918,6 +1918,8 @@ function resetAboutUpdateLine() {
   if (out) { out.textContent = ''; out.className = 'test-result'; }
   const get = document.getElementById('btn-get-update');
   if (get) { get.style.display = 'none'; get.onclick = null; }
+  const url = document.getElementById('about-update-url');
+  if (url) { url.textContent = ''; url.style.display = 'none'; url.onclick = null; }
 }
 
 /**
@@ -1926,6 +1928,19 @@ function resetAboutUpdateLine() {
  * — calling an unreachable GitHub "up to date", or telling a machine that runs a build
  * NEWER than the last release to go back to it.
  */
+const RELEASES_URL = 'https://github.com/serekkr/amelie/releases';
+
+/**
+ * Where "get it" should go, and what the button should say. Pure, like the rest of the
+ * update decisions: a release that carries the installer is offered as the FILE (the
+ * browser downloads it), one that does not is offered as its page, and no release at
+ * all is the list of releases.
+ */
+function updateDownloadTarget(latest) {
+  if (latest && latest.asset) return { href: latest.asset, label: 'about.download_update' };
+  return { href: (latest && latest.url) || RELEASES_URL, label: 'about.open_releases' };
+}
+
 function updateCheckOutcome(latest, mine) {
   if (!latest || !latest.version || !mine) return 'failed';
   return cmpVersions(latest.version, mine) > 0 ? 'newer' : 'current';
@@ -9726,6 +9741,18 @@ function setupSettings() {
     // No answer means the request did not get there — offline, blocked, GitHub down.
     // Say that, rather than "you are up to date", which would be a guess.
     const found = updateCheckOutcome(latest, mine);
+    // The address, whatever the answer. Asked for on 13/10/2026: a version number
+    // nobody can act on is half the message — this says WHERE updates come from, in
+    // plain text you can read off the screen or click. When there is one, it is that
+    // release's own page (the file is there); otherwise the list of releases.
+    const link = $('about-update-url');
+    if (link) {
+      const href = found === 'newer' ? updateDownloadTarget(latest).href : RELEASES_URL;
+      link.textContent = href;
+      link.title = href;
+      link.style.display = '';
+      link.onclick = () => window.inkwell.openExternal(href).catch(() => {});
+    }
     if (found === 'failed') {
       if (out) { out.textContent = '✗ ' + window.i18n.t('about.check_failed'); out.className = 'test-result fail'; }
       return;
@@ -9733,8 +9760,14 @@ function setupSettings() {
     if (found === 'newer') {
       if (out) { out.textContent = '↑ ' + window.i18n.t('about.update_to', { v: 'v' + latest.version }); out.className = 'test-result ok'; }
       if (get) {
+        // The FILE when the release carries one — the browser then downloads the
+        // installer instead of landing you on a page to look for it — and the
+        // release page when it does not. The label says which of the two it is.
+        const t = updateDownloadTarget(latest);
+        const lbl = get.querySelector('span');
+        if (lbl) lbl.textContent = window.i18n.t(t.label);
         get.style.display = '';
-        get.onclick = () => window.inkwell.openExternal(latest.url || 'https://github.com/serekkr/amelie/releases').catch(() => {});
+        get.onclick = () => window.inkwell.openExternal(t.href).catch(() => {});
       }
     } else if (out) {
       // Level OR ahead: a build newer than the last release (which is what a machine

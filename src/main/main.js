@@ -1866,7 +1866,19 @@ ipcMain.handle('updates:latest', async () => {
             if (!/^\d+(\.\d+){0,3}$/.test(version)) return finish(null);
             const url = typeof j.html_url === 'string' && /^https:\/\/github\.com\//.test(j.html_url)
               ? j.html_url : 'https://github.com/serekkr/Amelie/releases';
-            finish({ version, url });
+            // The installer itself, when the release carries one: the About panel can
+            // then offer the FILE rather than a page to go hunting on. Only a
+            // github.com address is taken — the rest of the release body is whatever
+            // the API happens to hold, and this one is handed to a browser.
+            let asset = null;
+            try {
+              const a = (Array.isArray(j.assets) ? j.assets : [])
+                .find(x => x && typeof x.name === 'string' && /\.run$/i.test(x.name)
+                        && typeof x.browser_download_url === 'string'
+                        && /^https:\/\/github\.com\//.test(x.browser_download_url));
+              if (a) asset = a.browser_download_url;
+            } catch (_) {}
+            finish({ version, url, asset });
           } catch (_) { finish(null); }
         });
         res.on('error', () => finish(null));

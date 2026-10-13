@@ -208,6 +208,44 @@ say('clicking it writes an answer into the panel', /^[✓✗↑]/.test(String(li
 say('and the answer is one of the three it knows',
   /latest version|Update to|Could not reach|ultima versione|Aggiornamento|raggiungere/i.test(String(line || '')), JSON.stringify(line));
 
+// ── The address, so you know where updates come from ─────────────────────────
+// serekkr, 13/10/2026: "fai vedere anche il url … così la gente lo sa il link dove
+// andare per scaricare aggiornamenti". A version number nobody can act on is half
+// the message.
+say('a check shows the address it is talking about', await ev(`(() => {
+  const u = document.getElementById('about-update-url');
+  return !!u && u.style.display !== 'none' && /^https:\\/\\/github\\.com\\//.test(u.textContent);
+})()`) === true, await ev(`(document.getElementById('about-update-url')||{}).textContent`));
+say('and it is the releases page when there is nothing newer',
+  /\/releases$/.test(await ev(`document.getElementById('about-update-url').textContent`)) ||
+  /\/releases\/tag\//.test(await ev(`document.getElementById('about-update-url').textContent`)),
+  await ev(`document.getElementById('about-update-url').textContent`));
+say('the address goes away with the rest when you leave', await ev(`(() => {
+  resetAboutUpdateLine();
+  const u = document.getElementById('about-update-url');
+  return u.textContent === '' && u.style.display === 'none';
+})()`) === true);
+// Put an answer back for the panel-lifetime checks below.
+await ev(`document.getElementById('btn-check-updates').click()`);
+await sleep(6000);
+
+// ── What "get it" offers ─────────────────────────────────────────────────────
+// A release that carries the .run is offered as the FILE — the browser downloads the
+// installer instead of landing you on a page to hunt on — and the label says so.
+const tgt = (o) => ev(`JSON.stringify(updateDownloadTarget(${o}))`).then(JSON.parse);
+{
+  const t = await tgt(`{version:'1.0.150', url:'https://github.com/serekkr/Amelie/releases/tag/v1.0.150', asset:'https://github.com/serekkr/Amelie/releases/download/v1.0.150/amelie_1.0.150.run'}`);
+  say('a release with the installer offers the file', /amelie_1\.0\.150\.run$/.test(t.href), JSON.stringify(t));
+  say('and the button says "download the update"', t.label === 'about.download_update', JSON.stringify(t));
+}
+{
+  const t = await tgt(`{version:'1.0.150', url:'https://github.com/serekkr/Amelie/releases/tag/v1.0.150'}`);
+  say('one without it offers its page', /\/tag\/v1\.0\.150$/.test(t.href), JSON.stringify(t));
+  say('and the button says so instead', t.label === 'about.open_releases', JSON.stringify(t));
+}
+say('no release at all falls back to the list of releases',
+  (await tgt('null')).href === 'https://github.com/serekkr/amelie/releases');
+
 // ── The answer does not outlive the panel ────────────────────────────────────
 // serekkr, 13/10/2026: "dopo aver fatto check for update non sparisce la scritta
 // neanche dopo che chiudo la schermata options". It is about a moment, not a setting.
