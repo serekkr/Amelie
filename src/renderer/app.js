@@ -9741,17 +9741,28 @@ function setupSettings() {
     // No answer means the request did not get there — offline, blocked, GitHub down.
     // Say that, rather than "you are up to date", which would be a guess.
     const found = updateCheckOutcome(latest, mine);
-    // The address, whatever the answer. Asked for on 13/10/2026: a version number
-    // nobody can act on is half the message — this says WHERE updates come from, in
-    // plain text you can read off the screen or click. When there is one, it is that
-    // release's own page (the file is there); otherwise the list of releases.
+    // The button and the address come up on EVERY answer, next to each other — the
+    // shape serekkr asked for on 13/10/2026, after seeing it with nothing newer to
+    // fetch and finding the row half empty. They were only drawn when an update
+    // existed, which hid the one thing the panel is for: where the app comes from.
+    // So they always appear, and they always say what they will actually do — the
+    // FILE when a release carries one (the browser downloads the .run), that
+    // release's page when it does not, and the list of releases in every other case,
+    // which is the right place to land when GitHub could not even be reached.
+    const t = found === 'newer' ? updateDownloadTarget(latest)
+                                : { href: RELEASES_URL, label: 'about.open_releases' };
     const link = $('about-update-url');
     if (link) {
-      const href = found === 'newer' ? updateDownloadTarget(latest).href : RELEASES_URL;
-      link.textContent = href;
-      link.title = href;
+      link.textContent = t.href;
+      link.title = t.href;
       link.style.display = '';
-      link.onclick = () => window.inkwell.openExternal(href).catch(() => {});
+      link.onclick = () => window.inkwell.openExternal(t.href).catch(() => {});
+    }
+    if (get) {
+      const lbl = get.querySelector('span');
+      if (lbl) lbl.textContent = window.i18n.t(t.label);
+      get.style.display = '';
+      get.onclick = () => window.inkwell.openExternal(t.href).catch(() => {});
     }
     if (found === 'failed') {
       if (out) { out.textContent = '✗ ' + window.i18n.t('about.check_failed'); out.className = 'test-result fail'; }
@@ -9759,16 +9770,6 @@ function setupSettings() {
     }
     if (found === 'newer') {
       if (out) { out.textContent = '↑ ' + window.i18n.t('about.update_to', { v: 'v' + latest.version }); out.className = 'test-result ok'; }
-      if (get) {
-        // The FILE when the release carries one — the browser then downloads the
-        // installer instead of landing you on a page to look for it — and the
-        // release page when it does not. The label says which of the two it is.
-        const t = updateDownloadTarget(latest);
-        const lbl = get.querySelector('span');
-        if (lbl) lbl.textContent = window.i18n.t(t.label);
-        get.style.display = '';
-        get.onclick = () => window.inkwell.openExternal(t.href).catch(() => {});
-      }
     } else if (out) {
       // Level OR ahead: a build newer than the last release (which is what a machine
       // this is developed on runs) must not be told to "update" to an older number.

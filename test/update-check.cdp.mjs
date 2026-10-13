@@ -196,7 +196,7 @@ say('and neither half missing passes for the other',
 
 say('the About panel has a line to answer in, empty until asked',
   await ev(`(() => { const o = document.getElementById('about-update-result'); return !!o && o.textContent === ''; })()`) === true);
-say('and the download button is hidden until a check finds something',
+say('and the download button is hidden until you ask',
   await ev(`(() => { const g = document.getElementById('btn-get-update'); return !!g && g.style.display === 'none'; })()`) === true);
 // The click itself: GitHub may or may not be reachable from here, so what is checked is
 // that it ANSWERS on screen — in one of the three shapes — and never silently does
@@ -245,6 +245,19 @@ const tgt = (o) => ev(`JSON.stringify(updateDownloadTarget(${o}))`).then(JSON.pa
 }
 say('no release at all falls back to the list of releases',
   (await tgt('null')).href === 'https://github.com/serekkr/amelie/releases');
+
+// ── After a check, the row is whole ──────────────────────────────────────────
+// serekkr, 13/10/2026, looking at it with nothing newer to fetch: the button and the
+// address belong on screen whatever the answer — a panel that hides where the app
+// comes from until the day there is an update hides it almost always.
+say('the button is on screen after a check, even with nothing newer',
+  await ev(`(() => { const g = document.getElementById('btn-get-update'); return !!g && g.style.display !== 'none'; })()`) === true);
+say('and it is next to "Check for updates", in the same row',
+  await ev(`(() => { const a = document.getElementById('btn-check-updates'), b = document.getElementById('btn-get-update');
+    return a.parentElement === b.parentElement && Math.abs(a.getBoundingClientRect().top - b.getBoundingClientRect().top) < 2; })()`) === true);
+say('its label says what it will do when there is nothing to fetch',
+  (await ev(`document.querySelector('#btn-get-update span').textContent`) || '').length > 0,
+  await ev(`document.querySelector('#btn-get-update span').textContent`));
 
 // ── The answer does not outlive the panel ────────────────────────────────────
 // serekkr, 13/10/2026: "dopo aver fatto check for update non sparisce la scritta
