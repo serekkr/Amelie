@@ -1302,6 +1302,30 @@ function _initCmEditor() {
       if (_editorMiddleDownHandler) cd.addEventListener('mousedown', _editorMiddleDownHandler, true);
       if (_editorAuxClickHandler) cd.addEventListener('auxclick', _editorAuxClickHandler, true);
     } catch (_) {}
+    // A click in the empty strip to the LEFT of the text did nothing at all. That
+    // strip is wide — the scroller's 48px padding, plus the line-number gutter when it
+    // is on — and aiming at the beginning of a line is exactly where you land in it:
+    // the caret stayed wherever it had been, so the click read as swallowed (serekkr,
+    // 13/10/2026, on the lines under a heading). It now means what it looks like it
+    // means: the start of the line you clicked on. Only the left strip — a click ON
+    // the text stays CM's own business, including drag-select.
+    try {
+      const scroller = mount.querySelector('.cm-scroller');
+      scroller?.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        const view = _cmHandle && _cmHandle.view;
+        const content = view && view.contentDOM;
+        if (!content) return;
+        const r = content.getBoundingClientRect();
+        if (e.clientX >= r.left) return;
+        const pos = view.posAtCoords({ x: r.left + 1, y: e.clientY }, false);
+        if (pos == null) return;
+        e.preventDefault();
+        const from = view.state.doc.lineAt(pos).from;
+        view.dispatch({ selection: { anchor: from } });
+        view.focus();
+      }, true);
+    } catch (_) {}
     // Sync the line-number gutter to the saved setting (CM's native gutter).
     try { _cmHandle.setLineNumbers(loadLineNumbers()); } catch (_) {}
     // Force CM to re-measure line metrics after the editor's web font
