@@ -382,14 +382,16 @@
      not be merged, or changing the accent would repaint every success indicator. */
   --green: #4caf7d;
   --yellow: #d6a344;
-  /* The heading ladder, used only by this theme (see the rule near #preview-content):
-     it has to DESCEND, and --h4 did not — at #93e5ab it was the lightest of the four
-     (contrast 10.8 on #212121, against 9.1 for --h1), so the smallest heading shouted
-     the loudest. Muted instead of darkened: #8fbd9c is 7.6, below --h1 and --h2, and
-     a step darker would have gone under the accent's own 6.3 and read as disabled. */
+  /* The heading ladder, used only by this theme (see the rule near #preview-content).
+     Four shades of the SAME green first, which told you nothing you could not already
+     see from the size; asked on 13/10/2026 for colours "un po' più diversi, tipo verde
+     giallo verde aperto", so the hue moves with the level instead of the brightness:
+     green, amber, light green, and a muted sage for the smallest. All four are read on
+     #212121 at 7:1 or better (9.1 / 7.0 / 11.5 / 7.6), and none of them is the accent
+     #3fb950 — that green already means "this is the one that is on". */
   --h1: #6bd88a;
-  --h2: #4fc873;
-  --h3: #3fb950;
+  --h2: #d6a344;
+  --h3: #b8e986;
   --h4: #8fbd9c;
   /* Blue, and the only frankly blue thing in the theme: with a green accent a link
      can keep its own hue, which is the clearest way to say it is not an accent. It
