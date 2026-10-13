@@ -208,5 +208,25 @@ say('clicking it writes an answer into the panel', /^[✓✗↑]/.test(String(li
 say('and the answer is one of the three it knows',
   /latest version|Update to|Could not reach|ultima versione|Aggiornamento|raggiungere/i.test(String(line || '')), JSON.stringify(line));
 
+// ── The answer does not outlive the panel ────────────────────────────────────
+// serekkr, 13/10/2026: "dopo aver fatto check for update non sparisce la scritta
+// neanche dopo che chiudo la schermata options". It is about a moment, not a setting.
+say('the line is there right after a check',
+  (await ev(`document.getElementById('about-update-result').textContent`)).length > 0);
+say('closing and reopening Settings clears it', await ev(`(async () => {
+  document.getElementById('settings-modal').style.display = 'none';
+  await openSettings();
+  const o = document.getElementById('about-update-result');
+  const g = document.getElementById('btn-get-update');
+  return o.textContent === '' && g.style.display === 'none';
+})()`) === true);
+say('and so does walking back into About', await ev(`(() => {
+  const o = document.getElementById('about-update-result');
+  const g = document.getElementById('btn-get-update');
+  o.textContent = '↑ something from before'; g.style.display = '';
+  resetAboutUpdateLine();
+  return o.textContent === '' && g.style.display === 'none';
+})()`) === true);
+
 console.log(`\n${ok.every(Boolean) ? `all ${ok.length} passed` : `${ok.filter(Boolean).length}/${ok.length}`}`);
 process.exit(ok.every(Boolean) ? 0 : 1);

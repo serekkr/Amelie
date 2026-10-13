@@ -1907,6 +1907,20 @@ function updateWorthAnnouncing(latest, mine, announced) {
 }
 
 /**
+ * The answer a check left on screen is about a moment, not a setting: it goes when you
+ * leave. Arriving at About is the app's own convention for every other panel (the Vault
+ * tab clears its result line, Backup folds its sections), and it was the one thing the
+ * update line did not do — it sat there through a close and a reopen of Settings, still
+ * announcing a check from ten minutes ago (serekkr, 13/10/2026).
+ */
+function resetAboutUpdateLine() {
+  const out = document.getElementById('about-update-result');
+  if (out) { out.textContent = ''; out.className = 'test-result'; }
+  const get = document.getElementById('btn-get-update');
+  if (get) { get.style.display = 'none'; get.onclick = null; }
+}
+
+/**
  * What a manual "Check for updates" found. Pure, and separate from the button for the
  * same reason updateWorthAnnouncing is separate from the fetch: the mistakes live here
  * — calling an unreachable GitHub "up to date", or telling a machine that runs a build
@@ -9784,6 +9798,7 @@ function setupSettings() {
       // blocked the repaint → the strip appeared with a delay.
       requestAnimationFrame(() => {
         if (btn.dataset.tab === 'security') openSecurityTab();
+        if (btn.dataset.tab === 'about') resetAboutUpdateLine();
         if (btn.dataset.tab === 'shortcuts') renderShortcutsTab();
         // Theme tab: re-scan ~/.amelie/themes from disk so new files/blocks
         // appear as cards WITHOUT restarting the app.
@@ -12085,6 +12100,7 @@ function buildVpnConfig() {
 }
 
 async function openSettings() {
+  try { resetAboutUpdateLine(); } catch (_) {}
   const cfg = await window.inkwell.readConfig();
   state.config = cfg;
   _smbExpanded = { backup: false, sync: false };   // each open starts collapsed-if-configured
