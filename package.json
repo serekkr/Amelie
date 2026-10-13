@@ -38,6 +38,7 @@
     "test:recent": "node test/recent-by-date.mjs",
     "test:temps": "node test/attachment-temps-hidden.cdp.mjs",
     "test:drop": "node test/sidebar-media-drop.cdp.mjs",
+    "test:pdfdrop": "node test/pdf-drop-sidebar.cdp.mjs",
     "test:rename": "node test/attachment-rename.cdp.mjs",
     "test:mediatab": "node test/media-tab-plays.cdp.mjs",
     "test:notemedia": "node test/note-media-plays.cdp.mjs",

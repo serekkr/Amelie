@@ -17025,6 +17025,19 @@ function setupFileDrop() {
     const entries = items.map(it => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null)).filter(Boolean);
     const flat = [...(e.dataTransfer?.files || [])];
 
+    // One place for "it did not come in, and why". The loose-PDF branch below used to
+    // swallow this entirely — main refuses a file and all that was left was a console
+    // line nobody sees (serekkr, 13/10/2026: a PDF dragged onto the sidebar, nothing
+    // imported, nothing said). Every known reason keeps its own sentence; anything else
+    // still says something, with the name of the file that did not make it.
+    const _attachErrToast = (err, name) => {
+      const m = err?.message || String(err || '');
+      if (/ATTACHMENT_TOO_LARGE/.test(m)) showToast(window.i18n.t('attach.too_large'));
+      else if (/Unsupported attachment type/.test(m)) showToast(window.i18n.t('attach.unsupported_format'));
+      else if (/ATTACHMENT_CONTENT_MISMATCH/.test(m)) showToast(window.i18n.t('attach.content_mismatch'));
+      else showToast(window.i18n.t('attach.import_failed', { name: name || '' }), 4000);
+    };
+
     // RELIABLE folder detection: webkitGetAsEntry is flaky for directories on Linux
     // (and Electron 32+ removed File.path), so resolve the real FS path via
     // webUtils.getPathForFile and let MAIN decide which are folders. A dropped FOLDER
@@ -17065,12 +17078,6 @@ function setupFileDrop() {
       // The error/size helpers used by the editor's handler are local to setupEditor(),
       // so the checks are inlined rather than reached for across scopes.
       const _isDroppedMedia = (name) => isSupportedAttachmentName(name) && !/\.pdf$/i.test(name || '');
-      const _mediaErrToast = (err) => {
-        const m = err?.message || String(err || '');
-        if (/ATTACHMENT_TOO_LARGE/.test(m)) showToast(window.i18n.t('attach.too_large'));
-        else if (/Unsupported attachment type/.test(m)) showToast(window.i18n.t('attach.unsupported_format'));
-        else if (/ATTACHMENT_CONTENT_MISMATCH/.test(m)) showToast(window.i18n.t('attach.content_mismatch'));
-      };
       // An identical file already in the vault is reused by the importer (same bytes →
       // same copy), so the only honest way to tell "added" from "you already have this"
       // is whether the tree actually grew.
@@ -17098,7 +17105,7 @@ function setupFileDrop() {
         let failed = 0;
         for (const p of mediaPaths) {
           try { await window.inkwell.importAttachmentPath(p, _sidebarMediaTarget(p.split('/').pop())); }
-          catch (err) { failed++; console.error('Sidebar media import failed:', p, err); _mediaErrToast(err); }
+          catch (err) { failed++; console.error('Sidebar media import failed:', p, err); _attachErrToast(err, p.split('/').pop()); }
         }
         await _reportMedia(before, failed, droppedOnFolder);
         return;
@@ -17127,10 +17134,7 @@ function setupFileDrop() {
         } catch (err) {
           failed++;
           console.error('Sidebar media save failed:', file.name, err);
-          const m = err?.message || String(err || '');
-          if (/ATTACHMENT_TOO_LARGE/.test(m)) showToast(window.i18n.t('attach.too_large'));
-          else if (/Unsupported attachment type/.test(m)) showToast(window.i18n.t('attach.unsupported_format'));
-          else if (/ATTACHMENT_CONTENT_MISMATCH/.test(m)) showToast(window.i18n.t('attach.content_mismatch'));
+          _attachErrToast(err, file.name);
         }
       }
       await loadTree();
@@ -17287,7 +17291,7 @@ function setupFileDrop() {
         }
         pdfImported++;
         // No "PDF added" toast — the imported PDF opens in a tab as feedback.
-      } catch (err) { console.error('Import pdf failed:', file.name, err); }
+      } catch (err) { console.error('Import pdf failed:', file.name, err); _attachErrToast(err, file.name); }
     }
     if (pdfImported > 0) await loadTree();
 
