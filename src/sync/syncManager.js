@@ -520,13 +520,22 @@ class SyncManager {
    * (`vaultSig` in sync-state.json, restored into `_lastBackupSig` at startup — a
    * skip deliberately leaves it alone, so it always describes a real copy).
    *
-   * False when there is no record at all: that case is already "overdue" on the
-   * clock, and answering true here as well would only duplicate it. Any error
-   * walking the vault answers false too — a catch-up is an optimisation, and the
-   * interval timer is still behind it.
+   * With no fingerprint at all, nothing has ever been copied: true for any vault
+   * that holds something to copy (see below). Any error walking the vault answers
+   * false — a catch-up is an optimisation, and the interval timer is still behind it.
    */
   _backupChangePending() {
-    if (!this._lastBackupSig) return false;
+    // No fingerprint at all means no run has ever WRITTEN anything — a skip stamps
+    // `lastBackupAt` exactly like a real copy does, so the clock can read "ten minutes
+    // ago" over a destination that is still empty. serekkr, 12→13/10/2026: Local was
+    // switched on while the vault held only the welcome note, the forced first copy
+    // skipped it (as it should), and then 794 notes went in. A whole day later
+    // `~/Documents/amelie-backups` had never been created: every start read the clock
+    // as recent and this question as "no", and the interval timer, which counts uptime,
+    // restarted from zero each launch. So until something has actually been copied, a
+    // copy is due for any vault that has something to copy — the same two states the
+    // forced first copy declines are the only ones that stay quiet here.
+    if (!this._lastBackupSig) return !this._vaultIsEmpty() && !this._vaultIsOnlyWelcome();
     try { return this._vaultSignature() !== this._lastBackupSig; }
     catch (_) { return false; }
   }

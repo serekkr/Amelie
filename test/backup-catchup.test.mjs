@@ -552,6 +552,60 @@ const stampTwoway = (agoMin) => {
   fs.rmSync(DEST, { recursive: true, force: true });
 }
 
+// ── A clock stamped by a SKIP, over a destination that was never written ─────
+// serekkr, 12→13/10/2026: Local switched on while the vault held only the welcome
+// note. The forced first copy skipped it on purpose and stamped `lastBackupAt`
+// anyway, so every later start read the clock as recent; `vaultSig` was never
+// written, so the fingerprint question answered no as well. He then wrote 794
+// notes, and a day later `~/Documents/amelie-backups` had never been created —
+// the interval timer counts uptime and he restarts more often than once a day.
+// A clock with no fingerprint behind it means NOTHING has been copied yet.
+{
+  const m0 = new SyncManager(NOTES, ATT, CONF); m0.config = SHARE();
+  fs.writeFileSync(statePath(), JSON.stringify({ lastBackupAt: new Date(Date.now() - 10 * 60000).toISOString() }));
+  const m = mgr();
+  m._loadSyncState();
+  check('a clock with no fingerprint leaves the shortcut unset', !m._lastBackupSig, String(m._lastBackupSig));
+  m._scheduleCatchUp();
+  await sleep(40);
+  check('a destination that was never written is caught up, however recent the clock',
+    m._runs.length === 1, JSON.stringify(m._runs));
+}
+{
+  // ...but the two states the forced first copy declines stay quiet here too, or
+  // every start over a brand-new install would queue a backup of nothing.
+  const E = fs.mkdtempSync(path.join(os.tmpdir(), 'amelie-emptyvault-'));
+  const EN = path.join(E, 'notes'), EA = path.join(E, 'attachments');
+  fs.mkdirSync(EN, { recursive: true }); fs.mkdirSync(EA, { recursive: true });
+  const build = () => {
+    const m = new SyncManager(EN, EA, path.join(E, 'settings.json'));
+    m.config = SHARE();
+    m._CATCH_UP_DELAY_MS = 5; m._runs = [];
+    m.runBackup = (o) => { m._runs.push({ what: 'backup', ...(o || {}) }); return { success: true }; };
+    m.runTwoway = (o) => { m._runs.push({ what: 'twoway', ...(o || {}) }); return { success: true }; };
+    fs.writeFileSync(path.join(E, 'sync-state.json'), JSON.stringify({ lastBackupAt: new Date(Date.now() - 10 * 60000).toISOString() }));
+    m._loadSyncState();
+    return m;
+  };
+  const m1 = build();
+  m1._scheduleCatchUp();
+  await sleep(40);
+  check('an empty vault is not caught up', m1._runs.length === 0, JSON.stringify(m1._runs));
+
+  fs.writeFileSync(path.join(EN, 'Welcome.md'), '# 12 October 2026\n\nStart writing your thoughts…\n');
+  const m2 = build();
+  m2._scheduleCatchUp();
+  await sleep(40);
+  check('nor is a vault holding only the welcome note', m2._runs.length === 0, JSON.stringify(m2._runs));
+
+  fs.writeFileSync(path.join(EN, 'mine.md'), 'the first thing he wrote');
+  const m3 = build();
+  m3._scheduleCatchUp();
+  await sleep(40);
+  check('one note of his own and the copy is due', m3._runs.length === 1, JSON.stringify(m3._runs));
+  fs.rmSync(E, { recursive: true, force: true });
+}
+
 fs.rmSync(ROOT, { recursive: true, force: true });
 const failed = results.filter((r) => !r.pass);
 for (const r of results) console.log(`${r.pass ? 'ok  ' : 'FAIL'}  ${r.name}${r.pass ? '' : `   [${r.detail}]`}`);
