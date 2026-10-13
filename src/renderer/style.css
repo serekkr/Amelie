@@ -382,10 +382,15 @@
      not be merged, or changing the accent would repaint every success indicator. */
   --green: #4caf7d;
   --yellow: #d6a344;
+  /* The heading ladder, used only by this theme (see the rule near #preview-content):
+     it has to DESCEND, and --h4 did not — at #93e5ab it was the lightest of the four
+     (contrast 10.8 on #212121, against 9.1 for --h1), so the smallest heading shouted
+     the loudest. Muted instead of darkened: #8fbd9c is 7.6, below --h1 and --h2, and
+     a step darker would have gone under the accent's own 6.3 and read as disabled. */
   --h1: #6bd88a;
   --h2: #4fc873;
   --h3: #3fb950;
-  --h4: #93e5ab;
+  --h4: #8fbd9c;
   /* Blue, and the only frankly blue thing in the theme: with a green accent a link
      can keep its own hue, which is the clearest way to say it is not an accent. It
      stayed put through the violet and navy accents that came before. */
@@ -1513,6 +1518,22 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #preview-content h2 { font-size: 1.45em; color: var(--text-0); }
 #preview-content h3 { font-size: 1.15em; color: var(--text-0); }
 #preview-content h4 { font-size: 1em;    color: var(--text-0); }
+/* GRAPHITE only, asked for on 13/10/2026: the headings carry the theme's green
+   ladder instead of plain white. Colour per level was the app's old behaviour
+   everywhere and was taken out because it read worse — but half of why was that it
+   showed in the rendered view ONLY, so a heading changed colour when you stopped
+   editing it. Here it is in BOTH: the same four greens in the edit overlay and in
+   the view. Every other theme keeps white headings; this is the one that asked. */
+:root[data-theme="graphite"] #preview-content h1,
+:root[data-theme="graphite"] #editor-highlight .hl-h1 { color: var(--h1); }
+:root[data-theme="graphite"] #preview-content h2,
+:root[data-theme="graphite"] #editor-highlight .hl-h2 { color: var(--h2); }
+:root[data-theme="graphite"] #preview-content h3,
+:root[data-theme="graphite"] #editor-highlight .hl-h3 { color: var(--h3); }
+:root[data-theme="graphite"] #preview-content h4,
+:root[data-theme="graphite"] #preview-content h5,
+:root[data-theme="graphite"] #preview-content h6,
+:root[data-theme="graphite"] #editor-highlight .hl-h4 { color: var(--h4); }
 #preview-content p { margin: .8em 0; line-height: var(--md-row); color: var(--text-0); }
 #preview-content a { color: var(--link); text-decoration: none; }
 #preview-content a:hover { text-decoration: underline; }
