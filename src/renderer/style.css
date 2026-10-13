@@ -38,6 +38,8 @@
   --red: #f85149;
   --green: #3fb950;
   --yellow: #d29922;
+  /* The Tab ring — see `:focus-visible` below. White everywhere but on `light`. */
+  --focus-ring: #ffffff;
   /* Headings & links — themable: every [data-theme] block (built-in or custom)
      can override these; without an override the classic palette applies. */
   --h1: #4ade80;
@@ -236,6 +238,8 @@
   --red: #c0392b;
   --green: #2e6e45;
   --yellow: #b7770d;
+  /* White would vanish on this one: the ring takes the text colour instead. */
+  --focus-ring: #2c2825;
   --h1: #2e7d4a;
   --h2: #1d7a6b;
   --h3: #0f6b66;
@@ -429,6 +433,44 @@
    dot. `accent-color` is the one property that redirects them, and it inherits, so
    stating it here covers every control in the app. */
 html { accent-color: var(--accent); }
+
+/* Keyboard focus. Nothing here used to say what Tab should look like, so the ring
+   was the browser's own — `outline: auto 1px rgb(229,151,0)`, measured in this
+   Electron: an amber this app uses for nothing, and the yellow serekkr saw tabbing
+   through the sidebar strip on 13/10/2026. Ours is
+   white, stated once and the same on every control: the strip icons, the buttons,
+   the selects, the checkboxes. `:focus-visible`, not `:focus`, so it appears for
+   Tab and not for a click — a mouse user never sees it.
+   Text fields are left out on purpose: they already answer a focus by lighting
+   their border (`#search-input:focus`, `.field-group input:focus` and the rest),
+   and a ring around them on top of that is one signal too many. */
+:where(button, select, a[href], summary, [tabindex]:not([tabindex="-1"]),
+       input[type="checkbox"], input[type="radio"], input[type="range"],
+       input[type="file"], input[type="color"]):focus-visible {
+  /* `!important`, deliberately and only here. Twenty-odd rules in this file say
+     `outline: none` on a select, a slider or a search box — they were written to
+     kill the browser's own ugly ring, back when there was nothing to put in its
+     place. A class beats this selector, so without it the ring would appear on the
+     strip icons and quietly NOT on half the options in Settings, which is worse
+     than not having it at all. The keyboard ring wins everywhere. */
+  outline: 2px solid var(--focus-ring) !important;
+  /* INSET, not around: the sidebar strip is 38px of a toolbar that clips what
+     grows past it, and a ring sitting 2px outside came out as two white bars with
+     no top and no bottom. Drawn inside, it is whole on every control, big or
+     small — the same reason the VPN type buttons use an inset ring. */
+  outline-offset: -2px !important;
+}
+
+/* Text fields answer a focus by lighting their own border, so they get no ring —
+   but they must not fall back to the browser's either, which is where the yellow
+   came from in the first place: measured in this Electron, the default ring is
+   `auto 1px rgb(229,151,0)`. Chromium also matches :focus-visible on a text field
+   that was CLICKED, not only tabbed into, so a ring here would show up on an
+   ordinary click into the search box — one more reason it belongs to the border. */
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+       textarea, [contenteditable]):focus-visible {
+  outline: none !important;
+}
 
 html, body {
   height: 100%; overflow: hidden;
