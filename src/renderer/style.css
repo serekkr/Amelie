@@ -385,13 +385,15 @@
   /* The heading ladder, used only by this theme (see the rule near #preview-content).
      Four shades of the SAME green first, which told you nothing you could not already
      see from the size; asked on 13/10/2026 for colours "un po' più diversi, tipo verde
-     cyano giallo verde aperto", so the hue moves with the level instead of the
-     brightness, in that order. All four are read on #212121 at 7:1 or better
-     (9.1 / 8.9 / 7.0 / 11.5); none of them is the accent #3fb950, which already means
-     "this is the one that is on"; and the cyan is far enough from --link #7ec0f5 that
-     a heading is not read as a link — checked side by side with one. */
+     cyano giallo verde aperto", then the cyan swapped for purple. So the hue moves
+     with the level instead of the brightness: green, purple, yellow, light green.
+     All four are read on #212121 at 7:1 or better (9.1 / 8.3 / 7.0 / 11.5); none of
+     them is the accent #3fb950, which already means "this is the one that is on".
+     The purple is the LIGHT one, #cfaaff and not a mid #c792ea: the preview paints a
+     visited link #a07ddc, and a mid purple heading would read as one. Checked with a
+     link and a visited link on the same line as a heading. */
   --h1: #6bd88a;
-  --h2: #22d3ee;
+  --h2: #cfaaff;
   --h3: #d6a344;
   --h4: #b8e986;
   /* Blue, and the only frankly blue thing in the theme: with a green accent a link
