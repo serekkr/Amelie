@@ -59,6 +59,63 @@ function fakeServer({ latencyMs = 5 } = {}) {
   return { client, files, dirs, stats };
 }
 
+// ── a server that answers about folders the way Nextcloud does ─────────────────
+// MKCOL on a folder that is already there is a 405, MKCOL whose parent is missing
+// is a 409, and PUT into a folder that does not exist is a 404. `recursive: true`
+// is what the webdav client does: walk the path and create what is missing, one
+// request at a time — which is where six uploads sharing an ancestor collide.
+function fakeNextcloud({ latencyMs = 5 } = {}) {
+  const files = new Map();
+  const dirs = new Set(['/amelie/sync']);
+  const stats = { propfind: 0, mkcol: 0, put: 0, put404: 0, mkcol405: 0, get: 0, del: 0, exists: 0, maxPar: 0, cur: 0, recursive: 0 };
+  const trip = async (fn) => {
+    stats.cur++; if (stats.cur > stats.maxPar) stats.maxPar = stats.cur;
+    try { await sleep(latencyMs); return fn(); } finally { stats.cur--; }
+  };
+  const mkcol = (d) => trip(() => {
+    stats.mkcol++;
+    const parent = d.slice(0, d.lastIndexOf('/'));
+    if (dirs.has(d)) { stats.mkcol405++; throw new Error('Invalid response: 405 Method Not Allowed'); }
+    if (parent && !dirs.has(parent)) throw new Error('Invalid response: 409 Conflict');
+    dirs.add(d);
+  });
+  const client = {
+    async getDirectoryContents(base, opts) {
+      return trip(() => {
+        stats.propfind++;
+        if (!dirs.has(base.replace(/\/+$/, ''))) throw new Error('Invalid response: 404 Not Found');
+        const out = [];
+        for (const [p, v] of files) if (p.startsWith(base.replace(/\/+$/, '') + '/'))
+          out.push({ type: 'file', filename: p, lastmod: new Date(v.mtime).toUTCString() });
+        return out;
+      });
+    },
+    async createDirectory(d, o) {
+      d = d.replace(/\/+$/, '');
+      if (!o || !o.recursive) return mkcol(d);
+      stats.recursive++;
+      let acc = '';
+      for (const seg of d.split('/')) {           // the client's own walk: one hop at a time
+        if (!seg) continue;
+        acc += '/' + seg;
+        if (!dirs.has(acc)) await mkcol(acc);     // and it gives up the rest of the chain on a 405
+      }
+    },
+    async putFileContents(p, body, _o) {
+      return trip(() => {
+        const dir = p.slice(0, p.lastIndexOf('/'));
+        if (!dirs.has(dir)) { stats.put404++; throw new Error('Invalid response: 404 Not Found'); }
+        stats.put++; files.set(p, { body: Buffer.from(body), mtime: Date.now() }); return true;
+      });
+    },
+    async getFileContents(p, _o) { return trip(() => { stats.get++; const v = files.get(p); if (!v) throw new Error('404 Not Found'); return v.body; }); },
+    async deleteFile(p) { return trip(() => { stats.del++; if (!files.delete(p)) throw new Error('404 Not Found'); }); },
+    async exists(p) { return trip(() => { stats.exists++; return files.has(p) || dirs.has(p); }); },
+    async stat(p) { return trip(() => { const v = files.get(p); if (!v) throw new Error('404 Not Found'); return { size: v.body.length, lastmod: new Date(v.mtime).toUTCString() }; }); },
+  };
+  return { client, files, dirs, stats };
+}
+
 // Hand the engine our client instead of the real one, through the module cache it
 // reads at call time.
 const wdPath = require.resolve('webdav');
@@ -162,6 +219,33 @@ async function main() {
   check('le cancellazioni viaggiano anche loro insieme', CURRENT.stats.maxPar > 1, `max in volo = ${CURRENT.stats.maxPar}`);
   const gone = written.slice(0, 10).every(rel => !CURRENT.files.has('/amelie/sync/' + rel));
   check('e sul server non ne resta nessuna', gone);
+
+
+  // ── 5. cartelle profonde che condividono gli antenati, server alla Nextcloud ──
+  // Dal Nextcloud vero di serekkr, 13/10/2026: la prima passata ha lasciato 14 file
+  // per terra con un 404, perche sei caricamenti chiedevano insieme la propria
+  // cartella con recursive:true e si pestavano i piedi sugli antenati in comune —
+  // uno vinceva la MKCOL, gli altri prendevano 405 e il client mollava li il resto
+  // della catena. Nove cartelle profonde su dodici non venivano create affatto.
+  const DEEP = [];
+  for (const cl of ['Aramco', 'DPI-Project', 'Acme'])
+    for (const sub of ['preprod-install/ADFS', 'preprod-install/LDAP', 'Serbia/clickhouse-guida', 'Serbia/kafka'])
+      DEEP.push(`02 - Work/01 - clients/${cl}/${sub}`);
+  for (const d of DEEP) {
+    fs.mkdirSync(path.join(NOTES, d), { recursive: true });
+    for (let i = 0; i < 3; i++) fs.writeFileSync(path.join(NOTES, d, `nota-${i}.md`), `# ${d} ${i}\n`, 'utf8');
+  }
+  fs.writeFileSync(STATE, '{}', 'utf8');
+  CURRENT = fakeNextcloud();
+  const r5 = await mgr()._twowayWebdav({ ...WD });
+  const D = CURRENT.stats;
+  const wantDeep = DEEP.flatMap(d => [0, 1, 2].map(i => `/amelie/sync/notes/${d}/nota-${i}.md`));
+  const upDeep = wantDeep.filter(p => CURRENT.files.has(p)).length;
+  check('cartelle profonde: nessun PUT finisce su un 404', D.put404 === 0, `404 sui PUT = ${D.put404}`);
+  check('cartelle profonde: ogni file e sul server alla PRIMA passata', upDeep === wantDeep.length, `${upDeep}/${wantDeep.length}`);
+  check('nessuna MKCOL ricorsiva: le cartelle si fanno un livello per volta', D.recursive === 0, `recursive=${D.recursive}`);
+  check('e nessuna cartella chiesta due volte', D.mkcol405 === 0, `405 sulle MKCOL = ${D.mkcol405}`);
+  check('cartelle profonde: la passata le carica tutte', r5.uploaded >= wantDeep.length, `uploaded=${r5.uploaded}`);
 
   void before; void ms1;
 }

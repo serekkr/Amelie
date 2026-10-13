@@ -2434,38 +2434,67 @@ class SyncManager {
     if (!url) throw new Error('Two-way WebDAV: URL mancante');
     const base = '/' + String(wcfg.remotePath || 'amelie/sync').replace(/^\/+|\/+$/g, '');
     const client = createClient(url, { username: wcfg.username || '', password: this._decSecret(wcfg.password) || '' });
-    // One MKCOL per folder per PASS, not one per file. Every upload used to ask for
-    // its folder again — against a server that answers in about a second, that was
-    // half the requests of a first pass. The map holds the in-flight promise and not
-    // a flag, so six uploads landing in the same new folder WAIT for the one MKCOL
-    // instead of racing it: a PUT into a folder still being made is a 409.
-    const dirJobs = new Map();
-    const ensureDir = (dir) => {
-      const d = String(dir).replace(/\/+$/, '');
-      if (!dirJobs.has(d)) dirJobs.set(d, (async () => { try { await client.createDirectory(d, { recursive: true }); } catch (_) {} })());
-      return dirJobs.get(d);
+    // Folders, all of them, before the first PUT: one flat MKCOL each, shallowest
+    // level first, six at a time — never { recursive: true } from inside an upload.
+    //
+    // Measured against the real Nextcloud on 13/10/2026: six uploads each asking for
+    // their own folder with recursive:true RACE over the ancestors they share. One
+    // wins the MKCOL and the others get a 405, and the webdav client gives up the
+    // rest of its chain right there — so the deep folder is never made and every PUT
+    // into it answers 404. Nine deep folders out of twelve went missing in the probe,
+    // and a first pass over the real vault left 14 files on the floor (they went up
+    // on the pass after, which is not the same as working). Under that contention a
+    // recursive call cost 5,9 s on average; a flat MKCOL per folder, a level at a
+    // time, costs about 360 ms.
+    const dirsDone = new Set();
+    const ensureDirs = async (dirs) => {
+      const want = new Set();
+      for (const dir of dirs) {
+        let acc = '';
+        for (const seg of String(dir).replace(/\/+$/, '').split('/')) {
+          if (!seg) continue;
+          acc += '/' + seg;
+          if (!dirsDone.has(acc)) want.add(acc);
+        }
+      }
+      if (!want.size) return;
+      const byDepth = new Map();
+      for (const d of want) { const k = d.split('/').length; if (!byDepth.has(k)) byDepth.set(k, []); byDepth.get(k).push(d); }
+      for (const k of [...byDepth.keys()].sort((a, b) => a - b)) {
+        const lvl = byDepth.get(k);
+        for (let i = 0; i < lvl.length; i += SyncManager._WEBDAV_PAR) {
+          await Promise.all(lvl.slice(i, i + SyncManager._WEBDAV_PAR).map(async (d) => {
+            // 405/409 is the server saying it is already there — the answer we wanted.
+            try { await client.createDirectory(d); }
+            catch (e) { if (!/\b40[59]\b|method not allowed/i.test(e.message || '')) console.warn('[Two-way WebDAV] mkcol failed', d, e.message); }
+            dirsDone.add(d);
+          }));
+        }
+      }
     };
-    await ensureDir(base); await ensureDir(base + '/notes'); await ensureDir(base + '/attachments');
+
+    // The listing comes FIRST: a folder it shows a file in is a folder that exists,
+    // so an ordinary pass spends no request at all on folders, and the BACKUP marker
+    // is read off the same answer instead of two more round trips.
+    let remote = {}, listed = false;
+    try { remote = await this._webdavTwowayList(client, base); listed = true; }
+    catch (e) { console.warn('[Two-way WebDAV] list failed:', e.message); remote = {}; }
+    if (listed) {
+      const baseN = base.replace(/\/+$/, '');
+      dirsDone.add(baseN);
+      for (const rel of Object.keys(remote)) {
+        const parts = String(rel).split('/'); parts.pop();
+        let d = baseN;
+        for (const seg of parts) { d += '/' + seg; dirsDone.add(d); }
+      }
+    }
+    if (!listed || !Object.keys(remote).length) await ensureDirs([base + '/notes', base + '/attachments']);
 
     // Refuse a folder already claimed by BACKUP (same rule as Samba). The backup
     // side refuses a folder claimed by SYNC (.amelie-sync) — see _syncWebDAV.
-    if (await this._webdavHasFile(client, base, SyncManager._MARK_BACKUP) || await this._webdavHasFile(client, base, 'amelie-backup'))
+    if ((listed && (SyncManager._MARK_BACKUP in remote || 'amelie-backup' in remote)) ||
+        (!listed && (await this._webdavHasFile(client, base, SyncManager._MARK_BACKUP) || await this._webdavHasFile(client, base, 'amelie-backup'))))
       throw new Error('Two-way: questa cartella WebDAV è usata per il BACKUP — scegline un\'altra o elimina il file ".amelie-backup".');
-
-    let remote = {};
-    try { remote = await this._webdavTwowayList(client, base); }
-    catch (e) { console.warn('[Two-way WebDAV] list failed:', e.message); remote = {}; }
-
-    // A folder the listing already has a file in is a folder that exists: mark it
-    // done so no upload spends a request asking for it.
-    {
-      const exists = Promise.resolve();
-      for (const rel of Object.keys(remote)) {
-        const parts = String(rel).split('/'); parts.pop();
-        let d = base;
-        for (const seg of parts) { d += '/' + seg; if (!dirJobs.has(d)) dirJobs.set(d, exists); }
-      }
-    }
 
     const localNotes = this._getAllLocalFiles(this.notesDir, '').filter(f => !f.relPath.startsWith('attachments/')).map(f => ({ rel: 'notes/' + f.relPath, abs: f.absPath }));
     const localAtt   = this._getAllLocalFiles(this.attachmentsDir, '').map(f => ({ rel: 'attachments/' + f.relPath, abs: f.absPath }));
@@ -2506,7 +2535,7 @@ class SyncManager {
       try {
         const abs = absOf(rel);
         const dir = rel.split('/').slice(0, -1).join('/');
-        if (dir) await ensureDir(base + '/' + dir);
+        if (dir && !dirsDone.has(base + '/' + dir)) await ensureDirs([base + '/' + dir]);
         await client.putFileContents(remoteOf(rel), fs.readFileSync(abs), { overwrite: true });
         return true;
       } catch (e) { console.warn('[Two-way WebDAV] upload failed', rel, e.message); return false; }
@@ -2606,6 +2635,9 @@ class SyncManager {
     // Samba side already uses for its deletions — enough to fill the waiting, below
     // where a server starts answering 503.
     const PAR = SyncManager._WEBDAV_PAR;
+    // Every folder the transfers will need, made first and in one go.
+    await ensureDirs(moves.filter(p => p.d.action === 'upload' || p.d.action === 'conflict')
+      .map(p => base + '/' + p.rel.split('/').slice(0, -1).join('/')));
     const plain = moves.filter(p => p.d.action !== 'conflict');
     for (let i = 0; i < plain.length; i += PAR) await Promise.all(plain.slice(i, i + PAR).map(runOne));
 
