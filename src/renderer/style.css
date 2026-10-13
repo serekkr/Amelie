@@ -38,13 +38,16 @@
   --red: #f85149;
   --green: #3fb950;
   --yellow: #d29922;
-  /* The Tab ring — see `:focus-visible` below. Cyan: the one hue this interface
-     does NOT already use for something. Green is the accent and means "this is the
-     one that is on" (the underline under the open view, the selected row, the
-     folders), so a green ring put two green things on screen saying two different
-     things. Cyan says only "the keyboard is here". Overridden on `light`, where a
-     bright cyan washes out on cream. */
-  --focus-ring: #22d3ee;
+  /* The Tab ring — see `:focus-visible` below. A muted amber, serekkr's pick after
+     seeing white, green and cyan side by side. NOT the browser's own ring we took
+     out: that one is #e59700, a hard orange; this is sand, two shades quieter, and
+     the difference is plain when the two are put next to each other.
+     Not `var(--accent)` either — the accent is green and in this interface green
+     already means "this is the one that is ON" (the underline under the open view,
+     the selected row, the folders), and it differs per theme, so on `amber` the ring
+     would have come out #c9a96e anyway and on `rose` violet. One colour, stated.
+     Overridden on `light`, where sand on cream is too faint. */
+  --focus-ring: #c9a96e;
   /* Headings & links — themable: every [data-theme] block (built-in or custom)
      can override these; without an override the classic palette applies. */
   --h1: #4ade80;
@@ -243,8 +246,8 @@
   --red: #c0392b;
   --green: #2e6e45;
   --yellow: #b7770d;
-  /* #22d3ee on #ede8df is barely a line; the dark end of the same hue instead. */
-  --focus-ring: #0e7490;
+  /* #c9a96e on #ede8df is barely a line; the dark end of the same hue instead. */
+  --focus-ring: #8a6d1f;
   --h1: #2e7d4a;
   --h2: #1d7a6b;
   --h3: #0f6b66;
@@ -442,9 +445,9 @@ html { accent-color: var(--accent); }
 /* Keyboard focus. Nothing here used to say what Tab should look like, so the ring
    was the browser's own — `outline: auto 1px rgb(229,151,0)`, measured in this
    Electron: an amber this app uses for nothing, and the yellow serekkr saw tabbing
-   through the sidebar strip on 13/10/2026. Ours is cyan (`--focus-ring`), stated
-   once and the same on every control: the strip icons, the buttons, the selects,
-   the checkboxes. `:focus-visible`, not `:focus`, so it appears for
+   through the sidebar strip on 13/10/2026. Ours is `--focus-ring`, stated once and
+   the same on every control: the strip icons, the buttons, the selects, the
+   checkboxes. `:focus-visible`, not `:focus`, so it appears for
    Tab and not for a click — a mouse user never sees it.
    Text fields are left out on purpose: they already answer a focus by lighting
    their border (`#search-input:focus`, `.field-group input:focus` and the rest),
