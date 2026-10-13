@@ -19886,7 +19886,7 @@
     }
   }, { decorations: (v) => v.decorations });
   var mdLinkMark = Decoration.mark({ class: "cm-md-link" });
-  var LINK_RE = /!?\[[^\]\n]*\]\([^)\n]*\)|\[\[[^\]\n]*\]\]/g;
+  var LINK_RE = /!?\[(?:[^\[\]\n]|\[[^\[\]\n]*\])*\]\([^)\n]*\)|\[\[[^\]\n]*\]\]/g;
   var linkColorPlugin = ViewPlugin.fromClass(class {
     constructor(view) {
       this.decorations = this.build(view);

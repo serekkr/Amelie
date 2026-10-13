@@ -6303,8 +6303,13 @@ function _rewriteOutsideCode(body, fn) {
 
 function _preprocessMarkdown(body) {
   return _rewriteOutsideCode(body, seg => seg
-    // [[note links]] → clickable anchors
-    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) => {
+    // [[note links]] → clickable anchors.
+    // NOT when a `(` follows: `[[3]](https://…)` is a markdown link whose LABEL is
+    // `[3]` — the footnote shape every web clipper writes, and four of them sit in
+    // serekkr's own ReadItLater notes. Read as a wiki-link it came out of the reading
+    // view as a dead "3" pointing at a note that does not exist, with the real address
+    // printed beside it in brackets. Left alone, marked parses it as the link it is.
+    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\](?!\()/g, (_, target, alias) => {
       const t = target.trim();
       const display = (alias || target).trim();
       // `[[#Heading]]` / `[[#Heading|Alias]]` aims at a heading INSIDE this note, not at

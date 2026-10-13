@@ -41,6 +41,7 @@
     "test:pdfdrop": "node test/pdf-drop-sidebar.cdp.mjs",
     "test:noterefresh": "node test/open-note-refreshed-after-sync.cdp.mjs",
     "test:leftclick": "node test/editor-click-left-of-text.cdp.mjs",
+    "test:footnote": "node test/footnote-link.cdp.mjs",
     "test:rename": "node test/attachment-rename.cdp.mjs",
     "test:mediatab": "node test/media-tab-plays.cdp.mjs",
     "test:notemedia": "node test/note-media-plays.cdp.mjs",

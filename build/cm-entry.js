@@ -555,7 +555,10 @@ const codeHighlightPlugin = ViewPlugin.fromClass(class {
 // of this pattern, so `if [[ "$c" == */* ]]; then` came out painted blue as though
 // a shell test were a link to a note.
 const mdLinkMark = Decoration.mark({ class: 'cm-md-link' });
-const LINK_RE = /!?\[[^\]\n]*\]\([^)\n]*\)|\[\[[^\]\n]*\]\]/g;
+// The label may itself hold one pair of brackets: `[[3]](url)` is a link called
+// `[3]`, not a wiki-link, and matching only `[[3]]` left the address uncoloured
+// beside it (serekkr, 13/10/2026, on a ReadItLater note).
+const LINK_RE = /!?\[(?:[^\[\]\n]|\[[^\[\]\n]*\])*\]\([^)\n]*\)|\[\[[^\]\n]*\]\]/g;
 const linkColorPlugin = ViewPlugin.fromClass(class {
   constructor(view) { this.decorations = this.build(view); }
   update(u) { if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view); }
