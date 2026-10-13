@@ -1412,6 +1412,8 @@ class SyncManager {
   // `.amelie-sync`. Each explains how to repurpose the folder (delete the file).
   static get _MARK_BACKUP() { return '.amelie-backup'; }   // dotfile, like .amelie-sync (legacy 'amelie-backup' still honored)
   static get _MARK_SYNC()   { return '.amelie-sync'; }
+  /** How many WebDAV requests ride together. See the transfer loop in _twowayWebdav. */
+  static get _WEBDAV_PAR() { return 6; }
   static get _MARK_TEXT() {
     return {
       '.amelie-backup': 'This folder is used by Amelie as a BACKUP repository (notes, attachments, dated snapshots and .tar.gz archives).\nTo use this folder for another purpose, DELETE this file.\n',
@@ -2432,7 +2434,17 @@ class SyncManager {
     if (!url) throw new Error('Two-way WebDAV: URL mancante');
     const base = '/' + String(wcfg.remotePath || 'amelie/sync').replace(/^\/+|\/+$/g, '');
     const client = createClient(url, { username: wcfg.username || '', password: this._decSecret(wcfg.password) || '' });
-    const ensureDir = async (dir) => { try { await client.createDirectory(dir, { recursive: true }); } catch (_) {} };
+    // One MKCOL per folder per PASS, not one per file. Every upload used to ask for
+    // its folder again — against a server that answers in about a second, that was
+    // half the requests of a first pass. The map holds the in-flight promise and not
+    // a flag, so six uploads landing in the same new folder WAIT for the one MKCOL
+    // instead of racing it: a PUT into a folder still being made is a 409.
+    const dirJobs = new Map();
+    const ensureDir = (dir) => {
+      const d = String(dir).replace(/\/+$/, '');
+      if (!dirJobs.has(d)) dirJobs.set(d, (async () => { try { await client.createDirectory(d, { recursive: true }); } catch (_) {} })());
+      return dirJobs.get(d);
+    };
     await ensureDir(base); await ensureDir(base + '/notes'); await ensureDir(base + '/attachments');
 
     // Refuse a folder already claimed by BACKUP (same rule as Samba). The backup
@@ -2443,6 +2455,17 @@ class SyncManager {
     let remote = {};
     try { remote = await this._webdavTwowayList(client, base); }
     catch (e) { console.warn('[Two-way WebDAV] list failed:', e.message); remote = {}; }
+
+    // A folder the listing already has a file in is a folder that exists: mark it
+    // done so no upload spends a request asking for it.
+    {
+      const exists = Promise.resolve();
+      for (const rel of Object.keys(remote)) {
+        const parts = String(rel).split('/'); parts.pop();
+        let d = base;
+        for (const seg of parts) { d += '/' + seg; if (!dirJobs.has(d)) dirJobs.set(d, exists); }
+      }
+    }
 
     const localNotes = this._getAllLocalFiles(this.notesDir, '').filter(f => !f.relPath.startsWith('attachments/')).map(f => ({ rel: 'notes/' + f.relPath, abs: f.absPath }));
     const localAtt   = this._getAllLocalFiles(this.attachmentsDir, '').map(f => ({ rel: 'attachments/' + f.relPath, abs: f.absPath }));
@@ -2556,13 +2579,16 @@ class SyncManager {
     });
     for (const rel of approved || []) approvedDel.add(rel);
 
-    const work = plan.filter(p => p.d.action !== 'adopt' && p.d.action !== 'skip').length;
+    // Nothing to send: settle the baseline for everything already in step.
+    for (const { rel, L, R, d } of plan) if (d.action === 'adopt' || d.action === 'skip') st[rel] = { r: R || 0, l: L || 0 };
+
+    const moves = plan.filter(p => p.d.action !== 'adopt' && p.d.action !== 'skip');
+    const work = moves.length;
     let step = 0;
-    for (const { rel, L, R, d } of plan) {
-      if (d.action !== 'adopt' && d.action !== 'skip') this._progress({ op: 'twoway', phase: 'transfer', done: ++step, total: work, action: d.action, file: rel });
-      if (d.action === 'adopt' || d.action === 'skip') {
-        st[rel] = { r: R || 0, l: L || 0 };
-      } else if (d.action === 'upload') {
+    const tick = (action, file) => this._progress({ op: 'twoway', phase: 'transfer', done: ++step, total: work, action, file });
+
+    const runOne = async ({ rel, L, R, d }) => {
+      if (d.action === 'upload') {
         if (await uploadRel(rel)) { uploaded++; log.push(['up', rel]); st[rel] = { r: Date.now(), l: L }; }
       } else if (d.action === 'download') {
         if (await downloadRel(rel)) { downloaded++; log.push(['down', rel]); try { const t = R / 1000; fs.utimesSync(absOf(rel), t, t); } catch (_) {} st[rel] = { r: R, l: R }; }
@@ -2570,7 +2596,24 @@ class SyncManager {
         if (await deleteRemoteRel(rel)) { deleted++; log.push(['del-remote', rel]); delete st[rel]; approvedDel.delete(rel); console.warn('[Two-way WebDAV] deleted on server (propagated):', rel); }
       } else if (d.action === 'delete-local') {
         if (deleteLocalRel(rel)) { deleted++; log.push(['del-local', rel]); delete st[rel]; console.warn('[Two-way WebDAV] deleted locally (propagated):', rel); }
-      } else if (d.action === 'conflict') {
+      }
+      tick(d.action, rel);
+    };
+
+    // Six at a time. One file per request AND one request at a time is what made a
+    // first pass over this vault a quarter of an hour: the server takes about a
+    // second to answer and the line sat empty for all of it. Six is the measure the
+    // Samba side already uses for its deletions — enough to fill the waiting, below
+    // where a server starts answering 503.
+    const PAR = SyncManager._WEBDAV_PAR;
+    const plain = moves.filter(p => p.d.action !== 'conflict');
+    for (let i = 0; i < plain.length; i += PAR) await Promise.all(plain.slice(i, i + PAR).map(runOne));
+
+    // Conflicts stay one at a time: each one renames, downloads and uploads around
+    // the SAME path, and there are never many of them.
+    for (const { rel, L, R, d } of moves) {
+      if (d.action === 'conflict') {
+        tick(d.action, rel);
         const abs = absOf(rel);
         const cRel = this._conflictRel(rel, d.winner === 'local' ? R : L);
         const cAbs = absOf(cRel);
@@ -2592,11 +2635,17 @@ class SyncManager {
       }
     }
 
-    // Clock-skew reconcile: pin baseline.r to the server's real mtime.
-    try {
-      const after = await this._webdavTwowayList(client, base);
-      for (const rel of Object.keys(st)) { if (st[rel] && typeof st[rel] === 'object' && (rel in after)) st[rel].r = after[rel]; }
-    } catch (_) {}
+    // Clock-skew reconcile: pin baseline.r to the server's real mtime. Only what we
+    // UPLOADED carries our own clock (Date.now()); a download already took the
+    // server's. With nothing uploaded there is nothing to correct, and this second
+    // full listing is not cheap — 9 MB of XML off a vault this size.
+    let after = null;
+    if (uploaded > 0) {
+      try {
+        after = await this._webdavTwowayList(client, base);
+        for (const rel of Object.keys(st)) { if (st[rel] && typeof st[rel] === 'object' && (rel in after)) st[rel].r = after[rel]; }
+      } catch (_) {}
+    }
 
     // Envelope header (.amelie-vault.json) — newer mtime wins, never deleted.
     const HDR = '.amelie-vault.json';
@@ -2613,7 +2662,11 @@ class SyncManager {
     if (approvedDel.size) allState[pendKey] = [...approvedDel]; else delete allState[pendKey];
     try { allState[stateKey] = st; fs.writeFileSync(stateFile, JSON.stringify(allState), 'utf8'); } catch (_) {}
     // Claim this folder for SYNC so a future BACKUP to the same folder refuses it.
-    try { await this._webdavWriteFile(client, base, SyncManager._MARK_SYNC); } catch (_) {}
+    // Only if it is not already there: rewriting it every pass moves its mtime every
+    // pass, and the remote listing is exactly what the timer watches for a change.
+    if (!(SyncManager._MARK_SYNC in remote) && !(after && SyncManager._MARK_SYNC in after)) {
+      try { await this._webdavWriteFile(client, base, SyncManager._MARK_SYNC); } catch (_) {}
+    }
     console.log(`[Two-way] WebDAV done: ↑${uploaded} ↓${downloaded}${deleted ? ` ✗${deleted} eliminati` : ''}${conflicts ? ` ⚠${conflicts} conflitti` : ''}`);
     return { method: 'webdav-twoway', uploaded, downloaded, deleted, conflicts };
   }
