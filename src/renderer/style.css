@@ -38,8 +38,13 @@
   --red: #f85149;
   --green: #3fb950;
   --yellow: #d29922;
-  /* The Tab ring — see `:focus-visible` below. White everywhere but on `light`. */
-  --focus-ring: #ffffff;
+  /* The Tab ring — see `:focus-visible` below. Cyan: the one hue this interface
+     does NOT already use for something. Green is the accent and means "this is the
+     one that is on" (the underline under the open view, the selected row, the
+     folders), so a green ring put two green things on screen saying two different
+     things. Cyan says only "the keyboard is here". Overridden on `light`, where a
+     bright cyan washes out on cream. */
+  --focus-ring: #22d3ee;
   /* Headings & links — themable: every [data-theme] block (built-in or custom)
      can override these; without an override the classic palette applies. */
   --h1: #4ade80;
@@ -238,8 +243,8 @@
   --red: #c0392b;
   --green: #2e6e45;
   --yellow: #b7770d;
-  /* White would vanish on this one: the ring takes the text colour instead. */
-  --focus-ring: #2c2825;
+  /* #22d3ee on #ede8df is barely a line; the dark end of the same hue instead. */
+  --focus-ring: #0e7490;
   --h1: #2e7d4a;
   --h2: #1d7a6b;
   --h3: #0f6b66;
@@ -437,9 +442,9 @@ html { accent-color: var(--accent); }
 /* Keyboard focus. Nothing here used to say what Tab should look like, so the ring
    was the browser's own — `outline: auto 1px rgb(229,151,0)`, measured in this
    Electron: an amber this app uses for nothing, and the yellow serekkr saw tabbing
-   through the sidebar strip on 13/10/2026. Ours is
-   white, stated once and the same on every control: the strip icons, the buttons,
-   the selects, the checkboxes. `:focus-visible`, not `:focus`, so it appears for
+   through the sidebar strip on 13/10/2026. Ours is cyan (`--focus-ring`), stated
+   once and the same on every control: the strip icons, the buttons, the selects,
+   the checkboxes. `:focus-visible`, not `:focus`, so it appears for
    Tab and not for a click — a mouse user never sees it.
    Text fields are left out on purpose: they already answer a focus by lighting
    their border (`#search-input:focus`, `.field-group input:focus` and the rest),
