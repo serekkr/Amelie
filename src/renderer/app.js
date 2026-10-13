@@ -1907,6 +1907,17 @@ function updateWorthAnnouncing(latest, mine, announced) {
 }
 
 /**
+ * What a manual "Check for updates" found. Pure, and separate from the button for the
+ * same reason updateWorthAnnouncing is separate from the fetch: the mistakes live here
+ * — calling an unreachable GitHub "up to date", or telling a machine that runs a build
+ * NEWER than the last release to go back to it.
+ */
+function updateCheckOutcome(latest, mine) {
+  if (!latest || !latest.version || !mine) return 'failed';
+  return cmpVersions(latest.version, mine) > 0 ? 'newer' : 'current';
+}
+
+/**
  * Once a day, at startup. Deliberately NOT a setInterval: a daily timer counts app
  * UPTIME and dies with the window, so anyone who closes Amelie more often than once a
  * day would never reach it — the same fault the backup catch-up was fixed for on
@@ -9682,7 +9693,42 @@ function setupSettings() {
   $('settings-close').addEventListener('click', closeSettings);
   $('settings-backdrop').addEventListener('click', closeSettings);
   // About: check for new releases (opens in the browser).
-  $('btn-check-updates')?.addEventListener('click', () => window.inkwell.openExternal('https://github.com/serekkr/amelie/releases').catch(() => {}));
+  // "Check for updates" used to BE a link: it opened the releases page in a browser
+  // and left you to compare version numbers yourself. It asks and answers now — the
+  // usual thing (serekkr, 13/10/2026). The page is still one click away, and only
+  // when there is actually something on it: a button to fetch an update that does not
+  // exist is the same dead end in a different shape. Nothing here touches the daily
+  // check's record, so the bell keeps its own counting.
+  $('btn-check-updates')?.addEventListener('click', async () => {
+    const btn = $('btn-check-updates'), get = $('btn-get-update'), out = $('about-update-result');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    if (get) get.style.display = 'none';
+    if (out) { out.className = 'test-result'; out.textContent = window.i18n.t('about.checking'); }
+    let latest = null, mine = '';
+    try { [latest, mine] = await Promise.all([window.inkwell.latestRelease(), window.inkwell.appVersion()]); }
+    catch (_) { latest = null; }
+    btn.disabled = false;
+    // No answer means the request did not get there — offline, blocked, GitHub down.
+    // Say that, rather than "you are up to date", which would be a guess.
+    const found = updateCheckOutcome(latest, mine);
+    if (found === 'failed') {
+      if (out) { out.textContent = '✗ ' + window.i18n.t('about.check_failed'); out.className = 'test-result fail'; }
+      return;
+    }
+    if (found === 'newer') {
+      if (out) { out.textContent = '↑ ' + window.i18n.t('about.update_to', { v: 'v' + latest.version }); out.className = 'test-result ok'; }
+      if (get) {
+        get.style.display = '';
+        get.onclick = () => window.inkwell.openExternal(latest.url || 'https://github.com/serekkr/amelie/releases').catch(() => {});
+      }
+    } else if (out) {
+      // Level OR ahead: a build newer than the last release (which is what a machine
+      // this is developed on runs) must not be told to "update" to an older number.
+      out.textContent = '✓ ' + window.i18n.t('about.up_to_date', { v: 'v' + mine });
+      out.className = 'test-result ok';
+    }
+  });
   // No Save button: settings persist AUTOMATICALLY on any change. Toggles and
   // selects apply immediately (e.g. flipping the WireGuard flag on brings the
   // tunnel up via reloadConfig; off tears it down); text/number inputs are

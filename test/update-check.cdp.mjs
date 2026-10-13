@@ -181,5 +181,32 @@ say('the Settings row exists and follows the setting',
   await ev(`(() => { const t = document.getElementById('cfg-update-check'); if (!t) return 'missing';
     localStorage.setItem('inkwell-update-check','off'); setupUpdateCheck(); const off = t.checked;
     localStorage.setItem('inkwell-update-check','on'); setupUpdateCheck(); return off === false && t.checked === true; })()`) === true);
+// ── The button in About: it ASKS now, instead of opening a browser ───────────
+// serekkr, 13/10/2026: "invece di mandarmi alla pagina github riusciamo a mandare un
+// messaggio tipo update to v0.XX.X available". The decision is pure for the same
+// reason as the one above; the click is then checked for landing in one of its states.
+say('a newer release reads as an update', await ev(`updateCheckOutcome({version:'1.0.150'},'1.0.145')`) === 'newer');
+say('the same version reads as up to date', await ev(`updateCheckOutcome({version:'1.0.145'},'1.0.145')`) === 'current');
+say('a build NEWER than the last release is not told to go back',
+  await ev(`updateCheckOutcome({version:'1.0.144'},'1.0.145')`) === 'current');
+say('no answer from GitHub is a failure, not "up to date"',
+  await ev(`updateCheckOutcome(null,'1.0.145')`) === 'failed');
+say('and neither half missing passes for the other',
+  await ev(`updateCheckOutcome({version:'1.0.150'}, '')`) === 'failed');
+
+say('the About panel has a line to answer in, empty until asked',
+  await ev(`(() => { const o = document.getElementById('about-update-result'); return !!o && o.textContent === ''; })()`) === true);
+say('and the download button is hidden until a check finds something',
+  await ev(`(() => { const g = document.getElementById('btn-get-update'); return !!g && g.style.display === 'none'; })()`) === true);
+// The click itself: GitHub may or may not be reachable from here, so what is checked is
+// that it ANSWERS on screen — in one of the three shapes — and never silently does
+// nothing (which is what it did before: it opened a browser and left the panel blank).
+await ev(`document.getElementById('btn-check-updates').click()`);
+await sleep(6000);
+const line = await ev(`document.getElementById('about-update-result').textContent`);
+say('clicking it writes an answer into the panel', /^[✓✗↑]/.test(String(line || '')), JSON.stringify(line));
+say('and the answer is one of the three it knows',
+  /latest version|Update to|Could not reach|ultima versione|Aggiornamento|raggiungere/i.test(String(line || '')), JSON.stringify(line));
+
 console.log(`\n${ok.every(Boolean) ? `all ${ok.length} passed` : `${ok.filter(Boolean).length}/${ok.length}`}`);
 process.exit(ok.every(Boolean) ? 0 : 1);
