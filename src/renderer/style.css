@@ -385,14 +385,15 @@
   /* The heading ladder, used only by this theme (see the rule near #preview-content).
      Four shades of the SAME green first, which told you nothing you could not already
      see from the size; asked on 13/10/2026 for colours "un po' più diversi, tipo verde
-     giallo verde aperto", so the hue moves with the level instead of the brightness:
-     green, amber, light green, and a muted sage for the smallest. All four are read on
-     #212121 at 7:1 or better (9.1 / 7.0 / 11.5 / 7.6), and none of them is the accent
-     #3fb950 — that green already means "this is the one that is on". */
+     cyano giallo verde aperto", so the hue moves with the level instead of the
+     brightness, in that order. All four are read on #212121 at 7:1 or better
+     (9.1 / 8.9 / 7.0 / 11.5); none of them is the accent #3fb950, which already means
+     "this is the one that is on"; and the cyan is far enough from --link #7ec0f5 that
+     a heading is not read as a link — checked side by side with one. */
   --h1: #6bd88a;
-  --h2: #d6a344;
-  --h3: #b8e986;
-  --h4: #8fbd9c;
+  --h2: #22d3ee;
+  --h3: #d6a344;
+  --h4: #b8e986;
   /* Blue, and the only frankly blue thing in the theme: with a green accent a link
      can keep its own hue, which is the clearest way to say it is not an accent. It
      stayed put through the violet and navy accents that came before. */
