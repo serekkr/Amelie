@@ -1526,6 +1526,14 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #preview-content h2 { font-size: 1.45em; color: var(--text-0); }
 #preview-content h3 { font-size: 1.15em; color: var(--text-0); }
 #preview-content h4 { font-size: 1em;    color: var(--text-0); }
+/* h5/h6 had NO font-size of their own, so the browser default took over (0.83em /
+   0.67em = 12.45px / 10.05px against a 15px note): "##### PFSENSE 1" came out
+   SMALLER than the text around it, and smaller than the same line in the editor,
+   which paints every heading at the note size — so the title shrank the moment you
+   left edit mode. A heading is never smaller than its own paragraph: from h4 down
+   the ladder stops at 1em and the level reads from the colour. */
+#preview-content h5,
+#preview-content h6 { font-size: 1em;    color: var(--text-0); }
 /* GRAPHITE only, asked for on 13/10/2026: the headings carry the theme's green
    ladder instead of plain white. Colour per level was the app's old behaviour
    everywhere and was taken out because it read worse — but half of why was that it
