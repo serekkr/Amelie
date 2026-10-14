@@ -686,7 +686,7 @@ html.is-mac #titlebar { padding-left: 72px; }
 .tree-folder.selected {
   box-shadow: inset 2px 0 0 var(--accent);
 }
-.tree-folder.selected:not([data-color]) .tree-name { color: var(--accent); opacity: 1; }
+.tree-folder.selected:not([data-color]) .tree-name { color: var(--accent); }
 .tree-folder-icon { display: flex; align-items: center; color: var(--accent); flex-shrink: 0; }
 /* Folder style uses ONE shape (the closed folder) that fills with the accent
    colour when expanded — consistent with the other icon styles. The separate
@@ -771,8 +771,17 @@ html.is-mac #titlebar { padding-left: 72px; }
   padding: 1px 4px; margin: -1px 0; outline: none;
 }
 
-/* Folder name prominence */
-.tree-folder .tree-name { font-weight: 300; letter-spacing: .01em; color: var(--text-0); opacity: .9; }
+/* Folder name prominence.
+   WEIGHT 400, not 300 (2026-10-14): same fault, same cause, as the note text on
+   2026-09-16 — Inter DOES ship a Light face, so every rule that said 300 for the old
+   Helvetica (which had none, and was drawn Regular anyway) got thinner the day the
+   app moved to Inter. The note text was put back to 400 then; this panel was missed,
+   and a 13px Light grey on #2a2a2a is what "lo vedo un po' sfocato" is. Obsidian's
+   file explorer, the comparison the user made, is 13px at weight 400 on #b3b3b3 over
+   #262626 — the same size and all but the same grey: the weight was the difference.
+   No letter-spacing either: .01em of 13px is 0.13px per letter, which cannot land on
+   a pixel and so smears every glyph a little further right than the last. */
+.tree-folder .tree-name { font-weight: 400; color: var(--text-0); }
 /* Note names sit ONE STEP DOWN the grey ladder (--text-1), not on the white the
    editor writes in (2026-09-16). At --text-0 the sidebar and the note you are
    writing were the same white, and the list of names competed with the text for
@@ -780,7 +789,7 @@ html.is-mac #titlebar { padding-left: 72px; }
    one you read. Same relationship as the reference the user brought in (sidebar
    ~#b2b2b2 against body ~#d8d8d8). The ladder is unchanged below: non-note files
    stay a further step down at --text-2, folders keep --text-0 at .9 opacity. */
-.tree-note .tree-name { color: var(--text-1); font-weight: 300; letter-spacing: .01em; }
+.tree-note .tree-name { color: var(--text-1); font-weight: 400; }
 /* Files that are NOT notes — drawings, PDFs, audio, video, images — read at exactly
    the same brightness as the notes, --text-1, which is what the rule above already
    gives them. There is no rule here on purpose.
@@ -800,7 +809,6 @@ html.is-mac #titlebar { padding-left: 72px; }
    and after the plain rule so it wins the tie. */
 .tree-note.active .tree-name,
 .tree-note.open-in-tab .tree-name { color: var(--text-0); }
-.tree-folder:hover .tree-name { opacity: 1; }
 
 /* Folder colors */
 .tree-folder[data-color="rose"]   .tree-name { color: #e0758a; }
