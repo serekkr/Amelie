@@ -272,8 +272,15 @@ const _placeHint = (e) => {
 previewContent.addEventListener('mouseover', e => {
   const el = e.target.closest && e.target.closest('a, .note-link');
   if (!el || !previewContent.contains(el)) return;
-  // No hint on an http/https link — same rule as the main window (see app.js).
-  if (/^https?:/i.test((el.getAttribute('href') || '').trim())) { _linkHint.style.display = 'none'; return; }
+  // An http/https link gets the bare "Open link", no address — same rule as the main
+  // window (see app.js). i18n.js is not loaded in this window, so the label falls back
+  // to the Italian wording when it is absent, as every other string here does.
+  if (/^https?:/i.test((el.getAttribute('href') || '').trim())) {
+    _linkHint.textContent = (window.i18n ? window.i18n.t('view.link_open') : 'Apri link');
+    _linkHint.style.display = 'block';
+    _placeHint(e);
+    return;
+  }
   const dest = _hintTargetOf(el);
   if (!dest) { _linkHint.style.display = 'none'; return; }
   _linkHint.textContent = 'Vai a → ' + dest;

@@ -8511,13 +8511,19 @@ function setupLinkHoverHint() {
   const show = (a, e) => {
     // Unresolved [[wikilink]] → no "Go to" hint: it leads nowhere.
     if (a.dataset.unresolved) { _linkHint.style.display = 'none'; return; }
-    // An http/https link gets NO hint (asked for on 14/10/2026). The pointer's hand
-    // already says "this opens", and the label floated over the lines being read for
-    // as long as the mouse rested on the link. The hint stays everywhere it names a
-    // destination the text cannot show: a note link resolves to its folder + name,
-    // an attachment to its vault-relative path. The address of a web link is the one
-    // thing a browser will show anyway, the moment it opens.
-    if (/^https?:/i.test((a.getAttribute('href') || '').trim())) { _linkHint.style.display = 'none'; return; }
+    // An http/https link says "Open link" and NOTHING else (asked for on 14/10/2026,
+    // in two steps: the address out first, then the label back). What was wrong with
+    // it was never the label, it was the URL trailing off it — a long address floated
+    // over the lines being read for as long as the mouse rested on the link, to say
+    // what the browser shows anyway the moment it opens. The hint keeps a destination
+    // only where the text cannot show one: a note link resolves to its folder + name,
+    // an attachment to its path in the vault.
+    if (/^https?:/i.test((a.getAttribute('href') || '').trim())) {
+      _linkHint.textContent = (window.i18n ? window.i18n.t('view.link_open') : 'Apri link');
+      _linkHint.style.display = 'block';
+      place(e);
+      return;
+    }
     const dest = targetOf(a);
     if (!dest) { _linkHint.style.display = 'none'; return; }
     const label = (window.i18n ? window.i18n.t('view.link_goto') : 'Vai a');
