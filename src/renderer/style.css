@@ -833,7 +833,7 @@ html.is-mac #titlebar { padding-left: 72px; }
    #262626 — the same size and all but the same grey: the weight was the difference.
    No letter-spacing either: .01em of 13px is 0.13px per letter, which cannot land on
    a pixel and so smears every glyph a little further right than the last. */
-.tree-folder .tree-name { font-weight: 400; color: var(--text-0); }
+.tree-folder .tree-name { font-weight: 400; color: color-mix(in srgb, var(--text-0) 80%, var(--text-1)); }
 /* Note names sit ONE STEP DOWN the grey ladder (--text-1), not on the white the
    editor writes in (2026-09-16). At --text-0 the sidebar and the note you are
    writing were the same white, and the list of names competed with the text for
@@ -850,8 +850,14 @@ html.is-mac #titlebar { padding-left: 72px; }
    A mix, not a new value per theme: it lands between the two rungs whatever the theme
    defines, and it moves in the right direction in a LIGHT theme too (there --text-0 is
    the dark end, so the names get darker, not paler).
-   Graphite, on the tree's #2a2a2a: #b2b2b2 6,8:1 → #cdcdcd 9,0:1, folders 10,1:1. */
-.tree-note .tree-name { color: color-mix(in srgb, var(--text-0) 70%, var(--text-1)); font-weight: 400; }
+   70% first, then 50% an hour later — "adesso le scritte delle cartelle e note sono
+   troppo bianche", then "farle leggermente meno", so one notch down and not the way
+   back to where they were this morning. The folders came down with them, off the full
+   --text-0 they had been given when their 90% opacity was dropped: the two have to
+   move together or the step between a folder and a note changes meaning.
+   Graphite, on the tree's #2a2a2a: notes #b2b2b2 6,8:1 → #cdcdcd 9,0 → #c5c5c5 8,3:1;
+   folders #d8d8d8 10,1:1 → #d0d0d0 9,5:1. */
+.tree-note .tree-name { color: color-mix(in srgb, var(--text-0) 50%, var(--text-1)); font-weight: 400; }
 /* Files that are NOT notes — drawings, PDFs, audio, video, images — read at exactly
    the same brightness as the notes, --text-1, which is what the rule above already
    gives them. There is no rule here on purpose.
