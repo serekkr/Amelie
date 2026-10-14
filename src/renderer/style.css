@@ -72,6 +72,16 @@
   /* Appearance — tunable from settings */
   --tree-item-py: 1px;
   --tree-font-size: 13px;
+  /* The width of the tree's hairlines — the nesting guides and the accent strip that
+     marks a chosen folder, which must stay the same width or the lit stretch reads
+     thicker than the line it lights.
+     HALF a CSS pixel, which is not a hair-splitting nicety: at 1x Chromium draws this
+     as one solid device pixel (measured offscreen: identical to a 1px box, same
+     colour value), while on a display that scales — serekkr's runs at about 1.2 — a
+     1px box lands on TWO device pixels, both at full strength. That is what was being
+     seen as thick, and it is why dropping the colour from 32% to 20% did not answer
+     it: the line was two pixels wide either way, just paler. */
+  --tree-guide-w: 0.5px;
   --editor-font-size: 15px;
   --editor-line-height: 1.85;
   --editor-font-family: var(--editor-font);
@@ -697,7 +707,7 @@ html.is-mac #titlebar { padding-left: 72px; }
 .tree-folder.selected::before,
 .tree-folder.multi-selected::before,
 .tree-note.multi-selected::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 1px;
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--tree-guide-w);
   background: var(--accent); pointer-events: none;
 }
 /* Indented rows: 7px in, which is the hairline's column (its ::before sits at 8px of
@@ -770,19 +780,20 @@ html.is-mac #titlebar { padding-left: 72px; }
    compromise and the line came along for the ride. Drawn absolutely it is free: the
    indent stays 14px per level, the names do not move a pixel, and only the hairline
    does.
-   A white hairline at a FIFTH strength, 20% (2026-10-14: "magari le linee non farle
-   così spesse"). One CSS pixel is as thin as it goes, and on a display that scales —
-   his runs at 1.2 — that pixel snaps up to two device pixels at full strength, which
-   is what reads as thick. The width cannot answer that; the strength can. It was 32%:
-   on Graphite's tree that painted #626262, against #4d4d4d now. No tint: the
+   A white hairline, --tree-guide-w wide (see the variable: half a CSS pixel, so it
+   stays ONE device pixel on a scaled display instead of two) at 26% of the text
+   colour. 32% was the long-standing value and 20% was a first attempt at "non farle
+   così spesse" that could not work, because what was thick was the width and not the
+   ink; 26% is the original darkness less a notch, now that the line is half as wide.
+   No tint: the
    coloured stripe down the sidebar, and plain --text-2 was the same shade as the note
    icons and muted labels beside it, so the nesting levels vanished into the tree. A
    faint white differs from both without belonging to either. Mixed from the theme's
    text rather than written as `rgba(255,255,255,…)`, so on Light Paper the same rule
    gives a faint DARK line instead of white on white. */
 .tree-folder-children::before {
-  content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 1px;
-  background: color-mix(in srgb, var(--text-0) 20%, transparent);
+  content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: var(--tree-guide-w);
+  background: color-mix(in srgb, var(--text-0) 26%, transparent);
   pointer-events: none;
 }
 /* No hover reaction. The guides used to brighten — both under the pointer and when the
