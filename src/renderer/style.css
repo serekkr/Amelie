@@ -70,7 +70,16 @@
   --ui-font: 'Inter', sans-serif;
   --radius: 6px;
   /* Appearance — tunable from settings */
-  --tree-item-py: 1px;
+  /* 3px, up from 1 (2026-10-14). Same screenshot, the other way round: the names in
+     the left panel sat 26 device pixels apart here against 32 there — Obsidian gives
+     its editor LESS room per line and its file list MORE, and this app did the
+     opposite on both counts. Padding is added, so this works whatever the note-list
+     font is set to: +4 CSS pixels a row, which at his scale is +4.9 device — the gap
+     measured was +6. A hair short on purpose rather than a hair over. The names did
+     not change size, and nothing in the row did.
+     Whole pixels on purpose — a half lands the row edges, and with them the nesting
+     hairlines, between device pixels on a scaled display. */
+  --tree-item-py: 3px;
   --tree-font-size: 13px;
   /* The width of the tree's hairlines — the nesting guides and the accent strip that
      marks a chosen folder, which must stay the same width or the lit stretch reads
@@ -83,7 +92,15 @@
      it: the line was two pixels wide either way, just paler. */
   --tree-guide-w: 0.5px;
   --editor-font-size: 15px;
-  --editor-line-height: 1.85;
+  /* 1.58, down from 1.85 (2026-10-14). Measured off one screenshot with Amelie and
+     Obsidian open together: the rows of note text ran 34 device pixels apart here
+     against 29 there, and 29/34 of 1.85 is 1.58. The glyphs themselves were already
+     the same size in both — x-height 10 device pixels either side — so what made the
+     other one read better was the pitch, not the type.
+     --md-row below must stay the SAME number: the edit surfaces and the rendered view
+     are stacked on the same lines, and a note that reflows when you stop typing is the
+     fault that was fixed in September. */
+  --editor-line-height: 1.58;
   --editor-font-family: var(--editor-font);
   /* Code — and anything that shows a path, a command or a key — stays monospaced whatever font
      you choose for the app: proportional code is unreadable. --editor-font itself now follows
@@ -1547,7 +1564,7 @@ kbd {
   /* ONE row of reading-mode text. The paragraphs are set in it and the blank
      lines are measured in it (applyBlankLineSpacers), so a row is one thing and
      it follows the note font size on its own. */
-  --md-row: 1.85em;
+  --md-row: 1.58em;   /* the same number as --editor-line-height, see there */
 }
 /* Drop the first block's top margin (e.g. a leading <p>'s .8em) so the first view-mode
    line sits at the pane's 28px top — same y as the first edit-mode line. Without this,
