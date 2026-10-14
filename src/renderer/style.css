@@ -905,6 +905,27 @@ html.is-mac #titlebar { padding-left: 72px; }
 .tree-folder[data-color] .tree-folder-icon { color: inherit; }
 .tree-note .tree-date { font-size: 11px; color: var(--text-3); flex-shrink: 0; }
 
+/* The About page's feature list. A ring per line, in the accent, sized and placed
+   off the text's own line box (em, not px) so it stays on the first line's centre
+   whatever the note font is set to. Weight 400: this used to be a 300 paragraph,
+   which on Inter is a real Light face and the reason the page read washed out. */
+#tab-about .about-points {
+  list-style: none; margin: 22px 0 0; padding: 0 6px;
+  max-width: 620px; text-align: left;
+  display: flex; flex-direction: column; gap: 10px;
+  font-family: var(--editor-font); font-size: 13px; font-weight: 400;
+  line-height: 1.55; color: var(--text-1);
+}
+#tab-about .about-points li { position: relative; padding-left: 22px; }
+#tab-about .about-points li::before {
+  /* .775em = half of the 1.55 line-height, so the ring sits on the MIDDLE of the
+     first line and not near its top — .5em put it above centre, which read as the
+     ring belonging to the line above on the two-line entries. */
+  content: ''; position: absolute; left: 2px; top: .775em;
+  width: 7px; height: 7px; margin-top: -3.5px;
+  border: 1.5px solid var(--accent); border-radius: 50%;
+}
+
 /* ─── Resize handle ─────────────────────────────────────────────
    Sits ON the sidebar/editor border with ZERO layout width (margin-right
    cancels its width), so the two panels are attached — no empty column.

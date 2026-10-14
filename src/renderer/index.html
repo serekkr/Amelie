@@ -1850,9 +1850,22 @@
                    Replaces both the old "Amelie" title and the "A privacy-focused
                    note app" subtitle. -->
               <div class="mr-robot-type" aria-label="Hello friend! Amelie · your data, private by default"><span class="mrt mrt-a">Hello friend!</span><span class="mrt mrt-b">Amelie · your data, private by default</span></div>
-              <p style="font-family:var(--editor-font);font-weight:300;font-size:13px;line-height:1.9;color:var(--text-1);max-width:820px;margin:26px 0 0;padding:0 12px">
-                Markdown notes with a built-in PDF viewer &amp; editor, to-do lists and drawings — everything encrypted at rest (AES-256-GCM). Encrypted backup and two-way sync to your own server over Samba or WebDAV, with WireGuard &amp; OpenVPN when the server is not on your network, plus multi-language support.
-              </p>
+              <!-- One paragraph of run-on prose before (2026-10-14): the whole feature
+                   list in a single 13px block that nobody reads to the end, with the
+                   page's empty half left under it. A ring per line instead, each one
+                   a thing the app does, and enough of them to fill the page. English
+                   only, like the typewriter line above it — these are not UI strings
+                   and are not in i18n.js. -->
+              <ul class="about-points">
+                <li>Markdown notes, a built-in PDF viewer and editor, to-do lists and drawings — all in one window.</li>
+                <li>Everything encrypted where it sits, AES-256-GCM. The passphrase stays on this machine and is never written down.</li>
+                <li>Two-way sync to a server that is yours, over Samba or WebDAV. No account, no company in the middle.</li>
+                <li>WireGuard and OpenVPN built in, for the days that server is somewhere else.</li>
+                <li>Backups on a schedule, encrypted, kept locally or sent to that same server — and a restore that puts a whole vault back.</li>
+                <li>An Obsidian vault opens as it is: folders, attachments and [[wiki links]] intact.</li>
+                <li>Ten themes, or make your own — every colour, the accent, and the fonts you write in.</li>
+                <li>Seven languages, and it reaches the network only where you point it: your server, and GitHub the moment you press Check for updates.</li>
+              </ul>
               <div style="display:flex;flex-direction:column;align-items:center;gap:11px;margin-top:auto;padding-bottom:6px">
                 <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
                   <button class="btn-test btn-svg" id="btn-check-updates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg><span data-i18n="about.check_updates">Check for updates</span></button>
