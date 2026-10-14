@@ -910,7 +910,7 @@ html.is-mac #titlebar { padding-left: 72px; }
    whatever the note font is set to. Weight 400: this used to be a 300 paragraph,
    which on Inter is a real Light face and the reason the page read washed out. */
 #tab-about .about-points {
-  list-style: none; margin: 22px 0 0; padding: 0 6px;
+  list-style: none; margin: 42px 0 0; padding: 0 6px;   /* 42: one line lower (asked) */
   /* 800, not 620 (2026-10-14). At 620 the first line had 586px for text that wants
      590 — it broke before the last word by FOUR pixels, which is what "la parola
      windows deve stare nella stessa riga" was. Not a line-by-line fit: 800 leaves
@@ -920,14 +920,25 @@ html.is-mac #titlebar { padding-left: 72px; }
   font-family: var(--editor-font); font-size: 13px; font-weight: 400;
   line-height: 1.55; color: var(--text-1);
 }
-#tab-about .about-points li { position: relative; padding-left: 22px; }
+#tab-about .about-points li { position: relative; padding-left: 26px; }
+/* The graphene hexagon, the app's own — the same path as the fi-graphene folder icon
+   (see .tree-folder-icon .fi-graphene), not a new shape invented for this page.
+   Asked for on 2026-10-14 in place of the plain ring, "o il logo di amelie piccolo":
+   the logo is a PNG and at 12px it turns to mush, while this is one stroked path that
+   stays crisp at any size and on any display scale.
+   Drawn as a MASK over a solid --accent rather than as an <img>, so it follows the
+   theme's accent the way every other icon here does — an SVG in an <img> cannot take
+   currentColor, and eight inline <svg> blocks would be eight copies of the path in the
+   markup. .775em = half of the 1.55 line-height, so it sits on the MIDDLE of the first
+   line of its entry. */
 #tab-about .about-points li::before {
-  /* .775em = half of the 1.55 line-height, so the ring sits on the MIDDLE of the
-     first line and not near its top — .5em put it above centre, which read as the
-     ring belonging to the line above on the two-line entries. */
-  content: ''; position: absolute; left: 2px; top: .775em;
-  width: 7px; height: 7px; margin-top: -3.5px;
-  border: 1.5px solid var(--accent); border-radius: 50%;
+  content: ''; position: absolute; left: 0; top: .775em;
+  width: 13px; height: 13px; margin-top: -6.5px;
+  background: var(--accent);
+  --graphene: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='1.6' stroke-linejoin='round'%3E%3Cpath d='M12 2.5l8 4.6v9.8l-8 4.6-8-4.6V7.1z'/%3E%3C/svg%3E");
+  -webkit-mask-image: var(--graphene); mask-image: var(--graphene);
+  -webkit-mask-size: contain; mask-size: contain;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
 }
 
 /* ─── Resize handle ─────────────────────────────────────────────
