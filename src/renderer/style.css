@@ -789,7 +789,17 @@ html.is-mac #titlebar { padding-left: 72px; }
    one you read. Same relationship as the reference the user brought in (sidebar
    ~#b2b2b2 against body ~#d8d8d8). The ladder is unchanged below: non-note files
    stay a further step down at --text-2, folders keep --text-0 at .9 opacity. */
-.tree-note .tree-name { color: var(--text-1); font-weight: 400; }
+/* 70% of the way from --text-1 up to --text-0 (2026-10-14). With both rows at weight
+   400 the grey was the ONLY thing left between a folder and a note, and it was doing
+   too much work: "le cartelle si leggono bene, mi sa le note no". Still a step below a
+   folder, which is the part that was working and must not be flattened — the sidebar
+   is a place you look things up, the right-hand pane is the one you read (2026-09-16),
+   and this keeps that relationship while making a name legible on its own.
+   A mix, not a new value per theme: it lands between the two rungs whatever the theme
+   defines, and it moves in the right direction in a LIGHT theme too (there --text-0 is
+   the dark end, so the names get darker, not paler).
+   Graphite, on the tree's #2a2a2a: #b2b2b2 6,8:1 → #cdcdcd 9,0:1, folders 10,1:1. */
+.tree-note .tree-name { color: color-mix(in srgb, var(--text-0) 70%, var(--text-1)); font-weight: 400; }
 /* Files that are NOT notes — drawings, PDFs, audio, video, images — read at exactly
    the same brightness as the notes, --text-1, which is what the rule above already
    gives them. There is no rule here on purpose.
