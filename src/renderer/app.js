@@ -8511,6 +8511,13 @@ function setupLinkHoverHint() {
   const show = (a, e) => {
     // Unresolved [[wikilink]] → no "Go to" hint: it leads nowhere.
     if (a.dataset.unresolved) { _linkHint.style.display = 'none'; return; }
+    // An http/https link gets NO hint (asked for on 14/10/2026). The pointer's hand
+    // already says "this opens", and the label floated over the lines being read for
+    // as long as the mouse rested on the link. The hint stays everywhere it names a
+    // destination the text cannot show: a note link resolves to its folder + name,
+    // an attachment to its vault-relative path. The address of a web link is the one
+    // thing a browser will show anyway, the moment it opens.
+    if (/^https?:/i.test((a.getAttribute('href') || '').trim())) { _linkHint.style.display = 'none'; return; }
     const dest = targetOf(a);
     if (!dest) { _linkHint.style.display = 'none'; return; }
     const label = (window.i18n ? window.i18n.t('view.link_goto') : 'Vai a');

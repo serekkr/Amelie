@@ -272,6 +272,8 @@ const _placeHint = (e) => {
 previewContent.addEventListener('mouseover', e => {
   const el = e.target.closest && e.target.closest('a, .note-link');
   if (!el || !previewContent.contains(el)) return;
+  // No hint on an http/https link — same rule as the main window (see app.js).
+  if (/^https?:/i.test((el.getAttribute('href') || '').trim())) { _linkHint.style.display = 'none'; return; }
   const dest = _hintTargetOf(el);
   if (!dest) { _linkHint.style.display = 'none'; return; }
   _linkHint.textContent = 'Vai a → ' + dest;
