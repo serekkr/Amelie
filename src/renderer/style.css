@@ -641,6 +641,8 @@ html.is-mac #titlebar { padding-left: 72px; }
   padding: var(--tree-item-py) 14px; cursor: pointer; font-size: var(--tree-font-size);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   color: var(--text-1); user-select: none; transition: background .1s;
+  /* Containing block for the selected/multi-selected strip (see below). */
+  position: relative;
 }
 /* Hover changes the BACKGROUND, and only that: the text keeps whatever colour it has,
    so a dimmed attachment stays dim and a coloured note keeps its colour. Recolouring the
@@ -660,7 +662,6 @@ html.is-mac #titlebar { padding-left: 72px; }
    act on. */
 .tree-folder.multi-selected, .tree-note.multi-selected {
   background: var(--active-bg);
-  box-shadow: inset 2px 0 0 0 var(--accent);
 }
 .tree-note.active {
   background: var(--active-bg); color: var(--accent);
@@ -682,10 +683,28 @@ html.is-mac #titlebar { padding-left: 72px; }
    The bar is an inset box-shadow, not a border: a border would push the icon and the
    name 2px right and the row would twitch as the target moves. It also keeps the
    state readable against HOVER, which is a fill and now the only fill here. A folder
-   given a colour of its own keeps it — the bar alone marks it. */
-.tree-folder.selected {
-  box-shadow: inset 2px 0 0 var(--accent);
+   given a colour of its own keeps it — the bar alone marks it.
+   It sits ON the guide line and is one pixel wide, not two at the row's edge
+   (2026-10-14, "c'è un cursore verde comparso e non va bene"). It always did sit on
+   the line — when the line WAS the container's left border the two were the same
+   column by accident, and lighting the bar simply lit that stretch of it. Moving the
+   hairline 8px right earlier today left the bar behind, and a green stub beside a
+   white line reads as a second line, not as a lit one.
+   A drawn strip, not the inset box-shadow it used to be, and NOT the `inset 8px 0 0
+   -7px` that looks like it would do the job: an inset shadow paints from the padding
+   edge INWARD, so a negative spread only thins it, it never moves it off the edge.
+   The marker on the rows that have no line to ride — the roots — stays on the edge. */
+.tree-folder.selected::before,
+.tree-folder.multi-selected::before,
+.tree-note.multi-selected::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 1px;
+  background: var(--accent); pointer-events: none;
 }
+/* Indented rows: 7px in, which is the hairline's column (its ::before sits at 8px of
+   a container whose rows start 1px in). Any depth — the container is an ancestor. */
+.tree-folder-children .tree-folder.selected::before,
+.tree-folder-children .tree-folder.multi-selected::before,
+.tree-folder-children .tree-note.multi-selected::before { left: 7px; }
 .tree-folder.selected:not([data-color]) .tree-name { color: var(--accent); }
 .tree-folder-icon { display: flex; align-items: center; color: var(--accent); flex-shrink: 0; }
 /* Folder style uses ONE shape (the closed folder) that fills with the accent
@@ -751,7 +770,11 @@ html.is-mac #titlebar { padding-left: 72px; }
    compromise and the line came along for the ride. Drawn absolutely it is free: the
    indent stays 14px per level, the names do not move a pixel, and only the hairline
    does.
-   A white hairline at a third strength. No tint: the accent-green version drew a
+   A white hairline at a FIFTH strength, 20% (2026-10-14: "magari le linee non farle
+   così spesse"). One CSS pixel is as thin as it goes, and on a display that scales —
+   his runs at 1.2 — that pixel snaps up to two device pixels at full strength, which
+   is what reads as thick. The width cannot answer that; the strength can. It was 32%:
+   on Graphite's tree that painted #626262, against #4d4d4d now. No tint: the
    coloured stripe down the sidebar, and plain --text-2 was the same shade as the note
    icons and muted labels beside it, so the nesting levels vanished into the tree. A
    faint white differs from both without belonging to either. Mixed from the theme's
@@ -759,7 +782,7 @@ html.is-mac #titlebar { padding-left: 72px; }
    gives a faint DARK line instead of white on white. */
 .tree-folder-children::before {
   content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 1px;
-  background: color-mix(in srgb, var(--text-0) 32%, transparent);
+  background: color-mix(in srgb, var(--text-0) 20%, transparent);
   pointer-events: none;
 }
 /* No hover reaction. The guides used to brighten — both under the pointer and when the
