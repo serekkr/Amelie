@@ -67,6 +67,21 @@ for (const cfg of [{}, { softwareCompositing: true, lowMemory: true, disableGpu:
     has(cfg, 'disable-features=SecretPortalKeyProvider'), flagsOf(cfg).join(' '));
 }
 
+// ── Text is drawn in grayscale, as decided for every install ─────────────────
+// Not a workaround: a look, measured against Obsidian on the same screen (87.7%
+// of Amelie's glyph pixels carried a coloured fringe, 0.0% of Obsidian's). The
+// hatch exists for an unscaled RGB-stripe panel where the fringes do sharpen.
+for (const cfg of [{}, { softwareCompositing: true, lowMemory: true, disableGpu: true }]) {
+  const label = Object.keys(cfg).length ? 'with every workaround on' : 'by default';
+  check(`text is grayscale, not subpixel, ${label}`, has(cfg, 'disable-lcd-text'), flagsOf(cfg).join(' '));
+}
+check('subpixelText gives the coloured fringes back',
+  !has({ subpixelText: true }, 'disable-lcd-text'), flagsOf({ subpixelText: true }).join(' '));
+check('...and changes nothing else',
+  JSON.stringify(flagsOf({ subpixelText: true })) ===
+  JSON.stringify(flagsOf({}).filter(f => f !== 'disable-lcd-text')),
+  flagsOf({ subpixelText: true }).join(' '));
+
 // ── Each switch answers to its own setting, and only its own ─────────────────
 check('softwareCompositing brings back software compositing',
   has({ softwareCompositing: true }, 'disable-gpu-compositing'), '');
