@@ -911,7 +911,11 @@ html.is-mac #titlebar { padding-left: 72px; }
    which on Inter is a real Light face and the reason the page read washed out. */
 #tab-about .about-points {
   list-style: none; margin: 22px 0 0; padding: 0 6px;
-  max-width: 620px; text-align: left;
+  /* 800, not 620 (2026-10-14). At 620 the first line had 586px for text that wants
+     590 — it broke before the last word by FOUR pixels, which is what "la parola
+     windows deve stare nella stessa riga" was. Not a line-by-line fit: 800 leaves
+     room on every entry, and the panel holds 888 at the modal's default width. */
+  max-width: 800px; text-align: left;
   display: flex; flex-direction: column; gap: 10px;
   font-family: var(--editor-font); font-size: 13px; font-weight: 400;
   line-height: 1.55; color: var(--text-1);
