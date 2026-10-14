@@ -735,14 +735,32 @@ html.is-mac #titlebar { padding-left: 72px; }
      them — is 16px narrower than it was; that is the price of the same step
      everywhere, and it was the thing asked for. */
   margin-left: 14px;
-  padding-left: 0;
-  /* A white hairline, at a third strength. No tint: the accent-green version drew a
-     coloured stripe down the sidebar, and plain --text-2 was the same shade as the
-     note icons and muted labels beside it, so the nesting levels vanished into the
-     tree. A faint white differs from both without belonging to either. Mixed from the
-     theme's text rather than written as `rgba(255,255,255,…)`, so on Light Paper the
-     same rule gives a faint DARK line instead of white on white. */
-  border-left: 1px solid color-mix(in srgb, var(--text-0) 32%, transparent);
+  /* 1px, standing in for the hairline that used to be a border-left and paid for its
+     own width in the layout. The line is drawn by ::before now (see below) and costs
+     nothing, so this keeps the names in the exact same column they were in. */
+  padding-left: 1px;
+  position: relative;
+}
+/* The hairline, 8px further right than the border it replaces (2026-10-14: "le linee
+   che vanno giù dai folder sono un po' troppo a sinistra"). It lands back on the
+   CENTRE of the parent folder's icon — row padding 14 + half of a 16px icon — which
+   is where it was until 2026-09-16 and the reason the step was 22px then.
+   What changed is that the position no longer costs anything. Back then the line WAS
+   the container's left border, so moving it right moved every name right with it, and
+   at seven levels deep that left 40px for a name in a 250px sidebar; 14px was the
+   compromise and the line came along for the ride. Drawn absolutely it is free: the
+   indent stays 14px per level, the names do not move a pixel, and only the hairline
+   does.
+   A white hairline at a third strength. No tint: the accent-green version drew a
+   coloured stripe down the sidebar, and plain --text-2 was the same shade as the note
+   icons and muted labels beside it, so the nesting levels vanished into the tree. A
+   faint white differs from both without belonging to either. Mixed from the theme's
+   text rather than written as `rgba(255,255,255,…)`, so on Light Paper the same rule
+   gives a faint DARK line instead of white on white. */
+.tree-folder-children::before {
+  content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 1px;
+  background: color-mix(in srgb, var(--text-0) 32%, transparent);
+  pointer-events: none;
 }
 /* No hover reaction. The guides used to brighten — both under the pointer and when the
    parent folder row was hovered — to show which folder you were about to enter; the
@@ -754,10 +772,10 @@ html.is-mac #titlebar { padding-left: 72px; }
    1px more than it, so both modes land the text in the same column (guided spends one
    of its pixels on the hairline itself). */
 :root[data-folder-guides="off"] .tree-folder-children {
-  border-left: none;
   margin-left: 0;
   padding-left: 15px;
 }
+:root[data-folder-guides="off"] .tree-folder-children::before { display: none; }
 
 .tree-note-icon { color: var(--text-3); font-size: 12px; pointer-events: none; }
 .tree-name { flex: 1; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
