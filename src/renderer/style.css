@@ -1262,12 +1262,16 @@ kbd {
   background: var(--bg-1); border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
+/* Un grigio SOLO per tutta la riga (15/10/2026, "come colore"): l'etichetta era
+   --text-3 e la data --text-2, cioe' due grigi dentro la stessa frase, e la riga si
+   leggeva a scatti. Restano piu' spente dei titoli, che e' giusto: sono una nota a
+   pie' di pagina dell'intestazione, non un titolo. */
 .note-meta-item {
   display: flex; align-items: center; gap: 6px;
-  font-family: var(--editor-font); font-size: 12px; color: var(--text-3);
+  font-family: var(--editor-font); font-size: 12px; color: var(--text-2);
 }
 .note-meta-item svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 1.5; flex-shrink: 0; opacity: .7; }
-.note-meta-item span { color: var(--text-2); }
+.note-meta-item span { color: inherit; }
 
 /* ─── Editor pane ───────────────────────────────────────────── */
 /* AmelieWideTick REMOVED (2026-09-16). It was a 1-glyph font holding a widened
