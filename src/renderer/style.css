@@ -696,6 +696,16 @@ html.is-mac #titlebar { padding-left: 72px; }
 .tree-folder:hover, .tree-note:hover {
   background: color-mix(in srgb, var(--text-1) 10%, transparent);
 }
+/* La cartella SELEZIONATA: lo stesso grigio dell'hover, ma piu' deciso — "deve vedersi
+   un po' di grigio tipo quando faccio hover piu scuro". 18% contro il 10% dell'hover:
+   abbastanza da non confondersi con il passaggio del mouse, e abbastanza da non
+   confondersi con la nota APERTA, che in graphite e' bianco al 10% e porta anche il suo
+   bordo d'accento. Nessun verde: il verde qui diceva "selezionata" e adesso lo dice il
+   grigio. Una cartella con un colore suo tiene il suo testo, perche' questo e' solo uno
+   sfondo. */
+.tree-folder.selected {
+  background: color-mix(in srgb, var(--text-1) 18%, transparent);
+}
 /* Picked with Shift/Ctrl+click, waiting to be moved or deleted. A fill, not the
    accent text colour the OPEN note uses: the two mean different things and must not
    be read for each other — one is where you are, the other is what you are about to
@@ -737,7 +747,9 @@ html.is-mac #titlebar { padding-left: 72px; }
    -7px` that looks like it would do the job: an inset shadow paints from the padding
    edge INWARD, so a negative spread only thins it, it never moves it off the edge.
    The marker on the rows that have no line to ride — the roots — stays on the edge. */
-.tree-folder.selected::before,
+/* La barretta verde NON vale piu' per la cartella selezionata (15/10/2026: "quando
+   clicco su cartelle vedo che selezionato si vede verde non va bene"). Resta per la
+   MULTI-selezione, che e' un altro stato e che l'utente non ha messo in discussione. */
 .tree-folder.multi-selected::before,
 .tree-note.multi-selected::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--tree-guide-w);
@@ -745,7 +757,6 @@ html.is-mac #titlebar { padding-left: 72px; }
 }
 /* Indented rows: 7px in, which is the hairline's column (its ::before sits at 8px of
    a container whose rows start 1px in). Any depth — the container is an ancestor. */
-.tree-folder-children .tree-folder.selected::before,
 .tree-folder-children .tree-folder.multi-selected::before,
 .tree-folder-children .tree-note.multi-selected::before { left: 7px; }
 /* L'icona della cartella e' BIANCA per default (2026-10-15, richiesta di serekkr).
@@ -754,13 +765,10 @@ html.is-mac #titlebar { padding-left: 72px; }
    di fianco. Una cartella a cui l'utente ha dato un colore suo vince lo stesso:
    .tree-folder[data-color] .tree-folder-icon piu sotto fa `color: inherit`. */
 .tree-folder-icon { display: flex; align-items: center; color: var(--text-0); flex-shrink: 0; }
-/* … e torna VERDE quando quella cartella e' la selezionata (2026-10-15, "il verde
-   quando click su la cartella invece del testo"). Il verde non e' piu' la decorazione
-   di tutte le cartelle: adesso vuol dire "e' questa". Il nome resta bianco — era lui
-   a diventare verde fino a mezz'ora fa. Una cartella con un colore suo non si tocca:
-   .tree-folder[data-color] .tree-folder-icon fa `color: inherit` piu' sotto, e questa
-   regola si chiama fuori da sola con :not([data-color]). */
-.tree-folder.selected:not([data-color]) .tree-folder-icon { color: var(--accent); }
+/* L'icona resta BIANCA anche da selezionata (15/10/2026: "il colore della cartella
+   selezionata bianca"). Per meta' giornata e' stata verde: prima tutte, poi solo la
+   selezionata. Adesso la selezione la dice lo SFONDO grigio qui sopra, e l'icona non
+   cambia mai colore — tranne quando l'utente gliene ha dato uno suo. */
 /* Folder style uses ONE shape (the closed folder) that fills with the accent
    colour when expanded — consistent with the other icon styles. The separate
    open-folder shape is no longer used. */
