@@ -4403,8 +4403,23 @@ function folderNodeAtPath(nodes, targetPath) {
 // for seconds (serekkr, 12/10/2026). The per-item work that must still happen — the
 // file itself, the manual order, the tabs that pointed at it — is unchanged.
 async function deleteNote(node, { bulk = false } = {}) {
-  // No confirmation dialog — delete immediately (notes, folders, draws, PDF, images).
-  // (User preference: delete goes through without asking.)
+  // A NOTE goes through without asking — serekkr's choice of 12/10/2026, and what makes
+  // it safe is that delete goes to the system trash (main.js: trashOrRemove).
+  // A FOLDER asks first, and says how much goes with it (15/10/2026: "se provo a
+  // cancellare una cartella deve chiedermi conferma anche se faccio con cancel").
+  // The asymmetry is the point: a note is one thing you can see on the row you pressed
+  // the key on, a folder takes everything underneath — and the tree shows only the
+  // levels you happen to have open, so what you are destroying is partly invisible.
+  // Here and not at the call sites, because there are two of them (the context menu's
+  // ctx-delete and the Canc key) and a guard on one of them is a guard on neither.
+  // `bulk` skips it: deleteTreeSelection has already asked once for the whole set.
+  if (!bulk && node.type === 'folder') {
+    let dentro = 0;
+    (function conta(nodes) { for (const c of nodes || []) { dentro++; conta(c.children); } })(node.children);
+    const chiave = dentro ? 'tree.delete_folder_n_confirm' : 'tree.delete_folder_confirm';
+    const nome = node.name || String(node.path || '').split('/').pop();
+    if (!(await showConfirmModal(window.i18n.t(chiave, { name: nome, n: dentro })))) return;
+  }
   removeFromTreeOrder(node.path);   // forget the deleted item's manual order
   if (node.type === 'folder') {
     await window.inkwell.deleteFolder(node.path);
