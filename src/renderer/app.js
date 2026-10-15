@@ -3195,8 +3195,8 @@ function makeFolderEl(node, parentArray, folderPath = '') {
     <svg class="folder-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
     <svg class="folder-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"/></svg>
     <svg class="fi-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M9 6l6 6-6 6"/></svg>
-    <svg class="fi-triangle" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M10 6l6 6-6 6z"/></svg>
-    <svg class="fi-graphene" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" width="16" height="16"><path d="M12 2.5l8 4.6v9.8l-8 4.6-8-4.6V7.1z"/></svg>
+    <svg class="fi-triangle" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 4l8 8-8 8z"/></svg>
+    <svg class="fi-graphene" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" width="16" height="16"><path d="M12 4.6l6.2 3.6v7.6l-6.2 3.6-6.2-3.6V8.2z"/></svg>
     <svg class="fi-dot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="4.5"/></svg>
     <svg class="fi-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" width="16" height="16"><polygon points="12 2.5 14.85 8.3 21.2 9.25 16.6 13.75 17.7 20.1 12 17.1 6.3 20.1 7.4 13.75 2.8 9.25 9.15 8.3"/></svg>
   </span><span class="tree-name">${escHtml(node.name)}</span>`;
