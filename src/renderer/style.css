@@ -1454,7 +1454,11 @@ kbd {
   outline: 1px solid color-mix(in srgb, var(--yellow) 70%, transparent);
 }
 #cm-mount .cm-search-current { background: transparent; outline: 2px solid var(--accent); }
-#cm-mount .cm-codeblock { background: var(--code-bg); padding-left: 2ch; padding-right: 2ch; }
+/* Same monospace as the rendered block above, so a fence looks identical either side
+   of the edit/view toggle — which is the rule the old proportional choice existed to
+   protect, kept here while changing what the two agree ON. */
+#cm-mount .cm-codeblock { background: var(--code-bg); padding-left: 2ch; padding-right: 2ch;
+  font-family: var(--code-font); }
 /* Breathing above/below the fence lines = 0.3× the line height (the legacy inkGap),
    proportional so it stays right when the font is zoomed. */
 #cm-mount .cm-cb-first { border-top-left-radius: 7px; border-top-right-radius: 7px; padding-top: calc(0.14 * var(--editor-line-height) * 1em); }
@@ -1511,7 +1515,15 @@ kbd {
    tracks --bg-0. The extra :root raises the specificity over the plain :root rule
    above; inside the theme block it would lose. */
 :root[data-theme="graphite"] {
-  --code-bg: color-mix(in srgb, #000 22%, var(--bg-0));
+  /* SOPRA la pagina, non sotto (2026-10-15). Fino a oggi era #000 al 22%, un gradino
+     PIU SCURO: misurato sullo screenshot di serekkr, pagina #262626 e blocco #202020,
+     cioe' -6 di luminanza. Obsidian fa l'opposto sullo stesso appunto: pagina #222222,
+     blocco #282828, +6. Un pannello piu scuro su una pagina scura si legge come un
+     buco; piu chiaro si legge come una scheda. Bianco al 3% su #212121 da' esattamente
+     #282828, lo stesso pannello misurato da loro, nella direzione giusta (il 4%
+     provato prima saliva di 9 invece che di 6: piu' contrasto del modello).
+     Mescolato e non scritto fisso, cosi' segue --bg-0 come prima. */
+  --code-bg: color-mix(in srgb, #fff 3%, var(--bg-0));
 }
 [data-theme="light"] {
   --hl-comment: #6e7781;
@@ -1721,11 +1733,20 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
      edit↔view toggle. Radius 7px to match it as well, and no frame — the edit-mode
      block has none, by an old request. */
   background: var(--code-bg); border: none;
-  /* The note's font, stated HERE and not left to inheritance: the UA stylesheet says
-     `pre { font-family: monospace }`, and a declaration beats an inherited value — so
-     the block rendered in the system's monospace (DejaVu Sans Mono on this machine)
-     while the text around it was the note font. Same 15px, visibly bigger letters. */
-  font-family: var(--editor-font-family);
+  /* MONOSPACE again (2026-10-15). From 2026-09 to today this said
+     `var(--editor-font-family)`, so a code block was drawn in the NOTE's font: the
+     reasoning was that a block is typed in the editor's font and must not change face
+     when you leave edit mode, and the note under it said in so many words "pick a
+     proportional font for notes and view-mode code follows it". serekkr picked Inter,
+     and the consequence arrived: measured against his Obsidian screenshot of the same
+     note (444.png / 555.png), `export PIKSESNECIL=1` is monospaced there and
+     proportional here — "adesso la nostra vista e brutta".
+     The old worry is still right, and is answered instead of ignored: edit mode gets
+     the same font on its own code block (#cm-mount .cm-codeblock below), so the two
+     sides of the toggle still agree. They just agree on monospace now.
+     Stated HERE and not inherited: the UA stylesheet says `pre { font-family: monospace }`
+     and a declaration beats an inherited value. */
+  font-family: var(--code-font);
   /* The box spans the full width of the text column, aligned to the text
      margins (no overflow past the start/end edges). */
   border-radius: 7px; padding: 16px 20px; overflow-x: auto;
