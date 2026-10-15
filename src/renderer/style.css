@@ -1680,22 +1680,20 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
    the ladder stops at 1em and the level reads from the colour. */
 #preview-content h5,
 #preview-content h6 { font-size: 1em;    color: var(--text-0); }
-/* GRAPHITE only, asked for on 13/10/2026: the headings carry the theme's green
-   ladder instead of plain white. Colour per level was the app's old behaviour
-   everywhere and was taken out because it read worse — but half of why was that it
-   showed in the rendered view ONLY, so a heading changed colour when you stopped
-   editing it. Here it is in BOTH: the same four greens in the edit overlay and in
-   the view. Every other theme keeps white headings; this is the one that asked. */
-:root[data-theme="graphite"] #preview-content h1,
-:root[data-theme="graphite"] #editor-highlight .hl-h1 { color: var(--h1); }
-:root[data-theme="graphite"] #preview-content h2,
-:root[data-theme="graphite"] #editor-highlight .hl-h2 { color: var(--h2); }
-:root[data-theme="graphite"] #preview-content h3,
-:root[data-theme="graphite"] #editor-highlight .hl-h3 { color: var(--h3); }
-:root[data-theme="graphite"] #preview-content h4,
-:root[data-theme="graphite"] #preview-content h5,
-:root[data-theme="graphite"] #preview-content h6,
-:root[data-theme="graphite"] #editor-highlight .hl-h4 { color: var(--h4); }
+/* GRAPHITE's coloured heading ladder is GONE (2026-10-15). It was asked for on
+   13/10/2026 — green, amber, purple, light green, one hue per level, in the edit
+   overlay and the view alike — and taken out again after measuring the user's
+   Obsidian screenshot (333.png): there H1…H6 are all #d9d9d9, exactly the grey of
+   the body text, and the level is told by size and weight alone. With no rule here,
+   the base rules above apply and every heading is var(--text-0) in every theme,
+   which is what that means.
+   The --h1…--h4 variables are deliberately LEFT in all the theme blocks: they cost
+   nothing, they are the record of each palette's ladder, and putting the four lines
+   back is all it takes to have it again.
+   What this costs, and it is real: the size ladder stops at h4 (see the h5/h6 note
+   above — h4, h5 and h6 are all 1em, because a heading smaller than its own
+   paragraph was the bug fixed on 14/10). The colour was the only thing separating
+   those three levels. They are now identical to each other. */
 #preview-content p { margin: .8em 0; line-height: var(--md-row); color: var(--text-0); }
 #preview-content a { color: var(--link); text-decoration: none; }
 #preview-content a:hover { text-decoration: underline; }
