@@ -433,7 +433,14 @@ async function switchTab(idx) {
   // header title, via the focusin tracker) when the user is working in the
   // split pane and this switchTab came from a programmatic refresh.
   requestAnimationFrame(() => {
-    if (state.viewMode === 'edit' && !(_splitPath && _focusedPane === 'split') && !_cmSameNote) {
+    // ...e NON lo ruba se il fuoco e' gia' nell'albero: ci sei appena arrivato
+    // cliccando una riga, e portarlo nell'editor manderebbe il Canc dentro il testo.
+    // Letto da activeElement invece che con un flag: non c'e' stato da azzerare, e
+    // vale per ogni strada che arriva qui, non solo per il clic sull'albero.
+    const _nellAlbero = (() => { try {
+      return !!document.activeElement?.closest?.('#file-tree');
+    } catch (_) { return false; } })();
+    if (state.viewMode === 'edit' && !(_splitPath && _focusedPane === 'split') && !_cmSameNote && !_nellAlbero) {
       editor.focus();
       try { editor.setSelectionRange(tab.cursorPos || 0, tab.cursorPos || 0); } catch(_) {}
     }
@@ -3430,9 +3437,20 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   _tipWhenClipped(el, displayName);
   el.dataset.path = node.path;
 
+  // Le righe dell'albero prendono il FUOCO della tastiera quando le clicchi
+  // (15/10/2026). Prima no, e la conseguenza era un baco: aprendo una nota in
+  // modifica l'editor si prendeva il fuoco (vedi switchTab), quindi il Canc finiva
+  // dentro il testo e cancellava un carattere invece della nota — "se seleziono una
+  // nota e faccio cancel cancella testo da dentro la nota". La guardia del gestore
+  // Canc si tira indietro apposta quando il fuoco e' in un elemento scrivibile, ed e'
+  // giusto che lo faccia: la cura e' non portarcelo, non togliere la guardia.
+  // tabindex -1: raggiungibile da codice, ma il Tab non ci finisce dentro riga per riga.
+  el.tabIndex = -1;
   el.addEventListener('click', (e) => {
     // Shift/Ctrl+click picks rows; it must not also open the note.
     if (handleTreeSelectClick(e, node.path)) return;
+    // preventScroll: senza, il browser riporta la riga in vista e l'elenco sobbalza.
+    try { el.focus({ preventScroll: true }); } catch (_) {}
     openNote(node);
   });
   el.addEventListener('contextmenu', e => showContextMenu(e, node));
