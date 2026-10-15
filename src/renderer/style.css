@@ -775,15 +775,14 @@ html.is-mac #titlebar { padding-left: 72px; }
    a container whose rows start 1px in). Any depth — the container is an ancestor. */
 .tree-folder-children .tree-folder.multi-selected::before,
 .tree-folder-children .tree-note.multi-selected::before { left: 7px; }
-/* L'icona della cartella e' VERDE, l'accento del tema. Oggi (15/10/2026) e' stata
-   bianca per qualche ora, poi "metti il verde di prima su le cartelle": torna com'era.
-   Adesso regge meglio di stamattina, perche' nel frattempo e' cambiato il significato
-   del verde: non marca piu' la selezione — quella la dice lo sfondo grigio della riga
-   — quindi il verde dell'icona e' semplicemente il colore delle cartelle e non deve
-   piu' distinguere due stati con un colore solo.
-   Una cartella a cui l'utente ha dato un colore suo vince lo stesso:
-   .tree-folder[data-color] .tree-folder-icon piu sotto fa `color: inherit`. */
-.tree-folder-icon { display: flex; align-items: center; color: var(--accent); flex-shrink: 0; }
+/* L'icona della cartella e' BIANCA (--text-0). Il 15/10/2026 e' passata da verde a
+   bianca, poi di nuovo verde, poi bianca: vale quest'ultima. Il verde nell'albero
+   resta solo dove dice qualcosa — la maschera della riga aperta e la barretta della
+   multi-selezione — mentre la selezione la dice lo sfondo grigio.
+   --text-0 e non #fff: e' lo stesso bianco dei nomi accanto, e un bianco pieno sarebbe
+   piu' acceso del testo che ha di fianco. Una cartella a cui l'utente ha dato un colore
+   suo vince lo stesso: .tree-folder[data-color] .tree-folder-icon fa `color: inherit`. */
+.tree-folder-icon { display: flex; align-items: center; color: var(--text-0); flex-shrink: 0; }
 /* L'icona resta BIANCA anche da selezionata (15/10/2026: "il colore della cartella
    selezionata bianca"). Per meta' giornata e' stata verde: prima tutte, poi solo la
    selezionata. Adesso la selezione la dice lo SFONDO grigio qui sopra, e l'icona non
