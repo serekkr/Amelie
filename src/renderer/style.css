@@ -699,8 +699,11 @@ html.is-mac #titlebar { padding-left: 72px; }
   0%, 30% { background: var(--accent); color: #fff; }
   100%    { background: transparent; }
 }
-/* Folder selected as the target for a new note. A BAR down its left edge and the
-   accent on the name — no fill.
+/* Folder selected as the target for a new note. A BAR down its left edge — no fill
+   and, from 2026-10-15, no accent on the name either: "quando clicco su le cartelle
+   non mettere piu il colore verde delle cartelle". The bar alone marks it, which is
+   what a folder with a colour of its own has always done (see the note below), so
+   every folder now behaves the same way instead of two.
    The fill is the open note's and nothing else's (2026-10-01). This rule used to be
    byte-for-byte `.tree-note.active`: the same --active-bg tint, and the label it
    claimed to recolour never arrived (`.tree-folder .tree-name` sets its own --text-0
@@ -732,7 +735,6 @@ html.is-mac #titlebar { padding-left: 72px; }
 .tree-folder-children .tree-folder.selected::before,
 .tree-folder-children .tree-folder.multi-selected::before,
 .tree-folder-children .tree-note.multi-selected::before { left: 7px; }
-.tree-folder.selected:not([data-color]) .tree-name { color: var(--accent); }
 /* L'icona della cartella e' BIANCA per default (2026-10-15, richiesta di serekkr).
    Era --accent, cioe' verde in graphite. --text-0 e non #fff: e' lo stesso bianco dei
    nomi delle note accanto, mentre un bianco pieno sarebbe piu acceso del testo che ha
