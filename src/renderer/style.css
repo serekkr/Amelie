@@ -88,7 +88,12 @@
      cioe' font size"). 13px, la stessa misura dei nomi nell'albero: e' testo di
      CONTORNO, e a 15-16px competeva col testo della nota, che e' 15px — ed e' questo
      che lo faceva sembrare troppo grande. */
-  --title-font-size: 13px;
+  --title-font-size: 14px;
+  /* Il PERCORSO che precede il nome della nota e' piu' piccolo del nome stesso: e'
+     navigazione, non titolo (15/10/2026, "fai piu grande il titolo della nota").
+     Prima erano la stessa cosa perche' il breadcrumb imponeva una misura sola a tutti
+     i suoi pezzi, e il risultato era una riga tutta uguale in cui niente era il titolo. */
+  --path-font-size: 13px;
   /* The width of the tree's hairlines — the nesting guides and the accent strip that
      marks a chosen folder, which must stay the same width or the lit stretch reads
      thicker than the line it lights.
@@ -1074,7 +1079,7 @@ kbd {
 .note-breadcrumb {
   display: flex; align-items: center; flex-wrap: wrap;
   flex: 1; min-width: 0;
-  font-family: var(--ui-font); font-size: var(--title-font-size);
+  font-family: var(--ui-font); font-size: var(--path-font-size);
   color: var(--text-2); line-height: 1.3;
 }
 .note-breadcrumb .crumb {
@@ -1083,8 +1088,9 @@ kbd {
   transition: color .12s, background .12s;
 }
 .note-breadcrumb .crumb:hover { color: var(--accent); text-decoration: underline; }
-/* The note itself: prominent, like a title. */
-.note-breadcrumb .crumb-note { color: var(--text-0); font-weight: 500; }
+/* The note itself: prominent, like a title — e grande come gli altri titoli di
+   pannello (pdf, immagine, media), non come il percorso che la precede. */
+.note-breadcrumb .crumb-note { color: var(--text-0); font-weight: 500; font-size: var(--title-font-size); }
 .note-breadcrumb .crumb-sep { padding: 0 4px; color: var(--text-3); user-select: none; }
 /* Inline rename field inside the breadcrumb (double-click / right-click).
    NO BOX: the bordered field was the browser's default 20-character input, so a
@@ -1268,7 +1274,7 @@ kbd {
    pie' di pagina dell'intestazione, non un titolo. */
 .note-meta-item {
   display: flex; align-items: center; gap: 6px;
-  font-family: var(--editor-font); font-size: 12px; color: var(--text-2);
+  font-family: var(--editor-font); font-size: 11px; color: var(--text-2);
 }
 .note-meta-item svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 1.5; flex-shrink: 0; opacity: .7; }
 .note-meta-item span { color: inherit; }
