@@ -5021,3 +5021,23 @@ input, textarea, [contenteditable="true"] {
 #syncreport-modal .sr-file.sr-open:hover { background: var(--bg-2); color: var(--text-0); }
 #syncreport-modal .sr-file.sr-gone { color: var(--text-3); }
 #syncreport-modal .sr-empty { color: var(--text-3); font-size: 13px; padding: 10px 2px; }
+
+/* ── Folder picker rows ("move to…", 2026-10-15) ─────────────────────────────
+   The modal itself is styled inline in index.html like the other ones; only the
+   rows live here, because hover and "picked" are states and an inline style has
+   nowhere to put them. The row you are ALREADY in is shown and dimmed rather
+   than hidden: a list that silently drops the current folder makes you look for
+   it, and finding it missing says nothing about why. */
+#move-modal .move-row {
+  padding: 7px 12px; cursor: pointer; white-space: pre;
+  font-family: var(--ui-font); font-size: 14px; color: var(--text-0);
+  overflow: hidden; text-overflow: ellipsis;
+}
+#move-modal .move-row:hover { background: var(--bg-3); }
+#move-modal .move-row-sel,
+#move-modal .move-row-sel:hover {
+  background: var(--accent-glow); color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+#move-modal .move-row-here { color: var(--text-3); cursor: default; }
+#move-modal .move-row-here:hover { background: transparent; }

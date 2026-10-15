@@ -3981,6 +3981,76 @@ function showInputModal(label, defaultValue = '', opts = {}) {
   });
 }
 
+// Folder picker for "move to…" (serekkr, 15/10/2026). Lists every folder in the
+// vault plus the root, indented by depth, and resolves to the chosen path ('' = root)
+// or null if cancelled.
+//
+// What it refuses to offer, because offering it and failing later would be worse:
+// the item's OWN folder (moving something where it already is does nothing), the
+// folder itself, and everything underneath it — a folder cannot be moved inside
+// itself. moveManyInto() already skips those cases silently; a list that still shows
+// them would look like the move simply did not work.
+function showFolderPickerModal(label, { excludePath = null, currentParent = null } = {}) {
+  return new Promise(resolve => {
+    const modal = document.getElementById('move-modal');
+    const lab   = document.getElementById('move-modal-label');
+    const list  = document.getElementById('move-modal-list');
+    const okBtn = document.getElementById('move-modal-ok');
+    const caBtn = document.getElementById('move-modal-cancel');
+    if (!modal || !lab || !list || !okBtn || !caBtn) { resolve(null); return; }
+
+    const voci = [{ path: '', nome: window.i18n.t('move.root'), liv: 0 }];
+    (function walk(nodes, liv) {
+      for (const n of nodes || []) {
+        if (n.type !== 'folder') continue;
+        const dentro = excludePath && (n.path === excludePath || n.path.startsWith(excludePath + '/'));
+        if (!dentro) voci.push({ path: n.path, nome: n.name, liv });
+        walk(n.children, liv + 1);
+      }
+    })(state.notes, 1);
+
+    let scelto = null;
+    list.innerHTML = '';
+    for (const v of voci) {
+      const qui = v.path === (currentParent || '');
+      const r = document.createElement('div');
+      r.className = 'move-row' + (qui ? ' move-row-here' : '');
+      r.dataset.path = v.path;
+      r.textContent = (v.liv ? '\u00a0'.repeat(v.liv * 3) : '') + v.nome + (qui ? '  •' : '');
+      r.title = qui ? window.i18n.t('move.already_here') : v.path;
+      if (qui) r.setAttribute('aria-disabled', 'true');
+      else r.addEventListener('click', () => {
+        scelto = v.path;
+        [...list.children].forEach(c => c.classList.remove('move-row-sel'));
+        r.classList.add('move-row-sel');
+      });
+      r.addEventListener('dblclick', () => { if (!qui) { scelto = v.path; chiudi(scelto); } });
+      list.appendChild(r);
+    }
+
+    lab.textContent = label;
+    modal.style.display = 'flex';
+    setTimeout(() => list.focus(), 60);
+
+    function chiudi(val) {
+      modal.style.display = 'none';
+      okBtn.removeEventListener('click', onOk);
+      caBtn.removeEventListener('click', onCa);
+      document.removeEventListener('keydown', onKey, true);
+      resolve(val);
+    }
+    const onOk  = () => chiudi(scelto);
+    const onCa  = () => chiudi(null);
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); chiudi(null); }
+      else if (e.key === 'Enter' && scelto !== null) { e.stopPropagation(); chiudi(scelto); }
+    };
+    okBtn.addEventListener('click', onOk);
+    caBtn.addEventListener('click', onCa);
+    document.addEventListener('keydown', onKey, true);
+  });
+}
+
 // In-theme confirmation dialog — replaces window.confirm() (which on Linux
 // shows an ugly native box with the old app icon). Returns a Promise<boolean>.
 function showConfirmModal(message) {
@@ -8638,6 +8708,26 @@ function setupContextMenu() {
     if (target) await duplicateNode(target);
   });
 
+  $('ctx-move')?.addEventListener('click', async () => {
+    const target = state.contextTarget;
+    menu.style.display = 'none';
+    if (!target) return;
+    const cartella = target.type === 'folder';
+    const genitore = String(target.path || '').includes('/')
+      ? target.path.slice(0, target.path.lastIndexOf('/')) : '';
+    const dest = await showFolderPickerModal(
+      window.i18n.t('move.title', { name: target.name }),
+      { excludePath: cartella ? target.path : null, currentParent: genitore });
+    if (dest === null) return;                       // annullato
+    // Una sola strada per spostare: moveManyInto e' quella del trascinamento, gia'
+    // pagata (cartella dentro se' stessa, allegati che non si spostano, tab che
+    // seguono il file, albero riletto invece che rattoppato). Una seconda
+    // implementazione qui sarebbe la prima a divergere.
+    const n = await moveManyInto([target.path], dest);
+    if (n) showToast(window.i18n.t(dest ? 'tree.moved_one' : 'tree.moved_one_root',
+      { name: target.name, folder: dest.split('/').pop() || '' }));
+  });
+
   $('ctx-color')?.addEventListener('click', (e) => {
     e.stopPropagation();
     const node = state.contextTarget; if (!node) return;
@@ -8719,6 +8809,16 @@ function showContextMenu(e, node) {
   // Duplicate: available for notes and folders (not for PDFs / attachments).
   const ctxDup = $('ctx-duplicate');
   if (ctxDup) ctxDup.style.display = (hasTarget && !isAttachNode(node)) ? '' : 'none';
+  // Move to… — notes and folders. NOT attachments: they live in attachments/ and
+  // moveManyInto() skips them on purpose, so the entry would do nothing. The label
+  // says which of the two you right-clicked, as asked on 15/10/2026.
+  const ctxMove = $('ctx-move');
+  if (ctxMove) {
+    ctxMove.style.display = (hasTarget && !isAttachNode(node)) ? '' : 'none';
+    const k = isFolder ? 'ctx.move_folder' : 'ctx.move_file';
+    ctxMove.dataset.i18n = k;
+    ctxMove.textContent = window.i18n.t(k);
+  }
   // Set color — notes and folders (not PDFs). Always reads "Set color ›"
   // regardless of whether a color is already assigned.
   const ctxColor = $('ctx-color');

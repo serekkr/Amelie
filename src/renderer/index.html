@@ -1976,7 +1976,8 @@
       <div id="ctx-sep-create" class="ctx-sep"></div>
       <button id="ctx-open-new-tab" data-i18n="ctx.open_new_tab">Apri in nuova tab</button>
       <button id="ctx-rename" data-i18n="ctx.rename">Rinomina</button>
-      <button id="ctx-duplicate" data-i18n="ctx.duplicate">Duplica</button>
+      <button id="ctx-duplicate" data-i18n="ctx.duplicate">Fai una copia</button>
+      <button id="ctx-move" data-i18n="ctx.move_file">Sposta file in…</button>
       <button id="ctx-color" data-i18n="ctx.color_set">Imposta colore ›</button>
       <button id="ctx-emoji" data-i18n="ctx.add_emoji">Aggiungi emoji</button>
       <button id="ctx-open-location" data-i18n="ctx.open_location">Apri posizione file</button>
@@ -2072,6 +2073,19 @@
       <div style="display:flex;justify-content:flex-end;gap:8px">
         <button id="input-modal-cancel" data-i18n="common.cancel" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-2);font-family:var(--ui-font);font-size:14px;padding:7px 16px;cursor:pointer">Annulla</button>
         <button id="input-modal-ok" style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-family:var(--ui-font);font-size:14px;padding:7px 20px;cursor:pointer">OK</button>
+      </div>
+    </div>
+  </div>
+  <!-- Folder picker — "move to…". Same stamp as #input-modal above; the list is the
+       only part that differs, and it is built by showFolderPickerModal(). -->
+  <div id="move-modal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);align-items:center;justify-content:center">
+    <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:24px 24px 20px;width:380px;max-width:90vw;display:flex;flex-direction:column;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+      <div id="move-modal-label" style="font-family:var(--ui-font);font-size:15px;color:var(--text-0)"></div>
+      <div id="move-modal-list" role="listbox" tabindex="0"
+        style="background:var(--bg-2);border:1px solid var(--border);border-radius:6px;max-height:320px;overflow-y:auto;outline:none;padding:4px 0"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button id="move-modal-cancel" data-i18n="common.cancel" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-2);font-family:var(--ui-font);font-size:14px;padding:7px 16px;cursor:pointer">Annulla</button>
+        <button id="move-modal-ok" style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-family:var(--ui-font);font-size:14px;padding:7px 20px;cursor:pointer">OK</button>
       </div>
     </div>
   </div>
