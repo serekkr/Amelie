@@ -81,6 +81,14 @@
      hairlines, between device pixels on a scaled display. */
   --tree-item-py: 3px;
   --tree-font-size: 13px;
+  /* La dimensione di TUTTI i titoli di pannello: il percorso sopra la nota, e i titoli
+     di immagine, media e PDF. Una variabile e non quattro numeri perche' erano appunto
+     numeri diversi — 15px il percorso, 16px gli altri tre — e nessuno se n'era accorto
+     finche' serekkr non li ha visti accanto (15/10/2026: "devono avere lo stesso font
+     cioe' font size"). 13px, la stessa misura dei nomi nell'albero: e' testo di
+     CONTORNO, e a 15-16px competeva col testo della nota, che e' 15px — ed e' questo
+     che lo faceva sembrare troppo grande. */
+  --title-font-size: 13px;
   /* The width of the tree's hairlines — the nesting guides and the accent strip that
      marks a chosen folder, which must stay the same width or the lit stretch reads
      thicker than the line it lights.
@@ -1066,7 +1074,7 @@ kbd {
 .note-breadcrumb {
   display: flex; align-items: center; flex-wrap: wrap;
   flex: 1; min-width: 0;
-  font-family: var(--ui-font); font-size: 15px;
+  font-family: var(--ui-font); font-size: var(--title-font-size);
   color: var(--text-2); line-height: 1.3;
 }
 .note-breadcrumb .crumb {
@@ -3769,7 +3777,7 @@ body.split-open .pane-flash::after {
 }
 #img-view-title {
   font-family: var(--ui-font); font-weight: 500;
-  font-size: 16px; color: var(--text-0); flex: 1;
+  font-size: var(--title-font-size); color: var(--text-0); flex: 1;
 }
 #img-view-tools { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 #img-zoom-label { font-size: 13px; color: var(--text-1); min-width: 42px; text-align: center; }
@@ -3817,7 +3825,7 @@ body.split-open .pane-flash::after {
 }
 #media-view-title {
   font-family: var(--ui-font); font-weight: 500;
-  font-size: 16px; color: var(--text-0); flex: 1;
+  font-size: var(--title-font-size); color: var(--text-0); flex: 1;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 #media-view-embed {
@@ -3840,7 +3848,7 @@ body.split-open .pane-flash::after {
 }
 #pdf-title {
   font-family: var(--ui-font); font-weight: 400;
-  font-size: 16px; color: var(--text-0); flex: 1;
+  font-size: var(--title-font-size); color: var(--text-0); flex: 1;
 }
 #pdf-tools { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .pdf-tool-btn {
