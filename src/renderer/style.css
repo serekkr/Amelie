@@ -713,8 +713,15 @@ html.is-mac #titlebar { padding-left: 72px; }
 .tree-folder.multi-selected, .tree-note.multi-selected {
   background: var(--active-bg);
 }
+/* La nota aperta: SOLO il riempimento, niente verde (15/10/2026, "quando seleziono
+   una nota si deve vedere come in obsidian... non solo il colore della nota o cartella
+   o file verde"). Misurato sullo screenshot di Obsidian dello stesso vault: barra
+   laterale #2c2c2c — identica alla nostra in graphite — riga selezionata #3a3a3a, e
+   il testo che passa da #b2b2b2 a #d9d9d9. Nessun colore: un grigio piu' chiaro e le
+   lettere piu' accese. Qui il colore serviva all'ICONA della riga, perche' il nome era
+   gia' portato a --text-0 piu' sotto. */
 .tree-note.active {
-  background: var(--active-bg); color: var(--accent);
+  background: var(--active-bg); color: var(--text-0);
 }
 /* Briefly flash a tree node just created/revealed (e.g. PDF "save as new"). */
 .tree-note.tree-flash { animation: tree-flash-kf 1.6s ease-out; }
@@ -920,9 +927,13 @@ html.is-mac #titlebar { padding-left: 72px; }
    vedere tutte con il colore bianco la scritta" — so do not put the ladder back.
    Everything else about these rows is unchanged: the icon stays --text-3, an open one
    takes the accent, and a colour set on a file still outranks all of this. */
-/* Open: the accent, like any open note. HOVER is deliberately absent — the row lights
-   up behind the text and the name keeps its own colour, dim included. */
-.tree-note[data-kind]:not([data-color]).active .tree-name { color: var(--accent); }
+/* Open: il nome si ACCENDE, non cambia colore. Questa regola dava l'accento al nome
+   di un file aperto — PDF, disegno, immagine, audio, video — ed e' il "file verde" che
+   l'utente non vuole piu'. Batteva per specificita' la regola qui sotto, che porta a
+   --text-0 il nome della nota aperta: ora fa la stessa cosa, cosi' una nota e un PDF
+   aperti si marcano allo stesso modo. HOVER resta deliberatamente assente — la riga si
+   illumina dietro il testo e il nome tiene il suo colore, dim compreso. */
+.tree-note[data-kind]:not([data-color]).active .tree-name { color: var(--text-0); }
 /* The note you are ON keeps the full white, open or merely selected: the dimming
    above is for the rows you are NOT reading. Placed after the file rules so a
    drawing/PDF row still takes the accent when active (that selector is stronger),
