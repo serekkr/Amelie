@@ -1459,22 +1459,38 @@ kbd {
    proportional so it stays right when the font is zoomed. */
 #cm-mount .cm-cb-first { border-top-left-radius: 7px; border-top-right-radius: 7px; padding-top: calc(0.14 * var(--editor-line-height) * 1em); }
 #cm-mount .cm-cb-last  { border-bottom-left-radius: 7px; border-bottom-right-radius: 7px; padding-bottom: calc(0.14 * var(--editor-line-height) * 1em); }
-/* ── Code syntax colours, GREEN + YELLOW (2026-08-18, user's choice — the palette was
-   github-dark's red/orange/blue/purple). Two hues over eight roles would be mush, so
-   they are split by MEANING: green for what IS code (keywords, commands, definitions),
-   yellow for what code CARRIES (strings, numbers, variables, flags). Within each family
-   the shade separates the roles. Comments keep their muted grey — a comment that shouts
-   in one of the two hues competes with the code it explains.
+/* ── Code syntax colours, OBSIDIAN'S FIVE (2026-10-15, user's choice). This replaces
+   the green+yellow split of 2026-08-18 (green for what IS code, yellow for what code
+   CARRIES), which in turn had replaced github-dark. Five hues, not two, so a role no
+   longer has to be read off a SHADE of the same colour.
+   Every value below was measured off the user's own Obsidian screenshot (333.png,
+   reading mode on #222222, code panel #282828), taking the most SATURATED pixel of each
+   token — antialiasing can only pull a glyph TOWARDS the background, never past the
+   real colour, so the most saturated pixel IS the colour. First attempt took the pixel
+   furthest from the background instead, which ranks a light grey #ababab (393) above a
+   red #fb484d (280) and reported the XML tags as grey; the controls (body text must
+   read grey, a string must read green) are what caught it.
+      comandi / keywords   #dfdd70  yellow
+      strings              #46ce6e  green
+      flags                #54dedc  cyan
+      numbers              #a781ff  purple
+      tag names, operators #fb484d  red
+      comments             #666666  grey
+   Cyan also takes the roles Obsidian gives no sample of here (definitions, properties,
+   params): that part is REASONING, not measurement.
    These drive BOTH modes: #cm-mount .cm-hl-* while writing and the .hljs-* rules in the
-   preview, so a block looks the same either side of the toggle. Dark themes here, the
-   light theme overrides below with darker greens and browner yellows — the bright ones
-   are unreadable on paper. ──────────────────────────────────────────────────────── */
+   preview, so a block looks the same either side of the toggle. Dark themes here; the
+   light theme below is NOT touched — these six are measured against a near-black panel
+   and there is no measurement of Obsidian's light palette to copy. ──────────────────────────────────────────────────────── */
 :root {
-  --hl-comment: #7d8590;
-  --hl-keyword: #56d364; --hl-builtin: #7ee787; --hl-def: #3fb950; --hl-type: #7ee787;
-  --hl-meta: #56d364;
-  --hl-string: #e3b341; --hl-number: #f0c674; --hl-property: #f0c674;
-  --hl-var2: #e3b341;   --hl-atom: #f0c674;
+  /* #666666 is Obsidian's own comment grey. On its #282828 panel that is 2.6:1; on the
+     darker panel a code block sits on here it measures 3.0:1, so it reads no worse than
+     the screenshot it came from — but it IS dimmer than the #7d8590 it replaces. */
+  --hl-comment: #666666;
+  --hl-keyword: #dfdd70; --hl-builtin: #dfdd70; --hl-def: #54dedc; --hl-type: #dfdd70;
+  --hl-meta: #dfdd70;
+  --hl-string: #46ce6e; --hl-number: #a781ff; --hl-property: #54dedc;
+  --hl-var2: #54dedc;   --hl-atom: #a781ff;
   --md-link: #58a6ff;
   /* The surface a code block sits on, in BOTH modes, and under a table header. Built
      from the theme's own link blue over its page colour, so it belongs to the palette —
@@ -2403,7 +2419,11 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .hljs-title, .hljs-section, .hljs-title.function_,
 .hljs-title.class_ { color: var(--hl-def); }
 .hljs-variable, .hljs-template-variable, .hljs-params { color: var(--hl-var2); }
-.hljs-tag, .hljs-name { color: #7ee787; }
+/* Tag names red, like Obsidian: measured #fb484d on `<clickhouse>` / `<path>`. The
+   angle brackets come out a dimmer red there (#97393b on a 1px stroke); painting
+   .hljs-tag the same red as .hljs-name puts bracket and name on one colour, which is
+   what the eye reads at note size anyway. */
+.hljs-tag, .hljs-name { color: #fb484d; }
 .hljs-attribute, .hljs-meta, .hljs-selector-id,
 .hljs-selector-class { color: var(--hl-property); }
 .hljs-deletion { color: #ffa198; }
