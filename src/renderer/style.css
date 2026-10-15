@@ -794,11 +794,14 @@ html.is-mac #titlebar { padding-left: 72px; }
 /* Alternate folder icon styles (data-folder-icon). The extra glyphs are hidden
    by default; each mode hides the folder SVGs and shows its own glyph. */
 .tree-folder-icon .fi-chevron,
+.tree-folder-icon .fi-triangle,
 .tree-folder-icon .fi-graphene,
 .tree-folder-icon .fi-dot,
 .tree-folder-icon .fi-star { display: none; }
 :root[data-folder-icon="chevron"]  .tree-folder-icon .folder-closed,
 :root[data-folder-icon="chevron"]  .tree-folder-icon .folder-open,
+:root[data-folder-icon="triangle"] .tree-folder-icon .folder-closed,
+:root[data-folder-icon="triangle"] .tree-folder-icon .folder-open,
 :root[data-folder-icon="graphene"] .tree-folder-icon .folder-closed,
 :root[data-folder-icon="graphene"] .tree-folder-icon .folder-open,
 :root[data-folder-icon="dot"]      .tree-folder-icon .folder-closed,
@@ -807,6 +810,15 @@ html.is-mac #titlebar { padding-left: 72px; }
 :root[data-folder-icon="star"]     .tree-folder-icon .folder-open { display: none !important; }
 :root[data-folder-icon="chevron"]  .tree-folder-icon .fi-chevron  { display: block; transition: transform .15s; }
 :root[data-folder-icon="chevron"]  .tree-folder.open .tree-folder-icon .fi-chevron { transform: rotate(90deg); }
+/* Il TRIANGOLO PIENO (15/10/2026, richiesto). Si comporta come il chevron — punta a
+   destra da chiuso, ruota di 90° e punta in giù da aperto — ma è riempito invece che
+   disegnato a tratto, e resta riempito sempre: NON entra nelle regole `fill: currentColor
+   / fill: none` più sotto, che svuotano cartella, graphene, stella e pallina quando la
+   cartella si apre. Qui a dire "aperta" ci pensa già la rotazione: svuotarlo anche
+   sarebbe dire la stessa cosa due volte, e un triangolo vuoto non si legge come un
+   triangolo. */
+:root[data-folder-icon="triangle"] .tree-folder-icon .fi-triangle { display: block; transition: transform .15s; }
+:root[data-folder-icon="triangle"] .tree-folder.open .tree-folder-icon .fi-triangle { transform: rotate(90deg); }
 :root[data-folder-icon="graphene"] .tree-folder-icon .fi-graphene { display: block; transition: fill .12s; }
 :root[data-folder-icon="dot"]      .tree-folder-icon .fi-dot      { display: block; }
 :root[data-folder-icon="star"]     .tree-folder-icon .fi-star     { display: block; transition: fill .12s; }
