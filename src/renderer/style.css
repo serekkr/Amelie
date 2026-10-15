@@ -741,6 +741,13 @@ html.is-mac #titlebar { padding-left: 72px; }
    di fianco. Una cartella a cui l'utente ha dato un colore suo vince lo stesso:
    .tree-folder[data-color] .tree-folder-icon piu sotto fa `color: inherit`. */
 .tree-folder-icon { display: flex; align-items: center; color: var(--text-0); flex-shrink: 0; }
+/* … e torna VERDE quando quella cartella e' la selezionata (2026-10-15, "il verde
+   quando click su la cartella invece del testo"). Il verde non e' piu' la decorazione
+   di tutte le cartelle: adesso vuol dire "e' questa". Il nome resta bianco — era lui
+   a diventare verde fino a mezz'ora fa. Una cartella con un colore suo non si tocca:
+   .tree-folder[data-color] .tree-folder-icon fa `color: inherit` piu' sotto, e questa
+   regola si chiama fuori da sola con :not([data-color]). */
+.tree-folder.selected:not([data-color]) .tree-folder-icon { color: var(--accent); }
 /* Folder style uses ONE shape (the closed folder) that fills with the accent
    colour when expanded — consistent with the other icon styles. The separate
    open-folder shape is no longer used. */
