@@ -1302,7 +1302,13 @@ kbd {
    pie' di pagina dell'intestazione, non un titolo. */
 .note-meta-item {
   display: flex; align-items: center; gap: 6px;
-  font-family: var(--editor-font); font-size: 11px; color: var(--text-2);
+  /* Piu' piccola E piu' leggibile insieme (15/10/2026: "farla piu piccola come font e
+     ancora non lo lego bene aumenta un po il contrasto"). I due desideri tirano in
+     direzioni opposte solo in apparenza: il problema non era la misura ma il grigio.
+     --text-2 (#8a8a8a) sul #2c2c2c di questa fascia da' 4,0:1, sotto il minimo per del
+     testo normale; --text-1 (#b2b2b2) da' 6,6:1. Con quel contrasto 10px si leggono
+     meglio di 11px a 4,0. */
+  font-family: var(--editor-font); font-size: 10px; color: var(--text-1);
 }
 .note-meta-item svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 1.5; flex-shrink: 0; opacity: .7; }
 .note-meta-item span { color: inherit; }
