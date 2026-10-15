@@ -1763,7 +1763,20 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   font-family: var(--code-font);
   /* The box spans the full width of the text column, aligned to the text
      margins (no overflow past the start/end edges). */
-  border-radius: 7px; padding: 16px 20px; overflow-x: auto;
+  border-radius: 7px; padding: 16px 20px;
+  /* LE RIGHE LUNGHE VANNO A CAPO (2026-10-15), invece di scorrere a destra:
+     "in obsidian lo vedo bene senza la barra per andare su la destra".
+     Non e' solo gusto: l'editor manda gia' a capo le righe lunghe (il righello e'
+     scritto apposta per contarle, vedi i commenti "soft-wrap aware" sopra
+     measureLineTops), quindi finora modifica e vista NON erano d'accordo — la stessa
+     riga stava su due righe mentre scrivevi e su una sola, da scorrere, mentre
+     leggevi. Ora lo sono.
+     `anywhere` e non `break-word`: una riga di codice puo' essere un'unica parola
+     lunghissima — un base64, un percorso, un hash — e con `break-word` quella non si
+     spezza e la barra torna proprio nei casi per cui serviva.
+     `overflow-x: auto` resta come ultima rete: non dovrebbe piu' scattare, ma se
+     qualcosa sfora e' meglio poterlo raggiungere che perderlo sotto il bordo. */
+  white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: auto;
   margin: 1em 0;
 }
 #preview-content pre code {
