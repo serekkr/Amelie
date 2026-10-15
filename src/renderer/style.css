@@ -733,7 +733,12 @@ html.is-mac #titlebar { padding-left: 72px; }
 .tree-folder-children .tree-folder.multi-selected::before,
 .tree-folder-children .tree-note.multi-selected::before { left: 7px; }
 .tree-folder.selected:not([data-color]) .tree-name { color: var(--accent); }
-.tree-folder-icon { display: flex; align-items: center; color: var(--accent); flex-shrink: 0; }
+/* L'icona della cartella e' BIANCA per default (2026-10-15, richiesta di serekkr).
+   Era --accent, cioe' verde in graphite. --text-0 e non #fff: e' lo stesso bianco dei
+   nomi delle note accanto, mentre un bianco pieno sarebbe piu acceso del testo che ha
+   di fianco. Una cartella a cui l'utente ha dato un colore suo vince lo stesso:
+   .tree-folder[data-color] .tree-folder-icon piu sotto fa `color: inherit`. */
+.tree-folder-icon { display: flex; align-items: center; color: var(--text-0); flex-shrink: 0; }
 /* Folder style uses ONE shape (the closed folder) that fills with the accent
    colour when expanded — consistent with the other icon styles. The separate
    open-folder shape is no longer used. */
