@@ -19406,13 +19406,6 @@
   var plainEnter = {
     key: "Enter",
     run(view) {
-      const { state } = view;
-      let fences = null;
-      try {
-        fences = state.field(fenceField);
-      } catch (_) {
-      }
-      if (_posInFencedCode(state.selection.main.head, fences, state.doc)) return false;
       return insertNewline(view);
     }
   };

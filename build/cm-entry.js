@@ -25,16 +25,20 @@ import { sql } from '@codemirror/legacy-modes/mode/sql';
 // v's instead of at the margin — reported 2026-09-20 against a note that had grown a
 // staircase of inherited spaces nobody typed.
 //
-// INSIDE a fenced code block it stays out of the way and lets the default run: there
-// the indentation is the point, and _posInFencedCode already tells us where we are.
+// INSIDE a fenced code block it used to stand aside and let the default indent-copying
+// run, on the theory that "there the indentation is the point". Taken out on 2026-10-16:
+// serekkr pressed Enter after a wrapped shell flag and the next command started indented
+// under it. Measured on the real bundle before changing anything: in prose, in a list and
+// after an UNCLOSED fence the new line already landed at column 0; only inside a CLOSED
+// fence did it inherit the current line's leading spaces — 1 space in, 1 space out; 2 in,
+// 2 out. That is exactly the "uno o due spazi" he reported.
+// So Enter is now column 0 everywhere, with no exception. The cost, accepted knowingly:
+// writing genuinely indented code in a note (YAML, Python) means re-indenting each line
+// by hand. Notes here hold commands far more often than indented source.
 // Sits AFTER fenceEnter in the keymap, so opening a block still auto-closes it.
 const plainEnter = {
   key: 'Enter',
   run(view) {
-    const { state } = view;
-    let fences = null;
-    try { fences = state.field(fenceField); } catch (_) {}
-    if (_posInFencedCode(state.selection.main.head, fences, state.doc)) return false;
     return insertNewline(view);
   },
 };
