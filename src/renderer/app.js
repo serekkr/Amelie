@@ -11477,6 +11477,9 @@ async function updateWgConfiguredView(forceEdit = false) {
   // "Test connection" stays grey until a VPN (WireGuard/OpenVPN) config is loaded.
   const runTestBtn = $('btn-run-test');
   if (runTestBtn) runTestBtn.classList.toggle('tc-disabled', !confExists);
+  // Single test rule: with a VPN .conf present the VPN view carries the test, so
+  // hide the direct Samba test below; without one, the direct test is the only test.
+  { const lan = $('remote-samba-lantest'); if (lan) lan.style.display = (currentRemoteKind() === 'samba' && !confExists) ? '' : 'none'; }
   const showSummary = wgSetupComplete() && !forceEdit;
   summary.style.display = showSummary ? 'flex' : 'none';
   wizard.style.display  = showSummary ? 'none' : '';
@@ -12767,8 +12770,12 @@ function applyRemoteUiVisibility() {
   show('remote-vpn-wizard', kind === 'samba');       // always available: add/manage a VPN (optional)
   // ONE connection test, never two: the direct Samba test when no VPN is loaded,
   // the wizard's Samba-over-VPN test (wstep-4) only when a VPN is present.
-  show('remote-samba-lantest', kind === 'samba' && !vpn);
   show('wstep-4', vpn);
+  // The direct Samba test (remote-samba-lantest) is owned by updateWgConfiguredView:
+  // it knows whether a VPN .conf exists on disk, and when it does the VPN view carries
+  // the test instead — so there is never a second "Testa connessione" below.
+  if (kind === 'samba') { try { updateWgConfiguredView(); } catch (_) {} }
+  else { const lan = $('remote-samba-lantest'); if (lan) lan.style.display = 'none'; }
   show('tc-wg', vpn);                                 // VPN connectivity row only when a VPN is loaded
   const rv = $('cfg-remote-vpn'); if (rv) rv.checked = vpn;   // keep the hidden flag in step
   // Local is a BACKUP-ONLY destination: no two-way sync, no remote-backup toggle
