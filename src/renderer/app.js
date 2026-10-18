@@ -12689,7 +12689,9 @@ function buildFormFromConfig(cfg) {
   const s = (cfg && cfg.sync) || {};
   const tw = s.twoway || {};
   let kind, vpn;
-  if (s.webdav && s.webdav.enabled) { kind = 'webdav'; vpn = false; }
+  const anyRemoteOn = (s.webdav && s.webdav.enabled) || (s.vpn && s.vpn.enabled) || (s.sambaLan && s.sambaLan.enabled);
+  if (s.local && s.local.enabled && !anyRemoteOn && !(tw && tw.enabled)) { kind = 'local'; vpn = false; }
+  else if (s.webdav && s.webdav.enabled) { kind = 'webdav'; vpn = false; }
   else if (s.vpn && s.vpn.enabled) { kind = 'samba'; vpn = true; }
   else if (s.sambaLan && s.sambaLan.enabled) { kind = 'samba'; vpn = false; }
   else {
@@ -12730,19 +12732,29 @@ function buildFormFromConfig(cfg) {
   };
 }
 
-function currentRemoteKind() { return ($('cfg-remote-kind')?.value === 'webdav') ? 'webdav' : 'samba'; }
+function currentRemoteKind() { const v = $('cfg-remote-kind')?.value; return v === 'webdav' ? 'webdav' : v === 'local' ? 'local' : 'samba'; }
 
 function applyRemoteUiVisibility() {
   const kind = currentRemoteKind();
+  const local = kind === 'local';
   const vpn = kind === 'samba' && !!$('cfg-remote-vpn')?.checked;
   const show = (id, on) => { const el = $(id); if (el) el.style.display = on ? '' : 'none'; };
   document.querySelectorAll('#remote-kind-seg .vpn-type-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.remote === kind));
+  show('remote-local-block', local);
   show('remote-samba-block', kind === 'samba');
   show('remote-webdav-block', kind === 'webdav');
   show('remote-vpn-wizard', vpn);
   show('remote-samba-lantest', kind === 'samba' && !vpn);
   show('tc-wg', vpn);
+  // Local is a BACKUP-ONLY destination: no two-way sync, no remote-backup toggle
+  // and no remote folder — the backup goes to the local path chosen above.
+  show('sync-group-title', !local);
+  show('bksec-sync', !local);
+  show('backup-remote-row', !local);
+  show('backup-folder-wrap', !local);
+  const le = $('cfg-local-enabled'); if (le) le.checked = local;   // kind drives the hidden flag
+  if (local) { const bro = $('cfg-backup-remote-on'); if (bro) bro.checked = false; }
 }
 
 function syncHiddenTogglesFromForm(form) {
@@ -12816,11 +12828,13 @@ async function saveSettings() {
   const vpnCfg = buildVpnConfig();
   const val = (id) => { const el = $(id); return el && typeof el.value === 'string' ? el.value.trim() : ''; };
   const raw = (id) => { const el = $(id); return el ? el.value : ''; };
+  const isLocal = kind === 'local';
   const form = {
     kind, vpn: vpnOn,
-    backupRemoteOn: !!$('cfg-backup-remote-on')?.checked,
-    localOn: !!$('cfg-local-enabled')?.checked,
-    syncOn: !!$('cfg-sync-on')?.checked,
+    // Local is an exclusive, backup-only destination: no remote backup, no sync.
+    backupRemoteOn: !isLocal && !!$('cfg-backup-remote-on')?.checked,
+    localOn: isLocal,
+    syncOn: !isLocal && !!$('cfg-sync-on')?.checked,
     smbIp: val('cfg-smb-ip'), smbShare: val('cfg-smb-share'),
     smbUser: raw('cfg-smb-user'), smbPass: raw('cfg-smb-pass'),
     webdavUrl: val('cfg-webdav-url'), webdavUser: raw('cfg-webdav-user'), webdavPass: raw('cfg-webdav-pass'),
