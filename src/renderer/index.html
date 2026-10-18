@@ -619,11 +619,11 @@
 
                 <!-- ── SAMBA block ── -->
                 <div id="remote-samba-block">
-                  <!-- VPN as an attribute of Samba -->
-                  <div class="field-group toggle-row" style="margin-bottom:6px">
-                    <label for="cfg-remote-vpn" data-i18n="sync.remote_use_vpn">Connetti tramite VPN (WireGuard/OpenVPN)</label>
-                    <label class="toggle"><input type="checkbox" id="cfg-remote-vpn" /><span class="slider"></span></label>
-                  </div>
+                  <!-- VPN is used AUTOMATICALLY as a fallback only if one is loaded
+                       (the app tries the direct route first, tunnels only if the share
+                       isn't reachable). No manual toggle — this hidden flag is derived
+                       from whether a VPN profile is loaded. -->
+                  <input type="checkbox" id="cfg-remote-vpn" style="display:none" />
 
                   <!-- Samba server (shared connection) -->
                   <div class="field-group two-col">
@@ -639,12 +639,13 @@
 
                   <!-- ── VPN sub-wizard (shown only when "Connetti tramite VPN" is on) ── -->
                   <div id="remote-vpn-wizard" style="display:none;margin-top:12px">
-                    <!-- "Use the VPN only for sync": ONE setting (sync.vpn.syncOnly). -->
-                    <div class="field-group toggle-row" style="margin-bottom:6px">
+                    <!-- "Use the VPN only for sync" (sync.vpn.syncOnly): ON by default and
+                         hidden — the tunnel never takes over routes/DNS/IPv6, which is what
+                         you always want for a backup/sync VPN. -->
+                    <div class="field-group toggle-row" style="display:none">
                       <label for="cfg-vpn-synconly" data-i18n="sync.vpn_sync_only">Usa la VPN solo per il sync (priorità più bassa)</label>
-                      <label class="toggle"><input type="checkbox" id="cfg-vpn-synconly" class="vpn-sync-only" /><span class="slider"></span></label>
+                      <label class="toggle"><input type="checkbox" id="cfg-vpn-synconly" class="vpn-sync-only" checked /><span class="slider"></span></label>
                     </div>
-                    <p class="wstep-desc" style="margin:-4px 0 10px" data-i18n="sync.vpn_sync_only_hint">Nel tunnel passa solo l'indirizzo della share: route, DNS e IPv6 restano come sono.</p>
 
                     <!-- Configured/active summary — shown once setup is complete -->
                     <div id="wg-configured" style="display:none;flex-direction:column;gap:10px">
@@ -1030,11 +1031,10 @@
               <div class="sync-section-body" id="twsb-vpn" style="display:none">
                 <!-- "Use the VPN only for sync": ONE setting (sync.vpn.syncOnly) for WireGuard
                      and OpenVPN, shown in Backup and in Sync — the two boxes mirror each other. -->
-                <div class="field-group toggle-row" style="margin-bottom:6px">
+                <div class="field-group toggle-row" style="display:none">
                   <label for="cfg-tw-vpn-synconly" data-i18n="sync.vpn_sync_only">Usa la VPN solo per il sync (priorità più bassa)</label>
-                  <label class="toggle"><input type="checkbox" id="cfg-tw-vpn-synconly" class="vpn-sync-only" /><span class="slider"></span></label>
+                  <label class="toggle"><input type="checkbox" id="cfg-tw-vpn-synconly" class="vpn-sync-only" checked /><span class="slider"></span></label>
                 </div>
-                <p class="wstep-desc" style="margin:-4px 0 10px" data-i18n="sync.vpn_sync_only_hint">Nel tunnel passa solo l'indirizzo della share: route, DNS e IPv6 restano come sono.</p>
             <!-- IDENTICAL view to Backup: configured summary + wizard. -->
             <!-- Configured/active summary — shown once setup is complete -->
             <div id="twoway-conn-ok" style="display:none;flex-direction:column;gap:10px">

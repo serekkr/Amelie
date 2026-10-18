@@ -11592,6 +11592,10 @@ function loadWgFile(file) {
     state._wgOrigin = 'backup'; // imported HERE → "reuse" note belongs only to Sync
     showWgAlreadyRows('backup');
     updateVpnConfiguredBadge();
+    // A VPN is now loaded → reflect it (show the VPN test row) and persist so the
+    // destination routes through it (direct when reachable, tunnel when not).
+    try { applyRemoteUiVisibility(); } catch (_) {}
+    try { await saveSettings(); } catch (_) {}
   };
   reader.readAsText(file);
 }
@@ -12556,7 +12560,7 @@ async function openSettings() {
   if ($('cfg-vpn-archive'))        $('cfg-vpn-archive').checked        = !!(cfg.sync?.vpn?.archive || cfg.sync?.samba?.archive);
   // Folder toggle = the inverse of archiveOnly (folder snapshot happens unless
   // "archive only" was set). Defaults to ON for a fresh config.
-  document.querySelectorAll('.vpn-sync-only').forEach(el => { el.checked = !!cfg.sync?.vpn?.syncOnly; });
+  document.querySelectorAll('.vpn-sync-only').forEach(el => { el.checked = true; });   // syncOnly is always on (hidden option)
   if ($('cfg-vpn-folder'))         $('cfg-vpn-folder').checked         = cfg.sync?.vpn?.folder !== undefined
     ? !!cfg.sync.vpn.folder
     : !(cfg.sync?.vpn?.archiveOnly || cfg.sync?.samba?.archiveOnly);
@@ -12703,6 +12707,9 @@ function buildFormFromConfig(cfg) {
     else if ((s.vpn && s.vpn.smb && s.vpn.smb.ip) || (tw.smb && (tw.smb.ip || tw.smb.host))) { kind = 'samba'; vpn = true; }
     else { kind = 'samba'; vpn = false; }
   }
+  // New model: for Samba the VPN is used iff a profile is loaded (wgConfig present),
+  // not a manual flag. Keeps save/load/visibility consistent.
+  if (kind === 'samba') vpn = !!(s.vpn && s.vpn.wgConfig);
   const smbSrc = (vpn ? (s.vpn && s.vpn.smb) : s.sambaLan)
     || (s.vpn && s.vpn.smb) || tw.smb || tw.smbLan || s.sambaLan || s.samba || {};
   const smbIp = smbSrc.ip || smbSrc.host || (s.vpn && s.vpn.peerIp) || '';
@@ -12734,19 +12741,29 @@ function buildFormFromConfig(cfg) {
 
 function currentRemoteKind() { const v = $('cfg-remote-kind')?.value; return v === 'webdav' ? 'webdav' : v === 'local' ? 'local' : 'samba'; }
 
+// A VPN is "in use" for the Samba destination when a profile is loaded — in the
+// import wizard now, or already saved in the config. No manual flag: the app uses
+// the direct route when it can reach the share and tunnels only when it can't.
+function remoteHasVpn() {
+  try { if (wizardState && wizardState.wgConfig) return true; } catch (_) {}
+  const v = state.config && state.config.sync && state.config.sync.vpn;
+  return !!(v && v.wgConfig);
+}
+
 function applyRemoteUiVisibility() {
   const kind = currentRemoteKind();
   const local = kind === 'local';
-  const vpn = kind === 'samba' && !!$('cfg-remote-vpn')?.checked;
+  const vpn = kind === 'samba' && remoteHasVpn();
   const show = (id, on) => { const el = $(id); if (el) el.style.display = on ? '' : 'none'; };
   document.querySelectorAll('#remote-kind-seg .vpn-type-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.remote === kind));
   show('remote-local-block', local);
   show('remote-samba-block', kind === 'samba');
   show('remote-webdav-block', kind === 'webdav');
-  show('remote-vpn-wizard', vpn);
-  show('remote-samba-lantest', kind === 'samba' && !vpn);
-  show('tc-wg', vpn);
+  show('remote-vpn-wizard', kind === 'samba');       // always available: add a VPN (optional)
+  show('remote-samba-lantest', kind === 'samba');    // always: test the direct Samba route
+  show('tc-wg', vpn);                                 // VPN connectivity row only when a VPN is loaded
+  const rv = $('cfg-remote-vpn'); if (rv) rv.checked = vpn;   // keep the hidden flag in step
   // Local is a BACKUP-ONLY destination: no two-way sync, no remote-backup toggle
   // and no remote folder — the backup goes to the local path chosen above.
   show('sync-group-title', !local);
@@ -12819,7 +12836,7 @@ function setupRemoteUi() {
 
 async function saveSettings() {
   const kind = currentRemoteKind();
-  const vpnOn = kind === 'samba' && !!$('cfg-remote-vpn')?.checked;
+  const vpnOn = kind === 'samba' && remoteHasVpn();   // VPN used only if a profile is loaded
   const backupFolder = ($('cfg-backup-folder')?.value || '').trim();
   const syncFolder = ($('cfg-sync-folder')?.value || '').trim();
   // buildVpnConfig reads cfg-smb-path for the share path → feed it the backup folder.
