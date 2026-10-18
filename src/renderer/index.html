@@ -618,17 +618,14 @@
                 </select>
               </div>
               <!-- Backup format — GLOBAL: applies to every destination
-                   (Local, VPN with Samba, WebDAV). Two INDEPENDENT toggles:
-                   uncompressed folder and/or .tar.gz archive, both may be on.
-                   Neither is `checked` here: on a fresh install nothing is
-                   configured, and a switch sitting green in the Backup tab reads
-                   as a backup that is running. The first destination switched on
-                   arms the folder snapshot (ensureBackupFormat in app.js). -->
+                   (Local, VPN with Samba, WebDAV). The backup produced is a
+                   .tar.gz archive (the old uncompressed-folder snapshot was
+                   removed; Restore still reads old folder backups). Not `checked`
+                   here: on a fresh install nothing is configured, and a switch
+                   sitting green in the Backup tab reads as a backup that is
+                   running. The first destination switched on arms it
+                   (ensureBackupFormat in app.js). -->
               <div class="field-group toggle-row">
-                <label data-i18n="settings.backup_normal">Backup normale (cartella non compressa)</label>
-                <label class="toggle"><input type="checkbox" id="cfg-backup-normal" /><span class="slider"></span></label>
-              </div>
-              <div class="field-group toggle-row" style="border-top:1px solid var(--border);padding-top:12px">
                 <label data-i18n="settings.backup_archived">Backup archiviato (.tar.gz)</label>
                 <label class="toggle"><input type="checkbox" id="cfg-backup-archived" /><span class="slider"></span></label>
               </div>

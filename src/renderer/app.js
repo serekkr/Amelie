@@ -10424,8 +10424,10 @@ function setupSettings() {
   // by setting `checked` back to false, and this one reads `checked`. Bound earlier
   // it would arm a format for a destination that was refused.
   const ensureBackupFormat = () => {
-    const f = $('cfg-backup-normal'), a = $('cfg-backup-archived');
-    if (f && !f.checked && !a?.checked) f.checked = true;
+    // Only .tar.gz is produced now (the folder snapshot was removed): switching a
+    // destination on arms the archive.
+    const a = $('cfg-backup-archived');
+    if (a && !a.checked) a.checked = true;
   };
   ['cfg-local-enabled', 'cfg-samba-enabled', 'cfg-vpn-enabled', 'cfg-webdav-enabled'].forEach(id =>
     $(id)?.addEventListener('change', () => { if ($(id).checked) ensureBackupFormat(); }));
@@ -11880,9 +11882,9 @@ function updateActionNowButtons() {
 // Samba share" flag: turning the last mode off while the flag is on switches
 // the flag off too (with a toast explaining why).
 function updateVpnModeWarn() {
-  const f = !!$('cfg-backup-normal')?.checked, a = !!$('cfg-backup-archived')?.checked;
+  const a = !!$('cfg-backup-archived')?.checked;
   const flag = $('cfg-vpn-enabled');
-  if (!f && !a && flag?.checked) {
+  if (!a && flag?.checked) {
     flag.checked = false;
     showToast('✗ ' + window.i18n.t('sync.vpn_need_mode'));
   }
@@ -12364,13 +12366,12 @@ function buildVpnConfig() {
       // Local backup destination instead.
     },
     remotePath: val('cfg-smb-path'),
-    // Two positive toggles: dated folder snapshot and/or .tar.gz archive.
-    // "archive only" = archive requested but the folder snapshot turned off.
-    // `folder` persisted explicitly so "both off" is representable (backup
-    // then skips with a clear "no mode selected" error instead of guessing).
-    folder: !!$('cfg-backup-normal')?.checked,
+    // Backup produces a .tar.gz archive only (the dated folder snapshot was
+    // removed). `folder` is persisted false so the backend never writes one;
+    // `archive` is the single on/off for the backup format.
+    folder: false,
     archive: !!$('cfg-backup-archived')?.checked,
-    archiveOnly: !!$('cfg-backup-archived')?.checked && !$('cfg-backup-normal')?.checked,
+    archiveOnly: !!$('cfg-backup-archived')?.checked,
     keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
     // One setting for WireGuard and OpenVPN; the Backup and Sync boxes mirror it.
     syncOnly: !!$('cfg-vpn-synconly')?.checked,
@@ -12468,26 +12469,22 @@ async function openSettings() {
   // Backup destination tab: saved choice, else the enabled destination, else Local.
   collapseAllBackupSections();
   showAllBackupSections();
-  // Restore GLOBAL backup format — two INDEPENDENT flags (folder and/or .tar.gz).
+  // Restore the backup format. Only .tar.gz exists now; the folder snapshot was
+  // removed. A profile that used to make folder backups is MIGRATED to the archive
+  // so its backup keeps running — otherwise it would silently produce nothing.
   const _L = cfg.sync?.local || {}, _V = cfg.sync?.vpn || {}, _W = cfg.sync?.webdav || {};
-  const wantArchive = !!(_L.archive || _L.archiveOnly || _V.archive || _W.archive);
-  // Folder snapshot: prefer the EXPLICIT `folder` flag saved per destination (so a
-  // deliberate "both formats off" survives a reopen — it must NOT spring back on).
-  // Legacy configs without it: derive from "archive only" (off) / nothing yet (on).
   const anyConfigured = !!(_L.path || _V.host || _V.share || _W.url);
   const explicitFolder = [_V.folder, _L.folder, _W.folder].find(v => v !== undefined);
-  let wantFolder;
+  let legacyFolderOn;
   if (explicitFolder !== undefined) {
-    wantFolder = !!explicitFolder;
+    legacyFolderOn = !!explicitFolder;
   } else {
     const archiveOnlyAll = !!(_L.archiveOnly || _W.archiveOnly);
-    // Nothing configured at all (a fresh install) → OFF, not on: there is no
-    // destination to write to, so a preselected format only looks like a backup
-    // that is running. The first destination switched on arms it.
-    wantFolder = anyConfigured ? !archiveOnlyAll : false;
+    legacyFolderOn = anyConfigured ? !archiveOnlyAll : false;
   }
+  const wantArchive = !!(_L.archive || _L.archiveOnly || _V.archive || _W.archive)
+    || (anyConfigured && legacyFolderOn);
   if ($('cfg-backup-archived')) $('cfg-backup-archived').checked = wantArchive;
-  if ($('cfg-backup-normal'))   $('cfg-backup-normal').checked   = wantFolder;
   // Restore backup frequency: a preset (hourly / daily) or Custom (in days).
   //
   // parseFloat, not parseInt — the same rule the SAVE side already follows, and the
@@ -12661,7 +12658,7 @@ async function saveSettings() {
         const v = (id) => { const el = $(id); return el && typeof el.value === 'string' ? el.value.trim() : ''; };
         const ip = v('cfg-sb-ip');
         const wantArchive = !!$('cfg-backup-archived')?.checked;
-        const wantFolder  = !!$('cfg-backup-normal')?.checked;
+        const wantFolder  = false;   // folder snapshot removed — only .tar.gz
         return {
           enabled: !!$('cfg-samba-enabled')?.checked,
           host: ip, ip,
@@ -12684,9 +12681,9 @@ async function saveSettings() {
         username:   state._webdavSaved?.backup?.username   ?? (state.config?.sync?.webdav?.username || ''),
         password:   state._webdavSaved?.backup?.password   ?? (state.config?.sync?.webdav?.password || ''),
         remotePath: state._webdavSaved?.backup?.remotePath || (state.config?.sync?.webdav?.remotePath || '/amelie/backup'),
-        folder: !!$('cfg-backup-normal')?.checked,   // explicit: false = no folder snapshot (lets both formats be off)
+        folder: false,   // folder snapshot removed — only .tar.gz
         archive: !!$('cfg-backup-archived')?.checked,
-        archiveOnly: !!$('cfg-backup-archived')?.checked && !$('cfg-backup-normal')?.checked,
+        archiveOnly: !!$('cfg-backup-archived')?.checked,
         keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
       },
       local: (() => {
@@ -12694,7 +12691,7 @@ async function saveSettings() {
         // and/or .tar.gz (both independent). archiveOnly only when archived AND
         // the folder snapshot is off → skips the folder, keeps just the .tar.gz.
         const wantArchive = !!$('cfg-backup-archived')?.checked;
-        const wantFolder  = !!$('cfg-backup-normal')?.checked;
+        const wantFolder  = false;   // folder snapshot removed — only .tar.gz
         return {
           enabled: !!$('cfg-local-enabled').checked,
           path: $('cfg-local-path').value.trim(),

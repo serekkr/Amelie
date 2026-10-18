@@ -32,6 +32,7 @@ class SyncManager {
         console.error('[Sync] Failed to load config:', e);
       }
     }
+    this._forceArchiveOnly(this.config);
     this._setupWebDAV();
     // No UNCONDITIONAL backup at startup — the user asked for that and it stands.
     // What runs here is the missed one: the interval timer counts app UPTIME and
@@ -48,7 +49,27 @@ class SyncManager {
     this.ensureVpnTunnel();
   }
 
+  // The dated-folder backup was removed — only .tar.gz is produced now. Normalize
+  // every backup destination so the folder-snapshot branch never runs (`folder`
+  // forced false), and migrate a profile that used to make folder backups to the
+  // archive so its backup keeps working. Restore is untouched and still reads old
+  // folder backups. In-memory only — the on-disk config is rewritten as .tar.gz the
+  // next time the user saves Settings.
+  _forceArchiveOnly(config) {
+    const s = config && config.sync;
+    if (!s) return config;
+    for (const key of ['local', 'vpn', 'sambaLan', 'webdav']) {
+      const d = s[key];
+      if (!d || typeof d !== 'object') continue;
+      const wasBackingUp = !!d.enabled && ((d.folder !== false) || d.archive || d.archiveOnly);
+      d.folder = false;
+      if (wasBackingUp) { d.archive = true; d.archiveOnly = true; }
+    }
+    return config;
+  }
+
   reloadConfig(newConfig) {
+    newConfig = this._forceArchiveOnly(newConfig);
     // A scheduled backup is skipped when the vault hasn't changed since the last
     // successful one — but that shortcut is only sound while the DESTINATIONS
     // stay the same. Switching a share ON left it empty for as long as the vault
