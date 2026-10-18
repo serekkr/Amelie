@@ -12139,6 +12139,7 @@ function setVpnType(t) {
 
 async function runConnectionTest() {
   // Three sub-checks: VPN connected · Samba reachable · write to folder.
+  { const cl = $('test-checklist'); if (cl) cl.style.display = ''; }   // reveal the rows on test
   const rowByKey = { wg: 'tc-wg', reach: 'tc-reach', write: 'tc-write' };
   Object.values(rowByKey).forEach(id => {
     const row = $(id); if (!row) return;
@@ -12290,6 +12291,7 @@ function applySambaLanCollapse() {
 
 async function runSambaLanTest() {
   const btn = $('btn-sb-run-test'), summary = $('sb-test-summary');
+  { const cl = $('sb-test-checklist'); if (cl) cl.style.display = ''; }   // reveal the rows on test
   const fail = (msg) => {
     if (summary) { summary.style.display = 'block'; summary.className = 'test-summary fail'; summary.textContent = '✗ ' + msg; }
     if (btn) btn.disabled = false;

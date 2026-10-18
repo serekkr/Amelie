@@ -745,29 +745,30 @@
                           <span data-i18n="sync.smbtest_title">Test connessione Samba</span>
                         </div>
                         <p class="wstep-desc" data-i18n="sync.smbtest_desc">Verifica solo se Amelie riesce a scrivere sulla share Samba (attiva il tunnel se serve).</p>
-                        <div class="test-checklist" id="test-checklist">
-                          <div class="tc-row" id="tc-wg"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_wg_conn">Connesso via WireGuard</span><span class="tc-result" id="tc-wg-res"></span></div>
-                          <div class="tc-row" id="tc-reach"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_reach">Samba share raggiungibile</span><span class="tc-result" id="tc-reach-res"></span></div>
-                          <div class="tc-row" id="tc-write"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_write_folder">Scrittura nella cartella</span><span class="tc-result" id="tc-write-res"></span></div>
-                        </div>
                         <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end">
                           <button class="btn-test-run tc-disabled" id="btn-run-test">
                             <span data-i18n="sync.test_connection_btn">Testa connessione</span>
                           </button>
+                        </div>
+                        <div class="test-checklist" id="test-checklist" style="display:none;margin-top:8px">
+                          <div class="tc-row" id="tc-wg"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_wg_conn">Connesso via WireGuard</span><span class="tc-result" id="tc-wg-res"></span></div>
+                          <div class="tc-row" id="tc-reach"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_reach">Samba share raggiungibile</span><span class="tc-result" id="tc-reach-res"></span></div>
+                          <div class="tc-row" id="tc-write"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_write_folder">Scrittura nella cartella</span><span class="tc-result" id="tc-write-res"></span></div>
                         </div>
                         <div id="test-summary" class="test-summary" style="display:none;margin-top:8px"></div>
                       </div>
                     </div><!-- wg-wizard -->
                   </div><!-- remote-vpn-wizard -->
 
-                  <!-- Samba write test WITHOUT VPN (reach + write only) -->
+                  <!-- Samba write test WITHOUT VPN (reach + write only). Button first;
+                       the checklist rows appear only after the test runs. -->
                   <div id="remote-samba-lantest" style="margin-top:12px">
-                    <div class="test-checklist" id="sb-test-checklist">
+                    <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end">
+                      <button class="btn-test-run" id="btn-sb-run-test"><span data-i18n="sync.test_connection_btn">Testa connessione</span></button>
+                    </div>
+                    <div class="test-checklist" id="sb-test-checklist" style="display:none;margin-top:8px">
                       <div class="tc-row" id="sb-tc-reach"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_reach">Samba share raggiungibile</span><span class="tc-result"></span></div>
                       <div class="tc-row" id="sb-tc-write"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_write_folder">Scrittura nella cartella</span><span class="tc-result"></span></div>
-                    </div>
-                    <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:8px">
-                      <button class="btn-test-run" id="btn-sb-run-test"><span data-i18n="sync.test_connection_btn">Testa connessione</span></button>
                     </div>
                     <div id="sb-test-summary" class="test-summary" style="display:none;margin-top:8px"></div>
                   </div>
