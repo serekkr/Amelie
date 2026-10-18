@@ -6454,7 +6454,32 @@ function _embedMarkupFor(attPath, alias) {
   return (isAudio || isVideo) ? `![${isAudio ? '🎵' : '🎬'}](${url})` : `[📎](${url})`;
 }
 
+// A picture on its own line, indented with spaces, is read by marked as an INDENTED
+// CODE BLOCK (4+ leading spaces) and PRINTED as text instead of shown. An image is
+// never code: strip the leading whitespace from any line that is ONLY an image — an
+// Obsidian embed `![[pic.png]]` or a markdown `![alt](url)` — so it always renders,
+// left-aligned, no matter how far it was indented. Fenced code blocks are left alone.
+function _deindentImageOnlyLines(body) {
+  const lines = body.split('\n');
+  let fence = null;
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^\s*(```+|~~~+)/.exec(lines[i]);
+    if (fence) { if (m && m[1][0] === fence[0] && m[1].length >= fence.length) fence = null; continue; }
+    if (m) { fence = m[1]; continue; }
+    const t = lines[i].replace(/^[ \t]+/, '');
+    if (t === lines[i]) continue;                 // not indented → nothing to do
+    const only = t.trimEnd();
+    let isImg = false;
+    const emb = /^!\[\[([^\]]+)\]\]$/.exec(only);
+    if (emb) { const tgt = emb[1].split('|')[0].split('#')[0].trim(); isImg = EMBED_ATT_EXT_RE.test(tgt); }
+    else isImg = /^!\[[^\]]*\]\([^)]+\)(?:\{width=\d+\})?$/.test(only);
+    if (isImg) lines[i] = t;
+  }
+  return lines.join('\n');
+}
+
 function _preprocessMarkdown(body) {
+  body = _deindentImageOnlyLines(body);
   return _rewriteOutsideCode(body, seg => seg
     // Obsidian embeds `![[file]]` → the attachment, shown inline. Amelie expanded these
     // only at IMPORT time, so a note that still carries the raw embed (imported through a
