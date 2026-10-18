@@ -10857,12 +10857,8 @@ function setupSettings() {
   // top-of-tab button and the per-section (Local) button.
   async function runManualBackup(resultElId) {
     const res = resultElId ? $(resultElId) : null;
-    // Do nothing unless at least one backup FORMAT is selected (normal folder
-    // and/or .tar.gz archive) — otherwise there's nothing to produce.
-    if (!$('cfg-backup-normal')?.checked && !$('cfg-backup-archived')?.checked) {
-      if (res) { res.style.display = ''; res.className = 'test-result fail'; res.textContent = '✗ ' + window.i18n.t('sync.no_backup_format'); }
-      return;
-    }
+    // The backup format is always .tar.gz now (the format toggle was removed), so
+    // there is nothing to gate on — a backup always has something to produce.
     try { await saveSettings(); } catch (_) {}
     if (res) { res.style.display = ''; res.textContent = window.i18n.t('toast.backup_running'); res.className = 'test-result'; }
     showToast(window.i18n.t('toast.backup_running'));
@@ -11878,11 +11874,11 @@ function updateActionNowButtons() {
 }
 
 
-// At least ONE backup mode (folder/archive) must be selected for the "VPN with
-// Samba share" flag: turning the last mode off while the flag is on switches
-// the flag off too (with a toast explaining why).
+// The backup format is always .tar.gz now (the format toggle was removed), so a
+// destination always has a format — this warning no longer has a condition to fire
+// on. Kept as a no-op so its callers stay valid.
 function updateVpnModeWarn() {
-  const a = !!$('cfg-backup-archived')?.checked;
+  const a = true;   // .tar.gz is always the format
   const flag = $('cfg-vpn-enabled');
   if (!a && flag?.checked) {
     flag.checked = false;
@@ -12370,8 +12366,8 @@ function buildVpnConfig() {
     // removed). `folder` is persisted false so the backend never writes one;
     // `archive` is the single on/off for the backup format.
     folder: false,
-    archive: !!$('cfg-backup-archived')?.checked,
-    archiveOnly: !!$('cfg-backup-archived')?.checked,
+    archive: true,            // backup format is always .tar.gz now
+    archiveOnly: true,
     keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
     // One setting for WireGuard and OpenVPN; the Backup and Sync boxes mirror it.
     syncOnly: !!$('cfg-vpn-synconly')?.checked,
@@ -12657,7 +12653,7 @@ async function saveSettings() {
       sambaLan: (() => {
         const v = (id) => { const el = $(id); return el && typeof el.value === 'string' ? el.value.trim() : ''; };
         const ip = v('cfg-sb-ip');
-        const wantArchive = !!$('cfg-backup-archived')?.checked;
+        const wantArchive = true;    // backup format is always .tar.gz now
         const wantFolder  = false;   // folder snapshot removed — only .tar.gz
         return {
           enabled: !!$('cfg-samba-enabled')?.checked,
@@ -12682,15 +12678,15 @@ async function saveSettings() {
         password:   state._webdavSaved?.backup?.password   ?? (state.config?.sync?.webdav?.password || ''),
         remotePath: state._webdavSaved?.backup?.remotePath || (state.config?.sync?.webdav?.remotePath || '/amelie/backup'),
         folder: false,   // folder snapshot removed — only .tar.gz
-        archive: !!$('cfg-backup-archived')?.checked,
-        archiveOnly: !!$('cfg-backup-archived')?.checked,
+        archive: true,            // backup format is always .tar.gz now
+        archiveOnly: true,
         keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
       },
       local: (() => {
         // Backup is ONE-WAY (local → remote). GLOBAL format: folder snapshot
         // and/or .tar.gz (both independent). archiveOnly only when archived AND
         // the folder snapshot is off → skips the folder, keeps just the .tar.gz.
-        const wantArchive = !!$('cfg-backup-archived')?.checked;
+        const wantArchive = true;    // backup format is always .tar.gz now
         const wantFolder  = false;   // folder snapshot removed — only .tar.gz
         return {
           enabled: !!$('cfg-local-enabled').checked,

@@ -590,44 +590,34 @@
 
             <!-- ── Backup: scheduling + manual backup (global) ── -->
             <div id="backup-top-panel" style="border:1px solid var(--border);border-radius:10px;background:var(--bg-2,rgba(255,255,255,0.02));padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:14px">
-              <div class="field-group">
-                <label data-i18n="settings.backup_freq">Frequenza backup</label>
-                <!-- No 30 seconds here (taken out on 12/10/2026, serekkr): a backup writes a
-                     whole snapshot of the vault, and twice a minute is a frequency for the
-                     two-way sync — which moves what changed — not for this. Hourly is the
-                     shortest the list offers; Custom counts in DAYS. -->
-                <select id="cfg-local-interval" class="export-select">
-                  <option value="60" data-i18n="settings.freq_hourly">Ogni ora</option>
-                  <option value="1440" selected data-i18n="settings.freq_daily">Giornaliero</option>
-                  <option value="10080" data-i18n="settings.freq_weekly">Settimanale</option>
-                  <option value="custom" data-i18n="settings.interval_custom">Custom</option>
-                </select>
-                <div class="sip-custom-wrap" id="local-interval-custom-wrap" style="display:none;margin-top:8px">
-                  <input type="number" id="cfg-local-interval-custom" min="1" max="60" value="2" />
-                  <span data-i18n="settings.days">giorni</span>
+              <!-- Backup frequency + keep on ONE row. The backup is always a .tar.gz
+                   archive now (the format toggle was removed — folder snapshots are
+                   gone; Restore still reads old folder backups). -->
+              <div class="field-group two-col">
+                <div>
+                  <label data-i18n="settings.backup_freq">Frequenza backup</label>
+                  <!-- No sub-hour here: a backup writes a whole snapshot; a short
+                       cadence is for the two-way sync. Custom counts in DAYS. -->
+                  <select id="cfg-local-interval" class="export-select">
+                    <option value="60" data-i18n="settings.freq_hourly">Ogni ora</option>
+                    <option value="1440" selected data-i18n="settings.freq_daily">Giornaliero</option>
+                    <option value="10080" data-i18n="settings.freq_weekly">Settimanale</option>
+                    <option value="custom" data-i18n="settings.interval_custom">Custom</option>
+                  </select>
+                  <div class="sip-custom-wrap" id="local-interval-custom-wrap" style="display:none;margin-top:8px">
+                    <input type="number" id="cfg-local-interval-custom" min="1" max="60" value="2" />
+                    <span data-i18n="settings.days">giorni</span>
+                  </div>
                 </div>
-              </div>
-              <!-- Keep archives — GLOBAL retention, right under frequency. -->
-              <div class="field-group">
-                <label data-i18n="settings.backup_keep">Conserva archivi</label>
-                <select id="cfg-backup-keep" class="export-select">
-                  <option value="3" data-i18n="settings.keep_3">Ultimi 3</option>
-                  <option value="5" selected data-i18n="settings.keep_5">Ultimi 5</option>
-                  <option value="10" data-i18n="settings.keep_10">Ultimi 10</option>
-                  <option value="0" data-i18n="settings.keep_all">Tutti</option>
-                </select>
-              </div>
-              <!-- Backup format — GLOBAL: applies to every destination
-                   (Local, VPN with Samba, WebDAV). The backup produced is a
-                   .tar.gz archive (the old uncompressed-folder snapshot was
-                   removed; Restore still reads old folder backups). Not `checked`
-                   here: on a fresh install nothing is configured, and a switch
-                   sitting green in the Backup tab reads as a backup that is
-                   running. The first destination switched on arms it
-                   (ensureBackupFormat in app.js). -->
-              <div class="field-group toggle-row">
-                <label data-i18n="settings.backup_archived">Backup archiviato (.tar.gz)</label>
-                <label class="toggle"><input type="checkbox" id="cfg-backup-archived" /><span class="slider"></span></label>
+                <div>
+                  <label data-i18n="settings.backup_keep">Conserva archivi</label>
+                  <select id="cfg-backup-keep" class="export-select">
+                    <option value="3" data-i18n="settings.keep_3">Ultimi 3</option>
+                    <option value="5" selected data-i18n="settings.keep_5">Ultimi 5</option>
+                    <option value="10" data-i18n="settings.keep_10">Ultimi 10</option>
+                    <option value="0" data-i18n="settings.keep_all">Tutti</option>
+                  </select>
+                </div>
               </div>
               <!-- Manual backup — hidden until at least one backup destination is
                    active+saved (shown by updateActionNowButtons). -->
