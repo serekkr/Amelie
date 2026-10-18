@@ -6405,8 +6405,76 @@ function _rewriteOutsideCode(body, fn) {
   return lines.join('\n');
 }
 
+// Extensions Amelie files under attachments/ — the set the Obsidian import filters
+// embeds by (main.js: ATT_ANY_RE). Kept in sync by eye; a new media type added there
+// should be added here too.
+const EMBED_ATT_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp|pdf|mp4|mov|webm|mp3|wav|m4a)$/i;
+
+// Resolve an Obsidian embed target (`![[Serbia diagram.png]]`, possibly a path or a
+// name that differs from the stored one by spaces↔underscores↔dashes) to the live
+// attachment node's `attachments/…` path. Mirrors resolveNoteLink's forgiving ladder,
+// but over attachment nodes only. null when nothing in the vault matches.
+function _embedAttachmentPath(rawTarget) {
+  const target = (rawTarget || '').trim();
+  if (!target) return null;
+  const basename = (p) => (p || '').split('/').pop() || '';
+  const normSpace = (s) => s.toLowerCase().replace(/[-_\s]+/g, ' ').trim();
+  const normAlpha = (s) => s.toLowerCase().replace(/[^a-z0-9.]/g, '');  // keep the dot: the ext disambiguates
+  const tLower = basename(target).toLowerCase();
+  const tSpace = normSpace(basename(target));
+  const tAlpha = normAlpha(basename(target));
+  let atts;
+  try { atts = flattenTree(state.notes).filter(isAttachNode); } catch (_) { return null; }
+  // 0) a path-qualified target (`attachments/pdf/x.pdf`, or an Obsidian folder path)
+  if (target.includes('/')) {
+    const tp = target.replace(/^(?:inkwell:\/\/)?attachments\//i, '').toLowerCase();
+    const byPath = atts.find(n => n.path.replace(/^attachments\//i, '').toLowerCase() === tp)
+                || atts.find(n => n.path.toLowerCase().endsWith('/' + tp));
+    if (byPath) return byPath.path;
+  }
+  const hit = atts.find(n => (n.name || '').toLowerCase() === tLower)
+           || atts.find(n => basename(n.path).toLowerCase() === tLower)
+           || atts.find(n => normSpace(n.name || '') === tSpace || normSpace(basename(n.path)) === tSpace)
+           || atts.find(n => normAlpha(n.name || '') === tAlpha || normAlpha(basename(n.path)) === tAlpha);
+  return hit ? hit.path : null;
+}
+
+// The markup an embed expands to — IDENTICAL to what the Obsidian import writes into the
+// file (main.js attMarkup), so a note displayed with a live `![[x]]` reads exactly like
+// one imported long ago: images inline (📷, with {width=N} when the alias is a number),
+// audio/video as the embed form the preview turns into a player (🎵/🎬), everything else
+// (pdf/…) a plain 📎 link — never an `![](non-image)`, which would render broken.
+function _embedMarkupFor(attPath, alias) {
+  const url = 'attachments/' + attPath.replace(/^attachments\//i, '').split('/').map(encodeURIComponent).join('/');
+  if (/\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(attPath)) {
+    const w = /^\d+$/.test(alias || '') ? `{width=${alias}}` : '';
+    return `![📷](${url})${w}`;
+  }
+  const isAudio = /\.(mp3|wav|m4a)$/i.test(attPath), isVideo = /\.(mp4|mov|webm)$/i.test(attPath);
+  return (isAudio || isVideo) ? `![${isAudio ? '🎵' : '🎬'}](${url})` : `[📎](${url})`;
+}
+
 function _preprocessMarkdown(body) {
   return _rewriteOutsideCode(body, seg => seg
+    // Obsidian embeds `![[file]]` → the attachment, shown inline. Amelie expanded these
+    // only at IMPORT time, so a note that still carries the raw embed (imported through a
+    // different tool, pasted, synced from Obsidian) showed nothing — the `[[note links]]`
+    // rule below even turned the inner `[[file.png]]` into a dead "!note-link". Resolved
+    // HERE, display-only: the file on disk is never rewritten. Must run BEFORE the note
+    // rule so the brackets are gone before it looks. A target that is not an attachment
+    // extension is a note transclusion (unsupported) → leave it as a plain `[[note]]`
+    // link, as the import does; an attachment ext we cannot find → a visible missing
+    // marker with NO brackets, so the note rule can't re-mangle it.
+    .replace(/!\[\[([^\]]+)\]\]/g, (m, inner) => {
+      const parts  = inner.split('|');
+      const target = parts[0].split('#')[0].trim();
+      const alias  = parts[1] ? parts[1].trim() : '';
+      if (!EMBED_ATT_EXT_RE.test(target)) return '[[' + inner + ']]';
+      const p = _embedAttachmentPath(target);
+      if (p) return _embedMarkupFor(p, alias);
+      const esc = (target.split('/').pop() || target).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return `<span class="embed-missing" title="Allegato non trovato">📎 ${esc}</span>`;
+    })
     // [[note links]] → clickable anchors.
     // NOT when a `(` follows: `[[3]](https://…)` is a markdown link whose LABEL is
     // `[3]` — the footnote shape every web clipper writes, and four of them sit in
