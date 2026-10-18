@@ -11493,6 +11493,10 @@ async function updateWgConfiguredView(forceEdit = false) {
     if (drop) drop.style.display = confExists ? 'none' : '';
     // Once a VPN is loaded, "Import WireGuard configuration" is pointless — hide it.
     { const t = $('wg-import-title'); if (t) t.style.display = confExists ? 'none' : ''; }
+    // With a VPN loaded the whole import panel is empty (title/drop/parsed hidden),
+    // so collapse it — otherwise it leaves a blank bordered gap below the type row.
+    // "Modifica configurazione" reopens it (see the .vpn-edit-config handler).
+    { const s1 = $('wstep-1'); if (s1 && !s1.querySelector('.vpn-edit')) s1.style.display = confExists ? 'none' : ''; }
     // Action buttons live on the VPN-type row (#vpn-actions), shown only after a VPN
     // is imported. Point "Modifica" at the loaded type's parsed block.
     { const acts = $('vpn-actions'); if (acts) acts.style.display = confExists ? 'inline-flex' : 'none';
@@ -11754,6 +11758,8 @@ document.addEventListener('click', async (e) => {
     ed.querySelector('.vpn-edit-msg').textContent = '';
     ed.style.display = 'block';
     block.style.display = 'flex';
+    // The enclosing import panel may be collapsed when a VPN is loaded — reopen it.
+    { const wp = block.closest('.wizard-panel'); if (wp) wp.style.display = 'flex'; }
     document.querySelectorAll(`.vpn-show-config[data-target="${editBtn.dataset.target}"]`).forEach(b => b.textContent = window.i18n.t('sync.hide_config'));
     return;
   }
@@ -11763,6 +11769,8 @@ document.addEventListener('click', async (e) => {
     cancelBtn.closest('.vpn-edit')?.remove();
     if (block) {
       block.style.display = 'none';
+      // Re-collapse the Backup import panel so it stops leaving a blank gap.
+      if (block.id === 'wg-parsed') { const wp = block.closest('.wizard-panel'); if (wp) wp.style.display = 'none'; }
       document.querySelectorAll(`.vpn-show-config[data-target="${block.id}"]`).forEach(b => b.textContent = window.i18n.t('sync.show_config'));
     }
     return;
