@@ -11489,15 +11489,17 @@ async function updateWgConfiguredView(forceEdit = false) {
     // the wording turns on where the config came from: "loaded" here, "already
     // loaded — it will be reused" when it was imported in Sync (see
     // setVpnLoadedText).
-    const drop = $('wg-drop-zone'), already = $('wg-already');
-    if (drop)    drop.style.display    = confExists ? 'none' : '';
-    if (already) already.style.display = confExists ? 'flex' : 'none';
+    const drop = $('wg-drop-zone');
+    if (drop) drop.style.display = confExists ? 'none' : '';
     // Once a VPN is loaded, "Import WireGuard configuration" is pointless — hide it.
     { const t = $('wg-import-title'); if (t) t.style.display = confExists ? 'none' : ''; }
-    if (confExists) {
-      setVpnLoadedText('wg-already', state._wgOrigin === 'backup' ? 'sync.wg_loaded' : 'sync.tw_wg_already');
-      try { _armVpnConfigToggle('wg-parsed'); } catch (_) {}
-    }
+    // Action buttons live on the VPN-type row (#vpn-actions), shown only after a VPN
+    // is imported. Point "Modifica" at the loaded type's parsed block.
+    { const acts = $('vpn-actions'); if (acts) acts.style.display = confExists ? 'inline-flex' : 'none';
+      const mod = $('vpn-act-modify');
+      if (mod) { const ov = document.querySelector('#wg-wizard .vpn-type-btn.active')?.dataset.vpn === 'openvpn';
+        mod.dataset.kind = ov ? 'ovpn' : 'wg'; mod.dataset.target = ov ? 'ovpn-parsed' : 'wg-parsed'; } }
+    if (confExists) { try { _armVpnConfigToggle('wg-parsed'); } catch (_) {} }
     wizardGo(1); stopWgStatusPolling(); return;
   }
 
