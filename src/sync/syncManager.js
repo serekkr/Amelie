@@ -2393,14 +2393,36 @@ class SyncManager {
         if (deleteLocalRel(rel)) { deleted++; log.push(['del-local', rel]); delete st[rel]; console.warn('[Two-way] deleted locally (propagated from other PC):', rel); }
       } else if (d.action === 'conflict') {
         const abs  = absOf(rel);
-        // Stamp the conflict copy with the LOSING side's mtime.
+        // SPURIOUS-conflict guard: both mtimes moved past the baseline, but the
+        // CONTENT can still be identical — e.g. the share received a byte-for-byte
+        // copy from another device (the phone) with a fresh mtime. Fetch the remote
+        // ONCE to a temp file and compare bytes; if equal it is NOT a real conflict,
+        // so just re-adopt the baseline and keep ONE copy (no "(conflitto …)" junk).
+        const tmpAbs = abs + '.conflict-tmp';
+        let remoteOk = false;
+        try { remoteOk = await downloadRel(rel, tmpAbs); } catch (_) {}
+        let identical = false;
+        if (remoteOk) {
+          try { identical = fs.statSync(abs).size === fs.statSync(tmpAbs).size
+                            && fs.readFileSync(tmpAbs).equals(fs.readFileSync(abs)); } catch (_) {}
+        }
+        if (identical) {
+          try { fs.unlinkSync(tmpAbs); } catch (_) {}
+          st[rel] = { r: R, l: L };           // in sync after all — just refresh the baseline
+          log.push(['skip', rel]);
+          continue;                           // no conflict copy, no transfer
+        }
+        // Real conflict (content differs, or the remote couldn't be read). Stamp the
+        // conflict copy with the LOSING side's mtime.
         const cRel = this._conflictRel(rel, d.winner === 'local' ? R : L);
         const cAbs = absOf(cRel);
         fs.mkdirSync(path.dirname(cAbs), { recursive: true });
         if (d.winner === 'local') {
-          // Local wins: first preserve the remote version as a local conflict
-          // copy; only if that succeeds do we overwrite the remote with local.
-          if (await downloadRel(rel, cAbs)) {
+          // Local wins: preserve the remote version as a local conflict copy (reuse
+          // the temp we already fetched); only if that succeeds overwrite remote.
+          let preserved = false;
+          if (remoteOk) { try { fs.renameSync(tmpAbs, cAbs); preserved = true; } catch (_) { try { fs.unlinkSync(tmpAbs); } catch (__) {} } }
+          if (preserved) {
             if (await uploadRel(rel)) { uploaded++; st[rel] = { r: Date.now(), l: L }; }
             await pushConflictCopy(cRel);
             conflicts++; log.push(['conflict', rel, cRel]);
@@ -2409,8 +2431,9 @@ class SyncManager {
             console.warn('[Two-way] conflict on', rel, '→ could NOT preserve remote, skipped this round');
           }
         } else {
-          // Remote wins: preserve local as a conflict copy (rename), then pull
-          // remote to the canonical name. Restore on a failed download.
+          // Remote wins: drop the temp, preserve local as a conflict copy (rename),
+          // then pull remote to the canonical name. Restore on a failed download.
+          try { fs.unlinkSync(tmpAbs); } catch (_) {}
           try { fs.renameSync(abs, cAbs); } catch (_) {}
           if (await downloadRel(rel)) {
             downloaded++; try { const t = R / 1000; fs.utimesSync(abs, t, t); } catch (_) {} st[rel] = { r: R, l: R };
@@ -2739,16 +2762,36 @@ class SyncManager {
       if (d.action === 'conflict') {
         tick(d.action, rel);
         const abs = absOf(rel);
+        // SPURIOUS-conflict guard (see the Samba path): both mtimes moved but the
+        // content may be identical. Fetch the remote once, compare bytes; if equal
+        // it is not a real conflict — re-adopt the baseline, no "(conflitto …)" copy.
+        const tmpAbs = abs + '.conflict-tmp';
+        let remoteOk = false;
+        try { remoteOk = await downloadRel(rel, tmpAbs); } catch (_) {}
+        let identical = false;
+        if (remoteOk) {
+          try { identical = fs.statSync(abs).size === fs.statSync(tmpAbs).size
+                            && fs.readFileSync(tmpAbs).equals(fs.readFileSync(abs)); } catch (_) {}
+        }
+        if (identical) {
+          try { fs.unlinkSync(tmpAbs); } catch (_) {}
+          st[rel] = { r: R, l: L };
+          log.push(['skip', rel]);
+          continue;
+        }
         const cRel = this._conflictRel(rel, d.winner === 'local' ? R : L);
         const cAbs = absOf(cRel);
         fs.mkdirSync(path.dirname(cAbs), { recursive: true });
         if (d.winner === 'local') {
-          if (await downloadRel(rel, cAbs)) {
+          let preserved = false;
+          if (remoteOk) { try { fs.renameSync(tmpAbs, cAbs); preserved = true; } catch (_) { try { fs.unlinkSync(tmpAbs); } catch (__) {} } }
+          if (preserved) {
             if (await uploadRel(rel)) { uploaded++; st[rel] = { r: Date.now(), l: L }; }
             await pushConflictCopy(cRel); conflicts++; log.push(['conflict', rel, cRel]);
             console.warn('[Two-way WebDAV] conflict on', rel, '→ kept both (local wins)');
           }
         } else {
+          try { fs.unlinkSync(tmpAbs); } catch (_) {}
           try { fs.renameSync(abs, cAbs); } catch (_) {}
           if (await downloadRel(rel)) {
             downloaded++; try { const t = R / 1000; fs.utimesSync(abs, t, t); } catch (_) {} st[rel] = { r: R, l: R };
