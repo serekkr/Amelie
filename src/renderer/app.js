@@ -11492,6 +11492,8 @@ async function updateWgConfiguredView(forceEdit = false) {
     const drop = $('wg-drop-zone'), already = $('wg-already');
     if (drop)    drop.style.display    = confExists ? 'none' : '';
     if (already) already.style.display = confExists ? 'flex' : 'none';
+    // Once a VPN is loaded, "Import WireGuard configuration" is pointless — hide it.
+    { const t = $('wg-import-title'); if (t) t.style.display = confExists ? 'none' : ''; }
     if (confExists) {
       setVpnLoadedText('wg-already', state._wgOrigin === 'backup' ? 'sync.wg_loaded' : 'sync.tw_wg_already');
       try { _armVpnConfigToggle('wg-parsed'); } catch (_) {}
