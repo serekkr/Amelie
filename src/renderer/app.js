@@ -10690,6 +10690,8 @@ function setupSettings() {
 
   // Step 4: Test finale
   $('btn-run-test').addEventListener('click', runConnectionTest);
+  // "Testa connessione" sitting between Modifica and Rimuovi on the loaded-VPN rows.
+  document.querySelectorAll('.vpn-already-test').forEach(b => b.addEventListener('click', runConnectionTest));
 
   // WebDAV test
   $('btn-test-webdav').addEventListener('click', async () => {
