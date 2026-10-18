@@ -747,7 +747,11 @@
                           <span data-i18n="sync.smbtest_title">Test connessione Samba</span>
                         </div>
                         <p class="wstep-desc" data-i18n="sync.smbtest_desc">Verifica solo se Amelie riesce a scrivere sulla share Samba (attiva il tunnel se serve).</p>
-                        <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end">
+                        <!-- Duplicate test button hidden: the test is triggered from the
+                             "Testa connessione" between Modifica and Rimuovi (vpn-already-test)
+                             or from the configured summary. Kept in DOM (display:none) so the
+                             existing click wiring stays valid; the checklist below shows results. -->
+                        <div style="display:none">
                           <button class="btn-test-run tc-disabled" id="btn-run-test">
                             <span data-i18n="sync.test_connection_btn">Testa connessione</span>
                           </button>
