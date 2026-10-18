@@ -2696,6 +2696,12 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
    label. Closer to its rows than they are to each other, which is what makes it read
    as their heading rather than as another item. */
 .sync-section-list > .bk-group-title { margin: 0 0 10px; }
+
+/* Backup tab split screen: Sync and Backup sit side by side when the Settings
+   window is wide enough for two ~280px columns, and stack on their own when it's
+   narrower (auto-fit, so it follows the actual width — no fragile media query). */
+.bk-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; align-items: start; }
+.bk-split > .sync-section { margin-top: 0; }
 .sync-section:has(.sync-section-body:not([style*="display:none"])) { border-color: var(--border-light); }
 
 .sync-section-header {
