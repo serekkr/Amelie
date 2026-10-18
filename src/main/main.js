@@ -1929,7 +1929,13 @@ ipcMain.handle('vault:setup', async (_, opts) => {
                : KDF;
   const encCfg = encryptionEnabled ? { enabled: true, algo: 'aes' } : { enabled: false };
   if (encCfg.enabled && cfgKdf) encCfg.kdf = cfgKdf;
-  writeAppConfig({ vaultPath, encryption: encCfg });
+  // MERGE with the existing config — do NOT write a fresh {vaultPath, encryption}
+  // object: that overwrote the whole file and SILENTLY DROPPED the `sync` section
+  // (backup + two-way destinations). Seen 2026-10-18: a vault setup run after the
+  // encryption toggle left amelie.json with only vaultPath+encryption, so backups
+  // stopped. writeAppConfig is a raw overwrite, so the preservation must happen here.
+  const prevCfg = readAppConfig();
+  writeAppConfig({ ...prevCfg, vaultPath, encryption: encCfg });
 
   if (existingHeader) {
     // Picking an EXISTING encrypted vault (e.g. one synced from another PC):
