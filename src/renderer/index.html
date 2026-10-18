@@ -733,11 +733,8 @@
                   <button type="button" class="wiz-btn secondary" id="sb-reconfigure" data-i18n="sync.smb_modify" style="white-space:nowrap">Modifica</button>
                 </div>
                 <div id="smb-form-sblan">
-                  <div class="field-group">
-                    <label data-i18n="sync.smb_ip">Indirizzo server</label>
-                    <span class="ip-group" data-ip="cfg-sb-ip"><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="1" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="2" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="3" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="4" /></span><input type="hidden" id="cfg-sb-ip" />
-                  </div>
-                  <div class="field-group two-col" style="margin-top:10px">
+                  <div class="field-group three-col">
+                    <div><label data-i18n="sync.smb_ip">Indirizzo server</label><span class="ip-group" data-ip="cfg-sb-ip"><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="1" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="2" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="3" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="4" /></span><input type="hidden" id="cfg-sb-ip" /></div>
                     <div><label data-i18n="sync.smb_share_name">Nome share</label><input type="text" id="cfg-sb-share" /></div>
                     <div><label data-i18n="sync.remote_folder">Cartella remota</label><input type="text" id="cfg-sb-path" placeholder="amelie/backup" /></div>
                   </div>
@@ -895,11 +892,8 @@
                     <button type="button" class="wiz-btn secondary smb-reconfigure" data-target="backup" data-i18n="sync.smb_modify" style="white-space:nowrap">Modifica</button>
                   </div>
                   <div id="smb-form-backup">
-                  <div class="field-group">
-                    <label data-i18n="sync.smb_ip">Indirizzo server</label>
-                    <span class="ip-group" data-ip="cfg-smb-ip"><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="1" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="2" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="3" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="4" /></span><input type="hidden" id="cfg-smb-ip" />
-                  </div>
-                  <div class="field-group two-col" style="margin-top:10px">
+                  <div class="field-group three-col">
+                    <div><label data-i18n="sync.smb_ip">Indirizzo server</label><span class="ip-group" data-ip="cfg-smb-ip"><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="1" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="2" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="3" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="4" /></span><input type="hidden" id="cfg-smb-ip" /></div>
                     <div><label data-i18n="sync.smb_share_name">Nome share</label><input type="text" id="cfg-smb-share" /></div>
                     <div><label data-i18n="sync.remote_folder">Cartella remota</label><input type="text" id="cfg-smb-path" placeholder="amelie/backup" /></div>
                   </div>
@@ -1099,11 +1093,8 @@
                 <span data-i18n="sync.samba_share">Samba share</span>
               </div>
               <p class="wstep-desc" data-i18n="sync.samba_lan_desc">Share Samba raggiungibile direttamente sulla rete, senza VPN.</p>
-              <div class="field-group">
-                <label data-i18n="sync.smb_ip">Indirizzo server</label>
-                <span class="ip-group" data-ip="tw-sb-ip"><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="1" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="2" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="3" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="4" /></span><input type="hidden" id="tw-sb-ip" />
-              </div>
-              <div class="field-group two-col" style="margin-top:10px">
+              <div class="field-group three-col">
+                <div><label data-i18n="sync.smb_ip">Indirizzo server</label><span class="ip-group" data-ip="tw-sb-ip"><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="1" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="2" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="3" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="4" /></span><input type="hidden" id="tw-sb-ip" /></div>
                 <div><label data-i18n="sync.smb_share_name">Nome share</label><input type="text" id="tw-sb-share" /></div>
                 <div><label data-i18n="sync.remote_folder">Cartella remota</label><input type="text" id="tw-sb-path" placeholder="amelie/sync" /></div>
               </div>
@@ -1256,11 +1247,8 @@
                   <button type="button" class="wiz-btn secondary smb-reconfigure" data-target="sync" data-i18n="sync.smb_modify" style="white-space:nowrap">Modifica</button>
                 </div>
                 <div id="smb-form-sync">
-                <div class="field-group">
-                  <label data-i18n="sync.smb_ip">Indirizzo server</label>
-                  <span class="ip-group" data-ip="tw-smb-ip"><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="1" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="2" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="3" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="4" /></span><input type="hidden" id="tw-smb-ip" />
-                </div>
-                <div class="field-group two-col" style="margin-top:10px">
+                <div class="field-group three-col">
+                  <div><label data-i18n="sync.smb_ip">Indirizzo server</label><span class="ip-group" data-ip="tw-smb-ip"><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="1" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="2" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="3" /><span class="ip-sep">.</span><input class="ip-oct" inputmode="numeric" maxlength="3" aria-label="4" /></span><input type="hidden" id="tw-smb-ip" /></div>
                   <div><label data-i18n="sync.smb_share_name">Nome share</label><input type="text" id="tw-smb-share" /></div>
                   <div><label data-i18n="sync.remote_folder">Cartella remota</label><input type="text" id="tw-smb-path" placeholder="amelie/sync" /></div>
                 </div>

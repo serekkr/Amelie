@@ -2118,6 +2118,11 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .ip-group .ip-sep { color: var(--text-2); user-select: none; padding: 0 1px; }
 .field-group.two-col { flex-direction: row; gap: 12px; }
 .field-group.two-col > div { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+/* Three across — Samba server address + share + remote folder on one line. The IP
+   column sizes to its octet group; share/remote fill the rest. */
+.field-group.three-col { flex-direction: row; gap: 12px; align-items: flex-start; }
+.field-group.three-col > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.field-group.three-col > div:first-child { flex: 0 0 auto; }
 /* WebDAV panels (Backup #ssb-webdav + Sync #tw-webdav-panel): roomier vertical
    spacing between fields — the default 12px felt cramped (user request). */
 #tw-webdav-panel, #ssb-webdav { gap: 18px; }
