@@ -14115,8 +14115,19 @@ function setupImagePan() {
 function openImageFile(node, activate = true) {
   const attachmentName = node.attachmentName
     || (node.path ? node.path.replace(/^attachments\//, '') : node.name);
-  const existingIdx = tabs.findIndex(t => t.type === 'image' && t.attachmentName === attachmentName);
-  if (existingIdx >= 0) { if (activate) switchTab(existingIdx); return; }
+  // ONE image-viewer tab, reused: opening picture after picture should swap what the
+  // viewer shows, not pile up a new tab per image. Reuse whatever image tab is open
+  // (the exact one first, so clicking the same image just re-activates it).
+  let existingIdx = tabs.findIndex(t => t.type === 'image' && t.attachmentName === attachmentName);
+  if (existingIdx < 0) existingIdx = tabs.findIndex(t => t.type === 'image');
+  if (existingIdx >= 0) {
+    const t = tabs[existingIdx];
+    t.name = node.name;
+    t.path = node.path || `attachments/${attachmentName}`;
+    t.attachmentName = attachmentName;
+    if (activate) switchTab(existingIdx); else renderTabBar();
+    return;
+  }
   tabs.push({
     type: 'image',
     name: node.name,
