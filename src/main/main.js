@@ -5090,11 +5090,15 @@ ipcMain.handle('wg:testSmbWrite', async (_, smbConfig, purpose) => {
     const vaultCfg = fs.existsSync(CONFIG_FILE) ? JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) : {};
     const s = vaultCfg.sync || {};
     if (purpose === 'backup') {
-      const t = s.twoway?.smb;
+      // Avoid the folder CONFIGURED for two-way sync (VPN → smb, LAN → smbLan).
+      const t = s.twoway?.smb || s.twoway?.smbLan;
       if (t && t.share) avoid = { ip: t.ip || t.host, share: t.share, path: t.remoteSubPath ?? s.twoway?.subPath ?? '' };
     } else if (purpose === 'sync') {
-      if (s.vpn?.smb?.share)   avoid = { ip: s.vpn.smb.ip, share: s.vpn.smb.share, path: s.vpn.smb.path || s.vpn.remotePath || '' };
-      else if (s.samba?.share) avoid = { ip: s.samba.host, share: s.samba.share, path: s.samba.remoteSubPath || '' };
+      // Avoid the folder CONFIGURED for backup (VPN → vpn.smb, legacy → samba,
+      // no-VPN Samba → sambaLan).
+      if (s.vpn?.smb?.share)       avoid = { ip: s.vpn.smb.ip, share: s.vpn.smb.share, path: s.vpn.smb.path || s.vpn.remotePath || '' };
+      else if (s.samba?.share)     avoid = { ip: s.samba.host, share: s.samba.share, path: s.samba.remoteSubPath || '' };
+      else if (s.sambaLan?.share)  avoid = { ip: s.sambaLan.ip || s.sambaLan.host, share: s.sambaLan.share, path: s.sambaLan.remoteSubPath || '' };
     }
   } catch (_) {}
   return await wgManager.testSmbWrite(smbConfig, { keepUp: vpnFlagWantsTunnelUp(), purpose, avoid });

@@ -566,7 +566,6 @@
           <button class="tab-btn" data-tab="general" data-i18n="settings.tab_general">General</button>
           <button class="tab-btn" data-tab="ui" data-i18n="settings.tab_ui">User Interface</button>
           <button class="tab-btn" data-tab="sync" data-i18n="settings.tab_sync">Backup</button>
-          <button class="tab-btn" data-tab="twoway" data-i18n="settings.tab_twoway">Sync</button>
           <button class="tab-btn" data-tab="theme" data-i18n="settings.tab_theme">Tema</button>
           <button class="tab-btn" data-tab="shortcuts" data-i18n="settings.tab_shortcuts">Scorciatoie</button>
           <button class="tab-btn" data-tab="about">About</button>
@@ -576,8 +575,324 @@
           <!-- ── Sync ────────────────────────────────────────── -->
           <div class="tab-panel" id="tab-sync">
 
-            <!-- Restore — FIRST option, its own card (separate from the backup box). -->
-            <div id="restore-block" style="border:1px solid var(--border);border-radius:10px;background:var(--bg-2,rgba(255,255,255,0.02));padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:10px">
+            <!-- Legacy enable toggles kept as HIDDEN inputs: driven from the unified
+                 controls so the existing save/guard/badge code keeps resolving them.
+                 saveSettings builds the config from the unified controls, not these. -->
+            <input type="checkbox" id="cfg-vpn-enabled" style="display:none" />
+            <input type="checkbox" id="cfg-samba-enabled" style="display:none" />
+            <input type="checkbox" id="cfg-webdav-enabled" style="display:none" />
+            <input type="hidden" id="cfg-autosave" value="3" />
+
+            <!-- ══════════ SECTION 1 — Remote destination (set up ONCE) ══════════ -->
+            <div class="bk-group-title" data-i18n="sync.remote_dest_label">Destinazione remota</div>
+            <div class="sync-section" id="bksec-remote">
+              <div class="sync-section-body" id="ssb-remote" style="display:flex;flex-direction:column;gap:12px">
+                <p class="wstep-desc" data-i18n="sync.remote_dest_desc">Scegli e configura UNA destinazione remota. Backup e sincronizzazione la condividono, in cartelle diverse.</p>
+
+                <!-- Kind selector: Samba OR WebDAV -->
+                <div class="field-group">
+                  <label data-i18n="sync.remote_kind">Tipo destinazione</label>
+                  <div class="vpn-type-seg" id="remote-kind-seg">
+                    <button type="button" class="vpn-type-btn active" data-remote="samba">Samba</button>
+                    <button type="button" class="vpn-type-btn" data-remote="webdav">WebDAV</button>
+                  </div>
+                  <input type="hidden" id="cfg-remote-kind" value="samba" />
+                </div>
+
+                <!-- ── SAMBA block ── -->
+                <div id="remote-samba-block">
+                  <!-- VPN as an attribute of Samba -->
+                  <div class="field-group toggle-row" style="margin-bottom:6px">
+                    <label for="cfg-remote-vpn" data-i18n="sync.remote_use_vpn">Connetti tramite VPN (WireGuard/OpenVPN)</label>
+                    <label class="toggle"><input type="checkbox" id="cfg-remote-vpn" /><span class="slider"></span></label>
+                  </div>
+
+                  <!-- Samba server (shared connection) -->
+                  <div class="field-group two-col">
+                    <div><label data-i18n="sync.smb_ip">Indirizzo server</label><input type="text" id="cfg-smb-ip" autocomplete="off" /></div>
+                    <div><label data-i18n="sync.smb_share_name">Nome share</label><input type="text" id="cfg-smb-share" /></div>
+                  </div>
+                  <div class="field-group two-col" style="margin-top:10px">
+                    <div><label data-i18n="sync.username">Username</label><input type="text" id="cfg-smb-user" autocomplete="off" /></div>
+                    <div><label data-i18n="sync.password">Password</label><div style="position:relative"><input type="text" id="cfg-smb-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="cfg-smb-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
+                  </div>
+                  <!-- Backup folder mirror (hidden): fed from the Backup section's folder. -->
+                  <input type="hidden" id="cfg-smb-path" />
+
+                  <!-- ── VPN sub-wizard (shown only when "Connetti tramite VPN" is on) ── -->
+                  <div id="remote-vpn-wizard" style="display:none;margin-top:12px">
+                    <!-- "Use the VPN only for sync": ONE setting (sync.vpn.syncOnly). -->
+                    <div class="field-group toggle-row" style="margin-bottom:6px">
+                      <label for="cfg-vpn-synconly" data-i18n="sync.vpn_sync_only">Usa la VPN solo per il sync (priorità più bassa)</label>
+                      <label class="toggle"><input type="checkbox" id="cfg-vpn-synconly" class="vpn-sync-only" /><span class="slider"></span></label>
+                    </div>
+                    <p class="wstep-desc" style="margin:-4px 0 10px" data-i18n="sync.vpn_sync_only_hint">Nel tunnel passa solo l'indirizzo della share: route, DNS e IPv6 restano come sono.</p>
+
+                    <!-- Configured/active summary — shown once setup is complete -->
+                    <div id="wg-configured" style="display:none;flex-direction:column;gap:10px">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span id="wg-cfg-badge" style="width:9px;height:9px;border-radius:50%;background:var(--accent-dim);flex-shrink:0"></span>
+                        <span id="wg-cfg-state" data-i18n="sync.wg_inactive">Configurato (tunnel non attivo)</span>
+                      </div>
+                      <div id="wg-cfg-parsed" class="wg-parsed" style="display:none;flex-direction:column;gap:5px">
+                        <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_endpoint">Peer endpoint</span><span id="wg-cfg-endpoint" class="wg-val">—</span></div>
+                        <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.samba_share">Samba share</span><span id="wg-cfg-share" class="wg-val">—</span></div>
+                      </div>
+                      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+                        <button class="wiz-btn secondary" id="wg-reconfigure" data-i18n="sync.wg_reconfigure">Riconfigura</button>
+                        <button class="wiz-btn secondary" id="wg-test-quick" data-i18n="sync.run_smbtest">Test connessione Samba</button>
+                        <button class="wiz-btn secondary" id="wg-remove" data-i18n="sync.wg_remove">Rimuovi</button>
+                      </div>
+                    </div>
+
+                    <!-- Full setup wizard (hidden once configured) -->
+                    <div id="wg-wizard">
+                      <!-- VPN type selector: WireGuard or OpenVPN (one at a time). -->
+                      <div class="field-group" style="margin-bottom:4px">
+                        <label data-i18n="sync.vpn_type">Tipo VPN</label>
+                        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+                          <div class="vpn-type-seg">
+                            <button type="button" class="vpn-type-btn active" data-vpn="wireguard">WireGuard</button>
+                            <button type="button" class="vpn-type-btn" data-vpn="openvpn">OpenVPN</button>
+                          </div>
+                          <span id="vpn-configured-badge" style="display:none;align-items:center;gap:5px;color:var(--green);font-size:12px;white-space:nowrap">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;flex-shrink:0"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span></span>
+                          </span>
+                        </div>
+                      </div>
+
+                      <!-- ── Import OpenVPN .ovpn (shown only when OpenVPN selected) ── -->
+                      <div class="wizard-panel" id="ovpn-step" style="display:none">
+                        <div class="wstep-title">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                          <span data-i18n="sync.ovpn_import_title">Importa configurazione OpenVPN</span>
+                        </div>
+                        <div class="smb-preview" id="ovpn-already" style="display:none;color:var(--green);align-items:center;gap:8px">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;flex-shrink:0"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                          <span data-i18n="sync.ovpn_already" style="flex:1">Configurazione OpenVPN già caricata — verrà riusata.</span>
+                          <button type="button" class="wiz-btn secondary vpn-show-config" data-target="ovpn-parsed" data-i18n="sync.show_config" style="white-space:nowrap">Mostra configurazione</button>
+                          <button type="button" class="wiz-btn secondary vpn-edit-config" data-target="ovpn-parsed" data-kind="ovpn" data-i18n="sync.modify_config" style="white-space:nowrap">Modifica configurazione</button>
+                          <button type="button" class="wiz-btn secondary vpn-remove-btn" data-i18n="sync.wg_remove" style="white-space:nowrap">Rimuovi</button>
+                          <button type="button" class="wiz-btn secondary" id="ovpn-reconfigure" data-i18n="sync.wg_reconfigure" style="white-space:nowrap">Riconfigura</button>
+                        </div>
+                        <div class="wg-drop-zone" id="ovpn-drop-zone">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                          <span id="ovpn-drop-label" data-i18n-html="sync.ovpn_drop_label">Trascina il file <strong>.ovpn</strong><br/><small>oppure clicca per sfogliare</small></span>
+                          <input type="file" id="ovpn-file-input" accept=".ovpn,.conf" style="display:none" />
+                        </div>
+                        <div class="field-group two-col" id="ovpn-creds" style="margin-top:10px">
+                          <div><label data-i18n="sync.username">Username</label><input type="text" id="cfg-ovpn-user" autocomplete="off" placeholder="(se richiesto)" data-i18n-placeholder="sync.if_required" /></div>
+                          <div><label data-i18n="sync.password">Password</label><input type="text" id="cfg-ovpn-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="(se richiesto)" data-i18n-placeholder="sync.if_required" style="-webkit-text-security:disc" /></div>
+                        </div>
+                        <p class="wstep-desc" style="margin-top:6px" data-i18n="sync.ovpn_note">Se il tuo sistema non autorizza la gestione VPN per l'utente, NetworkManager potrebbe chiedere la password una volta.</p>
+                        <div id="ovpn-parsed" class="wg-parsed" style="display:none;margin-top:8px">
+                          <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_endpoint">Peer endpoint</span><span id="ovpn-endpoint" class="wg-val">—</span></div>
+                          <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_protocol">Protocollo</span><span id="ovpn-proto" class="wg-val">—</span></div>
+                        </div>
+                      </div>
+
+                      <!-- ── Import WireGuard .conf ── -->
+                      <div class="wizard-panel" id="wstep-1">
+                        <div class="wstep-title">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                          <span data-i18n="sync.wg_import_title">Importa configurazione WireGuard</span>
+                        </div>
+                        <div class="smb-preview" id="wg-already" style="display:none;color:var(--green);align-items:center;gap:8px">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;flex-shrink:0"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                          <span data-i18n="sync.tw_wg_already" style="flex:1">Configurazione WireGuard già caricata — verrà riusata.</span>
+                          <button type="button" class="wiz-btn secondary vpn-show-config" data-target="wg-parsed" data-i18n="sync.show_config" style="white-space:nowrap">Mostra configurazione</button>
+                          <button type="button" class="wiz-btn secondary vpn-edit-config" data-target="wg-parsed" data-kind="wg" data-i18n="sync.modify_config" style="white-space:nowrap">Modifica configurazione</button>
+                          <button type="button" class="wiz-btn secondary vpn-remove-btn" data-i18n="sync.wg_remove" style="white-space:nowrap">Rimuovi</button>
+                        </div>
+                        <div class="wg-drop-zone" id="wg-drop-zone">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                          <span id="wg-drop-label" data-i18n-html="sync.wg_drop_label">Trascina il file <strong>.conf</strong><br/><small>oppure clicca per sfogliare</small></span>
+                          <input type="file" id="wg-file-input" accept=".conf" style="display:none" />
+                        </div>
+                        <div id="wg-parsed" class="wg-parsed" style="display:none">
+                          <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_iface">Interfaccia</span><span id="wg-iface" class="wg-val">—</span></div>
+                          <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_local_ip">IP locale</span><span id="wg-local-ip" class="wg-val">—</span></div>
+                          <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_endpoint">Peer endpoint</span><span id="wg-endpoint" class="wg-val">—</span></div>
+                          <div class="wg-parsed-row"><span class="wg-key">Allowed IPs</span><span id="wg-allowed" class="wg-val">—</span></div>
+                          <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_protocol">Protocollo</span><span class="wg-val" style="color:var(--accent-dim)" data-i18n="sync.wg_udp_fixed">UDP (fisso)</span></div>
+                        </div>
+                      </div>
+
+                      <!-- ── Samba write test (reach + write; WG row shown only with VPN) ── -->
+                      <div class="wizard-panel" id="wstep-4">
+                        <div class="wstep-title">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                          <span data-i18n="sync.smbtest_title">Test connessione Samba</span>
+                        </div>
+                        <p class="wstep-desc" data-i18n="sync.smbtest_desc">Verifica solo se Amelie riesce a scrivere sulla share Samba (attiva il tunnel se serve).</p>
+                        <div class="test-checklist" id="test-checklist">
+                          <div class="tc-row" id="tc-wg"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_wg_conn">Connesso via WireGuard</span><span class="tc-result" id="tc-wg-res"></span></div>
+                          <div class="tc-row" id="tc-reach"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_reach">Samba share raggiungibile</span><span class="tc-result" id="tc-reach-res"></span></div>
+                          <div class="tc-row" id="tc-write"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_write_folder">Scrittura nella cartella</span><span class="tc-result" id="tc-write-res"></span></div>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end">
+                          <button class="btn-test-run tc-disabled" id="btn-run-test">
+                            <span data-i18n="sync.test_connection_btn">Testa connessione</span>
+                          </button>
+                        </div>
+                        <div id="test-summary" class="test-summary" style="display:none;margin-top:8px"></div>
+                      </div>
+                    </div><!-- wg-wizard -->
+                  </div><!-- remote-vpn-wizard -->
+
+                  <!-- Samba write test WITHOUT VPN (reach + write only) -->
+                  <div id="remote-samba-lantest" style="margin-top:12px">
+                    <div class="test-checklist" id="sb-test-checklist">
+                      <div class="tc-row" id="sb-tc-reach"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_reach">Samba share raggiungibile</span><span class="tc-result"></span></div>
+                      <div class="tc-row" id="sb-tc-write"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_write_folder">Scrittura nella cartella</span><span class="tc-result"></span></div>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:8px">
+                      <button class="btn-test-run" id="btn-sb-run-test"><span data-i18n="sync.test_connection_btn">Testa connessione</span></button>
+                    </div>
+                    <div id="sb-test-summary" class="test-summary" style="display:none;margin-top:8px"></div>
+                  </div>
+                </div><!-- remote-samba-block -->
+
+                <!-- ── WEBDAV block ── -->
+                <div id="remote-webdav-block" style="display:none">
+                  <div class="field-group">
+                    <label data-i18n="sync.webdav_url">URL server</label>
+                    <input type="url" id="cfg-webdav-url" placeholder="https://…" />
+                  </div>
+                  <div class="field-group two-col">
+                    <div><label data-i18n="sync.username">Username</label><input type="text" id="cfg-webdav-user" autocomplete="off" /></div>
+                    <div><label data-i18n="sync.webdav_pass">Password / App token</label><div style="position:relative"><input type="text" id="cfg-webdav-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="cfg-webdav-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
+                  </div>
+                  <input type="hidden" id="cfg-webdav-path" />
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+                    <button class="btn-test" id="btn-test-webdav" data-i18n="sync.test_connection_btn">Testa connessione</button>
+                  </div>
+                  <div id="webdav-test-result" class="test-result"></div>
+                </div><!-- remote-webdav-block -->
+              </div>
+            </div><!-- bksec-remote -->
+
+            <!-- ══════════ SECTION 2 — Sincronizzazione ══════════ -->
+            <div class="bk-group-title" data-i18n="sync.sync_section_title">Sincronizzazione</div>
+            <div class="sync-section" id="bksec-sync">
+              <div class="sync-section-body" id="ssb-sync" style="display:flex;flex-direction:column;gap:12px">
+                <div class="field-group toggle-row">
+                  <label for="cfg-sync-on" data-i18n="sync.sync_enable">Attiva sincronizzazione a due vie</label>
+                  <label class="toggle"><input type="checkbox" id="cfg-sync-on" /><span class="slider"></span></label>
+                </div>
+                <div class="field-group">
+                  <label data-i18n="sync.sync_folder">Cartella sync (remota)</label>
+                  <input type="text" id="cfg-sync-folder" placeholder="amelie/sync" />
+                </div>
+                <div class="field-group">
+                  <label data-i18n="sync.twoway_freq">Frequenza</label>
+                  <select id="cfg-twoway-interval" class="export-select">
+                    <option value="1">1 min</option>
+                    <option value="5">5 min</option>
+                    <option value="15" selected>15 min</option>
+                    <option value="60" data-i18n="settings.freq_hourly">Ogni ora</option>
+                    <option value="1440" data-i18n="settings.freq_daily">Giornaliero</option>
+                    <option value="custom" data-i18n="settings.interval_custom">Custom</option>
+                  </select>
+                  <div class="sip-custom-wrap" id="twoway-custom-wrap" style="display:none;margin-top:8px">
+                    <input type="number" id="cfg-twoway-interval-custom" min="1" max="1440" value="10" />
+                    <span data-i18n="settings.minutes">minuti</span>
+                  </div>
+                </div>
+                <div class="field-group toggle-row">
+                  <label><span data-i18n="sync.conflict_copies">Copie-conflitto</span> <small data-i18n="sync.conflict_copies_desc">(On = tiene entrambe le versioni in conflitto · Off = tiene la versione più recente)</small></label>
+                  <label class="toggle"><input type="checkbox" id="cfg-twoway-fullsync" checked /><span class="slider"></span></label>
+                </div>
+                <div id="sync-now-block" style="display:none;flex-direction:column;gap:10px;border-top:1px solid var(--border);padding-top:12px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                    <div style="display:flex;flex-direction:column;gap:2px">
+                      <span data-i18n="sync.sync_now_title">Sincronizzazione manuale</span>
+                      <span style="font-size:var(--settings-fs);font-family:var(--ui-font);color:var(--text-1)" data-i18n="sync.sync_now_hint">Sincronizza subito le note con la share</span>
+                    </div>
+                    <button class="btn-save" id="btn-test-twoway" data-i18n="sync.twoway_run">Sincronizza ora</button>
+                  </div>
+                  <div id="twoway-test-result" class="test-result" style="display:none"></div>
+                </div>
+              </div>
+            </div><!-- bksec-sync -->
+
+            <!-- ══════════ SECTION 3 — Backup ══════════ -->
+            <div class="bk-group-title" data-i18n="settings.tab_sync">Backup</div>
+            <div class="sync-section" id="bksec-backup">
+              <div class="sync-section-body" id="ssb-backup" style="display:flex;flex-direction:column;gap:14px">
+                <!-- Remote backup destination on/off (uses the shared remote above). -->
+                <div class="field-group toggle-row">
+                  <label for="cfg-backup-remote-on" data-i18n="sync.backup_remote_on">Backup sulla destinazione remota</label>
+                  <label class="toggle"><input type="checkbox" id="cfg-backup-remote-on" /><span class="slider"></span></label>
+                </div>
+                <div class="field-group" id="backup-folder-wrap">
+                  <label data-i18n="sync.backup_folder">Cartella backup (remota)</label>
+                  <input type="text" id="cfg-backup-folder" placeholder="amelie/backup" />
+                </div>
+
+                <!-- Local backup (independent destination) -->
+                <div class="field-group toggle-row" style="border-top:1px solid var(--border);padding-top:12px">
+                  <label for="cfg-local-enabled" data-i18n="sync.backup_local_on">Backup locale (cartella sul disco)</label>
+                  <label class="toggle"><input type="checkbox" id="cfg-local-enabled" /><span class="slider"></span></label>
+                </div>
+                <div class="field-group" id="local-path-wrap">
+                  <label data-i18n="sync.local_path">Percorso cartella locale</label>
+                  <div class="path-input-row">
+                    <input type="text" id="cfg-local-path" placeholder="/mnt/backup/amelie" />
+                    <button type="button" class="path-browse-btn" id="btn-browse-local" title="Sfoglia…" data-i18n-title="sync.browse" aria-label="Sfoglia cartella">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                    </button>
+                  </div>
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+                    <button class="btn-test" id="btn-test-local" data-i18n="sync.test_path_btn">Testa percorso</button>
+                  </div>
+                  <div id="local-test-result" class="test-result"></div>
+                </div>
+
+                <!-- Frequency + keep on ONE row. Backup is always a .tar.gz archive now. -->
+                <div class="field-group two-col" style="border-top:1px solid var(--border);padding-top:12px">
+                  <div>
+                    <label data-i18n="settings.backup_freq">Frequenza backup</label>
+                    <select id="cfg-local-interval" class="export-select">
+                      <option value="60" data-i18n="settings.freq_hourly">Ogni ora</option>
+                      <option value="1440" selected data-i18n="settings.freq_daily">Giornaliero</option>
+                      <option value="10080" data-i18n="settings.freq_weekly">Settimanale</option>
+                      <option value="custom" data-i18n="settings.interval_custom">Custom</option>
+                    </select>
+                    <div class="sip-custom-wrap" id="local-interval-custom-wrap" style="display:none;margin-top:8px">
+                      <input type="number" id="cfg-local-interval-custom" min="1" max="60" value="2" />
+                      <span data-i18n="settings.days">giorni</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label data-i18n="settings.backup_keep">Conserva archivi</label>
+                    <select id="cfg-backup-keep" class="export-select">
+                      <option value="3" data-i18n="settings.keep_3">Ultimi 3</option>
+                      <option value="5" selected data-i18n="settings.keep_5">Ultimi 5</option>
+                      <option value="10" data-i18n="settings.keep_10">Ultimi 10</option>
+                      <option value="0" data-i18n="settings.keep_all">Tutti</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Manual backup — shown when a backup destination is active+saved. -->
+                <div id="manual-backup-block" style="display:none;flex-direction:column;gap:14px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--border);padding-top:12px">
+                    <div style="display:flex;flex-direction:column;gap:2px">
+                      <span data-i18n="sync.backup_now_title">Backup manuale</span>
+                      <span style="font-size:var(--settings-fs);font-family:var(--ui-font);color:var(--text-1)" data-i18n="sync.backup_now_hint">Esegue subito il backup su tutte le destinazioni attive</span>
+                    </div>
+                    <button class="btn-save" id="btn-backup-now-top" data-i18n="sync.backup_now">Esegui backup ora</button>
+                  </div>
+                  <div id="backup-now-top-result" class="test-result" style="display:none"></div>
+                </div>
+              </div>
+            </div><!-- bksec-backup -->
+
+            <!-- ══════════ SECTION 4 — Ripristino (distruttivo) ══════════ -->
+            <div class="bk-group-title" data-i18n="sync.restore_title">Ripristina vault</div>
+            <div id="restore-block" style="border:1px solid var(--border);border-radius:10px;background:var(--bg-2,rgba(255,255,255,0.02));padding:14px;display:flex;flex-direction:column;gap:10px">
               <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
                 <div style="display:flex;flex-direction:column;gap:2px">
                   <span data-i18n="sync.restore_title">Ripristina vault</span>
@@ -588,418 +903,12 @@
               <div id="restore-result" class="test-result" style="display:none"></div>
             </div>
 
-            <!-- ── Backup: scheduling + manual backup (global) ── -->
-            <div id="backup-top-panel" style="border:1px solid var(--border);border-radius:10px;background:var(--bg-2,rgba(255,255,255,0.02));padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:14px">
-              <!-- Backup frequency + keep on ONE row. The backup is always a .tar.gz
-                   archive now (the format toggle was removed — folder snapshots are
-                   gone; Restore still reads old folder backups). -->
-              <div class="field-group two-col">
-                <div>
-                  <label data-i18n="settings.backup_freq">Frequenza backup</label>
-                  <!-- No sub-hour here: a backup writes a whole snapshot; a short
-                       cadence is for the two-way sync. Custom counts in DAYS. -->
-                  <select id="cfg-local-interval" class="export-select">
-                    <option value="60" data-i18n="settings.freq_hourly">Ogni ora</option>
-                    <option value="1440" selected data-i18n="settings.freq_daily">Giornaliero</option>
-                    <option value="10080" data-i18n="settings.freq_weekly">Settimanale</option>
-                    <option value="custom" data-i18n="settings.interval_custom">Custom</option>
-                  </select>
-                  <div class="sip-custom-wrap" id="local-interval-custom-wrap" style="display:none;margin-top:8px">
-                    <input type="number" id="cfg-local-interval-custom" min="1" max="60" value="2" />
-                    <span data-i18n="settings.days">giorni</span>
-                  </div>
-                </div>
-                <div>
-                  <label data-i18n="settings.backup_keep">Conserva archivi</label>
-                  <select id="cfg-backup-keep" class="export-select">
-                    <option value="3" data-i18n="settings.keep_3">Ultimi 3</option>
-                    <option value="5" selected data-i18n="settings.keep_5">Ultimi 5</option>
-                    <option value="10" data-i18n="settings.keep_10">Ultimi 10</option>
-                    <option value="0" data-i18n="settings.keep_all">Tutti</option>
-                  </select>
-                </div>
-              </div>
-              <!-- Manual backup — hidden until at least one backup destination is
-                   active+saved (shown by updateActionNowButtons). -->
-              <div id="manual-backup-block" style="display:none;flex-direction:column;gap:14px">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--border);padding-top:12px">
-                  <div style="display:flex;flex-direction:column;gap:2px">
-                    <span data-i18n="sync.backup_now_title">Backup manuale</span>
-                    <span style="font-size:var(--settings-fs);font-family:var(--ui-font);color:var(--text-1)" data-i18n="sync.backup_now_hint">Esegue subito il backup su tutte le destinazioni attive</span>
-                  </div>
-                  <button class="btn-save" id="btn-backup-now-top" data-i18n="sync.backup_now">Esegui backup ora</button>
-                </div>
-                <div id="backup-now-top-result" class="test-result" style="display:none"></div>
-              </div>
-            </div>
-
-            <!-- The four destinations are LISTED, all four, each as a name and a switch
-                 (2026-09-20). What stood here was a row of pills that showed one section
-                 at a time and hid the other three, plus a recap line underneath — and the
-                 recap existed only because of the hiding: an enabled destination could be
-                 writing from inside a section you were not looking at. Showing all four
-                 names removes the problem instead of reporting it, so the recap went with
-                 the pills. A destination's settings open when you switch it ON, and the
-                 header still opens and closes by hand, so one can be set up before being
-                 switched on — the rule the Sync tab follows too. -->
-
-            <!-- What the four switches below ARE. Without it the tab drops from the backup
-                 format straight into a row of unexplained names. The string is the one the
-                 recap used to head itself with (sync.dests_label) — already translated into
-                 all seven languages, and free the moment the recap went.
-                 "Destinations", not "sources": these are where the backup WRITES. The vault
-                 is the source, and calling them sources would name the wrong end of it. -->
-
-            <!-- ── Section: Local (moved to the top, before WireGuard/WebDAV) ── -->
-            <!-- The destinations are ONE list, so the tab panel's 20px flex gap applies to the
-                 list as a whole instead of once between every pair. Stacked as direct children
-                 they sat 28px apart (20 of gap PLUS an 8px margin — in flexbox the two add up)
-                 on rows only 49px tall, which is what "troppo spazio" was. -->
-            <div class="sync-section-list">
-            <div class="bk-group-title" data-i18n="sync.dests_label">Backup Destinations</div>
-
-            <div class="sync-section" id="bksec-local">
-              <div class="sync-section-header" id="ssh-local">
-                <div class="sync-section-title">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"/></svg>
-                  <span data-i18n="sync.local">Local</span>
-                </div>
-                <div class="sync-section-right">
-                  <label class="toggle"><input type="checkbox" id="cfg-local-enabled" /><span class="slider"></span></label>
-                  <span class="sync-section-chevron" id="chevron-local">›</span>
-                </div>
-              </div>
-              <div class="sync-section-body" id="ssb-local" style="display:none">
-                <p class="wstep-desc" data-i18n="sync.local_desc">Sincronizza con una cartella locale sul tuo sistema.</p>
-                <!-- Autosave: kept as a hidden field so the setting (and the JS
-                     that reads/writes it) still works; removed from the visible UI. -->
-                <input type="hidden" id="cfg-autosave" value="3" />
-                <div class="field-group">
-                  <label data-i18n="sync.local_path">Percorso cartella locale</label>
-                  <div class="path-input-row">
-                    <input type="text" id="cfg-local-path" placeholder="/mnt/backup/amelie" />
-                    <button type="button" class="path-browse-btn" id="btn-browse-local" title="Sfoglia…" data-i18n-title="sync.browse" aria-label="Sfoglia cartella">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                    </button>
-                  </div>
-                </div>
-                <div class="info-box" data-i18n-html="sync.local_info_box">
-                  Amelie userà <code>rsync</code>. La cartella viene creata automaticamente.
-                </div>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                  <button class="btn-test" id="btn-test-local" data-i18n="sync.test_path_btn">Testa percorso</button>
-                </div>
-                <div id="local-test-result" class="test-result"></div>
-              </div>
-            </div><!-- sync-section local -->
-
-            <!-- ── Section: Samba share on the LAN (no VPN) ───────────────
-                 Same share, no tunnel: for when the server sits on the network
-                 you are already on. The VPN section below is the same thing
-                 PLUS a tunnel for when you are away. Kept as its own
-                 destination (own toggle, own connection) so neither setup
-                 depends on the other. -->
-            <div class="sync-section" id="bksec-samba">
-              <div class="sync-section-header" id="ssh-samba">
-                <div class="sync-section-title">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                  <span data-i18n="sync.transport_samba_only">Samba</span>
-                </div>
-                <div class="sync-section-right">
-                  <label class="toggle"><input type="checkbox" id="cfg-samba-enabled" /><span class="slider"></span></label>
-                  <span class="sync-section-chevron" id="chevron-samba">›</span>
-                </div>
-              </div>
-              <div class="sync-section-body" id="ssb-samba" style="display:none">
-                <p class="wstep-desc" data-i18n="sync.samba_lan_desc">Share Samba raggiungibile direttamente sulla rete, senza VPN.</p>
-                <!-- Collapsed summary once configured — fields appear via "Modifica". -->
-                <div class="smb-preview" id="smb-preview-sblan" style="display:none;color:var(--green);align-items:center;gap:8px;flex-wrap:wrap">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-                  <span id="smb-summary-sblan" style="color:var(--text-1)"></span>
-                  <span style="flex:1"></span>
-                  <button type="button" class="wiz-btn secondary" id="sb-reconfigure" data-i18n="sync.smb_modify" style="white-space:nowrap">Modifica</button>
-                </div>
-                <div id="smb-form-sblan">
-                  <div class="field-group three-col">
-                    <div><label data-i18n="sync.smb_ip">Indirizzo server</label><input type="text" id="cfg-sb-ip" autocomplete="off" /></div>
-                    <div><label data-i18n="sync.smb_share_name">Nome share</label><input type="text" id="cfg-sb-share" /></div>
-                    <div><label data-i18n="sync.remote_folder">Cartella remota</label><input type="text" id="cfg-sb-path" placeholder="amelie/backup" /></div>
-                  </div>
-                  <div class="field-group two-col" style="margin-top:10px">
-                    <div><label data-i18n="sync.username">Username</label><input type="text" id="cfg-sb-user" autocomplete="off" /></div>
-                    <div><label data-i18n="sync.password">Password</label><div style="position:relative"><input type="text" id="cfg-sb-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="cfg-sb-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
-                  </div>
-                </div>
-                <!-- Write test — two rows only: no VPN step to report here. -->
-                <div class="test-checklist" id="sb-test-checklist" style="margin-top:12px">
-                  <div class="tc-row" id="sb-tc-reach"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_reach">Samba share raggiungibile</span><span class="tc-result"></span></div>
-                  <div class="tc-row" id="sb-tc-write"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_write_folder">Scrittura nella cartella</span><span class="tc-result"></span></div>
-                </div>
-                <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:8px">
-                  <button type="button" class="wiz-btn secondary" id="btn-sb-remove" data-i18n="sync.wg_remove">Rimuovi</button>
-                  <button class="btn-test-run" id="btn-sb-run-test"><span data-i18n="sync.test_connection_btn">Testa connessione</span></button>
-                </div>
-                <div id="sb-test-summary" class="test-summary" style="display:none;margin-top:8px"></div>
-              </div>
-            </div><!-- sync-section samba -->
-
-            <!-- ── Section: WireGuard with Remote Share ──────────────────── -->
-            <div class="sync-section" id="bksec-vpn">
-              <div class="sync-section-header" id="ssh-vpn">
-                <div class="sync-section-title">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                  <span data-i18n="sync.transport_vpn">VPN</span>
-                </div>
-                <div class="sync-section-right">
-                  <label class="toggle"><input type="checkbox" id="cfg-vpn-enabled" /><span class="slider"></span></label>
-                  <span class="sync-section-chevron" id="chevron-vpn">›</span>
-                </div>
-              </div>
-              <!-- display:none like its three siblings. It had none: while the pills hid
-                   the whole section this body was simply always open, and nobody could
-                   tell. Listing every section made it the one that started expanded. -->
-              <div class="sync-section-body" id="ssb-vpn" style="display:none">
-
-                <!-- "Use the VPN only for sync": ONE setting (sync.vpn.syncOnly) for WireGuard
-                     and OpenVPN, shown in Backup and in Sync — the two boxes mirror each other. -->
-                <div class="field-group toggle-row" style="margin-bottom:6px">
-                  <label for="cfg-vpn-synconly" data-i18n="sync.vpn_sync_only">Usa la VPN solo per il sync (priorità più bassa)</label>
-                  <label class="toggle"><input type="checkbox" id="cfg-vpn-synconly" class="vpn-sync-only" /><span class="slider"></span></label>
-                </div>
-                <p class="wstep-desc" style="margin:-4px 0 10px" data-i18n="sync.vpn_sync_only_hint">Nel tunnel passa solo l'indirizzo della share: route, DNS e IPv6 restano come sono.</p>
-
-                <!-- Configured/active summary — shown once setup is complete -->
-                <div id="wg-configured" style="display:none;flex-direction:column;gap:10px">
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <span id="wg-cfg-badge" style="width:9px;height:9px;border-radius:50%;background:var(--accent-dim);flex-shrink:0"></span>
-                    <span id="wg-cfg-state" data-i18n="sync.wg_inactive">Configurato (tunnel non attivo)</span>
-                  </div>
-                  <div id="wg-cfg-parsed" class="wg-parsed" style="display:none;flex-direction:column;gap:5px">
-                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_endpoint">Peer endpoint</span><span id="wg-cfg-endpoint" class="wg-val">—</span></div>
-                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.samba_share">Samba share</span><span id="wg-cfg-share" class="wg-val">—</span></div>
-                  </div>
-                  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
-                    <button class="wiz-btn secondary" id="wg-reconfigure" data-i18n="sync.wg_reconfigure">Riconfigura</button>
-                    <button class="wiz-btn secondary" id="wg-test-quick" data-i18n="sync.run_smbtest">Test connessione Samba</button>
-                    <button class="wiz-btn secondary" id="wg-remove" data-i18n="sync.wg_remove">Rimuovi</button>
-                  </div>
-                </div>
-
-                <!-- Full setup wizard (hidden once configured) -->
-                <div id="wg-wizard">
-
-                <!-- VPN type selector: WireGuard or OpenVPN (one at a time). -->
-                <div class="field-group" style="margin-bottom:4px">
-                  <label data-i18n="sync.vpn_type">Tipo VPN</label>
-                  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
-                    <div class="vpn-type-seg">
-                      <button type="button" class="vpn-type-btn active" data-vpn="wireguard">WireGuard</button>
-                      <button type="button" class="vpn-type-btn" data-vpn="openvpn">OpenVPN</button>
-                    </div>
-                    <span id="vpn-configured-badge" style="display:none;align-items:center;gap:5px;color:var(--green);font-size:12px;white-space:nowrap">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;flex-shrink:0"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                      <span></span>
-                    </span>
-                  </div>
-                </div>
-
-                <!-- ── Import OpenVPN .ovpn (shown only when OpenVPN selected) ── -->
-                <div class="wizard-panel" id="ovpn-step" style="display:none">
-                  <div class="wstep-title">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    <span data-i18n="sync.ovpn_import_title">Importa configurazione OpenVPN</span>
-                  </div>
-                  <div class="smb-preview" id="ovpn-already" style="display:none;color:var(--green);align-items:center;gap:8px">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;flex-shrink:0"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span data-i18n="sync.ovpn_already" style="flex:1">Configurazione OpenVPN già caricata — verrà riusata.</span>
-                    <button type="button" class="wiz-btn secondary vpn-show-config" data-target="ovpn-parsed" data-i18n="sync.show_config" style="white-space:nowrap">Mostra configurazione</button>
-                    <button type="button" class="wiz-btn secondary vpn-edit-config" data-target="ovpn-parsed" data-kind="ovpn" data-i18n="sync.modify_config" style="white-space:nowrap">Modifica configurazione</button>
-                    <button type="button" class="wiz-btn secondary vpn-remove-btn" data-i18n="sync.wg_remove" style="white-space:nowrap">Rimuovi</button>
-                    <button type="button" class="wiz-btn secondary" id="ovpn-reconfigure" data-i18n="sync.wg_reconfigure" style="white-space:nowrap">Riconfigura</button>
-                  </div>
-                  <div class="wg-drop-zone" id="ovpn-drop-zone">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    <span id="ovpn-drop-label" data-i18n-html="sync.ovpn_drop_label">Trascina il file <strong>.ovpn</strong><br/><small>oppure clicca per sfogliare</small></span>
-                    <input type="file" id="ovpn-file-input" accept=".ovpn,.conf" style="display:none" />
-                  </div>
-                  <div class="field-group two-col" id="ovpn-creds" style="margin-top:10px">
-                    <div><label data-i18n="sync.username">Username</label><input type="text" id="cfg-ovpn-user" autocomplete="off" placeholder="(se richiesto)" data-i18n-placeholder="sync.if_required" /></div>
-                    <div><label data-i18n="sync.password">Password</label><input type="text" id="cfg-ovpn-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="(se richiesto)" data-i18n-placeholder="sync.if_required" style="-webkit-text-security:disc" /></div>
-                  </div>
-                  <p class="wstep-desc" style="margin-top:6px" data-i18n="sync.ovpn_note">Se il tuo sistema non autorizza la gestione VPN per l'utente, NetworkManager potrebbe chiedere la password una volta.</p>
-                  <div id="ovpn-parsed" class="wg-parsed" style="display:none;margin-top:8px">
-                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_endpoint">Peer endpoint</span><span id="ovpn-endpoint" class="wg-val">—</span></div>
-                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_protocol">Protocollo</span><span id="ovpn-proto" class="wg-val">—</span></div>
-                  </div>
-                </div>
-
-                <!-- Flat layout: import + WG test + Samba + full test all on one
-                     page (no step navigation). A Test button sits under the
-                     WireGuard part and another under the Samba part. -->
-
-                <!-- ── Import WireGuard .conf ── -->
-                <div class="wizard-panel" id="wstep-1">
-                  <div class="wstep-title">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    <span data-i18n="sync.wg_import_title">Importa configurazione WireGuard</span>
-                  </div>
-                  <div class="smb-preview" id="wg-already" style="display:none;color:var(--green);align-items:center;gap:8px">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;flex-shrink:0"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span data-i18n="sync.tw_wg_already" style="flex:1">Configurazione WireGuard già caricata — verrà riusata.</span>
-                    <button type="button" class="wiz-btn secondary vpn-show-config" data-target="wg-parsed" data-i18n="sync.show_config" style="white-space:nowrap">Mostra configurazione</button>
-                    <button type="button" class="wiz-btn secondary vpn-edit-config" data-target="wg-parsed" data-kind="wg" data-i18n="sync.modify_config" style="white-space:nowrap">Modifica configurazione</button>
-                    <button type="button" class="wiz-btn secondary vpn-remove-btn" data-i18n="sync.wg_remove" style="white-space:nowrap">Rimuovi</button>
-                  </div>
-                  <div class="wg-drop-zone" id="wg-drop-zone">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    <span id="wg-drop-label" data-i18n-html="sync.wg_drop_label">Trascina il file <strong>.conf</strong><br/><small>oppure clicca per sfogliare</small></span>
-                    <input type="file" id="wg-file-input" accept=".conf" style="display:none" />
-                  </div>
-                  <div id="wg-parsed" class="wg-parsed" style="display:none">
-                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_iface">Interfaccia</span><span id="wg-iface" class="wg-val">—</span></div>
-                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_local_ip">IP locale</span><span id="wg-local-ip" class="wg-val">—</span></div>
-                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_endpoint">Peer endpoint</span><span id="wg-endpoint" class="wg-val">—</span></div>
-                    <div class="wg-parsed-row"><span class="wg-key">Allowed IPs</span><span id="wg-allowed" class="wg-val">—</span></div>
-                    <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_protocol">Protocollo</span><span class="wg-val" style="color:var(--accent-dim)" data-i18n="sync.wg_udp_fixed">UDP (fisso)</span></div>
-                  </div>
-                </div>
-
-                <!-- ── Samba share ── -->
-                <div class="wizard-panel" id="wstep-3">
-                  <div class="wstep-title">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                    <span data-i18n="sync.samba_share">Samba share</span>
-                  </div>
-                  <p class="wstep-desc" data-i18n="sync.samba_desc">Configura la share Samba sull'IP del peer WireGuard.</p>
-                  <!-- Collapsed summary once configured — fields appear only via the buttons. -->
-                  <div class="smb-preview" id="smb-preview-backup" style="display:none;color:var(--green);align-items:center;gap:8px;flex-wrap:wrap">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-                    <span id="smb-summary-backup" style="color:var(--text-1)"></span>
-                    <span style="flex:1"></span>
-                    <button type="button" class="wiz-btn secondary smb-reconfigure" data-target="backup" data-i18n="sync.smb_modify" style="white-space:nowrap">Modifica</button>
-                  </div>
-                  <div id="smb-form-backup">
-                  <div class="field-group three-col">
-                    <div><label data-i18n="sync.smb_ip">Indirizzo server</label><input type="text" id="cfg-smb-ip" autocomplete="off" /></div>
-                    <div><label data-i18n="sync.smb_share_name">Nome share</label><input type="text" id="cfg-smb-share" /></div>
-                    <div><label data-i18n="sync.remote_folder">Cartella remota</label><input type="text" id="cfg-smb-path" placeholder="amelie/backup" /></div>
-                  </div>
-                  <div class="field-group two-col" style="margin-top:10px">
-                    <div><label data-i18n="sync.username">Username</label><input type="text" id="cfg-smb-user" autocomplete="off" /></div>
-                    <div><label data-i18n="sync.password">Password</label><div style="position:relative"><input type="text" id="cfg-smb-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="cfg-smb-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
-                  </div>
-                  <div style="display:flex;justify-content:flex-end;margin-top:8px">
-                    <button type="button" class="wiz-btn secondary samba-remove-btn" data-scope="backup" data-i18n="sync.wg_remove">Rimuovi</button>
-                  </div>
-                  </div>
-                </div>
-
-                <!-- ── Samba write test (inline, below Samba) ── -->
-                <div class="wizard-panel" id="wstep-4">
-                  <div class="wstep-title">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span data-i18n="sync.smbtest_title">Test connessione Samba</span>
-                  </div>
-                  <p class="wstep-desc" data-i18n="sync.smbtest_desc">Verifica solo se Amelie riesce a scrivere sulla share Samba (attiva il tunnel se serve).</p>
-                  <div class="test-checklist" id="test-checklist">
-                    <div class="tc-row" id="tc-wg"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_wg_conn">Connesso via WireGuard</span><span class="tc-result" id="tc-wg-res"></span></div>
-                    <div class="tc-row" id="tc-reach"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_reach">Samba share raggiungibile</span><span class="tc-result" id="tc-reach-res"></span></div>
-                    <div class="tc-row" id="tc-write"><span class="tc-dot idle"></span><span class="tc-label" data-i18n="sync.tc_write_folder">Scrittura nella cartella</span><span class="tc-result" id="tc-write-res"></span></div>
-                  </div>
-                  <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end">
-                    <button class="btn-test-run tc-disabled" id="btn-run-test">
-                      <span data-i18n="sync.test_connection_btn">Testa connessione</span>
-                    </button>
-                  </div>
-                  <div id="test-summary" class="test-summary" style="display:none;margin-top:8px"></div>
-                </div>
-
-                </div><!-- wg-wizard -->
-
-              </div><!-- ssb-vpn -->
-            </div><!-- sync-section vpn -->
-
-            <!-- ── Section: WebDAV ────────────────────────────────── -->
-            <div class="sync-section" id="bksec-webdav">
-              <div class="sync-section-header" id="ssh-webdav">
-                <div class="sync-section-title">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
-                  WebDAV
-                </div>
-                <div class="sync-section-right">
-                  <label class="toggle"><input type="checkbox" id="cfg-webdav-enabled" /><span class="slider"></span></label>
-                  <span class="sync-section-chevron" id="chevron-webdav">›</span>
-                </div>
-              </div>
-              <div class="sync-section-body" id="ssb-webdav" style="display:none">
-                <div class="field-group">
-                  <label data-i18n="sync.webdav_url">URL server</label>
-                  <input type="url" id="cfg-webdav-url" placeholder="https://…" />
-                </div>
-                <div class="field-group two-col">
-                  <div><label data-i18n="sync.username">Username</label><input type="text" id="cfg-webdav-user" autocomplete="off" /></div>
-                  <div><label data-i18n="sync.webdav_pass">Password / App token</label><div style="position:relative"><input type="text" id="cfg-webdav-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="cfg-webdav-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
-                </div>
-                <div class="field-group">
-                  <label data-i18n="sync.remote_path">Percorso remoto</label>
-                  <input type="text" id="cfg-webdav-path" placeholder="/amelie/backup" />
-                </div>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                  <button class="btn-test" id="btn-test-webdav" data-i18n="sync.test_connection_btn">Testa connessione</button>
-                  <button class="wiz-btn secondary" id="btn-webdav-save" data-i18n="sync.wg_remove">Rimuovi</button>
-                </div>
-                <div id="webdav-test-result" class="test-result"></div>
-              </div>
-            </div>
-            </div><!-- /sync-section-list --><!-- sync-section webdav -->
-
           </div><!-- tab-sync -->
+
 
           <!-- ── Sync (two-way) ───────────────────────────────── -->
           <div class="tab-panel" id="tab-twoway">
-            <!-- Manual sync at the TOP, like Backup's "Backup now". Shown only when the two-way connection is ready. -->
-            <div id="sync-now-block" style="display:none;flex-direction:column;gap:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg-2,rgba(255,255,255,0.02));padding:14px;margin-bottom:16px">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-                <div style="display:flex;flex-direction:column;gap:2px">
-                  <span data-i18n="sync.sync_now_title">Sincronizzazione manuale</span>
-                  <span style="font-size:var(--settings-fs);font-family:var(--ui-font);color:var(--text-1)" data-i18n="sync.sync_now_hint">Sincronizza subito le note con la share</span>
-                </div>
-                <button class="btn-save" id="btn-test-twoway" data-i18n="sync.twoway_run">Sincronizza ora</button>
-              </div>
-              <div id="twoway-test-result" class="test-result" style="display:none"></div>
-            </div>
 
-            <!-- Two-way sync: THREE activation toggles, one per method (WebDAV / Samba /
-                 VPN+Samba). They are MUTUALLY EXCLUSIVE — turning one on turns the others
-                 off — because the engine syncs with a single source of truth (_syncTwoway
-                 picks one transport). The legacy master toggle (#cfg-twoway-enabled) is
-                 hidden and DERIVED from them, so all existing save/validation/panel logic
-                 keeps working unchanged. The transport selector this comment used to name
-                 alongside it is gone (2026-09-20) — and it had stopped being hidden long
-                 before that, which is how a comment ends up describing something that is
-                 not there in either sense. -->
-            <!-- Frequency and Conflict copies come FIRST: they are global to
-                 two-way sync — how it syncs, not where — so they stay put
-                 whichever method is chosen. -->
-            <div class="field-group">
-              <label data-i18n="sync.twoway_freq">Frequenza</label>
-              <select id="cfg-twoway-interval" class="export-select">
-                <option value="1">1 min</option>
-                <option value="5">5 min</option>
-                <option value="15" selected>15 min</option>
-                <option value="60" data-i18n="settings.freq_hourly">Ogni ora</option>
-                <option value="1440" data-i18n="settings.freq_daily">Giornaliero</option>
-                <option value="custom" data-i18n="settings.interval_custom">Custom</option>
-              </select>
-              <div class="sip-custom-wrap" id="twoway-custom-wrap" style="display:none;margin-top:8px">
-                <input type="number" id="cfg-twoway-interval-custom" min="1" max="1440" value="10" />
-                <span data-i18n="settings.minutes">minuti</span>
-              </div>
-            </div>
-            <div class="field-group toggle-row" style="margin-top:4px">
-              <label><span data-i18n="sync.conflict_copies">Copie-conflitto</span> <small data-i18n="sync.conflict_copies_desc">(On = tiene entrambe le versioni in conflitto · Off = tiene la versione più recente)</small></label>
-              <label class="toggle"><input type="checkbox" id="cfg-twoway-fullsync" checked /><span class="slider"></span></label>
-            </div>
 
             <!-- The three methods are LISTED, like the Backup tab's destinations
                  (2026-09-20): a row of pills used to pick which one section was on

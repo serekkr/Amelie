@@ -12286,7 +12286,7 @@ async function runSambaLanTest() {
     if (summary) { summary.style.display = 'block'; summary.className = 'test-summary fail'; summary.textContent = '✗ ' + msg; }
     if (btn) btn.disabled = false;
   };
-  const ip = $('cfg-sb-ip')?.value.trim() || '', share = $('cfg-sb-share')?.value.trim() || '';
+  const ip = $('cfg-smb-ip')?.value.trim() || '', share = $('cfg-smb-share')?.value.trim() || '';
   if (!ip || !share)        return fail(window.i18n.t('sync.samba_missing'));
   if (!isValidSmbHost(ip))  return fail(window.i18n.t('sync.invalid_ip'));
 
@@ -12301,9 +12301,9 @@ async function runSambaLanTest() {
 
   const smbConfig = {
     ip, share,
-    path:     $('cfg-sb-path')?.value.trim() || '',
-    username: $('cfg-sb-user')?.value        || '',
-    password: $('cfg-sb-pass')?.value        || '',
+    path:     $('cfg-backup-folder')?.value.trim() || '',
+    username: $('cfg-smb-user')?.value             || '',
+    password: $('cfg-smb-pass')?.value             || '',
   };
   let result;
   try { result = await window.inkwell.wg.testSmbWrite(smbConfig, 'backup'); }
@@ -12557,6 +12557,8 @@ async function openSettings() {
     ? !!cfg.sync.vpn.folder
     : !(cfg.sync?.vpn?.archiveOnly || cfg.sync?.samba?.archiveOnly);
   updateVpnModeWarn();
+  // Unified Backup tab: wire controls (once) and populate from config.
+  try { setupRemoteUi(); populateUnifiedBackupUi(cfg); } catch (e) { console.error(e); }
 
   // Theme/appearance
   document.querySelectorAll('.theme-card').forEach(c =>
@@ -12622,150 +12624,229 @@ function closeSettings() {
   saveSettings();
 }
 
-async function saveSettings() {
-  const vpnCfg = buildVpnConfig();
-  const config = {
-    autoSaveSeconds: parseInt($('cfg-autosave').value) || 3,
-    sync: {
-      enabled: !!$('cfg-vpn-enabled')?.checked || $('cfg-webdav-enabled').checked
-        || !!$('cfg-samba-enabled')?.checked
-        || !!$('cfg-local-enabled').checked || !!$('cfg-twoway-enabled')?.checked,
-      // Vestigial: the pills that set this are gone (see showAllBackupSections) and
-      // nothing reads it back any more. Still written, and carried over rather than
-      // reset, so downgrading onto the same profile finds the value it left behind.
-      backupTransport: state.config?.sync?.backupTransport || 'local',
-      vpn: { enabled: !!$('cfg-vpn-enabled')?.checked, ...vpnCfg },
-      // The WG+Samba backup connection: persisted HERE (the test only
-      // verifies and parks it in state._backupSmbTested). Its enabled state
-      // always follows the flag.
-      samba: (() => {
-        const t = state._backupSmbCommitted;
-        const prev = state.config?.sync?.samba;
-        if (!t && !prev) return undefined;
-        const base = t
-          ? { host: t.ip, share: t.share, remoteSubPath: t.path || '', username: t.username, password: t.password, useWireGuard: true }
-          : prev;
-        return { ...base, enabled: !!$('cfg-vpn-enabled')?.checked };
-      })(),
-      // Samba destination WITHOUT a VPN. Its own key on purpose: sync.samba is
-      // the VPN destination's connection mirror, and the two must be able to
-      // point at different servers without overwriting each other.
-      sambaLan: (() => {
-        const v = (id) => { const el = $(id); return el && typeof el.value === 'string' ? el.value.trim() : ''; };
-        const ip = v('cfg-sb-ip');
-        const wantArchive = true;    // backup format is always .tar.gz now
-        const wantFolder  = false;   // folder snapshot removed — only .tar.gz
-        return {
-          enabled: !!$('cfg-samba-enabled')?.checked,
-          host: ip, ip,
-          share:         v('cfg-sb-share'),
-          remoteSubPath: v('cfg-sb-path'),
-          username:      v('cfg-sb-user'),
-          password:      $('cfg-sb-pass')?.value || '',
-          useWireGuard:  false,          // never raise a tunnel for this one
-          folder: wantFolder,
-          archive: wantArchive,
-          archiveOnly: wantArchive && !wantFolder,
-          keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
-        };
-      })(),
-      webdav: {
-        enabled: $('cfg-webdav-enabled').checked,
-        // WebDAV connection is STAGED: persisted ONLY by "Salva configurazione"
-        // (which writes state._webdavSaved.backup), NOT auto-saved while typing.
-        url:        state._webdavSaved?.backup?.url        ?? (state.config?.sync?.webdav?.url || ''),
-        username:   state._webdavSaved?.backup?.username   ?? (state.config?.sync?.webdav?.username || ''),
-        password:   state._webdavSaved?.backup?.password   ?? (state.config?.sync?.webdav?.password || ''),
-        remotePath: state._webdavSaved?.backup?.remotePath || (state.config?.sync?.webdav?.remotePath || '/amelie/backup'),
-        folder: false,   // folder snapshot removed — only .tar.gz
-        archive: true,            // backup format is always .tar.gz now
-        archiveOnly: true,
-        keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
-      },
-      local: (() => {
-        // Backup is ONE-WAY (local → remote). GLOBAL format: folder snapshot
-        // and/or .tar.gz (both independent). archiveOnly only when archived AND
-        // the folder snapshot is off → skips the folder, keeps just the .tar.gz.
-        const wantArchive = true;    // backup format is always .tar.gz now
-        const wantFolder  = false;   // folder snapshot removed — only .tar.gz
-        return {
-          enabled: !!$('cfg-local-enabled').checked,
-          path: $('cfg-local-path').value.trim(),
-          folder: wantFolder,   // explicit: false = no folder snapshot (lets both formats be off)
-          archive: wantArchive,
-          archiveOnly: wantArchive && !wantFolder,
-          intervalMinutes: (() => {
-            const v = $('cfg-local-interval')?.value;
-            if (v === 'custom') return (parseInt($('cfg-local-interval-custom')?.value) || 2) * 1440; // days → minutes
-            return parseFloat(v) || 1440;   // parseFloat: the shortest choice is 0.5 (30 s)
-          })(),
-          keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
-        };
-      })(),
-      // Two-way sync (read remote + update local + push). Separate from backup.
-      twoway: {
-        enabled: !!$('cfg-twoway-enabled')?.checked,
-        // Transport: 'samba' (share on a network we already reach), 'vpn' (the
-        // same share through a tunnel) or 'webdav'. `useWireGuard` follows it,
-        // and is also what tells an OLD config's 'samba' — which meant VPN —
-        // apart from the new one. A config no method toggle represents (the
-        // legacy mounted folder) keeps its stored value verbatim: writing a
-        // transport here would reroute a working setup.
-        ...(() => {
-          const on = (id) => !!$(id)?.checked;
-          const picked = on('cfg-tw-webdav-enabled') ? 'webdav'
-            : on('cfg-tw-lan-enabled') ? 'samba'
-            : on('cfg-tw-samba-enabled') ? 'vpn' : null;
-          const stored = state.config?.sync?.twoway;
-          if (!picked) return { transport: stored?.transport, useWireGuard: stored?.useWireGuard };
-          return { transport: picked, useWireGuard: picked !== 'samba' };
-        })(),
-        // Which method's section the Sync tab shows on open — a view preference,
-        // like Backup's backupTransport. Never drives what actually syncs.
-        transportView: state.config?.sync?.twoway?.transportView,
-        // WebDAV two-way connection (used when transport === 'webdav'). STAGED:
-        // persisted ONLY by "Salva configurazione" (state._webdavSaved.sync).
-        webdav: {
-          url:        state._webdavSaved?.sync?.url        ?? (state.config?.sync?.twoway?.webdav?.url || ''),
-          username:   state._webdavSaved?.sync?.username   ?? (state.config?.sync?.twoway?.webdav?.username || ''),
-          password:   state._webdavSaved?.sync?.password   ?? (state.config?.sync?.twoway?.webdav?.password || ''),
-          remotePath: state._webdavSaved?.sync?.remotePath || (state.config?.sync?.twoway?.webdav?.remotePath || 'amelie/sync'),
-        },
-        // PRESERVE the dedicated two-way Samba connection saved by "Configure &
-        // verify" — it lives only in config (no form field), so rebuilding the
-        // config here would otherwise wipe it and break syncing.
-        smb: state.config?.sync?.twoway?.smb,
-        // The Samba (LAN) method's own connection, kept apart from `smb` above
-        // so the two methods never overwrite each other's server.
-        smbLan: (() => {
-          const v = (id) => { const el = $(id); return el && typeof el.value === 'string' ? el.value.trim() : ''; };
-          const ip = v('tw-sb-ip');
-          if (!ip && !v('tw-sb-share')) return state.config?.sync?.twoway?.smbLan;
-          return { host: ip, ip, share: v('tw-sb-share'), remoteSubPath: v('tw-sb-path'),
-                   username: v('tw-sb-user'), password: $('tw-sb-pass')?.value || '' };
-        })(),
-        subPath: $('cfg-twoway-subpath')?.value.trim() || '',
-        // Single toggle = conflict handling only (On = keep both, Off = latest
-        // wins). Deletions ALWAYS propagate, regardless of this toggle.
-        conflictCopies: !!$('cfg-twoway-fullsync')?.checked,
-        propagateDeletes: true,
-        // The old "realtime" option is gone: the frequency itself goes down to
-        // 30 seconds (0.5 minutes), and the engine's tick asks the share what
-        // changed before doing any work. parseFloat, or 0.5 truncates to 0.
-        intervalMinutes: (() => {
-          const v = $('cfg-twoway-interval')?.value;
-          if (v === 'custom') return parseInt($('cfg-twoway-interval-custom')?.value) || 15;
-          return parseFloat(v) || 15;
-        })(),
-      },
-    }
+// ─── Unified Backup tab: single remote destination shared by Backup + Sync ──
+// Builds the FULL per-vault config (settings.json) from the one connection + two
+// folders, into the SAME keys the engine reads. No new schema, no migration.
+function buildSyncConfig(form, prev) {
+  prev = prev || {};
+  const pS = prev.sync || {};
+  const kind = form.kind === 'webdav' ? 'webdav' : 'samba';
+  const vpn = kind === 'samba' && !!form.vpn;
+  const keepLast = form.keepLast;
+  const smbServer = {
+    host: form.smbIp || '', ip: form.smbIp || '',
+    share: form.smbShare || '', username: form.smbUser || '', password: form.smbPass || '',
   };
+  const remoteOn = !!form.backupRemoteOn;
+  const sambaLan = (kind === 'samba' && !vpn)
+    ? { ...smbServer, remoteSubPath: form.backupFolder || '', useWireGuard: false,
+        folder: false, archive: true, archiveOnly: true, keepLast, enabled: remoteOn }
+    : { ...(pS.sambaLan || {}), enabled: false };
+  const vpnObj = (kind === 'samba' && vpn)
+    ? { ...(form.vpnCfg || {}), enabled: remoteOn, syncOnly: !!form.vpnSyncOnly, keepLast }
+    : { ...(pS.vpn || {}), enabled: false, syncOnly: !!form.vpnSyncOnly };
+  const webdav = (kind === 'webdav')
+    ? { url: form.webdavUrl || '', username: form.webdavUser || '', password: form.webdavPass || '',
+        remotePath: form.backupFolder || '/amelie/backup',
+        folder: false, archive: true, archiveOnly: true, keepLast, enabled: remoteOn }
+    : { ...(pS.webdav || {}), enabled: false };
+  const local = {
+    enabled: !!form.localOn, path: form.localPath || '',
+    folder: false, archive: true, archiveOnly: true,
+    intervalMinutes: form.backupIntervalMinutes, keepLast,
+  };
+  const transport = kind === 'webdav' ? 'webdav' : (vpn ? 'vpn' : 'samba');
+  const twWebdav = (kind === 'webdav')
+    ? { url: form.webdavUrl || '', username: form.webdavUser || '', password: form.webdavPass || '',
+        remotePath: form.syncFolder || 'amelie/sync' }
+    : ((pS.twoway && pS.twoway.webdav) || { url: '', username: '', password: '', remotePath: 'amelie/sync' });
+  const twSmb = (kind === 'samba' && vpn)
+    ? { ...smbServer, remoteSubPath: form.syncFolder || '' } : (pS.twoway && pS.twoway.smb);
+  const twSmbLan = (kind === 'samba' && !vpn)
+    ? { ...smbServer, remoteSubPath: form.syncFolder || '' } : (pS.twoway && pS.twoway.smbLan);
+  const twoway = {
+    enabled: !!form.syncOn, transport, useWireGuard: transport === 'vpn', transportView: transport,
+    webdav: twWebdav, smb: twSmb, smbLan: twSmbLan,
+    subPath: (pS.twoway && pS.twoway.subPath) || '',
+    conflictCopies: form.conflictCopies !== false, propagateDeletes: true,
+    intervalMinutes: form.syncIntervalMinutes,
+  };
+  return {
+    autoSaveSeconds: form.autoSaveSeconds || 3,
+    sync: {
+      enabled: remoteOn || !!form.localOn || !!form.syncOn,
+      backupTransport: pS.backupTransport || 'local',
+      vpn: vpnObj, samba: pS.samba, sambaLan, webdav, local, twoway,
+    },
+  };
+}
+
+function buildFormFromConfig(cfg) {
+  const s = (cfg && cfg.sync) || {};
+  const tw = s.twoway || {};
+  let kind, vpn;
+  if (s.webdav && s.webdav.enabled) { kind = 'webdav'; vpn = false; }
+  else if (s.vpn && s.vpn.enabled) { kind = 'samba'; vpn = true; }
+  else if (s.sambaLan && s.sambaLan.enabled) { kind = 'samba'; vpn = false; }
+  else {
+    const t = tw.transport || '';
+    if (t === 'webdav') { kind = 'webdav'; vpn = false; }
+    else if (t === 'vpn') { kind = 'samba'; vpn = true; }
+    else if (t === 'samba') { kind = 'samba'; vpn = false; }
+    else if (tw.webdav && tw.webdav.url) { kind = 'webdav'; vpn = false; }
+    else if ((s.vpn && s.vpn.smb && s.vpn.smb.ip) || (tw.smb && (tw.smb.ip || tw.smb.host))) { kind = 'samba'; vpn = true; }
+    else { kind = 'samba'; vpn = false; }
+  }
+  const smbSrc = (vpn ? (s.vpn && s.vpn.smb) : s.sambaLan)
+    || (s.vpn && s.vpn.smb) || tw.smb || tw.smbLan || s.sambaLan || s.samba || {};
+  const smbIp = smbSrc.ip || smbSrc.host || (s.vpn && s.vpn.peerIp) || '';
+  const wdSrc = (s.webdav && s.webdav.url) ? s.webdav : (tw.webdav || {});
+  const backupFolder = kind === 'webdav'
+    ? ((s.webdav && s.webdav.remotePath) || wdSrc.remotePath || '')
+    : vpn ? ((s.vpn && s.vpn.smb && s.vpn.smb.path) || (s.vpn && s.vpn.remotePath) || '')
+          : ((s.sambaLan && s.sambaLan.remoteSubPath) || '');
+  const syncFolder = kind === 'webdav'
+    ? ((tw.webdav && tw.webdav.remotePath) || '')
+    : vpn ? ((tw.smb && tw.smb.remoteSubPath) || tw.subPath || '')
+          : ((tw.smbLan && tw.smbLan.remoteSubPath) || tw.subPath || '');
+  return {
+    kind, vpn,
+    backupRemoteOn: !!(kind === 'webdav' ? (s.webdav && s.webdav.enabled)
+      : vpn ? (s.vpn && s.vpn.enabled) : (s.sambaLan && s.sambaLan.enabled)),
+    localOn: !!(s.local && s.local.enabled), syncOn: !!tw.enabled,
+    smbIp, smbShare: smbSrc.share || '', smbUser: smbSrc.username || '', smbPass: smbSrc.password || '',
+    webdavUrl: wdSrc.url || '', webdavUser: wdSrc.username || '', webdavPass: wdSrc.password || '',
+    backupFolder, syncFolder, localPath: (s.local && s.local.path) || '',
+    backupIntervalMinutes: (s.local && s.local.intervalMinutes) || 1440,
+    keepLast: (s.local && s.local.keepLast) != null ? s.local.keepLast
+      : (s.vpn && s.vpn.keepLast) != null ? s.vpn.keepLast : 5,
+    syncIntervalMinutes: tw.intervalMinutes || 15,
+    conflictCopies: tw.conflictCopies !== false,
+    vpnSyncOnly: !!(s.vpn && s.vpn.syncOnly), autoSaveSeconds: cfg.autoSaveSeconds || 3,
+  };
+}
+
+function currentRemoteKind() { return ($('cfg-remote-kind')?.value === 'webdav') ? 'webdav' : 'samba'; }
+
+function applyRemoteUiVisibility() {
+  const kind = currentRemoteKind();
+  const vpn = kind === 'samba' && !!$('cfg-remote-vpn')?.checked;
+  const show = (id, on) => { const el = $(id); if (el) el.style.display = on ? '' : 'none'; };
+  document.querySelectorAll('#remote-kind-seg .vpn-type-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.remote === kind));
+  show('remote-samba-block', kind === 'samba');
+  show('remote-webdav-block', kind === 'webdav');
+  show('remote-vpn-wizard', vpn);
+  show('remote-samba-lantest', kind === 'samba' && !vpn);
+  show('tc-wg', vpn);
+}
+
+function syncHiddenTogglesFromForm(form) {
+  const set = (id, v) => { const el = $(id); if (el) el.checked = !!v; };
+  const samba = form.kind === 'samba';
+  set('cfg-vpn-enabled',    form.backupRemoteOn && samba && form.vpn);
+  set('cfg-samba-enabled',  form.backupRemoteOn && samba && !form.vpn);
+  set('cfg-webdav-enabled', form.backupRemoteOn && form.kind === 'webdav');
+  set('cfg-twoway-enabled', form.syncOn);
+  set('cfg-tw-webdav-enabled', form.syncOn && form.kind === 'webdav');
+  set('cfg-tw-lan-enabled',    form.syncOn && samba && !form.vpn);
+  set('cfg-tw-samba-enabled',  form.syncOn && samba && form.vpn);
+}
+
+function populateUnifiedBackupUi(cfg) {
+  const form = buildFormFromConfig(cfg || {});
+  const setV = (id, v) => { const el = $(id); if (el) el.value = v != null ? v : ''; };
+  const setC = (id, v) => { const el = $(id); if (el) el.checked = !!v; };
+  setV('cfg-remote-kind', form.kind);
+  setC('cfg-remote-vpn', form.vpn);
+  setV('cfg-smb-ip', form.smbIp); setV('cfg-smb-share', form.smbShare);
+  setV('cfg-smb-user', form.smbUser); setV('cfg-smb-pass', form.smbPass);
+  setV('cfg-webdav-url', form.webdavUrl); setV('cfg-webdav-user', form.webdavUser); setV('cfg-webdav-pass', form.webdavPass);
+  setV('cfg-backup-folder', form.backupFolder);
+  setV('cfg-sync-folder', form.syncFolder);
+  setV('cfg-smb-path', form.backupFolder);
+  setV('cfg-webdav-path', form.backupFolder);
+  setC('cfg-backup-remote-on', form.backupRemoteOn);
+  setC('cfg-sync-on', form.syncOn);
+  setC('cfg-local-enabled', form.localOn);
+  setV('cfg-local-path', form.localPath);
+  setC('cfg-twoway-fullsync', form.conflictCopies);
+  document.querySelectorAll('.vpn-sync-only').forEach(el => { el.checked = !!form.vpnSyncOnly; });
+  syncHiddenTogglesFromForm(form);
+  applyRemoteUiVisibility();
+}
+
+function setupRemoteUi() {
+  if (window._remoteUiWired) return; window._remoteUiWired = true;
+  document.querySelectorAll('#remote-kind-seg .vpn-type-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const el = $('cfg-remote-kind'); if (el) el.value = btn.dataset.remote;
+      applyRemoteUiVisibility();
+      try { updateWgConfiguredView(); } catch (_) {}
+      saveSettings().catch(() => {});
+    });
+  });
+  $('cfg-remote-vpn')?.addEventListener('change', () => {
+    applyRemoteUiVisibility();
+    try { updateWgConfiguredView(); } catch (_) {}
+    saveSettings().catch(() => {});
+  });
+  ['cfg-backup-remote-on', 'cfg-sync-on'].forEach(id =>
+    $(id)?.addEventListener('change', () => {
+      saveSettings().then(() => { try { updateActionNowButtons(); } catch (_) {} }).catch(() => {});
+    }));
+  ['cfg-backup-folder', 'cfg-sync-folder'].forEach(id => {
+    $(id)?.addEventListener('blur', () => saveSettings().catch(() => {}));
+    $(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
+  });
+}
+
+async function saveSettings() {
+  const kind = currentRemoteKind();
+  const vpnOn = kind === 'samba' && !!$('cfg-remote-vpn')?.checked;
+  const backupFolder = ($('cfg-backup-folder')?.value || '').trim();
+  const syncFolder = ($('cfg-sync-folder')?.value || '').trim();
+  // buildVpnConfig reads cfg-smb-path for the share path → feed it the backup folder.
+  if ($('cfg-smb-path')) $('cfg-smb-path').value = backupFolder;
+  if ($('cfg-webdav-path')) $('cfg-webdav-path').value = backupFolder;
+  const vpnCfg = buildVpnConfig();
+  const val = (id) => { const el = $(id); return el && typeof el.value === 'string' ? el.value.trim() : ''; };
+  const raw = (id) => { const el = $(id); return el ? el.value : ''; };
+  const form = {
+    kind, vpn: vpnOn,
+    backupRemoteOn: !!$('cfg-backup-remote-on')?.checked,
+    localOn: !!$('cfg-local-enabled')?.checked,
+    syncOn: !!$('cfg-sync-on')?.checked,
+    smbIp: val('cfg-smb-ip'), smbShare: val('cfg-smb-share'),
+    smbUser: raw('cfg-smb-user'), smbPass: raw('cfg-smb-pass'),
+    webdavUrl: val('cfg-webdav-url'), webdavUser: raw('cfg-webdav-user'), webdavPass: raw('cfg-webdav-pass'),
+    backupFolder, syncFolder,
+    localPath: val('cfg-local-path'),
+    backupIntervalMinutes: (() => {
+      const v = $('cfg-local-interval')?.value;
+      if (v === 'custom') return (parseInt($('cfg-local-interval-custom')?.value) || 2) * 1440;
+      return parseFloat(v) || 1440;
+    })(),
+    keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
+    syncIntervalMinutes: (() => {
+      const v = $('cfg-twoway-interval')?.value;
+      if (v === 'custom') return parseInt($('cfg-twoway-interval-custom')?.value) || 15;
+      return parseFloat(v) || 15;
+    })(),
+    conflictCopies: !!$('cfg-twoway-fullsync')?.checked,
+    vpnSyncOnly: !!$('cfg-vpn-synconly')?.checked,
+    autoSaveSeconds: parseInt($('cfg-autosave')?.value) || 3,
+    vpnCfg,
+  };
+  const config = buildSyncConfig(form, state.config || {});
   await window.inkwell.writeConfig(config);
   state.config = config;
-  state._backupSmbCommitted = null;   // now persisted in config.sync.samba
+  syncHiddenTogglesFromForm(form);
+  state._backupSmbCommitted = null;
   updateSyncButtonVisibility();
   updateActionNowButtons();
 }
+
 
 
 // ─── Sync UI ──────────────────────────────────────────────────────────────────
