@@ -12760,13 +12760,15 @@ function applyRemoteUiVisibility() {
   show('remote-local-block', local);
   show('remote-samba-block', kind === 'samba');
   show('remote-webdav-block', kind === 'webdav');
-  show('remote-vpn-wizard', kind === 'samba');       // always available: add a VPN (optional)
-  show('remote-samba-lantest', kind === 'samba');    // always: test the direct Samba route
+  show('remote-vpn-wizard', kind === 'samba');       // always available: add/manage a VPN (optional)
+  // ONE connection test, never two: the direct Samba test when no VPN is loaded,
+  // the wizard's Samba-over-VPN test (wstep-4) only when a VPN is present.
+  show('remote-samba-lantest', kind === 'samba' && !vpn);
+  show('wstep-4', vpn);
   show('tc-wg', vpn);                                 // VPN connectivity row only when a VPN is loaded
   const rv = $('cfg-remote-vpn'); if (rv) rv.checked = vpn;   // keep the hidden flag in step
   // Local is a BACKUP-ONLY destination: no two-way sync, no remote-backup toggle
   // and no remote folder — the backup goes to the local path chosen above.
-  show('sync-group-title', !local);
   show('bksec-sync', !local);
   show('backup-remote-row', !local);
   show('backup-folder-wrap', !local);
