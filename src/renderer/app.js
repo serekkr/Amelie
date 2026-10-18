@@ -11663,6 +11663,10 @@ function setSmbFormReadonly(tab, ro) {
   _smbFieldIds(tab).forEach(id => { const el = $(id); if (el) el.readOnly = ro; });
 }
 function applySmbCollapse(tab) {
+  // Unified Backup tab: the backup Samba form has no collapsed "preview" with a
+  // "Modifica" button any more, so never collapse/lock its fields — that would
+  // leave them readonly with no way to re-open. Keep them editable and bail.
+  if (!$('smb-preview-' + tab)) { setSmbFormReadonly(tab, false); return; }
   const cfg = state.config || {};
   const smb = tab === 'backup'
     ? (cfg.sync?.vpn?.smb || cfg.sync?.samba)
