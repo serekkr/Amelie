@@ -638,7 +638,17 @@
                   <input type="hidden" id="cfg-smb-path" />
 
                   <!-- ── VPN sub-wizard (shown only when "Connetti tramite VPN" is on) ── -->
-                  <div id="remote-vpn-wizard" style="display:none;margin-top:16px;padding:14px;border:1px solid var(--border);border-radius:7px;background:var(--bg-3)">
+                  <!-- VPN as its own framed card — same look as the Sync tab's VPN section
+                       (.sync-section with a header strip + body), set apart from the Samba
+                       fields above. Not collapsible here (managed inline), so a static header. -->
+                  <div class="sync-section" id="remote-vpn-wizard" style="display:none;margin-top:16px">
+                    <div class="sync-section-header" style="cursor:default">
+                      <div class="sync-section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        <span data-i18n="sync.transport_vpn">VPN</span>
+                      </div>
+                    </div>
+                    <div class="sync-section-body" id="remote-vpn-body" style="display:block">
                     <!-- "Use the VPN only for sync" (sync.vpn.syncOnly): ON by default and
                          hidden — the tunnel never takes over routes/DNS/IPv6, which is what
                          you always want for a backup/sync VPN. -->
@@ -759,6 +769,7 @@
                         <div id="test-summary" class="test-summary" style="display:none;margin-top:8px"></div>
                       </div>
                     </div><!-- wg-wizard -->
+                    </div><!-- sync-section-body -->
                   </div><!-- remote-vpn-wizard -->
 
                   <!-- Samba write test WITHOUT VPN (reach + write only). Button first;
