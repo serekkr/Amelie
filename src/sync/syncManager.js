@@ -157,10 +157,17 @@ class SyncManager {
   // the timer at fifteen minutes until the user happened to open Settings and
   // save, which is exactly how a machine ended up taking a quarter of an hour
   // to notice the other one's notes.
+  // The two-way floor is 5 minutes, not _MIN_INTERVAL: every tick asks the remote
+  // "did anything change?", and on WebDAV that question is a recursive PROPFIND —
+  // cheap on Samba, but on a Nextcloud it is PHP+DB+FS over the whole tree and a
+  // 30-second cadence kept the server pegged for a vault nobody had touched. Five
+  // minutes is the shortest the sync will poll, whatever the UI (or an old
+  // `realtime` profile) asks for; a user can still set it longer.
+  static _MIN_TWOWAY_INTERVAL = 5;
   _twowayIntervalMinutes() {
     const tw = this.config?.sync?.twoway;
-    if (tw?.realtime) return SyncManager._MIN_INTERVAL;
-    return SyncManager._readInterval(tw?.intervalMinutes, 15);
+    const raw = tw?.realtime ? SyncManager._MIN_INTERVAL : SyncManager._readInterval(tw?.intervalMinutes, 15);
+    return Math.max(raw, SyncManager._MIN_TWOWAY_INTERVAL);
   }
 
   // Success is announced only by a pass MORE than an hour apart: at 30 s, or a
