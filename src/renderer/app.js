@@ -15810,18 +15810,9 @@ async function openSecurityTab() {
   // "Remember password" was removed: the passphrase is never stored (typed each
   // launch), so there's no keyring/obfuscation concern to surface here.
 
-  // Rest-mode switch — reflect the current mode (at-rest vs plaintext-while-open).
-  const restmodeRow = document.getElementById('sec-restmode-row');
-  if (restmodeRow) restmodeRow.style.display = enc ? '' : 'none';
-  const restmodeRes = document.getElementById('sec-restmode-result');
-  if (restmodeRes) { restmodeRes.textContent = ''; restmodeRes.className = 'test-result'; }
-  if (enc) {
-    const openPlain = !!info.encryptionOpenPlaintext;
-    const liveTgl = document.getElementById('sec-enc-rest-live-tgl');
-    if (liveTgl) liveTgl.checked = !openPlain;   // toggle = "encrypt at rest": ON = encrypted
-    // The plaintext+sync warning lives only in the Backup/Sync tabs (not here in
-    // Vault, where you'd enable it anyway).
-  }
+  // The "decrypt while open" rest-mode option was removed: encryption is now
+  // always at-rest (files stay encrypted on disk even with Amelie open), so there
+  // is no switch to reflect here.
 }
 
 // Reveal/hide toggle for a masked password input (same trick as the unlock
@@ -15951,8 +15942,8 @@ function setupSecurityTab() {
     if (p1 !== p2)       { res.textContent = '✗ ' + window.i18n.t('error.pass_mismatch'); res.className = 'test-result fail'; return; }
     res.textContent = window.i18n.t('vault_settings.encrypting'); res.className = 'test-result';
     const algo = document.getElementById('sec-enc-algo')?.dataset.algo || 'aes';
-    const restTgl = document.getElementById('sec-enc-rest-tgl');
-    const openPlaintext = restTgl ? !restTgl.checked : false;   // toggle = "encrypt at rest": ON = encrypted (default)
+    // Encryption is always at-rest now (the "decrypt while open" option was removed).
+    const openPlaintext = false;
     try {
       const result = await window.inkwell.vault.enableEncryption(p1, algo, openPlaintext);
       if (result.ok) {
@@ -15966,39 +15957,6 @@ function setupSecurityTab() {
     } catch (e) {
       res.textContent = '✗ ' + (e && e.message || window.i18n.t('status.error')); res.className = 'test-result fail';
     }
-  });
-
-  // Rest-mode live switch (when encryption is already active): decrypt-to-disk
-  // or re-encrypt the whole vault via setRestMode.
-  const restLiveTgl = document.getElementById('sec-enc-rest-live-tgl');
-  if (restLiveTgl) restLiveTgl.addEventListener('change', async () => {
-    const res  = document.getElementById('sec-restmode-result');
-    const openPlaintext = !restLiveTgl.checked;   // toggle = "encrypt at rest": ON = encrypted, OFF = plaintext
-    if (res) { res.textContent = window.i18n.t('vault_settings.applying'); res.className = 'test-result'; }
-    try {
-      const result = await window.inkwell.vault.setRestMode(openPlaintext);
-      if (result?.ok) {
-        if (res) {
-          const rep = result.failed ? '  ⚠ ' + window.i18n.t('vault_settings.convert_report', { converted: result.converted ?? 0, failed: result.failed }) : '';
-          res.textContent = '✓ ' + window.i18n.t('vault_settings.rest_applied') + rep;
-          res.className = result.failed ? 'test-result fail' : 'test-result ok';
-        }
-      } else {
-        if (res) { res.textContent = '✗ ' + (result?.error || window.i18n.t('status.error')); res.className = 'test-result fail'; }
-        await openSecurityTab();   // revert the toggle to the real state
-      }
-    } catch (e) {
-      if (res) { res.textContent = '✗ ' + (e?.message || window.i18n.t('status.error')); res.className = 'test-result fail'; }
-      await openSecurityTab();
-    }
-  });
-
-  // Enable-flow rest-mode toggle ("encrypt at rest"): reveal the plaintext-mode
-  // security caveat only when the toggle is OFF (i.e. plaintext-while-open).
-  const restEnableTgl = document.getElementById('sec-enc-rest-tgl');
-  if (restEnableTgl) restEnableTgl.addEventListener('change', () => {
-    const w = document.getElementById('sec-enc-restmode-warn');
-    if (w) w.style.display = restEnableTgl.checked ? 'none' : '';
   });
 
   // Disable encryption

@@ -1522,10 +1522,6 @@
                   </div>
                 </div>
               </div>
-              <div class="field-group toggle-row" id="sec-enc-restmode" style="margin-top:8px">
-                <label><span data-i18n="vault_settings.rest_encrypt">Cifra i file a riposo</span> <small data-i18n="vault_settings.rest_open_desc">(On = file sempre cifrati · Off = i file del vault locale vengono decifrati mentre Amelie è aperta)</small></label>
-                <label class="toggle"><input type="checkbox" id="sec-enc-rest-tgl" checked /><span class="slider"></span></label>
-              </div>
               <button class="btn-test btn-svg" id="sec-btn-enable-enc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span data-i18n="vault_settings.btn_enable">Abilita crittografia</span></button>
               <div id="sec-enc-result" class="test-result"></div>
             </div>
@@ -1545,13 +1541,6 @@
               </div>
               <div id="sec-disable-result" class="test-result"></div>
             </div>
-
-            <!-- Rest-mode switch — shown only when encryption is ACTIVE -->
-            <div class="field-group toggle-row" id="sec-restmode-row" style="display:none;margin-top:8px">
-              <label><span data-i18n="vault_settings.rest_encrypt">Cifra i file a riposo</span> <small data-i18n="vault_settings.rest_open_desc">(On = file sempre cifrati · Off = i file del vault locale vengono decifrati mentre Amelie è aperta)</small></label>
-              <label class="toggle"><input type="checkbox" id="sec-enc-rest-live-tgl" checked /><span class="slider"></span></label>
-            </div>
-            <div id="sec-restmode-result" class="test-result"></div>
 
             </div><!-- /.enc-box -->
 
