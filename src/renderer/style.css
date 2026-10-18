@@ -1247,7 +1247,7 @@ kbd {
   padding: 4px 14px; border-bottom: 1px solid var(--border);
   background: var(--bg-1); flex-shrink: 0;
 }
-#toolbar-buttons { display: flex; align-items: center; gap: 1px; flex-wrap: wrap; flex: 1; }
+#toolbar-buttons { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1; }
 /* Global icon-size control (Settings → User Interface → "Dimensione icone"):
    one `zoom` scales every top bar's icons/buttons together — the sidebar
    section tabs (File/Recenti/…), the create-note/folder row, the edit/view
