@@ -12542,7 +12542,7 @@ async function openSettings() {
       // A profile saved with the old "realtime" option lands on the shortest
       // interval there is now — the closest thing to what it used to do.
       const twMin = cfg.sync?.twoway?.realtime ? 5 : (parseFloat(cfg.sync?.twoway?.intervalMinutes) || 15);
-      const presets = ['5', '15', '60', '1440'];
+      const presets = ['1', '5', '15', '60', '1440'];
       if (presets.includes(String(twMin))) {
         twSel.value = String(twMin);
         if ($('twoway-custom-wrap')) $('twoway-custom-wrap').style.display = 'none';

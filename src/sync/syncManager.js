@@ -144,8 +144,15 @@ class SyncManager {
     const min = parseFloat(v);
     return (Number.isFinite(min) && min > 0) ? Math.max(min, SyncManager._MIN_INTERVAL) : fallback;
   }
+  // Backup floor is 1 minute. Backup is one-way (local → remote) and the "is a
+  // copy due?" check is a LOCAL fingerprint, not a remote query, so a short floor
+  // does not poll the server — it only bounds how often a .tar.gz could be written
+  // (and a copy is skipped when the vault is unchanged anyway). The UI still offers
+  // hourly as the shortest preset; this is only the engine's hard lower bound.
+  static _MIN_BACKUP_INTERVAL = 1;
   _backupIntervalMinutes() {
-    return SyncManager._readInterval(this.config?.sync?.local?.intervalMinutes, 60);
+    return Math.max(SyncManager._readInterval(this.config?.sync?.local?.intervalMinutes, 60),
+                    SyncManager._MIN_BACKUP_INTERVAL);
   }
 
   // The two-way sync's own frequency, read in one place for the same reason.
@@ -157,17 +164,29 @@ class SyncManager {
   // the timer at fifteen minutes until the user happened to open Settings and
   // save, which is exactly how a machine ended up taking a quarter of an hour
   // to notice the other one's notes.
-  // The two-way floor is 5 minutes, not _MIN_INTERVAL: every tick asks the remote
-  // "did anything change?", and on WebDAV that question is a recursive PROPFIND —
-  // cheap on Samba, but on a Nextcloud it is PHP+DB+FS over the whole tree and a
-  // 30-second cadence kept the server pegged for a vault nobody had touched. Five
-  // minutes is the shortest the sync will poll, whatever the UI (or an old
-  // `realtime` profile) asks for; a user can still set it longer.
-  static _MIN_TWOWAY_INTERVAL = 5;
+  // The two-way floor depends on the TRANSPORT, because "did the remote change?"
+  // costs very different amounts:
+  //  - WebDAV (Nextcloud): a recursive PROPFIND through PHP+DB+FS over the whole
+  //    tree — expensive. A 30s cadence kept the server pegged for a vault nobody
+  //    had touched. Floor 5 min. (The root-ETag shortcut, when present, skips the
+  //    recursive listing on an unchanged remote — see _twowayTick.)
+  //  - Samba / VPN: a plain SMB directory listing — cheap even over the tunnel.
+  //    Floor 1 min.
+  // Whatever the UI (or an old `realtime` profile) asks, the floor wins; a user can
+  // still set it longer.
+  static _MIN_TWOWAY_WEBDAV = 5;
+  static _MIN_TWOWAY_SMB = 1;
+  // WebDAV change-check: how often to force a FULL recursive listing even when the
+  // folder ETag looks unchanged — a safety net for servers that don't bubble child
+  // changes into the folder ETag. 6 ticks × 5-min floor = a full listing at least
+  // every ~30 min; Nextcloud (which does propagate) gets the cheap path in between.
+  static _WEBDAV_FULL_EVERY = 6;
   _twowayIntervalMinutes() {
     const tw = this.config?.sync?.twoway;
     const raw = tw?.realtime ? SyncManager._MIN_INTERVAL : SyncManager._readInterval(tw?.intervalMinutes, 15);
-    return Math.max(raw, SyncManager._MIN_TWOWAY_INTERVAL);
+    const floor = SyncManager._twowayTransport(tw) === 'webdav'
+      ? SyncManager._MIN_TWOWAY_WEBDAV : SyncManager._MIN_TWOWAY_SMB;
+    return Math.max(raw, floor);
   }
 
   // Success is announced only by a pass MORE than an hour apart: at 30 s, or a
@@ -773,7 +792,30 @@ class SyncManager {
       const { createClient } = require('webdav');
       const client = createClient(url, { username: w.username || '', password: this._decSecret(w.password) || '' });
       const base = '/' + String(w.remotePath || 'amelie/sync').replace(/^\/+|\/+$/g, '');
-      return this._remoteSignature(await this._webdavTwowayList(client, base));
+      // Cheap first: one Depth:0 stat of the sync folder. Nextcloud (and most
+      // servers) bubble any child change up into the folder's ETag, so an ETag
+      // that matches last tick means nothing moved — skip the expensive recursive
+      // PROPFIND and reuse the cached signature. _WEBDAV_FULL_EVERY forces a full
+      // listing periodically regardless, covering servers that don't propagate.
+      try {
+        const st = await client.stat(base);
+        const etag = st && (st.etag || (st.data && st.data.etag));
+        this._twWdTicks = (this._twWdTicks || 0) + 1;
+        const forceFull = this._twWdTicks % SyncManager._WEBDAV_FULL_EVERY === 0;
+        if (etag && !forceFull && etag === this._twWdEtag && this._twWdSig !== undefined) {
+          return this._twWdSig;                       // folder ETag unchanged → remote unchanged
+        }
+        const sig = this._remoteSignature(await this._webdavTwowayList(client, base));
+        this._twWdEtag = etag || undefined;
+        this._twWdSig = sig;
+        return sig;
+      } catch (_) {
+        // No usable stat (folder absent yet, or a server without one): fall back to
+        // the recursive listing — same answer as before, just not cheaper.
+        const sig = this._remoteSignature(await this._webdavTwowayList(client, base));
+        this._twWdSig = sig;
+        return sig;
+      }
     }
 
     if (transport === 'legacy') {

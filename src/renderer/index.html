@@ -994,6 +994,7 @@
             <div class="field-group">
               <label data-i18n="sync.twoway_freq">Frequenza</label>
               <select id="cfg-twoway-interval" class="export-select">
+                <option value="1">1 min</option>
                 <option value="5">5 min</option>
                 <option value="15" selected>15 min</option>
                 <option value="60" data-i18n="settings.freq_hourly">Ogni ora</option>
@@ -1001,7 +1002,7 @@
                 <option value="custom" data-i18n="settings.interval_custom">Custom</option>
               </select>
               <div class="sip-custom-wrap" id="twoway-custom-wrap" style="display:none;margin-top:8px">
-                <input type="number" id="cfg-twoway-interval-custom" min="5" max="1440" value="10" />
+                <input type="number" id="cfg-twoway-interval-custom" min="1" max="1440" value="10" />
                 <span data-i18n="settings.minutes">minuti</span>
               </div>
             </div>
