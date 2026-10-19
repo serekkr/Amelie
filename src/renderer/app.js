@@ -198,6 +198,10 @@ async function closeTab(idx, e) {
   if (tabs.length === 0) {
     activeTabIdx = -1;
     state.currentPath = null;
+    // No tab is switched to here, so nothing else dismisses the PDF/image/media/canvas
+    // overlay the closed tab was showing — without this it stayed up ON TOP of the empty
+    // state and the PDF looked like it never closed (serekkr, 19/10/2026).
+    hideAllSpecialViews();
     editorContainer.style.display = 'none';
     emptyState.style.display = 'flex';
   } else if (wasActive) {
@@ -13788,7 +13792,12 @@ function setupResize() {
   const sidebar = $('sidebar');
   if (!handle || !sidebar) return;
 
-  const FLOOR_W = 250, MAX_W = 480;   // 250 = the #sidebar min-width in style.css; keep the two in step
+  const FLOOR_W = 250;   // 250 = the #sidebar min-width in style.css; keep the two in step
+  // Upper limit: up to about HALF the app window, so the notes/folders pane can be dragged
+  // really wide (serekkr, 19/10/2026 — "almeno fino quasi a meta della app se voglio").
+  // Window-relative, not a fixed 480: on a wide screen half is far more than 480, and on a
+  // narrow one it never drops below the old 480 so nothing a saved width could reach is lost.
+  const maxW = () => Math.max(480, Math.round(window.innerWidth * 0.5));
   let MIN_W = FLOOR_W, DEFAULT_W = FLOOR_W;
 
   // Where the drag has to stop. FLOOR_W is the width the user asked for; on top of it
@@ -13817,7 +13826,7 @@ function setupResize() {
     const need = padX + btns.length * cap + gap * (btns.length - 1);
     return Math.max(FLOOR_W, Math.ceil(need * z));
   }
-  const clampW = w => Math.min(MAX_W, Math.max(MIN_W, w));
+  const clampW = w => Math.min(maxW(), Math.max(MIN_W, w));
 
   // Restore saved width — CLAMPED, not discarded: a width saved under an older,
   // lower minimum (or a larger icon size) must come back as the nearest allowed one,
@@ -13884,7 +13893,7 @@ function setupResize() {
 
   document.addEventListener('mousemove', e => {
     if (!dragging) return;
-    const w = Math.max(MIN_W, Math.min(MAX_W, startW + (e.clientX - startX)));
+    const w = Math.max(MIN_W, Math.min(maxW(), startW + (e.clientX - startX)));
     sidebar.style.width = w + 'px';
   });
 
@@ -13902,6 +13911,13 @@ function setupResize() {
   handle.addEventListener('dblclick', () => {
     sidebar.style.width = DEFAULT_W + 'px';
     try { localStorage.setItem('amelie-sidebar-w', DEFAULT_W); } catch(_) {}
+  });
+
+  // The max is window-relative, so shrinking the window can leave the sidebar wider than
+  // half: pull it back in. Only ever narrows — never widens past what the user set.
+  window.addEventListener('resize', () => {
+    const cur = sidebar.offsetWidth, cap = maxW();
+    if (cur > cap) { sidebar.style.width = cap + 'px'; try { localStorage.setItem('amelie-sidebar-w', cap); } catch (_) {} }
   });
 }
 

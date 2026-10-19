@@ -648,7 +648,10 @@ html.is-mac #titlebar { padding-left: 72px; }
      row (20 + 5×38 + 4×10 = 250), and the row has since been tightened to 172, so this
      is now a chosen width rather than a computed one; setupResize()'s measureMinWidth
      still raises the floor above it when a large icon size needs more room. */
-  width: 250px; min-width: 250px; max-width: 400px;
+  /* max-width up to half the app window (serekkr, 19/10/2026): the divider can drag the
+     notes/folders pane really wide. max(480px, 50vw) matches setupResize()'s maxW() so the
+     JS clamp and the CSS cap agree — never below the old 480 on a narrow window. */
+  width: 250px; min-width: 250px; max-width: max(480px, 50vw);
   background: var(--bg-1); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
 }
