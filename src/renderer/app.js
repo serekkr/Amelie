@@ -440,7 +440,7 @@ async function switchTab(idx) {
     const _nellAlbero = (() => { try {
       return !!document.activeElement?.closest?.('#file-tree');
     } catch (_) { return false; } })();
-    if (state.viewMode === 'edit' && !(_splitPath && _focusedPane === 'split') && !_cmSameNote && !_nellAlbero) {
+    if (state.viewMode === 'edit' && !(_splitPath && _focusedPane === 'split') && !_cmSameNote && !_nellAlbero && !_keepTreeFocus) {
       editor.focus();
       try { editor.setSelectionRange(tab.cursorPos || 0, tab.cursorPos || 0); } catch(_) {}
     }
@@ -3452,7 +3452,27 @@ function makeNoteEl(node, parentArray, folderPath = '') {
     if (handleTreeSelectClick(e, node.path)) return;
     // preventScroll: senza, il browser riporta la riga in vista e l'elenco sobbalza.
     try { el.focus({ preventScroll: true }); } catch (_) {}
-    openNote(node);
+    // Hold the focus on the row for the whole open (see _keepTreeFocus): the open path
+    // focuses the editor from a couple of places, the last one in a rAF after the render.
+    _keepTreeFocus = true;
+    Promise.resolve(openNote(node)).finally(() => {
+      // Let any trailing rAF editor.focus() run (and be suppressed) before we stop.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        _keepTreeFocus = false;
+        // The open re-renders the tree, so the row we clicked is replaced and focus drops to
+        // <body>. Settle it back onto the CURRENT row for this path (not the stale `el`) so the
+        // selection stays visible and Canc has its target — unless the user has meanwhile
+        // clicked into the editor or a field (then leave them).
+        try {
+          const a = document.activeElement;
+          const inEditable = a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+          if (!inEditable) {
+            const row = [...fileTree.querySelectorAll('[data-path]')].find(r => r.dataset.path === node.path);
+            if (row && row !== a) row.focus({ preventScroll: true });
+          }
+        } catch (_) {}
+      }));
+    });
   });
   el.addEventListener('contextmenu', e => showContextMenu(e, node));
 
@@ -5995,7 +6015,7 @@ function setViewMode(mode, opts) {
     // nell'editor aprendo la nota con un clic sulla riga — e il Canc finirebbe dentro
     // il testo invece di cancellare la nota (baco del 15/10 sopravvissuto a quella cura).
     const _inTree = (() => { try { return !!document.activeElement?.closest?.('#file-tree'); } catch (_) { return false; } })();
-    if (!(_splitPath && _focusedPane === 'split') && !_inTree) editor.focus();
+    if (!(_splitPath && _focusedPane === 'split') && !_inTree && !_keepTreeFocus) editor.focus();
     // The editor was display:none (clientWidth 0): the code-block boxes don't
     // exist / would be wrong. Rebuild them at the first usable layout.
     requestAnimationFrame(() => {
@@ -9216,6 +9236,15 @@ let _splitBasis = null;       // the pane's size (e.g. '35%' or '407px'), so reo
 let _splitOrient = 'right';   // 'right' = side-by-side, 'down' = stacked
 let _splitMode = 'edit';      // edit | view — follows the note's own toggle, for both halves
 let _focusedPane = 'main';    // main | split — last pane the user interacted with
+
+// True WHILE a note is being opened by a click on its tree row. The open path focuses the
+// editor from more than one place (setViewMode, and switchTab's post-render rAF), and a
+// transient blur between them makes an activeElement check unreliable — the rAF would read
+// "not in the tree" and grab focus back, sending Canc into the text. This intent flag is set
+// by the row click and cleared once the open has fully settled, and every editor.focus() on
+// the open path honours it. Obsidian-style: a row click SELECTS the note (focus stays on the
+// tree, so Canc deletes it); you click into the editor to type.
+let _keepTreeFocus = false;
 
 // orient: 'right' (side-by-side) or 'down' (stacked vertically).
 function openSplitView(path, name, orient = 'right') {
