@@ -5963,7 +5963,12 @@ function setViewMode(mode, opts) {
     refreshAttachmentChips();
     // Don't steal keyboard focus (and the header title, via the focusin
     // tracker) from the split pane on programmatic mode switches.
-    if (!(_splitPath && _focusedPane === 'split')) editor.focus();
+    // ...ne' dall'albero: switchTab chiama setViewMode('edit') PRIMA del suo guard
+    // rAF, quindi se non controllassimo anche qui il fuoco verrebbe portato
+    // nell'editor aprendo la nota con un clic sulla riga — e il Canc finirebbe dentro
+    // il testo invece di cancellare la nota (baco del 15/10 sopravvissuto a quella cura).
+    const _inTree = (() => { try { return !!document.activeElement?.closest?.('#file-tree'); } catch (_) { return false; } })();
+    if (!(_splitPath && _focusedPane === 'split') && !_inTree) editor.focus();
     // The editor was display:none (clientWidth 0): the code-block boxes don't
     // exist / would be wrong. Rebuild them at the first usable layout.
     requestAnimationFrame(() => {
