@@ -4221,15 +4221,6 @@ function showMassDeleteModal(info) {
   setTimeout(() => btn.cancel.focus(), 60);
 }
 
-function openNewTab() {
-  tabs.push({
-    path: null, name: 'Nuova nota', content: '',
-    isDirty: false, isNew: true,
-    viewMode: 'edit', scrollPos: 0, cursorPos: 0,
-  });
-  switchTab(tabs.length - 1);
-}
-
 // Expand a folder path and all its ancestors in the sidebar, so a freshly
 // created note/folder is visible nested inside its parent instead of being
 // hidden behind a collapsed folder (which looks like it landed at root).
@@ -4858,7 +4849,10 @@ async function addEmojiToNode(node, emoji) {
 // ─── Editor ───────────────────────────────────────────────────────────────────
 function setupEditor() {
   // Tab bar new button — opens blank tab; file is created on first save
-  $('tab-new-btn').addEventListener('click', () => openNewTab());
+  // The + makes a REAL note (same as the sidebar's new-note button and Ctrl+N), not a
+  // blank unsaved "Nuova nota" tab: that placeholder showed up as a note that wasn't on
+  // disk — a "nota fantasma" (serekkr, 19/10/2026). One path for "new note", no ghosts.
+  $('tab-new-btn').addEventListener('click', () => createNewNote(newNoteFolder()));
 
   // Focus / reading mode: hide the left column to maximise reading width.
   const FOCUS_KEY = 'amelie-focus-mode';
