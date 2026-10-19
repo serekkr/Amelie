@@ -709,6 +709,7 @@ const TRANSLATIONS = {
     // Context menu extra
     'ctx.new_note':             'Crea nota',
     'ctx.new_folder':           'Crea cartella',
+    'ctx.undo_delete':          'Annulla eliminazione',
     'ctx.open_new_tab':         'Apri in nuova tab',
     'ctx.duplicate':            'Fai una copia',
     'ctx.move_folder': 'Sposta cartella in…',
@@ -718,6 +719,8 @@ const TRANSLATIONS = {
     'move.already_here': 'È già qui',
     'tree.moved_one': 'Spostato “{name}” in “{folder}”',
     'tree.moved_one_root': 'Spostato “{name}” nella radice',
+    'tree.restored_one': 'Nota ripristinata: “{name}”',
+    'tree.restore_failed': 'Niente da ripristinare',
     'tab.split_right':          'Split a destra',
     'tab.split_down':           'Split in basso',
     'tab.close':                'Chiudi',
@@ -1652,6 +1655,7 @@ const TRANSLATIONS = {
     // Context menu extra
     'ctx.new_note':             'New note',
     'ctx.new_folder':           'New folder',
+    'ctx.undo_delete':          'Undo delete',
     'ctx.open_new_tab':         'Open in new tab',
     'ctx.duplicate':            'Make a copy',
     'ctx.move_folder': 'Move folder to…',
@@ -1661,6 +1665,8 @@ const TRANSLATIONS = {
     'move.already_here': 'Already here',
     'tree.moved_one': 'Moved “{name}” to “{folder}”',
     'tree.moved_one_root': 'Moved “{name}” to the root',
+    'tree.restored_one': 'Note restored: “{name}”',
+    'tree.restore_failed': 'Nothing to restore',
     'tab.split_right':          'Split right',
     'tab.split_down':           'Split down',
     'tab.close':                'Close',

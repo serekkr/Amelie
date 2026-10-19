@@ -4491,6 +4491,28 @@ function folderNodeAtPath(nodes, targetPath) {
 // loadTree()s, each reading the vault over IPC and rebuilding the tree, and sat there
 // for seconds (serekkr, 12/10/2026). The per-item work that must still happen — the
 // file itself, the manual order, the tabs that pointed at it — is unchanged.
+// The last single note deleted, or null. The bytes live in the main process (fs:undoDelete);
+// this only remembers whether there is something to OFFER — set on a single-note delete,
+// cleared by a folder / attachment / bulk delete so the menu never offers a stale undo.
+let _lastDeletedNote = null;
+
+// "Annulla eliminazione" (right-click on the tree's empty space). Rebuilds the last deleted
+// note from the bytes the main process stashed, reloads the tree and opens it.
+async function restoreLastDeletedNote() {
+  if (!_lastDeletedNote) return;
+  _lastDeletedNote = null;
+  let res = null;
+  try { res = await window.inkwell.undoDelete(); } catch (_) { res = null; }
+  if (!res || !res.path) { showToast(window.i18n.t('tree.restore_failed')); return; }
+  await loadTree();
+  const node = (function find(ns) {
+    for (const n of ns || []) { if (n.path === res.path) return n; const r = find(n.children); if (r) return r; }
+    return null;
+  })(state.notes);
+  if (node) try { await openNote(node); } catch (_) {}
+  showToast(window.i18n.t('tree.restored_one', { name: res.name || '' }));
+}
+
 async function deleteNote(node, { bulk = false } = {}) {
   // A NOTE goes through without asking — serekkr's choice of 12/10/2026, and what makes
   // it safe is that delete goes to the system trash (main.js: trashOrRemove).
@@ -4511,6 +4533,7 @@ async function deleteNote(node, { bulk = false } = {}) {
   }
   removeFromTreeOrder(node.path);   // forget the deleted item's manual order
   if (node.type === 'folder') {
+    _lastDeletedNote = null;   // a folder is not the single-note undo
     await window.inkwell.deleteFolder(node.path);
     // Close any open tabs that live inside the deleted folder
     const prefix = node.path + '/';
@@ -4536,6 +4559,7 @@ async function deleteNote(node, { bulk = false } = {}) {
     return;
   }
   if (isAttachNode(node)) {
+    _lastDeletedNote = null;   // an attachment is not the single-note undo
     await window.inkwell.deleteAttachment(node.attachmentName || node.name);
     const tabIdx = tabs.findIndex(t => t.type === node.type && t.attachmentName === (node.attachmentName || node.name));
     if (tabIdx !== -1) {
@@ -4546,6 +4570,9 @@ async function deleteNote(node, { bulk = false } = {}) {
     return;
   }
   await window.inkwell.deleteNote(node.path);
+  // Remember it for "Annulla eliminazione" — but only a single, deliberate delete. A bulk
+  // delete is a set we don't rebuild from one note, so it clears the offer instead.
+  _lastDeletedNote = bulk ? null : { path: node.path, name: node.name };
   // Close the tab if this note is open
   const tabIdx = tabs.findIndex(t => t.path === node.path);
   if (tabIdx !== -1) {
@@ -8784,6 +8811,11 @@ function setupContextMenu() {
     await createNewNote(folder);
   });
 
+  $('ctx-undo-delete')?.addEventListener('click', async () => {
+    menu.style.display = 'none';
+    await restoreLastDeletedNote();
+  });
+
   $('ctx-new-folder-here').addEventListener('click', async () => {
     const target = state.contextTarget;
     let parent = '';
@@ -8920,6 +8952,11 @@ function showContextMenu(e, node) {
   const menu = $('context-menu');
   const isFolder = node ? node.type === 'folder' : false;
   const hasTarget = !!node;
+  // "Annulla eliminazione" — only on the empty space (no target), and only when there is a
+  // single deleted note to put back.
+  const canUndo = !hasTarget && !!_lastDeletedNote;
+  const ctxUndo = $('ctx-undo-delete'); if (ctxUndo) ctxUndo.style.display = canUndo ? '' : 'none';
+  const ctxUndoSep = $('ctx-sep-undo'); if (ctxUndoSep) ctxUndoSep.style.display = canUndo ? '' : 'none';
   $('ctx-sep-create').style.display   = hasTarget ? '' : 'none';
   $('ctx-open-new-tab').style.display = (!hasTarget || isFolder) ? 'none' : '';
   $('ctx-rename').style.display       = hasTarget ? '' : 'none';

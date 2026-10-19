@@ -3351,13 +3351,51 @@ async function trashOrRemove(fullPath, { recursive = false } = {}) {
   else fs.rmSync(fullPath, { force: true });
 }
 
+// Undo-delete buffer (one level). The file goes to the system trash, which is the real
+// safety net; this just lets the UI put the LAST deleted note straight back without a trip
+// through the file manager. We keep the EXACT on-disk bytes — not readNoteContent(), which
+// strips the frontmatter — so `created`, colour/emoji metadata and at-rest encryption all
+// survive the round trip. One note only: the renderer decides when to OFFER it (never after
+// a folder/attachment/bulk delete), so a stale note here is simply never restored.
+let _lastDelNote = null;
+
 ipcMain.handle('fs:deleteNote', async (_, filePath) => {
   _internalWriteUntil = Date.now() + 1500;   // our own delete — the UI refreshes itself; don't fire the watcher
   const fullPath = noteFilePath(filePath);
   if (!fullPath.startsWith(NOTES_DIR + path.sep)) throw new Error('Invalid path');
+  // Stash the raw bytes BEFORE they go to the trash, so "Annulla eliminazione" can rebuild
+  // the note byte-for-byte.
+  try { _lastDelNote = { relPath: filePath, bytes: fs.readFileSync(fullPath) }; }
+  catch (_) { _lastDelNote = null; }
   await trashOrRemove(fullPath);
   if (syncManager) syncManager.scheduleSync();
   return true;
+});
+
+// Put the last deleted note back. Writes the exact bytes we stashed to the same path —
+// or, if something already sits there (sync, a new note of the same name), to a free
+// "name (1)" beside it, so an undo never clobbers. Returns the restored note's path+name.
+ipcMain.handle('fs:undoDelete', async () => {
+  const d = _lastDelNote;
+  if (!d || !d.bytes) return null;
+  _lastDelNote = null;
+  _internalWriteUntil = Date.now() + 1500;
+  let rel = d.relPath;
+  let full = noteFilePath(rel);
+  if (!full.startsWith(NOTES_DIR + path.sep)) return null;
+  if (fs.existsSync(full)) {
+    const ext = rel.toLowerCase().endsWith('.md') ? '.md' : '';
+    const base = ext ? rel.slice(0, -ext.length) : rel;
+    let i = 1, cand;
+    do { cand = `${base} (${i})${ext}`; i++; } while (fs.existsSync(noteFilePath(cand)));
+    rel = cand; full = noteFilePath(cand);
+  }
+  try {
+    fs.mkdirSync(path.dirname(full), { recursive: true });   // the note's folder may itself be gone
+    fs.writeFileSync(full, d.bytes);
+  } catch (e) { console.error('[undo] restore failed:', e && e.message); return null; }
+  if (syncManager) syncManager.scheduleSync();
+  return { path: rel, name: path.basename(rel).replace(/\.md$/i, '') };
 });
 
 // Gentle cap: a filename segment can't exceed the filesystem's ~255-byte limit.
