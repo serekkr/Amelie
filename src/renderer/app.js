@@ -18909,9 +18909,12 @@ function logSyncEventNotif(data) {
   // made a conflict copy — whatever the interval. Otherwise the half-minute passes
   // stay out of the bell, as before.
   const rep = data.op === 'twoway' ? data.report : null;
-  const rc = rep && rep.counts;
-  const repWorth = !!(rc && (data.manual || rc.total > 20 || rc.conflict || rc.delRemote || rc.delLocal));
-  if (data.quiet && !data.manual && data.status === 'ok' && !repWorth) return;
+  // serekkr, 20/10/2026: EVERY sync must leave a line in the Notifications section, the quiet
+  // automatic passes included (they used to be filtered out of the bell). To keep the list
+  // from filling with identical lines every interval, automatic entries COALESCE — a pass
+  // with the same outcome as the most recent entry refreshes that entry's time in place
+  // instead of stacking a new one. Manual runs always add a fresh line.
+  const coalesce = !data.manual;
   const key = data.manual ? 'manual' : 'auto';
   const label = window.i18n.t(`notif.${data.op}_${key}`);
   // No time in the text: every row already prints the full date and time
@@ -18919,7 +18922,7 @@ function logSyncEventNotif(data) {
   if (data.status === 'ok' && data.empty) {
     // The vault is empty, so nothing was copied or synced (see _vaultIsEmpty).
     const emptyKey = `notif.${data.op}_empty`;
-    addEventNotif(window.i18n.t(emptyKey), true, '', emptyKey);
+    addEventNotif(window.i18n.t(emptyKey), true, '', emptyKey, null, coalesce);
   } else if (data.status === 'ok' && data.unchanged) {
     // Nothing was copied because nothing had changed. Worth saying — silence here
     // reads exactly like a backup that failed to run — but it must not claim a copy
@@ -18929,11 +18932,11 @@ function logSyncEventNotif(data) {
     // different sentence — `data.manual` already tells the two apart.
     // The two-way pass that moved nothing files the same kind of line (asked 2026-09-30).
     const unchangedKey = `notif.${data.op === 'twoway' ? 'twoway' : 'backup'}_unchanged${data.manual ? '_manual' : ''}`;
-    addEventNotif(window.i18n.t(unchangedKey), true, '', unchangedKey);
+    addEventNotif(window.i18n.t(unchangedKey), true, '', unchangedKey, null, coalesce);
   } else if (data.status === 'ok') {
     // The destinations the engine actually wrote are recorded on the entry (they are
     // not shown: naming them read as noise on a local-only or WebDAV-only backup).
-    addEventNotif(label, true, data.dests, `notif.${data.op}_${key}`, rep);
+    addEventNotif(label, true, data.dests, `notif.${data.op}_${key}`, rep, coalesce);
   } else if (data.heldDeletes) {
     // Stopped before a mass delete, on purpose: say what it would have done, in the
     // user's language, instead of the engine's English message.
@@ -18983,15 +18986,24 @@ function _destNames(dests) {
 // done for them.
 // `report` ({ id, counts }) links the row to a sync report: its totals are shown on
 // the row, and a click opens it (openSyncReport).
-function addEventNotif(text, ok = true, dests = '', key = '', report = null) {
+function addEventNotif(text, ok = true, dests = '', key = '', report = null, coalesce = false) {
   // Switched off in Appearance: record NOTHING. Merely hiding the bell would
   // keep a backlog piling up behind it, to be dumped on the user the moment the
   // setting came back on — and an unread count with nowhere to show it.
   if (_notifHidden) return;
-  _eventNotifs.unshift({ text, key: key || undefined, ts: Date.now(), ok: !!ok, dests: Array.isArray(dests) ? dests : undefined, where: Array.isArray(dests) ? '' : (dests || ''),
-                        report: report && report.id ? { id: report.id, counts: report.counts } : undefined });
-  _eventNotifs = _eventNotifs.slice(0, 30);
-  _eventUnread++;
+  const entry = { text, key: key || undefined, ts: Date.now(), ok: !!ok,
+                  dests: Array.isArray(dests) ? dests : undefined, where: Array.isArray(dests) ? '' : (dests || ''),
+                  report: report && report.id ? { id: report.id, counts: report.counts } : undefined };
+  const top = _eventNotifs[0];
+  if (coalesce && top && top.key && key && top.key === key) {
+    // Same outcome as the most recent line (a recurring automatic sync) → refresh THAT line's
+    // time in place instead of stacking a duplicate, and don't bump the unread count for it.
+    _eventNotifs[0] = entry;
+  } else {
+    _eventNotifs.unshift(entry);
+    _eventNotifs = _eventNotifs.slice(0, 30);
+    _eventUnread++;
+  }
   _saveEventNotifs();
   updateNotifBell();
   if (_sidebarView === 'notifications') renderNotificationsView();
