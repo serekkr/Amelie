@@ -619,6 +619,8 @@
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
                       <button class="btn-test" id="btn-test-local" data-i18n="sync.test_path_btn">Testa percorso</button>
+                      <!-- Local only: Clear config sits next to "Test path", same level (serekkr, 20/10). -->
+                      <button class="btn-test" id="btn-clear-local" data-i18n="sync.clear_config">Cancella configurazione</button>
                     </div>
                     <div id="local-test-result" class="test-result"></div>
                   </div>
@@ -803,12 +805,6 @@
                   </div>
                   <div id="webdav-test-result" class="test-result"></div>
                 </div><!-- remote-webdav-block -->
-
-                <!-- Clear the saved details of the current destination (Samba / WebDAV / Local).
-                     Toggling sync/backup off no longer wipes them — this button does, on demand. -->
-                <div style="display:flex;justify-content:flex-end;border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
-                  <button class="btn-test" id="btn-clear-remote" data-i18n="sync.clear_config">Cancella configurazione</button>
-                </div>
               </div>
             </div><!-- bksec-remote -->
 
@@ -918,6 +914,13 @@
             </div><!-- bk-split -->
 
             <!-- (Ripristina vault moved up to the Destination-type line, top-right.) -->
+
+            <!-- Clear the saved details of the current destination. For Samba/WebDAV it sits at
+                 the very bottom, under the two-way-sync and backup panels; for LOCAL it moves
+                 next to "Test path" instead (see #btn-clear-local), so this row is hidden then. -->
+            <div id="clear-remote-row" style="display:flex;justify-content:flex-end;border-top:1px solid var(--border);padding-top:12px;margin-top:8px">
+              <button class="btn-test" id="btn-clear-remote" data-i18n="sync.clear_config">Cancella configurazione</button>
+            </div>
 
           </div><!-- tab-sync -->
 

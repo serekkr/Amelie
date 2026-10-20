@@ -10859,6 +10859,7 @@ function setupSettings() {
   // ONE Restore button for both a .tar.gz file AND a backup folder: the picker
   // reports which was chosen; route to the matching restore (both encrypted-aware).
   $('btn-clear-remote')?.addEventListener('click', () => { clearRemoteConfig().catch(() => {}); });
+  $('btn-clear-local')?.addEventListener('click', () => { clearRemoteConfig().catch(() => {}); });   // Local: same button, by "Test path"
   $('btn-restore-vault')?.addEventListener('click', async () => {
     const pick = await window.inkwell.vault.pickRestore();
     if (!pick || pick.canceled) return;
@@ -12900,6 +12901,9 @@ function applyRemoteUiVisibility() {
   document.querySelectorAll('#remote-kind-seg .vpn-type-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.remote === kind));
   show('remote-local-block', local);
+  // Clear config: the bottom row is for Samba/WebDAV; on Local it lives next to "Test path"
+  // inside remote-local-block, so hide the bottom one there to avoid two.
+  show('clear-remote-row', !local);
   show('remote-samba-block', kind === 'samba');
   show('remote-webdav-block', kind === 'webdav');
   show('remote-vpn-wizard', kind === 'samba');       // always available: add/manage a VPN (optional)
