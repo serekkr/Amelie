@@ -2028,10 +2028,11 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
      "cosi non devo fare trascinare la finestra e si vede tutto dentro"). */
   width: min(1200px, 88vw);
   height: min(760px, 88vh);
+  min-width: 520px; min-height: 420px;
   max-width: 96vw; max-height: 94vh;
-  /* Fixed size: at this width everything fits, so there is no reason to resize it — and the
-     user asked that it not be made smaller or bigger (serekkr, 20/10/2026). */
-  resize: none; overflow: hidden;
+  /* Resizable again (serekkr, 20/10/2026): the 1200px default fits everything, but the
+     window can be dragged wider/narrower; the drag lasts for the session. */
+  resize: both; overflow: hidden;
 }
 /* Darker Settings panel (requested): the panel drops to --bg-0 and the inner
    boxes to --bg-1 (one step up, for elevation). Done via variables so it stays
