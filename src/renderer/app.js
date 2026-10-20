@@ -12714,6 +12714,10 @@ async function openSettings() {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === 'security'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-security'));
   $('settings-modal').style.display = 'flex';
+  // A manual resize (CSS resize: both) leaves width/height inline on the panel; clear them on
+  // every open so Settings always comes up at the default 1200px, never the last dragged size
+  // (serekkr, 20/10/2026 — the resize must not be remembered).
+  { const p = document.querySelector('#settings-modal .modal-panel'); if (p) { p.style.width = ''; p.style.height = ''; } }
   // Vault is the default active tab: populate path/encryption right away.
   if (typeof openSecurityTab === 'function') openSecurityTab();
   window.inkwell.appVersion().then(v => {
@@ -12724,6 +12728,9 @@ async function openSettings() {
 
 function closeSettings() {
   $('settings-modal').style.display = 'none';
+  // Back to the default size on close: drop any inline width/height left by a manual resize,
+  // so the next open is the default, never the last dragged size (serekkr, 20/10/2026).
+  { const p = document.querySelector('#settings-modal .modal-panel'); if (p) { p.style.width = ''; p.style.height = ''; } }
   stopWgStatusPolling();
   // A VPN imported in this session but never committed (no "Salva
   // configurazione"/"Salva connessione") is DISCARDED on close: form cleared,
