@@ -10596,7 +10596,7 @@ function setupSettings() {
     });
   });
   const ovDrop = $('ovpn-drop-zone'), ovFile = $('ovpn-file-input'), ovLabel = $('ovpn-drop-label');
-  const loadOvpn = (f) => { const r = new FileReader(); r.onload = () => { _ovpnContent = String(r.result || ''); if (ovLabel) ovLabel.textContent = '✓ ' + f.name; resetVpnBackupModeFlags(); state._ovpnOrigin = 'backup'; importOvpnNow(); }; r.readAsText(f); };
+  const loadOvpn = (f) => { if (!_vpnExtOk(f && f.name, ['.ovpn'])) return; const r = new FileReader(); r.onload = () => { _ovpnContent = String(r.result || ''); if (ovLabel) ovLabel.textContent = '✓ ' + f.name; resetVpnBackupModeFlags(); state._ovpnOrigin = 'backup'; importOvpnNow(); }; r.readAsText(f); };
   ovDrop?.addEventListener('click', () => ovFile?.click());
   ovFile?.addEventListener('change', e => { if (e.target.files[0]) loadOvpn(e.target.files[0]); e.target.value = ''; });
   ovDrop?.addEventListener('dragover', e => { e.preventDefault(); ovDrop.classList.add('drag-over'); });
@@ -10610,7 +10610,7 @@ function setupSettings() {
   $('tw-ovpn-reconfigure')?.addEventListener('click', reconfigureOvpnCreds);
   // OpenVPN in the SYNC wizard: same shared config (_ovpnContent), its own drop zone.
   const twOvDrop = $('tw-ovpn-drop-zone'), twOvFile = $('tw-ovpn-file-input'), twOvLabel = $('tw-ovpn-drop-label');
-  const twLoadOvpn = (f) => { const r = new FileReader(); r.onload = () => { _ovpnContent = String(r.result || ''); if (twOvLabel) twOvLabel.textContent = '✓ ' + f.name; resetVpnBackupModeFlags(); state._ovpnOrigin = 'sync'; importOvpnNow(); }; r.readAsText(f); };
+  const twLoadOvpn = (f) => { if (!_vpnExtOk(f && f.name, ['.ovpn'])) return; const r = new FileReader(); r.onload = () => { _ovpnContent = String(r.result || ''); if (twOvLabel) twOvLabel.textContent = '✓ ' + f.name; resetVpnBackupModeFlags(); state._ovpnOrigin = 'sync'; importOvpnNow(); }; r.readAsText(f); };
   twOvDrop?.addEventListener('click', () => twOvFile?.click());
   twOvFile?.addEventListener('change', e => { if (e.target.files[0]) twLoadOvpn(e.target.files[0]); e.target.value = ''; });
   twOvDrop?.addEventListener('dragover', e => { e.preventDefault(); twOvDrop.classList.add('drag-over'); });
@@ -11234,6 +11234,7 @@ function setupTwowaySetup() {
   let twWgConf = null;
   const drop = $('tw-wg-drop-zone'), file = $('tw-wg-file-input'), label = $('tw-wg-drop-label');
   const loadFile = (f) => {
+    if (!_vpnExtOk(f && f.name, ['.conf'])) return;
     const r = new FileReader();
     r.onload = async () => {
       twWgConf = String(r.result || '');
@@ -11678,7 +11679,18 @@ function stopWgStatusPolling() {
   if (_wgStatusTimer) { clearInterval(_wgStatusTimer); _wgStatusTimer = null; }
 }
 
+// VPN import whitelist (serekkr, 20/10/2026): WireGuard accepts only .conf, OpenVPN only
+// .ovpn. The <input accept> is just a picker hint and does nothing for drag-drop, so this
+// guards BOTH paths. Rejects the wrong extension with a toast instead of trying to parse it.
+function _vpnExtOk(name, exts) {
+  const n = String(name || '').toLowerCase();
+  if (exts.some(e => n.endsWith(e))) return true;
+  try { showToast('✗ ' + window.i18n.t('sync.vpn_wrong_ext', { ext: exts.join(', ') })); } catch (_) {}
+  return false;
+}
+
 function loadWgFile(file) {
+  if (!_vpnExtOk(file && file.name, ['.conf'])) return;
   const reader = new FileReader();
   reader.onload = async e => {
     const confContent = e.target.result;
