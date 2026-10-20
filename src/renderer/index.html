@@ -588,15 +588,23 @@
               <div class="sync-section-body" id="ssb-remote" style="display:flex;flex-direction:column;gap:12px">
                 <p class="wstep-desc" data-i18n="sync.remote_dest_desc">Scegli e configura UNA destinazione remota. Backup e sincronizzazione la condividono, in cartelle diverse.</p>
 
-                <!-- Kind selector: Samba OR WebDAV -->
-                <div class="field-group">
-                  <label data-i18n="sync.remote_kind">Tipo destinazione</label>
-                  <div class="vpn-type-seg" id="remote-kind-seg">
-                    <button type="button" class="vpn-type-btn" data-remote="local">Local</button>
-                    <button type="button" class="vpn-type-btn active" data-remote="samba">Samba</button>
-                    <button type="button" class="vpn-type-btn" data-remote="webdav">WebDAV</button>
+                <!-- Kind selector (Local / Samba / WebDAV) on the left, "Restore vault" on
+                     the RIGHT of the same line — moved up here from the bottom so it is clearly
+                     visible (serekkr, 20/10/2026). -->
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">
+                  <div class="field-group" style="margin:0">
+                    <label data-i18n="sync.remote_kind">Tipo destinazione</label>
+                    <div class="vpn-type-seg" id="remote-kind-seg">
+                      <button type="button" class="vpn-type-btn" data-remote="local">Local</button>
+                      <button type="button" class="vpn-type-btn active" data-remote="samba">Samba</button>
+                      <button type="button" class="vpn-type-btn" data-remote="webdav">WebDAV</button>
+                    </div>
+                    <input type="hidden" id="cfg-remote-kind" value="samba" />
                   </div>
-                  <input type="hidden" id="cfg-remote-kind" value="samba" />
+                  <div id="restore-block" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+                    <button class="btn-save" id="btn-restore-vault" data-i18n="sync.restore_title" title="Load a .tar.gz archive or a backup folder. Your current vault is kept aside." data-i18n-title="sync.restore_hint">Ripristina vault</button>
+                    <div id="restore-result" class="test-result" style="display:none"></div>
+                  </div>
                 </div>
 
                 <!-- ── LOCAL block (backup only) — shown when kind=local ── -->
@@ -903,17 +911,7 @@
             </div><!-- bksec-backup -->
             </div><!-- bk-split -->
 
-            <!-- ══════════ SECTION 4 — Ripristino (distruttivo) ══════════ -->
-            <div id="restore-block" style="border:1px solid var(--border);border-radius:10px;background:var(--bg-2,rgba(255,255,255,0.02));padding:14px;display:flex;flex-direction:column;gap:10px">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-                <div style="display:flex;flex-direction:column;gap:2px">
-                  <span data-i18n="sync.restore_title">Ripristina vault</span>
-                  <span style="font-size:var(--settings-fs);font-family:var(--ui-font);color:var(--text-1)" data-i18n="sync.restore_hint">Load a .tar.gz archive or a backup folder. Your current vault is kept aside.</span>
-                </div>
-                <button class="btn-save" id="btn-restore-vault" data-i18n="sync.restore_btn">Restore</button>
-              </div>
-              <div id="restore-result" class="test-result" style="display:none"></div>
-            </div>
+            <!-- (Ripristina vault moved up to the Destination-type line, top-right.) -->
 
           </div><!-- tab-sync -->
 

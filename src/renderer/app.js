@@ -12852,6 +12852,24 @@ function buildFormFromConfig(cfg) {
   };
 }
 
+// When BOTH two-way sync and remote backup are off, there is no destination in use, so the
+// saved connection credentials should not linger (serekkr, 20/10/2026 — the Samba params
+// stayed after the VPN was removed). Clears the Samba + WebDAV fields (and the IP widget's
+// octets); the folder names are left as harmless defaults. Local is its own backup-only kind,
+// untouched. Returns true if it cleared anything. saveSettings() then serialises them empty.
+function clearRemoteCredsIfAllOff() {
+  if ($('cfg-sync-on')?.checked || $('cfg-backup-remote-on')?.checked) return false;
+  if (currentRemoteKind() === 'local') return false;
+  let any = false;
+  ['cfg-smb-ip', 'cfg-smb-share', 'cfg-smb-user', 'cfg-smb-pass',
+   'cfg-webdav-url', 'cfg-webdav-user', 'cfg-webdav-pass'].forEach(id => {
+    const el = $(id); if (el && el.value) { el.value = ''; any = true; }
+  });
+  const g = document.querySelector('.ip-group[data-ip="cfg-smb-ip"]');
+  if (g) g.querySelectorAll('.ip-oct').forEach(o => { if (o.value) { o.value = ''; any = true; } });
+  return any;
+}
+
 function currentRemoteKind() { const v = $('cfg-remote-kind')?.value; return v === 'webdav' ? 'webdav' : v === 'local' ? 'local' : 'samba'; }
 
 // A VPN is "in use" for the Samba destination when a profile is loaded — in the
@@ -12945,6 +12963,9 @@ function setupRemoteUi() {
   });
   ['cfg-backup-remote-on', 'cfg-sync-on'].forEach(id =>
     $(id)?.addEventListener('change', () => {
+      // Both sync AND backup off → no destination is in use, so wipe its saved credentials
+      // instead of leaving stale Samba/WebDAV params behind (serekkr, 20/10/2026).
+      clearRemoteCredsIfAllOff();
       saveSettings().then(() => { try { updateActionNowButtons(); } catch (_) {} }).catch(() => {});
     }));
   ['cfg-backup-folder', 'cfg-sync-folder'].forEach(id => {

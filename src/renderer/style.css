@@ -2128,7 +2128,10 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
    spacing between fields — the default 12px felt cramped (user request). */
 #tw-webdav-panel, #ssb-webdav { gap: 18px; }
 .toggle-row { flex-direction: row; align-items: center; justify-content: space-between; }
-.toggle { position: relative; display: inline-block; width: 38px; height: 20px; }
+/* flex-shrink:0 — in a toggle-row the switch is a flex item; a long label that wraps
+   (e.g. "Copie-conflitto (On = …)") squeezed it from 38px down to ~26px and the ON knob
+   poked out past the pill (serekkr, foto 5, 20/10/2026). It must keep its fixed size. */
+.toggle { position: relative; display: inline-block; width: 38px; height: 20px; flex-shrink: 0; }
 .toggle input { opacity: 0; width: 0; height: 0; }
 /* Track OFF: --border-light (NOT --bg-4): with the near-black palette --bg-4 was
    too dark and the pill vanished (only the knob was visible). OFF knob
