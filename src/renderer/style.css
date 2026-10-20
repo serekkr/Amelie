@@ -2024,11 +2024,14 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
      colors" rows) fits WITHOUT scrolling or manual resizing: measured via CDP —
      with the fonts enlarged (=Shortcuts) it needs ~792px. A touch
      wider (1160px). */
-  width: min(960px, 70vw);    /* -25% (was 1280/94vw): less wide */
-  height: min(713px, 83vh);   /* -10% (was 792/92vh): less tall at the bottom */
-  min-width: 520px; min-height: 420px;
+  /* Wider by default so everything fits without dragging the window (serekkr, 20/10/2026 —
+     "cosi non devo fare trascinare la finestra e si vede tutto dentro"). */
+  width: min(1200px, 88vw);
+  height: min(760px, 88vh);
   max-width: 96vw; max-height: 94vh;
-  resize: both; overflow: hidden;
+  /* Fixed size: at this width everything fits, so there is no reason to resize it — and the
+     user asked that it not be made smaller or bigger (serekkr, 20/10/2026). */
+  resize: none; overflow: hidden;
 }
 /* Darker Settings panel (requested): the panel drops to --bg-0 and the inner
    boxes to --bg-1 (one step up, for elevation). Done via variables so it stays
