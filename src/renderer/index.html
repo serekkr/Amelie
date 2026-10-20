@@ -803,6 +803,12 @@
                   </div>
                   <div id="webdav-test-result" class="test-result"></div>
                 </div><!-- remote-webdav-block -->
+
+                <!-- Clear the saved details of the current destination (Samba / WebDAV / Local).
+                     Toggling sync/backup off no longer wipes them — this button does, on demand. -->
+                <div style="display:flex;justify-content:flex-end;border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+                  <button class="btn-test" id="btn-clear-remote" data-i18n="sync.clear_config">Cancella configurazione</button>
+                </div>
               </div>
             </div><!-- bksec-remote -->
 

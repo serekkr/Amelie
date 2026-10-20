@@ -10858,6 +10858,7 @@ function setupSettings() {
 
   // ONE Restore button for both a .tar.gz file AND a backup folder: the picker
   // reports which was chosen; route to the matching restore (both encrypted-aware).
+  $('btn-clear-remote')?.addEventListener('click', () => { clearRemoteConfig().catch(() => {}); });
   $('btn-restore-vault')?.addEventListener('click', async () => {
     const pick = await window.inkwell.vault.pickRestore();
     if (!pick || pick.canceled) return;
@@ -12852,22 +12853,29 @@ function buildFormFromConfig(cfg) {
   };
 }
 
-// When BOTH two-way sync and remote backup are off, there is no destination in use, so the
-// saved connection credentials should not linger (serekkr, 20/10/2026 — the Samba params
-// stayed after the VPN was removed). Clears the Samba + WebDAV fields (and the IP widget's
-// octets); the folder names are left as harmless defaults. Local is its own backup-only kind,
-// untouched. Returns true if it cleared anything. saveSettings() then serialises them empty.
-function clearRemoteCredsIfAllOff() {
-  if ($('cfg-sync-on')?.checked || $('cfg-backup-remote-on')?.checked) return false;
-  if (currentRemoteKind() === 'local') return false;
-  let any = false;
-  ['cfg-smb-ip', 'cfg-smb-share', 'cfg-smb-user', 'cfg-smb-pass',
-   'cfg-webdav-url', 'cfg-webdav-user', 'cfg-webdav-pass'].forEach(id => {
-    const el = $(id); if (el && el.value) { el.value = ''; any = true; }
-  });
-  const g = document.querySelector('.ip-group[data-ip="cfg-smb-ip"]');
-  if (g) g.querySelectorAll('.ip-oct').forEach(o => { if (o.value) { o.value = ''; any = true; } });
-  return any;
+// "Clear config" button: wipe the SAVED details of the current destination on demand
+// (serekkr, 20/10/2026 — toggling sync/backup off must NOT touch them; this button is the
+// only thing that does). Clears whichever kind is shown — Samba (ip/share/user/pass + the IP
+// octets), WebDAV (url/user/pass) or Local (path) — plus the shared folder fields, turns the
+// sync/backup toggles off (a blank destination can't run), then saves the emptied config.
+async function clearRemoteConfig() {
+  const kind = currentRemoteKind();
+  if (!(await showConfirmModal(window.i18n.t('sync.clear_config_confirm')))) return;
+  if (kind === 'samba') {
+    ['cfg-smb-ip', 'cfg-smb-share', 'cfg-smb-user', 'cfg-smb-pass'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+    const g = document.querySelector('.ip-group[data-ip="cfg-smb-ip"]');
+    if (g) g.querySelectorAll('.ip-oct').forEach(o => (o.value = ''));
+  } else if (kind === 'webdav') {
+    ['cfg-webdav-url', 'cfg-webdav-user', 'cfg-webdav-pass'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+  } else if (kind === 'local') {
+    const el = $('cfg-local-path'); if (el) el.value = '';
+  }
+  ['cfg-sync-folder', 'cfg-backup-folder'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+  ['cfg-sync-on', 'cfg-backup-remote-on'].forEach(id => { const el = $(id); if (el) el.checked = false; });
+  await saveSettings();
+  try { updateActionNowButtons(); } catch (_) {}
+  try { applyRemoteUiVisibility(); } catch (_) {}
+  showToast('✓ ' + window.i18n.t('sync.clear_config_done'));
 }
 
 function currentRemoteKind() { const v = $('cfg-remote-kind')?.value; return v === 'webdav' ? 'webdav' : v === 'local' ? 'local' : 'samba'; }
@@ -12963,9 +12971,9 @@ function setupRemoteUi() {
   });
   ['cfg-backup-remote-on', 'cfg-sync-on'].forEach(id =>
     $(id)?.addEventListener('change', () => {
-      // Both sync AND backup off → no destination is in use, so wipe its saved credentials
-      // instead of leaving stale Samba/WebDAV params behind (serekkr, 20/10/2026).
-      clearRemoteCredsIfAllOff();
+      // Turning sync/backup off leaves the saved destination details in place now — clearing
+      // them is a deliberate action on the "Clear config" button, not a side effect of a
+      // toggle (serekkr, 20/10/2026).
       saveSettings().then(() => { try { updateActionNowButtons(); } catch (_) {} }).catch(() => {});
     }));
   ['cfg-backup-folder', 'cfg-sync-folder'].forEach(id => {
