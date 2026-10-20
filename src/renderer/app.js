@@ -10569,6 +10569,11 @@ function setupSettings() {
     state._vpnStaged = true;   // provisional until "Salva configurazione"/"Salva connessione"
     showOvpnAlreadyRows(state._ovpnOrigin);
     updateVpnConfiguredBadge();
+    // Show the shared VPN actions row (Modifica / Testa / RIMUOVI): it is driven by
+    // updateWgConfiguredView, which WireGuard calls after its import but OpenVPN did not —
+    // so an imported OpenVPN had no Remove button (serekkr, 20/10/2026).
+    try { updateWgConfiguredView(); } catch (_) {}
+    try { updateTwowayConnView(); } catch (_) {}
   };
   // Credentials typed/changed AFTER the import stick without a test. The fields
   // stay VISIBLE until a connection test succeeds (the test is what proves the
@@ -11569,8 +11574,12 @@ async function updateWgConfiguredView(forceEdit = false) {
   // Summary ONLY when the BACKUP is actually configured. If just a .conf exists
   // (e.g. loaded from the Sync tab) the wizard is shown with a "config already
   // present" note so the user sees it's there and can reuse/remove it.
+  // A VPN is "configured" if EITHER a WireGuard .conf or an OpenVPN config is present:
+  // getConf reports them separately (exists = WireGuard, ovpnExists = OpenVPN). Treating
+  // only WireGuard as configured left an imported OpenVPN with no actions row — no Remove
+  // button (serekkr, 20/10/2026).
   let confExists = false;
-  try { const c = await window.inkwell.wg.getConf(); confExists = !!(c && c.exists); } catch (_) {}
+  try { const c = await window.inkwell.wg.getConf(); confExists = !!(c && (c.exists || c.ovpnExists)); } catch (_) {}
   // "Test connection" stays grey until a VPN (WireGuard/OpenVPN) config is loaded.
   const runTestBtn = $('btn-run-test');
   if (runTestBtn) runTestBtn.classList.toggle('tc-disabled', !confExists);
@@ -13219,8 +13228,12 @@ async function updateTwowayConnView(forceEdit = false) {
   // Wizard mode: detect whether a WireGuard .conf is already imported (e.g. from
   // the Backup, or a previous load) so the user can REUSE it instead of
   // re-importing. Also prefill Samba fields from any known backup connection.
+  // A VPN is "configured" if EITHER a WireGuard .conf or an OpenVPN config is present:
+  // getConf reports them separately (exists = WireGuard, ovpnExists = OpenVPN). Treating
+  // only WireGuard as configured left an imported OpenVPN with no actions row — no Remove
+  // button (serekkr, 20/10/2026).
   let confExists = false;
-  try { const c = await window.inkwell.wg.getConf(); confExists = !!(c && c.exists); } catch (_) {}
+  try { const c = await window.inkwell.wg.getConf(); confExists = !!(c && (c.exists || c.ovpnExists)); } catch (_) {}
   const drop = $('tw-wg-drop-zone'), already = $('tw-wg-already');
   // Show the "config loaded" row (with Show/Modify config · Import another ·
   // Remove) whenever a WireGuard config exists — even if it was imported HERE in
