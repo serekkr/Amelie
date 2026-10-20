@@ -12773,7 +12773,10 @@ function buildSyncConfig(form, prev) {
         folder: false, archive: true, archiveOnly: true, keepLast, enabled: remoteOn }
     : { ...(pS.webdav || {}), enabled: false };
   const local = {
-    enabled: !!form.localOn, path: form.localPath || '',
+    // A local destination with no path is not really configured: saving it enabled makes
+    // the scheduler throw "percorso mancante" and file a bogus "backup failed" (serekkr,
+    // 20/10/2026). Enabled only WITH a path.
+    enabled: !!form.localOn && !!String(form.localPath || '').trim(), path: form.localPath || '',
     folder: false, archive: true, archiveOnly: true,
     intervalMinutes: form.backupIntervalMinutes, keepLast,
   };

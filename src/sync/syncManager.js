@@ -106,7 +106,10 @@ class SyncManager {
   /** True when at least one backup destination is enabled. */
   _anyBackupDestination() {
     const s = this.config?.sync || {};
-    return !!(s.local?.enabled || s.vpn?.enabled || s.samba?.enabled || s.sambaLan?.enabled || s.webdav?.enabled);
+    // A local backup with no path is NOT a destination: it would only throw "percorso
+    // mancante" every run and file a bogus "backup failed" (serekkr, 20/10/2026 — happens
+    // after clearing the Local config). Require the path for local to count.
+    return !!((s.local?.enabled && s.local?.path) || s.vpn?.enabled || s.samba?.enabled || s.sambaLan?.enabled || s.webdav?.enabled);
   }
 
   // Settings are autosaved on every toggle and every keystroke, so setting a
@@ -701,7 +704,7 @@ class SyncManager {
     const s = this.config.sync || {};
     // Backup timer (one-way: local / WireGuard+Samba / WebDAV) on the backup
     // frequency (default hourly — a sensible backup cadence).
-    const backupOn = s.local?.enabled || s.vpn?.enabled || s.samba?.enabled || s.sambaLan?.enabled || s.webdav?.enabled;
+    const backupOn = (s.local?.enabled && s.local?.path) || s.vpn?.enabled || s.samba?.enabled || s.sambaLan?.enabled || s.webdav?.enabled;
     if (backupOn) {
       const min = this._backupIntervalMinutes();
       this._backupTimer = setInterval(() => this.runBackup(), min * 60 * 1000);
@@ -898,7 +901,7 @@ class SyncManager {
     if (this._busy()) return { success: false, error: 'Already syncing' };
     // No enabled destination → don't pretend "backup complete". Tell the user.
     const s = this.config.sync || {};
-    const anyEnabled = !!(s.local?.enabled || this._sambaConfig() || s.webdav?.enabled);
+    const anyEnabled = !!((s.local?.enabled && s.local?.path) || this._sambaConfig() || s.webdav?.enabled);
     if (!anyEnabled) {
       this._setStatus('idle');
       return { success: false, noDestination: true,
@@ -916,7 +919,7 @@ class SyncManager {
     // whole run writing nothing, which the user has to be told about.
     const writesSomething = (d) => !!d && (d.folder !== false || !!d.archive || !!d.archiveOnly);
     const sc = this._sambaConfig();
-    const anyFormat = (s.local?.enabled && writesSomething(s.local))
+    const anyFormat = (s.local?.enabled && s.local?.path && writesSomething(s.local))
       || (s.webdav?.enabled && writesSomething(s.webdav))
       || (sc?.enabled && writesSomething(sc));
     if (!anyFormat) {
@@ -1407,8 +1410,10 @@ class SyncManager {
       if (wcfg.folder !== false && !wcfg.archiveOnly) results.webdav = await this._syncWebDAV();
       if (wcfg.archive) results.webdavArchive = await this._archiveToWebDAV();
     }
-    // Local folder backup (one-way) (+ tar.gz if requested)
-    if (this.config.sync?.local?.enabled) {
+    // Local folder backup (one-way) (+ tar.gz if requested). A path is required — an
+    // enabled-but-pathless local is skipped quietly instead of throwing (the gates above
+    // already keep a pathless local from counting as a destination; this is defence).
+    if (this.config.sync?.local?.enabled && this.config.sync.local.path) {
       results.local = await this._syncLocal();
     }
     // Samba / WireGuard share — config lives under sync.vpn (or legacy sync.samba).
