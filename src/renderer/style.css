@@ -2078,6 +2078,10 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .field-group label {
   font-size: 12px; color: var(--text-2); font-family: var(--editor-font);
   text-transform: uppercase; letter-spacing: .05em;
+  /* Roomier line box so the ascender tops (P, A, d, t, k…) are never clipped: the default
+     tight line cut "Username" / "Password / App token" at the top on a scaled display
+     (serekkr, foto 6, 20/10/2026). */
+  line-height: 1.5;
 }
 .field-group small { font-size: 12px; color: var(--text-3); text-transform: none; letter-spacing: 0; font-family: var(--ui-font); }
 /* Toggle-row descriptive labels read as normal sentences, not ALL-CAPS. */
