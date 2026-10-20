@@ -79,7 +79,7 @@
      not change size, and nothing in the row did.
      Whole pixels on purpose — a half lands the row edges, and with them the nesting
      hairlines, between device pixels on a scaled display. */
-  --tree-item-py: 3px;
+  --tree-item-py: 5px;   /* un filo piu' d'aria tra note/cartelle (serekkr, 20/10): erano un po' attaccate */
   --tree-font-size: 13px;
   /* La dimensione di TUTTI i titoli di pannello: il percorso sopra la nota, e i titoli
      di immagine, media e PDF. Una variabile e non quattro numeri perche' erano appunto
