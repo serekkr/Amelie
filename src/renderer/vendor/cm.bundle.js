@@ -19966,6 +19966,40 @@
       return builder.finish();
     }
   }, { decorations: (v) => v.decorations });
+  var inlineCodeMark = Decoration.mark({ class: "cm-inline-code" });
+  var INLINE_CODE_RE = /(`{1,2})(.+?)\1/g;
+  var inlineCodePlugin = ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.decorations = this.build(view);
+    }
+    update(u) {
+      if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view);
+    }
+    build(view) {
+      const builder = new RangeSetBuilder();
+      const doc2 = view.state.doc;
+      const vis = view.visibleRanges;
+      if (!vis.length) return builder.finish();
+      let fences = null;
+      try {
+        fences = view.state.field(fenceField);
+      } catch (_) {
+      }
+      const firstLn = doc2.lineAt(vis[0].from).number;
+      const lastLn = doc2.lineAt(vis[vis.length - 1].to).number;
+      for (let ln = firstLn; ln <= lastLn; ln++) {
+        const line = doc2.line(ln);
+        INLINE_CODE_RE.lastIndex = 0;
+        let m;
+        while (m = INLINE_CODE_RE.exec(line.text)) {
+          const s = line.from + m.index, e = s + m[0].length;
+          if (!_posInFencedCode(s, fences, doc2)) builder.add(s, e, inlineCodeMark);
+          if (INLINE_CODE_RE.lastIndex === m.index) INLINE_CODE_RE.lastIndex++;
+        }
+      }
+      return builder.finish();
+    }
+  }, { decorations: (v) => v.decorations });
   function _selectedLength(state) {
     try {
       let n = 0;
@@ -20305,6 +20339,7 @@
             linkColorPlugin,
             tagColorPlugin,
             tickPlugin,
+            inlineCodePlugin,
             searchField,
             updateListener2
           ]

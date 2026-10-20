@@ -652,6 +652,44 @@ const tickPlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: (v) => v.decorations });
 
+// ── Inline code chip (edit mode) ─────────────────────────────────────────────
+// A span wrapped in ONE or TWO backticks — `code` or ``co`de`` — gets the same
+// tint as a fenced block, the way Obsidian shows it in live preview (serekkr,
+// 20/10/2026). Cheap regex over the visible ranges only (like the tag/link
+// plugins — NOT the markdown syntax tree, which is the O(doc) cost this editor
+// avoids), line by line so a match never spans a newline. SKIPPED inside fenced
+// code (a backtick there is content, not a span delimiter). `{1,2}` caps the run
+// so a ``` fence line is never half-matched as a double-tick span, and the \1
+// backreference closes on the SAME number of ticks it opened with. The whole
+// run, backticks included, carries the chip (one mark, left to right → the
+// RangeSetBuilder gets its ranges already sorted).
+const inlineCodeMark = Decoration.mark({ class: 'cm-inline-code' });
+const INLINE_CODE_RE = /(`{1,2})(.+?)\1/g;
+const inlineCodePlugin = ViewPlugin.fromClass(class {
+  constructor(view) { this.decorations = this.build(view); }
+  update(u) { if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view); }
+  build(view) {
+    const builder = new RangeSetBuilder();
+    const doc = view.state.doc;
+    const vis = view.visibleRanges;
+    if (!vis.length) return builder.finish();
+    let fences = null; try { fences = view.state.field(fenceField); } catch (_) {}
+    const firstLn = doc.lineAt(vis[0].from).number;
+    const lastLn  = doc.lineAt(vis[vis.length - 1].to).number;
+    for (let ln = firstLn; ln <= lastLn; ln++) {
+      const line = doc.line(ln);
+      INLINE_CODE_RE.lastIndex = 0;
+      let m;
+      while ((m = INLINE_CODE_RE.exec(line.text))) {
+        const s = line.from + m.index, e = s + m[0].length;
+        if (!_posInFencedCode(s, fences, doc)) builder.add(s, e, inlineCodeMark);
+        if (INLINE_CODE_RE.lastIndex === m.index) INLINE_CODE_RE.lastIndex++;   // zero-length safety
+      }
+    }
+    return builder.finish();
+  }
+}, { decorations: (v) => v.decorations });
+
 // Total length selected across every range. The guards below compare a deletion against
 // what the user had selected; measuring only `selection.main` would understate it if the
 // selection ever had several ranges. It cannot today — this editor does not enable
@@ -1120,6 +1158,7 @@ window.AmelieCM = {
           linkColorPlugin,
           tagColorPlugin,
           tickPlugin,
+          inlineCodePlugin,
           searchField,
           updateListener,
         ],

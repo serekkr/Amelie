@@ -1808,8 +1808,10 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
      against 110. It was the box all along, so the box is what goes. The tint stays (it
      is what marks the word as code) and the horizontal padding stays with it, since
      width costs nothing here. */
-  background: var(--bg-2); border: none;
-  border-radius: 3px; padding: 0 4px; color: var(--accent);
+  /* Same tint as a fenced block (--code-bg), matching edit mode's inline chip so the word
+     keeps its colour across the edit↔view toggle (serekkr, 20/10/2026 — was --bg-2). */
+  background: var(--code-bg); border: none;
+  border-radius: 4px; padding: 0 4px; color: var(--accent);
 }
 #preview-content pre {
   position: relative;
@@ -4364,6 +4366,14 @@ kbd {
    mark. Padding, so the space is the same in every font the picker offers —
    the widened-glyph font this replaces is described where it used to live. */
 #cm-mount .cm-tick { padding: 0 1px; }
+
+/* Inline code `like this` (one or two backticks) carries the same tint as a fenced block
+   while you type, the way Obsidian shows it in live preview (serekkr, 20/10/2026). The whole
+   run including the backticks sits on the chip; the accent colour marks it as code. Padding
+   stays tiny (and only horizontal) so the chip never changes the line height CM measures. */
+#cm-mount .cm-inline-code {
+  background: var(--code-bg); border-radius: 4px; padding: 0 3px; color: var(--accent);
+}
 
 /* Accent on hover for the ICONS of the two accent-coloured palettes — Green Dark (the
    default → no data-theme attribute, see applyTheme) and Serekkr. Icons have no box and
