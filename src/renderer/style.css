@@ -4367,6 +4367,11 @@ kbd {
    the widened-glyph font this replaces is described where it used to live. */
 #cm-mount .cm-tick { padding: 0 1px; }
 
+/* Clear config row (Samba/WebDAV): the flex+right-align lives HERE, not inline, because
+   applyRemoteUiVisibility toggles it with el.style.display = '' which WIPES an inline
+   display:flex and left the button stuck on the left (serekkr, 20/10/2026). */
+#clear-remote-row { display: flex; justify-content: flex-end; }
+
 /* Inline code `like this` (one or two backticks) carries the same tint as a fenced block
    while you type, the way Obsidian shows it in live preview (serekkr, 20/10/2026). The whole
    run including the backticks sits on the chip; the accent colour marks it as code. Padding
@@ -5047,6 +5052,12 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 #settings-modal .wg-key,
 #settings-modal .wg-val,
 #settings-modal .sc-hint { font-size: var(--settings-fs); }
+/* Vertical breathing room in the text fields: at the content font size the default
+   line box left almost no margin and the glyph tops looked clipped on a scaled display
+   (serekkr, 20/10/2026, WebDAV username/password). A roomier line box + a touch more
+   vertical padding keeps the text fully inside at any content size. */
+#settings-modal .field-group input,
+#settings-modal .field-group select { line-height: 1.5; padding-top: 8px; padding-bottom: 8px; }
 /* The Samba summary (host/share · folder) follows its own compact box
    .smb-preview (11px monospace), NOT the content knob — otherwise it
    stuck out too big inside the little box. */
