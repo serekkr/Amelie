@@ -1172,11 +1172,14 @@ kbd {
 #note-header-meta {
   display: flex; align-items: center;
   margin-top: 5px;
-  font-family: var(--editor-font); font-size: 13px; color: var(--text-3);
+  /* Colours bumped one palette step (serekkr, 20/10/2026 — "le leggo appena"): labels and
+     separator were --text-3 (#4f4f4f, nearly invisible on the dark bg), dates --text-2.
+     Now --text-2 / --text-1 so the row reads clearly while staying below the title. */
+  font-family: var(--editor-font); font-size: 13px; color: var(--text-2);
 }
-#meta-created-line, #meta-edited-line { color: var(--text-2); }
-.meta-label { color: var(--text-3); margin-right: 5px; text-transform: lowercase; letter-spacing: 0.02em; }
-.meta-sep { padding: 0 7px; color: var(--text-3); }
+#meta-created-line, #meta-edited-line { color: var(--text-1); }
+.meta-label { color: var(--text-2); margin-right: 5px; text-transform: lowercase; letter-spacing: 0.02em; }
+.meta-sep { padding: 0 7px; color: var(--text-2); }
 .note-nav-btn {
   /* The sign alone, no box: the border and the hover fill drew a button around a
      mark that reads perfectly well on its own. The 24px square stays as the click
