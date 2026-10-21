@@ -10567,6 +10567,7 @@ function setupSettings() {
     if (!imp.ok) { showToast('✗ OpenVPN: ' + (imp.error || 'import fallito')); return; }
     _ovpnContent = null;   // next test reuses the imported connection (no flap)
     state._vpnStaged = true;   // provisional until "Salva configurazione"/"Salva connessione"
+    try { setVpnType('openvpn'); } catch (_) {}   // single-drop: the .ovpn picks the type (reveals creds)
     showOvpnAlreadyRows(state._ovpnOrigin);
     updateVpnConfiguredBadge();
     // Show the shared VPN actions row (Modifica / Testa / RIMUOVI): it is driven by
@@ -10623,16 +10624,24 @@ function setupSettings() {
   twOvDrop?.addEventListener('drop', e => { e.preventDefault(); twOvDrop.classList.remove('drag-over'); if (e.dataTransfer.files[0]) twLoadOvpn(e.dataTransfer.files[0]); });
   $('tw-ovpn-import-other')?.addEventListener('click', () => { if (twOvDrop) twOvDrop.style.display = ''; const al = $('tw-ovpn-already'); if (al) al.style.display = 'none'; setOvpnCredsVisible(true); setSmbPanelsVisible(true); });
 
-  // Step 1: WireGuard file import — calls real IPC to save .conf
+  // Single VPN drop zone (serekkr, 21/10/2026): one zone for both VPNs. The extension
+  // decides the type — .conf → WireGuard (loadWgFile), .ovpn → OpenVPN (loadOvpn); anything
+  // else is rejected with a toast. No more WireGuard/OpenVPN selector.
+  const loadVpnFile = (f) => {
+    const name = String(f && f.name || '').toLowerCase();
+    if (name.endsWith('.conf')) loadWgFile(f);
+    else if (name.endsWith('.ovpn')) loadOvpn(f);
+    else _vpnExtOk(f && f.name, ['.conf', '.ovpn']);   // wrong type → reject toast
+  };
   const dropZone = $('wg-drop-zone');
   const fileInput = $('wg-file-input');
   dropZone.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', e => { if (e.target.files[0]) loadWgFile(e.target.files[0]); e.target.value = ''; });
+  fileInput.addEventListener('change', e => { if (e.target.files[0]) loadVpnFile(e.target.files[0]); e.target.value = ''; });
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
   dropZone.addEventListener('drop', e => {
     e.preventDefault(); dropZone.classList.remove('drag-over');
-    if (e.dataTransfer.files[0]) loadWgFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files[0]) loadVpnFile(e.dataTransfer.files[0]);
   });
 
   // The "Drag or select…" import instruction is only useful while no config is
@@ -11707,6 +11716,7 @@ function _vpnExtOk(name, exts) {
 
 function loadWgFile(file) {
   if (!_vpnExtOk(file && file.name, ['.conf'])) return;
+  try { setVpnType('wireguard'); } catch (_) {}   // single-drop: the .conf picks the type
   const reader = new FileReader();
   reader.onload = async e => {
     const confContent = e.target.result;
@@ -12268,13 +12278,11 @@ async function updateVpnConfiguredBadge() {
 function setVpnType(t) {
   _vpnType = (t === 'openvpn') ? 'openvpn' : 'wireguard';
   document.querySelectorAll('.vpn-type-btn').forEach(b => b.classList.toggle('active', b.dataset.vpn === _vpnType));
-  // Backup and Sync share the VPN type: the panels swap in both tabs.
-  const wgP = $('wstep-1'), ovP = $('ovpn-step');
-  if (wgP) wgP.style.display = _vpnType === 'wireguard' ? '' : 'none';
-  if (ovP) ovP.style.display = _vpnType === 'openvpn' ? '' : 'none';
-  const twWgP = $('tw-wstep-1'), twOvP = $('tw-ovpn-step');
-  if (twWgP) twWgP.style.display = _vpnType === 'wireguard' ? '' : 'none';
-  if (twOvP) twOvP.style.display = _vpnType === 'openvpn' ? '' : 'none';
+  // Single drop zone now (no selector): wstep-1 (the one drop) stays visible and is hidden by
+  // updateWgConfiguredView only once a VPN is loaded. ovpn-step is shown ONLY to reveal the
+  // OpenVPN credentials — i.e. when the loaded/last VPN is OpenVPN (serekkr, 21/10/2026).
+  const ovP = $('ovpn-step'); if (ovP) ovP.style.display = _vpnType === 'openvpn' ? '' : 'none';
+  const twOvP = $('tw-ovpn-step'); if (twOvP) twOvP.style.display = 'none';
   try { localStorage.setItem('amelie-vpn-type', _vpnType); } catch (_) {}
 }
 

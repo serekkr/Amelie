@@ -681,11 +681,13 @@
 
                     <!-- Full setup wizard (hidden once configured) -->
                     <div id="wg-wizard">
-                      <!-- VPN type selector: WireGuard or OpenVPN (one at a time). -->
+                      <!-- VPN type selector removed (serekkr, 21/10/2026): ONE drag zone below
+                           auto-detects .conf (WireGuard) vs .ovpn (OpenVPN). The buttons are kept
+                           in the DOM (display:none) so the existing lock/active wiring stays valid. -->
                       <div class="field-group" style="margin-bottom:4px">
-                        <label data-i18n="sync.vpn_type">Tipo VPN</label>
+                        <label data-i18n="sync.vpn_type" style="display:none">Tipo VPN</label>
                         <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
-                          <div class="vpn-type-seg">
+                          <div class="vpn-type-seg" style="display:none">
                             <button type="button" class="vpn-type-btn active" data-vpn="wireguard">WireGuard</button>
                             <button type="button" class="vpn-type-btn" data-vpn="openvpn">OpenVPN</button>
                           </div>
@@ -705,13 +707,15 @@
 
                       <!-- ── Import OpenVPN .ovpn (shown only when OpenVPN selected) ── -->
                       <div class="wizard-panel" id="ovpn-step" style="display:none">
-                        <div class="wstep-title">
+                        <!-- Title + own drop zone hidden: the single drop in wstep-1 handles .ovpn too
+                             (serekkr, 21/10/2026). This panel now only carries the OpenVPN credentials,
+                             shown after an .ovpn is loaded. -->
+                        <div class="wstep-title" style="display:none">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                           <span data-i18n="sync.ovpn_import_title">Importa configurazione OpenVPN</span>
                         </div>
-                        <!-- Actions moved to the VPN type row (#vpn-actions). -->
                         <div id="ovpn-already" style="display:none"></div>
-                        <div class="wg-drop-zone" id="ovpn-drop-zone">
+                        <div class="wg-drop-zone" id="ovpn-drop-zone" style="display:none">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                           <span id="ovpn-drop-label" data-i18n-html="sync.ovpn_drop_label">Trascina il file <strong>.ovpn</strong><br/><small>oppure clicca per sfogliare</small></span>
                           <input type="file" id="ovpn-file-input" accept=".ovpn" style="display:none" />
@@ -731,15 +735,17 @@
                       <div class="wizard-panel" id="wstep-1">
                         <div class="wstep-title" id="wg-import-title">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                          <span data-i18n="sync.wg_import_title">Importa configurazione WireGuard</span>
+                          <span data-i18n="sync.vpn_import_title">Importa configurazione VPN</span>
                         </div>
                         <!-- Actions moved to the VPN type row (#vpn-actions); this stays
                              only as a hook for the loaded-state logic. -->
                         <div id="wg-already" style="display:none"></div>
+                        <!-- THE single VPN drop zone: accepts .conf (WireGuard) or .ovpn (OpenVPN);
+                             the handler auto-detects the type from the extension. -->
                         <div class="wg-drop-zone" id="wg-drop-zone">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                          <span id="wg-drop-label" data-i18n-html="sync.wg_drop_label">Trascina il file <strong>.conf</strong><br/><small>oppure clicca per sfogliare</small></span>
-                          <input type="file" id="wg-file-input" accept=".conf" style="display:none" />
+                          <span id="wg-drop-label" data-i18n-html="sync.vpn_drop_label">Trascina il file <strong>.conf</strong> o <strong>.ovpn</strong><br/><small>oppure clicca per sfogliare</small></span>
+                          <input type="file" id="wg-file-input" accept=".conf,.ovpn" style="display:none" />
                         </div>
                         <div id="wg-parsed" class="wg-parsed" style="display:none">
                           <div class="wg-parsed-row"><span class="wg-key" data-i18n="sync.wg_iface">Interfaccia</span><span id="wg-iface" class="wg-val">—</span></div>
