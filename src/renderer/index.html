@@ -594,7 +594,7 @@
                 <!-- Destination type (Local/Samba/WebDAV) with "Restore vault" right after WebDAV,
                      same button size, separated by a thin | (serekkr, 21/10/2026). Restore sits
                      OUTSIDE #remote-kind-seg so the kind-switch click handler never catches it. -->
-                <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">
+                <div style="display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap">
                   <div class="field-group" style="margin:0">
                     <label data-i18n="sync.remote_kind">Tipo destinazione</label>
                     <div class="vpn-type-seg" id="remote-kind-seg">
@@ -684,7 +684,10 @@
                       <!-- VPN type selector removed (serekkr, 21/10/2026): ONE drag zone below
                            auto-detects .conf (WireGuard) vs .ovpn (OpenVPN). The buttons are kept
                            in the DOM (display:none) so the existing lock/active wiring stays valid. -->
-                      <div class="field-group" style="margin-bottom:4px">
+                      <!-- Hidden until a VPN is loaded (updateWgConfiguredView): only then does it
+                           carry the "X loaded" badge + actions. Empty otherwise, so hiding it removes
+                           the thin strip above the drop zone (serekkr, 21/10/2026). -->
+                      <div class="field-group" id="vpn-top-row" style="margin-bottom:4px;display:none">
                         <label data-i18n="sync.vpn_type" style="display:none">Tipo VPN</label>
                         <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
                           <div class="vpn-type-seg" style="display:none">
@@ -831,7 +834,9 @@
                   <label data-i18n="sync.sync_folder">Cartella sync (remota)</label>
                   <input type="text" id="cfg-sync-folder" placeholder="amelie/sync" />
                 </div>
-                <div class="field-group">
+                <!-- Divider before Frequency, to match the Backup panel's line between the
+                     folder and Backup frequency (serekkr, 21/10/2026). -->
+                <div class="field-group" style="border-top:1px solid var(--border);padding-top:12px">
                   <label data-i18n="sync.twoway_freq">Frequenza</label>
                   <select id="cfg-twoway-interval" class="export-select">
                     <option value="1">1 min</option>

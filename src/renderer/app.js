@@ -11602,6 +11602,9 @@ async function updateWgConfiguredView(forceEdit = false) {
   // Single test rule: with a VPN .conf present the VPN view carries the test, so
   // hide the direct Samba test below; without one, the direct test is the only test.
   { const lan = $('remote-samba-lantest'); if (lan) lan.style.display = (currentRemoteKind() === 'samba' && !confExists) ? '' : 'none'; }
+  // The top row (badge "X loaded" + actions) only exists once a VPN is loaded — hidden
+  // otherwise so there is no empty strip above the drop zone.
+  { const tr = $('vpn-top-row'); if (tr) tr.style.display = confExists ? '' : 'none'; }
   const showSummary = wgSetupComplete() && !forceEdit;
   summary.style.display = showSummary ? 'flex' : 'none';
   wizard.style.display  = showSummary ? 'none' : '';

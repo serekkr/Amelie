@@ -2399,6 +2399,10 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
    same breathing room from the VPN-type selector as the WireGuard panel has.
    Applies to both Backup (#ovpn-step) and Sync (#tw-ovpn-step). */
 #ovpn-step, #tw-ovpn-step { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
+/* VPN type selector removed (serekkr, 21/10/2026): the single drop (#wstep-1) and the
+   OpenVPN creds panel (#ovpn-step) show one at a time, so neither needs the top divider the
+   old two-panel layout drew — it left a stray strip above "Import VPN configuration". */
+#wstep-1, #ovpn-step { margin-top: 0; padding-top: 0; border-top: none; }
 .wstep-title {
   display: flex; align-items: center; gap: 9px;
   font-size: 12px; font-weight: 400; font-style: normal; font-family: var(--ui-font);
