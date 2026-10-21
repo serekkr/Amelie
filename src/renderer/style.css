@@ -707,6 +707,10 @@ html.is-mac #titlebar { padding-left: 72px; }
 .tree-folder:hover, .tree-note:hover {
   background: color-mix(in srgb, var(--text-1) 10%, transparent);
 }
+/* A note has no folder icon/chevron, so its name sat ~23px left of the folder names on the
+   same level. Indent it by the icon(16)+gap(7) so note names line up UNDER the folder names,
+   the way Obsidian shows root notes with a space on the left (serekkr, 21/10/2026, foto 7). */
+.tree-note { padding-left: calc(14px + 16px + 7px); }
 /* La cartella SELEZIONATA: lo stesso grigio dell'hover, ma piu' deciso — "deve vedersi
    un po' di grigio tipo quando faccio hover piu scuro". 18% contro il 10% dell'hover:
    abbastanza da non confondersi con il passaggio del mouse, e abbastanza da non
