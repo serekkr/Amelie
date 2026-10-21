@@ -90,6 +90,16 @@ function startupFlags(cfg) {
     switches.push(['js-flags', '--max-old-space-size=512']);
   }
 
+  // Whole-window WHITE FLASH while a video plays. On some compositors (Wayland +
+  // in-process GPU, the box this was written on) a hardware-decoded video frame is
+  // promoted to an overlay plane, and the transparent hole punched for it flickers
+  // white over the ENTIRE window on every flip. Decoding video on the CPU keeps the
+  // frame off the overlay plane, so the flash is gone — while GPU COMPOSITING and
+  // the fast drawing path both stay on (unlike disable-gpu-compositing above, which
+  // halves the draw frame rate). Cheap for a notes app that plays the odd clip.
+  // Opt-in, per the rule at the top: a one-compositor fix nobody else pays for.
+  if (c.swVideoDecode) switches.push(['disable-accelerated-video-decode']);
+
   // Software RENDERING, the heaviest of the three. NOTE: it does NOT save system
   // RAM — with in-process-gpu there is no separate GPU process to drop.
   const disableHardwareAcceleration = !!c.disableGpu;
