@@ -591,7 +591,10 @@
                 <!-- Kind selector (Local / Samba / WebDAV) on the left, "Restore vault" on
                      the RIGHT of the same line — moved up here from the bottom so it is clearly
                      visible (serekkr, 20/10/2026). -->
-                <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">
+                <!-- Destination type (Local/Samba/WebDAV) with "Restore vault" right after WebDAV,
+                     same button size, separated by a thin | (serekkr, 21/10/2026). Restore sits
+                     OUTSIDE #remote-kind-seg so the kind-switch click handler never catches it. -->
+                <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">
                   <div class="field-group" style="margin:0">
                     <label data-i18n="sync.remote_kind">Tipo destinazione</label>
                     <div class="vpn-type-seg" id="remote-kind-seg">
@@ -601,11 +604,10 @@
                     </div>
                     <input type="hidden" id="cfg-remote-kind" value="samba" />
                   </div>
-                  <div id="restore-block" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-                    <button class="btn-save" id="btn-restore-vault" data-i18n="sync.restore_title" title="Load a .tar.gz archive or a backup folder. Your current vault is kept aside." data-i18n-title="sync.restore_hint">Ripristina vault</button>
-                    <div id="restore-result" class="test-result" style="display:none"></div>
-                  </div>
+                  <span aria-hidden="true" style="align-self:flex-end;width:1px;height:36px;background:var(--border);margin-bottom:1px"></span>
+                  <button type="button" class="vpn-type-btn" id="btn-restore-vault" style="align-self:flex-end" data-i18n="sync.restore_title" title="Load a .tar.gz archive or a backup folder. Your current vault is kept aside." data-i18n-title="sync.restore_hint">Ripristina vault</button>
                 </div>
+                <div id="restore-result" class="test-result" style="display:none;margin-top:6px"></div>
 
                 <!-- ── LOCAL block (backup only) — shown when kind=local ── -->
                 <div id="remote-local-block" style="display:none">
@@ -617,10 +619,10 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
                       </button>
                     </div>
-                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+                    <!-- Local: Test path next to Clear config, both right-aligned (serekkr, 21/10). -->
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;margin-top:8px">
                       <button class="btn-test" id="btn-test-local" data-i18n="sync.test_path_btn">Testa percorso</button>
-                      <!-- Local only: Clear config on the RIGHT of the same row as "Test path". -->
-                      <button class="btn-test" id="btn-clear-local" style="margin-left:auto" data-i18n="sync.clear_config">Cancella configurazione</button>
+                      <button class="btn-test" id="btn-clear-local" data-i18n="sync.clear_config">Cancella configurazione</button>
                     </div>
                     <div id="local-test-result" class="test-result"></div>
                   </div>
