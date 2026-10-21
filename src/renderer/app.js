@@ -10895,7 +10895,9 @@ function setupSettings() {
     // the note links (![[img]] / ![](img) → Amelie's attachment markup), so images show
     // up. The old importFolder copied notes verbatim and left every embed broken
     // (serekkr, 21/10/2026).
-    const result = await window.inkwell.vault.importObsidian(picked);
+    // flat=true: the folder's CONTENTS go to the vault root (root notes + folders show at
+    // the top, like Obsidian) instead of being nested under a container folder (serekkr, 21/10).
+    const result = await window.inkwell.vault.importObsidian(picked, '', true);
     if (result && result.ok) {
       if (res) {
         const att = (result.images || 0) + (result.pdfs || 0) + (result.media || 0);

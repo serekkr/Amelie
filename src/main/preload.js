@@ -14,7 +14,7 @@ contextBridge.exposeInMainWorld('inkwell', {
     changePath:       (p)          => ipcRenderer.invoke('vault:changePath', p),
     importFolder:     (p)          => ipcRenderer.invoke('vault:importFolder', p),
     filterDirs:       (paths)      => ipcRenderer.invoke('vault:filterDirs', paths),
-    importObsidian:   (p, dest)    => ipcRenderer.invoke('vault:importObsidian', p, dest),
+    importObsidian:   (p, dest, flat) => ipcRenderer.invoke('vault:importObsidian', p, dest, flat),
     restoreArchive:   (p, pass)    => ipcRenderer.invoke('vault:restoreArchive', p, pass),
     restoreFolder:    (p, pass)    => ipcRenderer.invoke('vault:restoreFolder', p, pass),
     pickRestore:      ()           => ipcRenderer.invoke('vault:pickRestore'),

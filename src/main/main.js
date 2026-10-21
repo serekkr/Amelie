@@ -2263,12 +2263,12 @@ ipcMain.handle('vault:filterDirs', async (_, paths) => {
 // audio/video→attachments/media/), all encrypted at rest via the normal write paths,
 // and rewrites Obsidian embeds ![[file]] into Amelie's format (images inline, other
 // types as 📎/🎵/🎬 links). `destFolder` ('' = root) nests the import under a tree folder.
-ipcMain.handle('vault:importObsidian', async (_, rawSrc, destFolder) => {
+ipcMain.handle('vault:importObsidian', async (_, rawSrc, destFolder, flat) => {
   if (!rawSrc) return { ok: false, error: 'Nessuna cartella' };
   const src = rawSrc.replace(/^~(?=$|[/\\])/, os.homedir());
   try { if (!fs.existsSync(src) || !fs.statSync(src).isDirectory()) return { ok: false, notDir: true }; }
   catch (e) { return { ok: false, error: e.message }; }
-  return importObsidianFolder(src, destFolder);
+  return importObsidianFolder(src, destFolder, undefined, !!flat);
 });
 
 // The import itself, shared by the drag-and-drop above and by Restore (which hands an
@@ -2303,7 +2303,11 @@ function _recordImportedHomes(files, root) {
   return added;
 }
 
-async function importObsidianFolder(src, destFolder, rootNameOverride) {
+// `flat`: when true the vault's CONTENTS go straight under `destFolder` (root by default),
+// so the Obsidian root notes/folders appear at the Amelie root exactly as in Obsidian
+// (serekkr, 21/10/2026). When false (Restore) everything is nested under one container
+// folder named after the source, keeping a dropped/restored vault grouped.
+async function importObsidianFolder(src, destFolder, rootNameOverride, flat = false) {
   const dest = (destFolder || '').replace(/^\/+|\/+$/g, '');
 
   const SKIP_DIRS  = new Set(['.obsidian', '.trash', '.stversions', '.stfolder', '.git']);
@@ -2380,7 +2384,8 @@ async function importObsidianFolder(src, destFolder, rootNameOverride) {
   // Nest everything under a container folder named after the dropped folder, so the
   // import appears as ONE folder with its subfolders inside (preserving the Obsidian
   // hierarchy) rather than scattering the top-level subfolders at the vault root.
-  const rootName = rootNameOverride || path.basename(src.replace(/[\\/]+$/, '')) || 'import';
+  // `flat` → no container folder: the contents land directly under `dest` (root).
+  const rootName = flat ? '' : (rootNameOverride || path.basename(src.replace(/[\\/]+$/, '')) || 'import');
   // Dates the note ALREADY has, so importing does not flatten a vault's whole
   // history onto the afternoon it was copied (2026-09-22: 982 notes all landed
   // saying "created today", and the Recent view, which sorts by this, became one
