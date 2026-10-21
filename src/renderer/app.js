@@ -10891,10 +10891,15 @@ function setupSettings() {
     if (!picked) return;
     $('cfg-import-path').value = picked;
     if (res) { res.textContent = window.i18n.t('settings.importing'); res.className = 'test-result'; }
-    const result = await window.inkwell.vault.importFolder(picked);
+    // Use the Obsidian importer (same as drag-drop): it copies attachments AND rewrites
+    // the note links (![[img]] / ![](img) → Amelie's attachment markup), so images show
+    // up. The old importFolder copied notes verbatim and left every embed broken
+    // (serekkr, 21/10/2026).
+    const result = await window.inkwell.vault.importObsidian(picked);
     if (result && result.ok) {
       if (res) {
-        res.textContent = '✓ ' + window.i18n.t('settings.import_done', { notes: result.notes, att: result.attachments, skip: result.skipped });
+        const att = (result.images || 0) + (result.pdfs || 0) + (result.media || 0);
+        res.textContent = '✓ ' + window.i18n.t('settings.import_done', { notes: result.notes, att, skip: result.skipped });
         res.className = 'test-result ok';
       }
       await loadTree();   // show the imported notes right away
