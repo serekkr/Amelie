@@ -10710,7 +10710,7 @@ function setupSettings() {
       url: $(pfx + 'url')?.value.trim() || '',
       username: $(pfx + 'user')?.value || '',
       password: $(pfx + 'pass')?.value || '',
-      remotePath: $(pfx + 'path')?.value.trim() || (scope === 'sync' ? 'amelie/sync' : '/amelie/backup'),
+      remotePath: $(pfx + 'path')?.value.trim() || (scope === 'sync' ? 'amelie/sync' : 'amelie/backup'),
     };
     saveSettings().catch(() => {});
   }
@@ -12601,7 +12601,7 @@ async function openSettings() {
   $('cfg-webdav-url').value  = cfg.sync?.webdav?.url      || '';
   $('cfg-webdav-user').value = cfg.sync?.webdav?.username || '';
   $('cfg-webdav-pass').value = cfg.sync?.webdav?.password || '';
-  $('cfg-webdav-path').value = cfg.sync?.webdav?.remotePath || '/amelie/backup';
+  $('cfg-webdav-path').value = cfg.sync?.webdav?.remotePath || 'amelie/backup';
   if ($('cfg-webdav-archive'))      $('cfg-webdav-archive').checked      = !!cfg.sync?.webdav?.archive;
   if ($('cfg-webdav-archive-only')) $('cfg-webdav-archive-only').checked = !!cfg.sync?.webdav?.archiveOnly;
   // STAGED WebDAV connections (Backup + Sync): the live fields can be edited
@@ -12816,7 +12816,7 @@ function buildSyncConfig(form, prev) {
     : { ...(pS.vpn || {}), enabled: false, syncOnly: !!form.vpnSyncOnly };
   const webdav = (kind === 'webdav')
     ? { url: form.webdavUrl || '', username: form.webdavUser || '', password: form.webdavPass || '',
-        remotePath: form.backupFolder || '/amelie/backup',
+        remotePath: form.backupFolder || 'amelie/backup',
         folder: false, archive: true, archiveOnly: true, keepLast, enabled: remoteOn }
     : { ...(pS.webdav || {}), enabled: false };
   const local = {
