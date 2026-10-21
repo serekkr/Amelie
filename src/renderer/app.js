@@ -11596,8 +11596,11 @@ async function updateWgConfiguredView(forceEdit = false) {
   // getConf reports them separately (exists = WireGuard, ovpnExists = OpenVPN). Treating
   // only WireGuard as configured left an imported OpenVPN with no actions row — no Remove
   // button (serekkr, 20/10/2026).
-  let confExists = false;
-  try { const c = await window.inkwell.wg.getConf(); confExists = !!(c && (c.exists || c.ovpnExists)); } catch (_) {}
+  let confExists = false, ovpnLoaded = false;
+  try { const c = await window.inkwell.wg.getConf(); ovpnLoaded = !!(c && c.ovpnExists); confExists = !!(c && (c.exists || ovpnLoaded)); } catch (_) {}
+  // OpenVPN credentials panel: ONLY when an OpenVPN is actually loaded (not just because the
+  // saved type is openvpn) — otherwise the creds + a stray drop showed on open (9.png).
+  { const ov = $('ovpn-step'); if (ov) ov.style.display = ovpnLoaded ? '' : 'none'; }
   // "Test connection" stays grey until a VPN (WireGuard/OpenVPN) config is loaded.
   const runTestBtn = $('btn-run-test');
   if (runTestBtn) runTestBtn.classList.toggle('tc-disabled', !confExists);
@@ -12283,10 +12286,9 @@ async function updateVpnConfiguredBadge() {
 function setVpnType(t) {
   _vpnType = (t === 'openvpn') ? 'openvpn' : 'wireguard';
   document.querySelectorAll('.vpn-type-btn').forEach(b => b.classList.toggle('active', b.dataset.vpn === _vpnType));
-  // Single drop zone now (no selector): wstep-1 (the one drop) stays visible and is hidden by
-  // updateWgConfiguredView only once a VPN is loaded. ovpn-step is shown ONLY to reveal the
-  // OpenVPN credentials — i.e. when the loaded/last VPN is OpenVPN (serekkr, 21/10/2026).
-  const ovP = $('ovpn-step'); if (ovP) ovP.style.display = _vpnType === 'openvpn' ? '' : 'none';
+  // The OpenVPN credentials panel (#ovpn-step) is NOT shown from here: it must appear ONLY when an
+  // OpenVPN is really loaded (ovpnExists), which updateWgConfiguredView decides. Tying it to the
+  // saved _vpnType made the creds + a second drop show on open with no VPN (serekkr, 9.png, 21/10).
   const twOvP = $('tw-ovpn-step'); if (twOvP) twOvP.style.display = 'none';
   try { localStorage.setItem('amelie-vpn-type', _vpnType); } catch (_) {}
 }
