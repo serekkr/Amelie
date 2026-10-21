@@ -11530,20 +11530,22 @@ async function _removeVpnOnly() {
     ['wg-parsed','tw-wg-parsed'].forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
     ['wg-iface','wg-local-ip','wg-endpoint','wg-allowed','tw-iface','tw-local-ip','tw-endpoint','tw-allowed']
       .forEach(id => { const el = $(id); if (el) el.textContent = '—'; });
-    [['wg-already','wg-drop-zone','wg-drop-label'], ['tw-wg-already','tw-wg-drop-zone','tw-wg-drop-label']].forEach(([al, dz, lb]) => {
+    // The single drop (wg-drop-zone) comes back with the UNIFIED label (.conf or .ovpn), not the
+    // old WireGuard-only one. (tw-* is the unreachable Sync tab — left as-is.)
+    [['wg-already','wg-drop-zone','wg-drop-label','sync.vpn_drop_label'], ['tw-wg-already','tw-wg-drop-zone','tw-wg-drop-label','sync.wg_drop_label']].forEach(([al, dz, lb, key]) => {
       const a = $(al); if (a) a.style.display = 'none';
       const d = $(dz); if (d) d.style.display = '';
-      const l = $(lb); if (l) l.innerHTML = window.i18n.t('sync.wg_drop_label');
+      const l = $(lb); if (l) l.innerHTML = window.i18n.t(key);
     });
-    // OpenVPN: clear creds, hide parsed/already, show the drop zones.
+    // OpenVPN: clear creds, hide parsed/already. The OpenVPN drop zone stays HIDDEN — the single
+    // drop handles both now; re-showing it left TWO drop zones after a remove (serekkr, 21/10/2026, foto 8).
     ['cfg-ovpn-user','cfg-ovpn-pass','tw-ovpn-user','tw-ovpn-pass'].forEach(id => { const el = $(id); if (el) el.value = ''; });
     ['ovpn-parsed','tw-ovpn-parsed'].forEach(id => { try { _clearVpnConfigToggle(id); } catch (_) {} });
-    [['ovpn-already','ovpn-drop-zone','ovpn-drop-label'], ['tw-ovpn-already','tw-ovpn-drop-zone','tw-ovpn-drop-label']].forEach(([al, dz, lb]) => {
+    [['ovpn-already','ovpn-drop-zone'], ['tw-ovpn-already','tw-ovpn-drop-zone']].forEach(([al, dz]) => {
       const a = $(al); if (a) a.style.display = 'none';
-      const d = $(dz); if (d) d.style.display = '';
-      const l = $(lb); if (l) l.innerHTML = window.i18n.t('sync.ovpn_drop_label');
+      const d = $(dz); if (d) d.style.display = 'none';
     });
-    try { setOvpnCredsVisible(true); } catch (_) {}
+    try { setVpnType('wireguard'); } catch (_) {}   // back to the single-drop default (hides the OpenVPN creds panel)
     if ($('cfg-vpn-enabled')) $('cfg-vpn-enabled').checked = false;
     try { await updateWgConfiguredView(true); } catch (_) {}
     try { await updateTwowayConnView(); } catch (_) {}
