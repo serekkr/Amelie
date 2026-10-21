@@ -7474,7 +7474,10 @@ function setupTOC() {
 }
 
 function _restoreTocWidth() {
-  try { const w = parseInt(localStorage.getItem('amelie-toc-width')); if (w >= 140 && w <= 600) $('toc-panel').style.width = w + 'px'; } catch (_) {}
+  // sessionStorage, NOT localStorage: a resize of the Index panel lasts only the
+  // current run — closing the app brings it back to the default width, same as the
+  // sidebar (serekkr, 21/10/2026 — "idem per la show index").
+  try { const w = parseInt(sessionStorage.getItem('amelie-toc-width')); if (w >= 140 && w <= 600) $('toc-panel').style.width = w + 'px'; } catch (_) {}
 }
 
 // Drag the divider on the Index panel's left edge to resize it (persisted).
@@ -7497,7 +7500,7 @@ function setupTocResizer() {
     if (!dragging) return;
     dragging = false; rz.classList.remove('dragging');
     document.body.style.cursor = ''; document.body.style.userSelect = '';
-    try { localStorage.setItem('amelie-toc-width', String(parseInt(panel.style.width) || 260)); } catch (_) {}
+    try { sessionStorage.setItem('amelie-toc-width', String(parseInt(panel.style.width) || 260)); } catch (_) {}
   });
 }
 
@@ -13927,10 +13930,13 @@ function setupResize() {
   }
   const clampW = w => Math.min(maxW(), Math.max(MIN_W, w));
 
-  // Restore saved width — CLAMPED, not discarded: a width saved under an older,
-  // lower minimum (or a larger icon size) must come back as the nearest allowed one,
-  // otherwise the sidebar silently ignores the pref and sits at the CSS width.
-  const saved = parseInt(localStorage.getItem('amelie-sidebar-w'));
+  // Restore the width set EARLIER THIS SESSION — CLAMPED, not discarded: a width
+  // saved under an older, lower minimum (or a larger icon size) must come back as
+  // the nearest allowed one, otherwise it silently sits at the CSS width.
+  // sessionStorage, NOT localStorage: a drag only lasts the current run, so closing
+  // the app resets the sidebar to its default width instead of reopening it wide
+  // (serekkr, 21/10/2026 — "all'avvio devo vedere il size di default").
+  const saved = parseInt(sessionStorage.getItem('amelie-sidebar-w'));
   MIN_W = measureMinWidth();
   DEFAULT_W = MIN_W;
   if (saved) sidebar.style.width = clampW(saved) + 'px';
@@ -14002,21 +14008,21 @@ function setupResize() {
     document.body.style.cursor    = '';
     document.body.style.userSelect = '';
     handle.classList.remove('dragging');
-    // Persist
-    try { localStorage.setItem('amelie-sidebar-w', sidebar.offsetWidth); } catch(_) {}
+    // Persist for THIS session only (reset to default on restart — see above).
+    try { sessionStorage.setItem('amelie-sidebar-w', sidebar.offsetWidth); } catch(_) {}
   });
 
   // Double-click → reset to default width
   handle.addEventListener('dblclick', () => {
     sidebar.style.width = DEFAULT_W + 'px';
-    try { localStorage.setItem('amelie-sidebar-w', DEFAULT_W); } catch(_) {}
+    try { sessionStorage.setItem('amelie-sidebar-w', DEFAULT_W); } catch(_) {}
   });
 
   // The max is window-relative, so shrinking the window can leave the sidebar wider than
   // half: pull it back in. Only ever narrows — never widens past what the user set.
   window.addEventListener('resize', () => {
     const cur = sidebar.offsetWidth, cap = maxW();
-    if (cur > cap) { sidebar.style.width = cap + 'px'; try { localStorage.setItem('amelie-sidebar-w', cap); } catch (_) {} }
+    if (cur > cap) { sidebar.style.width = cap + 'px'; try { sessionStorage.setItem('amelie-sidebar-w', cap); } catch (_) {} }
   });
 }
 
