@@ -4845,13 +4845,15 @@ function disableVpnFlagsAfterImport() {
 ipcMain.handle('wg:saveConf', async (_, confContent) => {
   try {
     const parsed = wgManager.saveConf(confContent);
-    // (Re)create the NM connection from the .conf (no password) so it's ready —
-    // but DON'T bring the tunnel up here. The tunnel activates only when the
-    // backup/sync FLAG is toggled on (or briefly during a test). Importing must
-    // not leave a tunnel connected.
-    const nm = await wgManager.importToNetworkManager();
+    // DON'T import into NetworkManager here. `nmcli connection import` ALWAYS
+    // activates the connection, so importing at load time (when we don't want the
+    // tunnel up yet) meant importing then immediately bringing it down — a visible
+    // down-flap that popped an "amelie-wg deactivated" OS notification just for
+    // dropping a file. The NM connection is now created LAZILY on the first real
+    // activation (the Test button, or a backup/sync flag turning on) — see
+    // WireGuardManager._ensureWgImported. Loading a .conf only writes the file.
     disableVpnFlagsAfterImport();
-    return { ok: true, parsed, nm };
+    return { ok: true, parsed, nm: { ok: true, deferred: true } };
   } catch(e) {
     return { ok: false, error: e.message };
   }

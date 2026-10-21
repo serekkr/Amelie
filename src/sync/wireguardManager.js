@@ -380,12 +380,31 @@ class WireGuardManager {
     return ok ? 'tunnel' : 'none';
   }
 
+  /**
+   * Lazily create the NM WireGuard connection from the saved .conf on the FIRST
+   * activation. We deliberately do NOT import at save time (that would flap the
+   * tunnel up+down and pop a desktop notification just for dropping a file), so
+   * the connection may not exist yet the first time something wants it up — the
+   * Test button, or a backup/sync flag turning on. Import with activate:true
+   * because the caller wants the tunnel UP: importing (NM activates) and then
+   * downing again would be the very flap we moved off the load path. OpenVPN is
+   * left alone — its import needs the credentials and is still done at save time.
+   */
+  async _ensureWgImported() {
+    if (!fs.existsSync(WG_CONF)) return;               // no WG .conf (none, or OpenVPN setup)
+    if ((await this._nmAmelieConns()).length) return;  // already imported
+    try { await this.importToNetworkManager({ activate: true }); } catch (_) {}
+  }
+
   async _nmUp() {
     try {
       // Already active? Do NOT run `nmcli connection up` again — on an already-up
       // connection NM deactivates+reactivates it, which is a visible tunnel flap
       // (down→up) and briefly breaks reachability mid-backup. No-op instead.
       if (await this.nmActiveAmelie()) return true;
+      // First activation after a deferred save: create the NM connection now.
+      await this._ensureWgImported();
+      if (await this.nmActiveAmelie()) return true;    // the import may have brought it up
       for (const name of await this._nmAmelieConns()) {
         // Every activation goes through the "sync only" routing first, so the
         // tunnel always comes up the way the flag says — including after the
