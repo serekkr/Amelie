@@ -3137,7 +3137,7 @@ body.split-open .pane-flash::after {
 
 /* ─── TOC panel — right sidebar ─────────────────────────────── */
 #toc-panel {
-  width: 260px; flex-shrink: 0;
+  width: 220px; flex-shrink: 0;
   min-width: 140px; max-width: 600px;
   background: var(--bg-1);
   border-left: 1px solid var(--border);
