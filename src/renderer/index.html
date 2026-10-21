@@ -826,12 +826,13 @@
             <!-- ══════════ SECTION 2 — Sincronizzazione ══════════ -->
             <div class="sync-section" id="bksec-sync">
               <div class="sync-section-body" id="ssb-sync" style="display:flex;flex-direction:column;gap:12px">
-                <div class="field-group toggle-row">
-                  <label for="cfg-sync-on" data-i18n="sync.sync_enable">Attiva sincronizzazione a due vie</label>
-                  <label class="toggle"><input type="checkbox" id="cfg-sync-on" /><span class="slider"></span></label>
-                </div>
+                <!-- Toggle moved onto the folder-label row (serekkr, 21/10/2026): no separate
+                     "Enable two-way sync" line — the on/off sits next to "Sync folder (remote)". -->
                 <div class="field-group">
-                  <label data-i18n="sync.sync_folder">Cartella sync (remota)</label>
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                    <label for="cfg-sync-folder" data-i18n="sync.sync_folder">Cartella sync (remota)</label>
+                    <label class="toggle"><input type="checkbox" id="cfg-sync-on" /><span class="slider"></span></label>
+                  </div>
                   <input type="text" id="cfg-sync-folder" placeholder="amelie/sync" />
                 </div>
                 <!-- Divider before Frequency, to match the Backup panel's line between the
@@ -871,13 +872,14 @@
             <!-- ══════════ SECTION 3 — Backup ══════════ -->
             <div class="sync-section" id="bksec-backup">
               <div class="sync-section-body" id="ssb-backup" style="display:flex;flex-direction:column;gap:14px">
-                <!-- Remote backup destination on/off (uses the shared remote above). -->
-                <div class="field-group toggle-row" id="backup-remote-row">
-                  <label for="cfg-backup-remote-on" data-i18n="sync.backup_remote_on">Backup sulla destinazione remota</label>
-                  <label class="toggle"><input type="checkbox" id="cfg-backup-remote-on" /><span class="slider"></span></label>
-                </div>
+                <!-- Toggle moved onto the folder-label row (serekkr, 21/10/2026): no separate
+                     "Back up to the remote destination" line. For Local the folder input is hidden
+                     and the label becomes "Enable backup" (set in applyRemoteUiVisibility). -->
                 <div class="field-group" id="backup-folder-wrap">
-                  <label data-i18n="sync.backup_folder">Cartella backup (remota)</label>
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                    <label id="backup-folder-label" for="cfg-backup-folder" data-i18n="sync.backup_folder">Cartella backup (remota)</label>
+                    <label class="toggle"><input type="checkbox" id="cfg-backup-remote-on" /><span class="slider"></span></label>
+                  </div>
                   <input type="text" id="cfg-backup-folder" placeholder="amelie/backup" />
                 </div>
 

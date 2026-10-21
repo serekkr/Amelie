@@ -12966,12 +12966,15 @@ function applyRemoteUiVisibility() {
   // Local is a BACKUP-ONLY destination: no two-way sync, no remote-backup toggle
   // and no remote folder — the backup goes to the local path chosen above.
   show('bksec-sync', !local);
-  // The backup toggle is shown for ALL kinds now: remote backup on/off for Samba/WebDAV,
-  // and "Enable backup" for Local (which had no activation flag before — serekkr, 21/10/2026).
-  show('backup-remote-row', true);
-  show('backup-folder-wrap', !local);   // remote backup folder — not for Local (it uses the path)
-  { const lbl = document.querySelector('#backup-remote-row label[for="cfg-backup-remote-on"]');
-    if (lbl) lbl.textContent = window.i18n.t(local ? 'sync.local_backup_on' : 'sync.backup_remote_on'); }
+  // The on/off toggle lives on the folder-label row now (no separate toggle line). The row is
+  // always shown — it carries the toggle. For Local there is no remote folder, so hide the
+  // folder input and relabel the row's head to "Enable backup"; otherwise it is "Backup folder
+  // (remote)" with the input (serekkr, 21/10/2026).
+  show('backup-folder-wrap', true);
+  { const inp = $('cfg-backup-folder'); if (inp) inp.style.display = local ? 'none' : ''; }
+  { const lbl = $('backup-folder-label');
+    if (lbl) { const k = local ? 'sync.local_backup_on' : 'sync.backup_folder';
+      lbl.setAttribute('data-i18n', k); lbl.textContent = window.i18n.t(k); } }
   const le = $('cfg-local-enabled'); if (le) le.checked = local;
   // On Local the toggle reflects whether the local backup is enabled (from saved config);
   // on Samba/WebDAV it is left as the remote-backup flag.
