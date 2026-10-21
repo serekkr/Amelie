@@ -12955,10 +12955,16 @@ function applyRemoteUiVisibility() {
   // Local is a BACKUP-ONLY destination: no two-way sync, no remote-backup toggle
   // and no remote folder — the backup goes to the local path chosen above.
   show('bksec-sync', !local);
-  show('backup-remote-row', !local);
-  show('backup-folder-wrap', !local);
-  const le = $('cfg-local-enabled'); if (le) le.checked = local;   // kind drives the hidden flag
-  if (local) { const bro = $('cfg-backup-remote-on'); if (bro) bro.checked = false; }
+  // The backup toggle is shown for ALL kinds now: remote backup on/off for Samba/WebDAV,
+  // and "Enable backup" for Local (which had no activation flag before — serekkr, 21/10/2026).
+  show('backup-remote-row', true);
+  show('backup-folder-wrap', !local);   // remote backup folder — not for Local (it uses the path)
+  { const lbl = document.querySelector('#backup-remote-row label[for="cfg-backup-remote-on"]');
+    if (lbl) lbl.textContent = window.i18n.t(local ? 'sync.local_backup_on' : 'sync.backup_remote_on'); }
+  const le = $('cfg-local-enabled'); if (le) le.checked = local;
+  // On Local the toggle reflects whether the local backup is enabled (from saved config);
+  // on Samba/WebDAV it is left as the remote-backup flag.
+  if (local) { const bro = $('cfg-backup-remote-on'); if (bro) bro.checked = !!(state.config?.sync?.local?.enabled); }
 }
 
 function syncHiddenTogglesFromForm(form) {
@@ -12986,7 +12992,7 @@ function populateUnifiedBackupUi(cfg) {
   setV('cfg-sync-folder', form.syncFolder);
   setV('cfg-smb-path', form.backupFolder);
   setV('cfg-webdav-path', form.backupFolder);
-  setC('cfg-backup-remote-on', form.backupRemoteOn);
+  setC('cfg-backup-remote-on', form.kind === 'local' ? form.localOn : form.backupRemoteOn);
   setC('cfg-sync-on', form.syncOn);
   setC('cfg-local-enabled', form.localOn);
   setV('cfg-local-path', form.localPath);
@@ -13040,7 +13046,7 @@ async function saveSettings() {
     kind, vpn: vpnOn,
     // Local is an exclusive, backup-only destination: no remote backup, no sync.
     backupRemoteOn: !isLocal && !!$('cfg-backup-remote-on')?.checked,
-    localOn: isLocal,
+    localOn: isLocal && !!$('cfg-backup-remote-on')?.checked,   // Local: the backup on/off toggle
     syncOn: !isLocal && !!$('cfg-sync-on')?.checked,
     smbIp: val('cfg-smb-ip'), smbShare: val('cfg-smb-share'),
     smbUser: raw('cfg-smb-user'), smbPass: raw('cfg-smb-pass'),
