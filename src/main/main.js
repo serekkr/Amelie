@@ -4645,7 +4645,9 @@ ipcMain.handle('notify:show', (_, { title, body } = {}) => {
   try {
     const { Notification } = require('electron');
     if (!Notification.isSupported || !Notification.isSupported()) return false;
-    new Notification({ title: String(title || 'Amelie'), body: String(body || '') }).show();
+    // urgency 'critical' on Linux: the notification STAYS on screen until the user
+    // dismisses it (no auto-timeout) — a deadline reminder shouldn't vanish unseen.
+    new Notification({ title: String(title || 'Amelie'), body: String(body || ''), urgency: 'critical', timeoutType: 'never' }).show();
     return true;
   } catch (_) { return false; }
 });
