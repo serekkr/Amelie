@@ -13744,7 +13744,13 @@ function setupSync() {
   // from OUTSIDE the app (file manager, external sync) — no restart needed. loadTree()
   // re-reads the vault; the note open in the editor is left untouched. Debounced in main.
   // (A redraw landing on top of an inline rename is held — see renderTree.)
-  window.inkwell.onVaultChanged?.(() => { try { loadTree(); } catch (_) {} });
+  window.inkwell.onVaultChanged?.(() => {
+    try { loadTree(); } catch (_) {}
+    // A todo that arrived via sync (created on another device) must get its deadline
+    // reminder scheduled/shown here too — not only after a local todo action or a
+    // restart (serekkr, 23/10/2026). Re-reads the todos and re-arms the alerts.
+    try { refreshTodoAlerts(); } catch (_) {}
+  });
 }
 
 // ─── Configurable shortcuts ───────────────────────────────────────────────────
