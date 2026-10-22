@@ -16818,34 +16818,28 @@ function showLinkPopup(query, cursorPos) {
   if (search) {
     if (!search.dataset.wired) {
       search.dataset.wired = '1';
-      search.addEventListener('input', () => renderLinkMatches(search.value));
+      search.addEventListener('input', () => { renderLinkMatches(search.value); popup.classList.toggle('has-query', !!search.value); });
       search.addEventListener('keydown', handleLinkPopupKey);
       search.addEventListener('mousedown', e => e.stopPropagation());
+      // ✕ clears the search text in one click.
+      const lc = $('link-search-clear');
+      if (lc) lc.addEventListener('click', () => { search.value = ''; renderLinkMatches(''); popup.classList.remove('has-query'); try { search.focus(); } catch (_) {} });
     }
     if (!wasOpen) { search.value = query || ''; setTimeout(() => { try { search.focus(); } catch (_) {} }, 0); }
+    popup.classList.toggle('has-query', !!search.value);
   }
 
-  // Compute the caret's VIEWPORT position directly, then anchor the popup
-  // below the caret line. Old formula mixed viewport and content coordinates
-  // — leading the popup to land off-screen on long notes.
+  // Center the popup on the viewport (it's the link picker you open from the menu /
+  // with [[ ) — a command-palette style dialog, not anchored to the caret, so it's
+  // always in the same readable spot (serekkr, 22/10/2026: "deve essere centrata").
   popup.style.display = 'block';
   popup.style.left = '0px'; popup.style.top = '0px';
-  // CM engine: the textarea is hidden, so its caret coords are wrong (popup landed
-  // too low). Use CodeMirror's real caret viewport position.
-  const cmc = (_cmActive && _cmHandle) ? _cmHandle.caretCoords() : null;
-  const caret = cmc ? { left: cmc.left, top: cmc.top } : getCaretViewportPosition(editor);
-  const lineH = cmc ? Math.max(16, cmc.bottom - cmc.top) : (parseInt(getComputedStyle(editor).lineHeight) || 22);
   const popupH = popup.offsetHeight || 240;
   const popupW = popup.offsetWidth || 260;
-
-  let left = caret.left;
-  if (left + popupW > window.innerWidth - 8) left = window.innerWidth - popupW - 8;
+  let left = Math.round((window.innerWidth - popupW) / 2);
   if (left < 8) left = 8;
-
-  let top = caret.top + lineH + 4;
-  if (top + popupH > window.innerHeight - 8) top = caret.top - popupH - 4;
+  let top = Math.round((window.innerHeight - popupH) / 2);
   if (top < 8) top = 8;
-
   popup.style.left = left + 'px';
   popup.style.top  = top + 'px';
   linkPopupActive = true;

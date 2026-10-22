@@ -3618,6 +3618,15 @@ body.split-open .pane-flash::after {
   border-bottom: 1px solid var(--border); border-radius: 7px 7px 0 0;
 }
 #link-search::placeholder { color: var(--text-3); }
+#link-search { padding-right: 40px; }   /* room for the clear ✕ */
+#link-search-clear {
+  position: absolute; top: 0; right: 0; width: 40px; height: 40px; z-index: 1;
+  display: none; align-items: center; justify-content: center;
+  background: transparent; border: none; cursor: pointer; padding: 0;
+  color: var(--text-0); font-size: 14px; line-height: 1;
+}
+#link-search-clear:hover { color: #fff; }
+#link-popup.has-query #link-search-clear { display: flex; }
 #link-list { padding: 4px 0; overflow-y: auto; max-height: 460px; }
 .link-empty { padding: 10px 12px; color: var(--text-3); font-family: var(--ui-font); font-size: 13px; }
 .link-item {
