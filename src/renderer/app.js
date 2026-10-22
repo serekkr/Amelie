@@ -7179,9 +7179,67 @@ function makeCellEditable(table, cell) {
       e.preventDefault();
       cell.textContent = cell.dataset.origText || '';
       cell.blur();
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      // Each cell is its OWN contentEditable (plus an absolutely-positioned resize
+      // handle), so the caret used to stop dead at a cell edge instead of moving on
+      // along the row like normal text (serekkr, 22/10/2026). Carry it across: at the
+      // end of a cell → start of the next; at the start → end of the previous (wrapping
+      // to the next/previous row, reading order). Inside a cell, or with a selection,
+      // the browser moves one character as usual.
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !sel.isCollapsed) return;
+      const info = _cellCaretInfo(cell, sel);
+      if (e.key === 'ArrowRight' && info.atEnd) {
+        const next = _adjacentTableCell(table, cell, +1);
+        if (next) { e.preventDefault(); _placeCaretInCell(next, 'start'); }
+      } else if (e.key === 'ArrowLeft' && info.atStart) {
+        const prev = _adjacentTableCell(table, cell, -1);
+        if (prev) { e.preventDefault(); _placeCaretInCell(prev, 'end'); }
+      }
     }
   });
   cell.addEventListener('blur', () => syncCellToMarkdown(table, cell));
+}
+
+// Where the caret sits within a preview table cell, ignoring the zero-width-space
+// anchor and the (text-less) resize handle. atStart/atEnd are about the cell's TEXT.
+function _cellCaretInfo(cell, sel) {
+  try {
+    const r = sel.getRangeAt(0);
+    const pre = document.createRange();
+    pre.selectNodeContents(cell);
+    pre.setEnd(r.endContainer, r.endOffset);
+    const before = pre.toString().replace(/​/g, '').length;
+    const total  = cell.textContent.replace(/​/g, '').length;
+    return { atStart: before === 0, atEnd: before >= total };
+  } catch (_) { return { atStart: false, atEnd: false }; }
+}
+
+// The editable cell dir (+1/-1) steps away from `cell`, in reading order across the
+// whole table (so right off a row's last cell lands on the next row's first).
+function _adjacentTableCell(table, cell, dir) {
+  const cells = [...table.querySelectorAll('th, td')].filter(c => c.dataset.editable === '1');
+  const i = cells.indexOf(cell);
+  if (i < 0) return null;
+  return cells[i + dir] || null;
+}
+
+// Focus a cell and drop the caret at the start or the END OF ITS TEXT (before the
+// resize handle, so it never lands in the handle at the cell's right edge).
+function _placeCaretInCell(cell, where) {
+  cell.focus();
+  const sel = window.getSelection();
+  const r = document.createRange();
+  r.selectNodeContents(cell);
+  if (where === 'start') {
+    r.collapse(true);
+  } else {
+    const last = cell.lastElementChild;
+    if (last && last.classList && last.classList.contains('col-resize-handle')) r.setEndBefore(last);
+    r.collapse(false);
+  }
+  sel.removeAllRanges();
+  sel.addRange(r);
 }
 
 function syncCellToMarkdown(table, cell) {
