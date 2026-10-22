@@ -5554,12 +5554,12 @@ function _attachmentPlacement() {
     let folders = usage.get(node.attachmentName);
     // An attachment a note links belongs to that note: show it INSIDE the note, never
     // as a separate tree row (serekkr, 22/10/2026 — "non si devono piu' vedere nella
-    // root, non ce li ho messi io" … "per tutte" i tipi). An Obsidian import links its
-    // photos/PDFs from the notes, so listing every one scattered a copy across the tree
-    // and the root. This now covers ALL types (image, pdf, audio, video). An attachment
-    // NO note uses falls through below (its dragged-to folder, else the root) so a
-    // dropped/unlinked file is still findable.
-    if (folders && folders.size) continue;
+    // root, non ce li ho messi io"). An Obsidian import links its photos from the notes,
+    // so listing every one scattered a copy across the tree and the root. Covers images,
+    // audio and video — but NOT PDFs ("i pdf no"): a linked PDF keeps its row so a
+    // document stays reachable from the tree without opening its note. An attachment NO
+    // note uses falls through below (its dragged-to folder, else the root), still findable.
+    if (folders && folders.size && node.type !== 'pdf') continue;
     // Linked by no note: the folder the sidebar order keeps it in (dragged there,
     // or where an import found it), else the root, where it can still be found.
     if (!folders || !folders.size) folders = (homes || (homes = _attachmentHomes())).get(node.path);
