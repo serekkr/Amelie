@@ -1908,10 +1908,12 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   /* min-width: a column holds this width while you type and only grows once the
      text actually fills it (reaches the right edge) — not halfway. */
   min-width: 90px;
-  /* overflow-wrap:normal + word-break:normal: a word is NEVER split. With
-     break-word a narrow/fixed column would shrink below the word and stack it
-     one letter per line — this keeps the word whole (it overflows instead). */
-  overflow-wrap: normal; word-break: normal;
+  /* Wrap long text INSIDE the cell instead of letting it spill over the next column
+     (serekkr, 23/10/2026: "il testo va su l'altra colonna invece di allargarsi").
+     overflow-wrap:break-word breaks a word only when it would otherwise overflow, at
+     the overflow point — NOT one letter per line (that was word-break:break-all). Normal
+     text still grows the column under table-layout:auto; only an over-long run wraps. */
+  overflow-wrap: break-word; word-break: normal;
 }
 #preview-content td:empty::before,
 #preview-content th:empty::before { content: '\00a0'; }
