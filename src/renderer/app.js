@@ -10562,9 +10562,31 @@ function setupSettings() {
     }
     return false;
   }
-  $('cfg-webdav-enabled')?.addEventListener('change', () => backupRemoteExclusiveGuard('webdav'));
-  $('cfg-vpn-enabled')?.addEventListener('change', () => backupRemoteExclusiveGuard('vpn'));
-  $('cfg-samba-enabled')?.addEventListener('change', () => backupRemoteExclusiveGuard('samba'));
+  // Backup (REMOTE) and two-way SYNC, when BOTH are on, must point at the SAME place
+  // (same method): no "WebDAV sync + Samba backup" mix (serekkr, 23/10/2026). Local
+  // backup is NOT remote and is always allowed alongside (e.g. Local + WebDAV backup).
+  // Families: 'webdav' vs 'samba' (VPN and LAN both land on a Samba share).
+  function _backupRemoteFamily() {
+    if ($('cfg-webdav-enabled')?.checked) return 'webdav';
+    if ($('cfg-samba-enabled')?.checked || $('cfg-vpn-enabled')?.checked) return 'samba';
+    return null;
+  }
+  function _syncFamilyChecked() {
+    if ($('cfg-tw-webdav-enabled')?.checked) return 'webdav';
+    if ($('cfg-tw-lan-enabled')?.checked || $('cfg-tw-samba-enabled')?.checked) return 'samba';
+    return null;
+  }
+  function backupSyncSamePlaceGuard(which) {
+    const me = $('cfg-' + which + '-enabled'); if (!me || !me.checked) return false;
+    const bf = which === 'webdav' ? 'webdav' : 'samba';
+    const sf = _syncFamilyChecked();
+    if (sf && sf !== bf) { me.checked = false; showToast('✗ ' + window.i18n.t('sync.same_place')); try { updateActionNowButtons(); } catch (_) {} return true; }
+    return false;
+  }
+  const _backupEnableGuard = (which) => { if (backupRemoteExclusiveGuard(which)) return; backupSyncSamePlaceGuard(which); };
+  $('cfg-webdav-enabled')?.addEventListener('change', () => _backupEnableGuard('webdav'));
+  $('cfg-vpn-enabled')?.addEventListener('change', () => _backupEnableGuard('vpn'));
+  $('cfg-samba-enabled')?.addEventListener('change', () => _backupEnableGuard('samba'));
   // Gate: the Samba destination can't be switched on until its write test passed
   // — same rule the WebDAV toggle follows, so an unusable share can't sit
   // "enabled" and fail silently at backup time.
@@ -11243,6 +11265,19 @@ function setupSettings() {
         const err = $('tw-method-error');
         if (err) { err.style.display = 'block'; err.textContent = window.i18n.t('sync.test_first'); }
         return;
+      }
+      // Backup (remote) + sync must be the SAME place: refuse a sync method whose family
+      // differs from an active remote backup (serekkr, 23/10/2026). Local backup exempt.
+      {
+        const sf = which === 'webdav' ? 'webdav' : 'samba';
+        const bf = _backupRemoteFamily();
+        if (me.checked && bf && bf !== sf) {
+          me.checked = false;
+          const err = $('tw-method-error');
+          if (err) { err.style.display = 'block'; err.textContent = window.i18n.t('sync.same_place'); }
+          try { applyTwowayMethodToggle(which); } catch (_) {}
+          return;
+        }
       }
       const err = $('tw-method-error'); if (err) err.style.display = 'none';
       applyTwowayMethodToggle(which);
