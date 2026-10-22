@@ -16285,9 +16285,14 @@ function setupSecurityTab() {
       : (b / (1024 * 1024)).toFixed(1) + ' MB';
     if (btn) btn.disabled = true;
     try {
-      // No confirm popup — delete directly and just report how many were removed.
+      // Dry-run first (apply=false) → confirm with the count/size → only then delete.
+      // PDFs and anything kept in the sidebar root are already spared by the backend.
+      const scan = await window.inkwell.removeUnusedMedia(false);
+      if (!scan || !scan.count) { showToast(window.i18n.t('vault_settings.unused_none')); return; }
+      const ok = await showConfirmModal(
+        window.i18n.t('vault_settings.unused_confirm', { count: scan.count, size: fmtBytes(scan.bytes) }));
+      if (!ok) return;
       const res = await window.inkwell.removeUnusedMedia(true);
-      if (!res || !res.count) { showToast(window.i18n.t('vault_settings.unused_none')); return; }
       showToast(window.i18n.t('vault_settings.unused_done', { count: res.count, size: fmtBytes(res.bytes) }));
       try { await openSecurityTab(); } catch (_) {}                 // refresh content stats
     } catch (_) {

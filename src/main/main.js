@@ -4427,8 +4427,23 @@ ipcMain.handle('attachment:removeUnusedMedia', async (_, apply) => {
   };
   walkMedia(ATTACHMENTS_DIR, '');
 
-  // 3) Unused = logical rel path referenced by no note.
-  const unused = media.filter(f => !referenced.has(f.logical));
+  // 2b) Media the user keeps in the sidebar ROOT (dropped/placed there, in no note):
+  //     tree-order's '' list. These were added ON PURPOSE and are NOT orphans of a
+  //     removed note reference, so cleanup must never delete them (serekkr, 22/10/2026:
+  //     "quelli che ho aggiunto direttamente nella root … non devono essere cancellati").
+  //     Keys match f.logical (the "attachments/" prefix dropped), same as `referenced`.
+  const rootKept = new Set();
+  try {
+    const order = JSON.parse(fs.readFileSync(treeOrderFile(), 'utf8'));
+    const rootList = order && Array.isArray(order['']) ? order[''] : [];
+    for (const p of rootList) {
+      if (typeof p === 'string' && p.startsWith('attachments/')) rootKept.add(p.replace(/^attachments\//, ''));
+    }
+  } catch (_) { /* no order file → nothing kept in root */ }
+
+  // 3) Unused = note media (image/audio/video) referenced by NO note AND not kept in
+  //    the sidebar root. What's left only ever lived inside a note and lost its link.
+  const unused = media.filter(f => !referenced.has(f.logical) && !rootKept.has(f.logical));
   let bytes = 0;
   const files = [];
   for (const f of unused) {
