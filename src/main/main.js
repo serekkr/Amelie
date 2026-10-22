@@ -3620,10 +3620,17 @@ async function saveAttachmentBuffer(originalName, buffer) {
       if (!check(Buffer.from(u8.subarray(0, 4096)))) throw new Error('ATTACHMENT_CONTENT_MISMATCH');
     }
   }
+  // Keep up to 120 ASCII chars of the name (matches the note-name cap above). 40 was
+  // too tight for real filenames: an Obsidian import of
+  // "FlowSignal_White_Paper_of_Asymmetric_Traffic_Handling_392.pdf" landed as
+  // "...Asymmetric_Tra.pdf", unreadable in the tree (serekkr, 21/10/2026). 120 + the
+  // extension + the ".enc" at-rest suffix + a "-N" dedup counter stays well under the
+  // filesystem's 255-byte-per-segment limit, and the links are rewritten to whatever
+  // name is returned here, so a longer name never breaks an embed.
   const baseName = path.basename(originalName, ext)
     .replace(/[^a-zA-Z0-9_\-]/g, '_')
     .replace(/_+/g, '_')
-    .slice(0, 40) || 'image';
+    .slice(0, 120) || 'image';
   // Optional subfolder (e.g. "scripts/") preserved from the passed name.
   const rawSub = path.dirname(originalName);
   const subDir = (rawSub && rawSub !== '.') ? rawSub.split(/[\\/]+/).map(s => s.replace(/[^a-zA-Z0-9_\-]/g, '_')).filter(Boolean).join('/') : '';
