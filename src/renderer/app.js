@@ -19078,11 +19078,16 @@ function addEventNotif(text, ok = true, dests = '', key = '', report = null, coa
   const entry = { text, key: key || undefined, ts: Date.now(), ok: !!ok,
                   dests: Array.isArray(dests) ? dests : undefined, where: Array.isArray(dests) ? '' : (dests || ''),
                   report: report && report.id ? { id: report.id, counts: report.counts } : undefined };
-  const top = _eventNotifs[0];
-  if (coalesce && top && top.key && key && top.key === key) {
-    // Same outcome as the most recent line (a recurring automatic sync) → refresh THAT line's
-    // time in place instead of stacking a duplicate, and don't bump the unread count for it.
-    _eventNotifs[0] = entry;
+  // Coalesce a recurring automatic outcome onto its EXISTING line, wherever it sits —
+  // not only when it is the single most recent entry. Backup and two-way sync run on
+  // their own timers, so their automatic lines alternate at the top; matching only
+  // _eventNotifs[0] meant each pass saw the OTHER type on top, never coalesced, and the
+  // bell stacked a fresh "backup"/"sync completed" every interval (serekkr, 22/10/2026).
+  // Found: refresh it and move it to the top with the new time, without bumping unread.
+  const idx = (coalesce && key) ? _eventNotifs.findIndex(e => e && e.key === key) : -1;
+  if (idx >= 0) {
+    _eventNotifs.splice(idx, 1);
+    _eventNotifs.unshift(entry);
   } else {
     _eventNotifs.unshift(entry);
     _eventNotifs = _eventNotifs.slice(0, 30);
