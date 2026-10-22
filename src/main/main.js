@@ -3322,7 +3322,9 @@ ipcMain.handle('fs:searchNotes', async (_, query) => {
 
   searchDir(NOTES_DIR, '');
   results.sort((a, b) => b.score - a.score);
-  return results.slice(0, 20);
+  // 100, not 20: the results now fill the whole sidebar panel, so show all the similar
+  // matches at once instead of cutting the list short (serekkr, 22/10/2026).
+  return results.slice(0, 100);
 });
 
 ipcMain.handle('fs:readNote', async (_, filePath) => {

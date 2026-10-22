@@ -3201,7 +3201,9 @@ body.split-open .pane-flash::after {
   position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
   background: var(--bg-2); border: 1px solid var(--border-light);
   border-top: none; border-radius: 0 0 6px 6px;
-  max-height: 340px; overflow-y: auto;
+  /* Fill the WHOLE notes panel below the search box (not a short 340px dropdown), so all
+     matching notes show at once and you scroll through them like the tree (serekkr, 22/10/2026). */
+  max-height: calc(100vh - 120px); overflow-y: auto;
   box-shadow: 0 8px 24px rgba(0,0,0,.5);
 }
 #search-results.empty { display: none; }
