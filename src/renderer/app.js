@@ -8180,10 +8180,23 @@ function removeAttachmentRef(name) {
 let searchDebounce = null;
 
 function setupSearch() {
+  // The ✕ clear button: wipe the query in one click and go back to the full tree.
+  const _syncSearchClear = () => { $('search-wrap')?.classList.toggle('has-query', !!searchInput.value); };
+  const clearNoteSearch = () => {
+    searchInput.value = '';
+    state.searchQuery = '';
+    hideSearchResults();
+    renderTree();
+    _syncSearchClear();
+    searchInput.focus();
+  };
+  $('search-clear')?.addEventListener('click', clearNoteSearch);
+
   searchInput.addEventListener('input', () => {
     const q = searchInput.value;
     state.searchQuery = q;
     clearTimeout(searchDebounce);
+    _syncSearchClear();
 
     if (!q.trim()) {
       hideSearchResults();
@@ -8200,10 +8213,7 @@ function setupSearch() {
 
   searchInput.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      searchInput.value = '';
-      state.searchQuery = '';
-      hideSearchResults();
-      renderTree();
+      clearNoteSearch();
     }
     if (e.key === 'Enter') {
       // Open first result
@@ -13980,7 +13990,7 @@ function setupKeyboard() {
     if (e.key === 'Escape') {
       closeSettings();
       $('context-menu').style.display = 'none';
-      if (searchInput === document.activeElement) { searchInput.value=''; state.searchQuery=''; renderTree(); }
+      if (searchInput === document.activeElement) { searchInput.value=''; state.searchQuery=''; renderTree(); $('search-wrap')?.classList.remove('has-query'); }
     }
   });
 }

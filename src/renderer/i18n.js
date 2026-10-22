@@ -18,6 +18,7 @@ const TRANSLATIONS = {
     // Sidebar
     'sidebar.notes':          'Note',
     'sidebar.search':         'Cerca note…',
+    'sidebar.search_clear':   'Svuota ricerca',
     'sidebar.new_note':       'Nuova nota',
     'sidebar.new_folder':     'Nuova cartella',
     'sidebar.new_todo':       'Nuovo todo',
@@ -973,6 +974,7 @@ const TRANSLATIONS = {
     // Sidebar
     'sidebar.notes':          'Notes',
     'sidebar.search':         'Search notes…',
+    'sidebar.search_clear':   'Clear search',
     'sidebar.new_note':       'New note',
     'sidebar.new_folder':     'New folder',
     'sidebar.new_todo':       'New todo',

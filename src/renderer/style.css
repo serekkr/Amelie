@@ -672,6 +672,17 @@ html.is-mac #titlebar { padding-left: 72px; }
   font-size: var(--tree-font-size, 13px); padding: 5px 10px; outline: none; transition: border-color .2s;
 }
 #search-input:focus, #tags-search-input:focus, #bookmarks-search-input:focus { border-color: var(--accent-dim); }
+/* Clear (✕) button inside the notes search box — one click wipes the query. Shown only
+   while there is something typed (see #search-wrap.has-query). */
+#search-input { padding-right: 30px; }   /* leave room for the ✕ so text doesn't run under it */
+#search-clear {
+  position: absolute; top: 22px; right: 16px; width: 22px; height: 27px;
+  display: none; align-items: center; justify-content: center;
+  background: transparent; border: none; cursor: pointer; padding: 0;
+  color: var(--text-3); font-size: 13px; line-height: 1; border-radius: 4px;
+}
+#search-clear:hover { color: var(--text-0); background: var(--bg-3); }
+#search-wrap.has-query #search-clear { display: flex; }
 /* The scrollbar uses the global style (wide and grabbable). The resize handle
    sits on the editor side of the border, so it doesn't cover it: notes stay scrollable. */
 /* The tree gets its own background, transparent everywhere except Graphite (see the
