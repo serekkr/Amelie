@@ -679,9 +679,9 @@ html.is-mac #titlebar { padding-left: 72px; }
   position: absolute; top: 22px; right: 16px; width: 22px; height: 27px;
   display: none; align-items: center; justify-content: center;
   background: transparent; border: none; cursor: pointer; padding: 0;
-  color: var(--text-3); font-size: 13px; line-height: 1; border-radius: 4px;
+  color: var(--text-0); font-size: 13px; line-height: 1; border-radius: 4px;
 }
-#search-clear:hover { color: var(--text-0); background: var(--bg-3); }
+#search-clear:hover { color: #fff; background: var(--bg-3); }
 #search-wrap.has-query #search-clear { display: flex; }
 /* The scrollbar uses the global style (wide and grabbable). The resize handle
    sits on the editor side of the border, so it doesn't cover it: notes stay scrollable. */
