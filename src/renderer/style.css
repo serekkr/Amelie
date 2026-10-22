@@ -3608,7 +3608,7 @@ body.split-open .pane-flash::after {
   background: var(--bg-2); border: 1px solid var(--border-light);
   border-radius: 7px; overflow: hidden;
   box-shadow: 0 8px 24px rgba(0,0,0,.5);
-  min-width: 600px; max-width: 720px;   /* always wide by default, not just on long names */
+  min-width: 680px; max-width: 900px;   /* wide so folder + note name fit without truncation */
   display: flex; flex-direction: column;
 }
 #link-search {
@@ -3618,7 +3618,7 @@ body.split-open .pane-flash::after {
   border-bottom: 1px solid var(--border); border-radius: 7px 7px 0 0;
 }
 #link-search::placeholder { color: var(--text-3); }
-#link-list { padding: 4px 0; overflow-y: auto; max-height: 240px; }
+#link-list { padding: 4px 0; overflow-y: auto; max-height: 460px; }
 .link-empty { padding: 10px 12px; color: var(--text-3); font-family: var(--ui-font); font-size: 13px; }
 .link-item {
   display: flex; align-items: center; gap: 8px;
@@ -3630,7 +3630,7 @@ body.split-open .pane-flash::after {
 }
 .link-item-icon { font-size: 13px; flex-shrink: 0; }
 .link-item-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.link-item-path { font-size: 13px; color: var(--text-0); font-family: var(--editor-font); padding-left: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; max-width: 45%; }
+.link-item-path { font-size: 13px; color: var(--text-0); font-family: var(--editor-font); padding-left: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; max-width: 60%; }
 .link-item-date { flex-shrink: 0; padding-left: 14px; font-size: 12px; color: var(--text-3); font-family: var(--ui-font); white-space: nowrap; }
 
 /* ─── Tables in preview ─────────────────────────────────────── */

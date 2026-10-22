@@ -16794,12 +16794,11 @@ function renderLinkMatches(query) {
     const clean = (n.path || '').replace(/^attachments\/(pdf|images|audio|videos)\//, '').replace(/^attachments\//, '');
     const showPath = clean.includes('/') ? clean : '';
     const icon = n.type === 'pdf' ? '📕' : n.type === 'audio' ? '🎵' : n.type === 'video' ? '🎬' : '📄';
-    const modMs = n.modified ? new Date(n.modified).getTime() : NaN;
-    const modStr = isNaN(modMs) ? '' : _fmtDateDMY(modMs);   // gg/mm/aaaa
+    // No date here — the link picker shows only the note name and its folder (serekkr,
+    // 22/10/2026: "in collegamenti quando cerco non devi farmi vedere la data").
     item.innerHTML = `<span class="link-item-icon">${icon}</span>
       <span class="link-item-name">${escHtml(n.name)}</span>
-      ${showPath ? `<span class="link-item-path">${escHtml(showPath)}</span>` : ''}
-      ${modStr ? `<span class="link-item-date">${modStr}</span>` : ''}`;
+      ${showPath ? `<span class="link-item-path">${escHtml(showPath)}</span>` : ''}`;
     item.addEventListener('mousedown', e => {
       e.preventDefault();
       insertNoteLink(n.name);
