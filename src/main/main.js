@@ -4638,6 +4638,18 @@ ipcMain.handle('shell:showItemInFolder', async (_, relPath) => {
 
 // Open an external URL with the system default browser. Accepts http(s)://
 // and bare URLs (e.g. starting with www.) — those get a leading https:// added.
+// Native OS desktop notification (todo reminders). Fired from main via Electron's
+// own Notification — reliable on Linux, unlike the renderer web Notification which
+// depends on page permission. No-op where notifications aren't supported.
+ipcMain.handle('notify:show', (_, { title, body } = {}) => {
+  try {
+    const { Notification } = require('electron');
+    if (!Notification.isSupported || !Notification.isSupported()) return false;
+    new Notification({ title: String(title || 'Amelie'), body: String(body || '') }).show();
+    return true;
+  } catch (_) { return false; }
+});
+
 ipcMain.handle('shell:openExternal', async (_, url) => {
   if (typeof url !== 'string' || !url) return false;
   let target = url.trim();

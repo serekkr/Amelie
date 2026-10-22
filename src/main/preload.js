@@ -60,6 +60,9 @@ contextBridge.exposeInMainWorld('inkwell', {
   },
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   pickFolder: (title) => ipcRenderer.invoke('dialog:pickFolder', title),
+  // Show a native OS desktop notification (todo reminders) from the main process —
+  // more reliable on Linux than the renderer's web Notification (no permission quirks).
+  notifyShow: (title, body) => ipcRenderer.invoke('notify:show', { title, body }),
 
   todo: {
     list:   ()                          => ipcRenderer.invoke('todo:list'),

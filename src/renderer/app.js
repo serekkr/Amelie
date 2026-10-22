@@ -19019,7 +19019,12 @@ async function refreshTodoAlerts() {
 }
 
 function _fireTodoNotif(it) {
-  try { new Notification('ToDo — ' + (it.title || ''), { body: window.i18n.t('todo.due') + ': ' + _fmtDue(it.due) }); } catch(_) {}
+  const title = 'ToDo — ' + (it.title || '');
+  const body = window.i18n.t('todo.due') + ': ' + _fmtDue(it.due);
+  // Prefer the NATIVE OS notification (main process) — reliable on Linux. Fall back to
+  // the web Notification elsewhere (Android's native path is wired in its own overlay).
+  try { if (window.inkwell && window.inkwell.notifyShow) { window.inkwell.notifyShow(title, body); return; } } catch (_) {}
+  try { new Notification(title, { body }); } catch(_) {}
 }
 
 function _notifKey(it) { return it.file + '@' + it.due; }
