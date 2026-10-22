@@ -550,6 +550,7 @@ const TRANSLATIONS = {
     // Todo
     'todo.new_task':            'Nuovo task',
     'todo.filter_all':          'Tutti',
+    'todo.filter_overdue':      'Scaduti',
     'todo.filter_today':        'Oggi',
     'todo.filter_upcoming':     'In arrivo',
     'todo.filter_done':         'Completati',
@@ -1506,6 +1507,7 @@ const TRANSLATIONS = {
     // Todo
     'todo.new_task':            'New task',
     'todo.filter_all':          'All',
+    'todo.filter_overdue':      'Overdue',
     'todo.filter_today':        'Today',
     'todo.filter_upcoming':     'Upcoming',
     'todo.filter_done':         'Done',

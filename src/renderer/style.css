@@ -4620,6 +4620,7 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .tv-filter.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 .todo-sec-head { display: flex; align-items: center; gap: 8px; margin: 18px 0 4px; font-family: var(--ui-font); font-size: 16px; font-weight: 600; color: var(--text-1); }
+.todo-section-overdue .todo-sec-head { color: var(--red, #e5534b); }
 .todo-sec-count { font-family: var(--editor-font); font-size: 12px; color: var(--text-3); }
 .todo-sec-empty { color: var(--text-3); font-size: 14px; padding: 4px 4px 8px; }
 

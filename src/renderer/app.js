@@ -18714,11 +18714,29 @@ async function renderTodoView() {
   const addRow = $('todo-add-row');
   if (addRow) { addRow.style.display = (_todoFilter === 'done') ? 'none' : ''; addRow.innerHTML = ''; addRow.appendChild(_todoAddTrigger()); }
   list.innerHTML = '';
+  // "Scaduti" (overdue): a VIRTUAL section at the top gathering every not-done task
+  // whose deadline has passed, pulled out of today/tomorrow/upcoming so they're seen
+  // first and not lost mid-list (serekkr, 23/10/2026). Only in the full board.
+  const _isOverdueItem = (it) => it && it.due && _isOverdue(it.due);
+  if (_todoFilter === 'all') {
+    const overdue = ['today', 'tomorrow', 'upcoming'].flatMap(b => data[b] || []).filter(_isOverdueItem)
+      .sort((a, b) => new Date(a.due) - new Date(b.due));
+    if (overdue.length) {
+      const sec = document.createElement('div'); sec.className = 'todo-section todo-section-overdue'; sec.dataset.bucket = 'overdue';
+      const h = document.createElement('div'); h.className = 'todo-sec-head';
+      h.innerHTML = `<span>${window.i18n.t('todo.filter_overdue')}</span><span class="todo-sec-count">${overdue.length}</span>`;
+      sec.appendChild(h);
+      overdue.forEach(it => sec.appendChild(_todoRow(it)));
+      list.appendChild(sec);
+    }
+  }
   const sections = _todoFilter === 'all'
     ? [['today', 'todo.filter_today'], ['tomorrow', 'todo.filter_tomorrow'], ['upcoming', 'todo.filter_upcoming'], ['done', 'todo.filter_done']]
     : [[_todoFilter, 'todo.filter_' + _todoFilter]];
   for (const [bucket, labelKey] of sections) {
-    const items = data[bucket] || [];
+    // In the full board, overdue not-done tasks live in the Overdue section above —
+    // don't repeat them in their own bucket (done is never overdue).
+    const items = (data[bucket] || []).filter(it => !(_todoFilter === 'all' && bucket !== 'done' && _isOverdueItem(it)));
     const sec = document.createElement('div'); sec.className = 'todo-section'; sec.dataset.bucket = bucket;
     if (_todoFilter === 'all') {
       const h = document.createElement('div'); h.className = 'todo-sec-head';
