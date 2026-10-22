@@ -3121,6 +3121,13 @@ body.split-open .pane-flash::after {
   border-radius: 6px; padding: 5px 12px; cursor: pointer; font-family: var(--ui-font); font-size: 13px;
 }
 .media-fallback button:hover { background: var(--bg-4); }
+/* A vault image whose file is missing (deleted attachment) → named placeholder,
+   like Obsidian, instead of a broken-image icon. */
+.img-missing {
+  display: inline-block; padding: 4px 10px;
+  background: var(--bg-2); border: 1px dashed var(--border); border-radius: 6px;
+  color: var(--text-2); font-family: var(--ui-font); font-size: 13px;
+}
 /* Rendered preview inside the split pane (typography rules are cloned at
    runtime from the #preview-content rules so the two previews match). */
 #preview-pane-b {

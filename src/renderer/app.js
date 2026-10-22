@@ -6825,6 +6825,27 @@ function enhancePreviewContent(token, widthsByTable) {
     wrap.appendChild(handle);
     setupImageResize(img, handle);
 
+    // A vault image whose file is gone (deleted attachment) → show a placeholder
+    // naming it, like Obsidian's "name not found", instead of a dead broken-image
+    // icon (asked 2026-10-22). Only for attachment images; a remote/data URL that
+    // fails for another reason is left alone.
+    const _src = img.getAttribute('src') || '';
+    if (/^(inkwell:\/\/)?attachments\//.test(_src)) {
+      const markMissing = () => {
+        if (wrap.dataset.missing) return;
+        wrap.dataset.missing = '1';
+        let name = _src; try { name = decodeURIComponent(_src); } catch (_) {}
+        name = name.split('/').pop();
+        const ph = document.createElement('span');
+        ph.className = 'img-missing';
+        ph.textContent = '⚠️ ' + window.i18n.t('img.not_found', { name });
+        wrap.replaceWith(ph);
+      };
+      img.addEventListener('error', markMissing);
+      // Already failed before this ran (the innerHTML paint happened a frame earlier).
+      if (img.complete && img.naturalWidth === 0) markMissing();
+    }
+
     // Right-click → image context menu
     img.addEventListener('contextmenu', e => {
       e.preventDefault(); e.stopPropagation();
