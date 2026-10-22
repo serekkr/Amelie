@@ -564,6 +564,32 @@ class SyncManager {
              sinceMin: Math.round((Date.now() - at) / 60000) };
   }
 
+  // The fixed clock time ("HH:MM") a DAILY backup should run at, or null when the
+  // backup is on a plain interval instead. Set when the user picks "Daily" and an
+  // hour in the Backup settings (sync.local.dailyTime). A missing/garbled value
+  // falls back to the interval behaviour.
+  _backupDailyTime() {
+    const t = this.config?.sync?.local?.dailyTime;
+    return (typeof t === 'string' && /^\d{1,2}:\d{2}$/.test(t)) ? t : null;
+  }
+
+  // In daily-time mode: is today's backup due? True once today's scheduled hour has
+  // passed AND no backup has run since it — so a launch at 22:00 after a missed 18:00
+  // still backs up today (serekkr, 22/10/2026), and only ONCE per day (a run moves
+  // lastBackupAt past today's time, so it stops being due until tomorrow). Skipped
+  // days are NOT back-filled: only today's run is ever caught up.
+  _dailyBackupDue() {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(this._backupDailyTime() || '');
+    if (!m) return false;
+    const now = new Date();
+    const scheduled = new Date(now);
+    scheduled.setHours(+m[1], +m[2], 0, 0);
+    if (now < scheduled) return false;                 // today's time not reached yet
+    const at = Date.parse(this._syncState?.lastBackupAt || '');
+    if (!Number.isFinite(at)) return true;             // never backed up → due
+    return at < scheduled.getTime();                   // last run was before today's time
+  }
+
   /**
    * Is there an edit that no backup has copied yet? Compares the vault as it is now
    * against the fingerprint recorded by the last run that actually WROTE something
@@ -607,7 +633,16 @@ class SyncManager {
     this._cancelCatchUp();
     const jobs = [];
 
-    if (this._anyBackupDestination()) {
+    if (this._anyBackupDestination() && this._backupDailyTime()) {
+      // Fixed daily clock time: catch up TODAY's run if its hour has already passed
+      // and it hasn't happened yet (app was off at the scheduled time).
+      if (this._dailyBackupDue()) {
+        console.log(`[Sync] Daily backup time ${this._backupDailyTime()} already passed and not done today — catching up`);
+        jobs.push({ what: 'backup', run: () => this._anyBackupDestination() && this.runBackup({ manual: false }) });
+      } else {
+        console.log(`[Sync] Daily backup at ${this._backupDailyTime()} — not due yet / already done today`);
+      }
+    } else if (this._anyBackupDestination()) {
       const min = this._backupIntervalMinutes();
       const { overdue, sinceMin } = this._overdueBy('lastBackupAt', min);
       // The clock alone is not enough to decide this, because a SKIPPED run writes
@@ -706,9 +741,18 @@ class SyncManager {
     // frequency (default hourly — a sensible backup cadence).
     const backupOn = (s.local?.enabled && s.local?.path) || s.vpn?.enabled || s.samba?.enabled || s.sambaLan?.enabled || s.webdav?.enabled;
     if (backupOn) {
-      const min = this._backupIntervalMinutes();
-      this._backupTimer = setInterval(() => this.runBackup(), min * 60 * 1000);
-      console.log(`[Sync] Backup every ${min} min`);
+      const daily = this._backupDailyTime();
+      if (daily) {
+        // Daily at a fixed clock time: poll every 5 min and run when today's hour has
+        // passed and today's backup hasn't happened yet (_dailyBackupDue gates it to
+        // once per day). 5 min = the backup lands within 5 min of the set time.
+        this._backupTimer = setInterval(() => { if (this._dailyBackupDue()) this.runBackup({ manual: false }); }, 5 * 60 * 1000);
+        console.log(`[Sync] Daily backup at ${daily} (checked every 5 min)`);
+      } else {
+        const min = this._backupIntervalMinutes();
+        this._backupTimer = setInterval(() => this.runBackup(), min * 60 * 1000);
+        console.log(`[Sync] Backup every ${min} min`);
+      }
     }
     // Two-way sync timer on its own (shorter) frequency. The remote folder comes
     // from the connection (smb.remoteSubPath) or a legacy local path/subPath.

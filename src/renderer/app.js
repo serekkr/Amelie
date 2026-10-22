@@ -11047,10 +11047,13 @@ function setupSettings() {
     if (w) w.style.display = e.target.value === 'custom' ? 'flex' : 'none';
   });
 
-  // Backup frequency: show the custom-DAYS input only when "Custom" is selected.
+  // Backup frequency: the custom-DAYS input shows only for "Custom"; the daily TIME
+  // picker shows only for "Daily" (1440) — the user sets the exact hour right there.
   $('cfg-local-interval')?.addEventListener('change', e => {
     const w = $('local-interval-custom-wrap');
     if (w) w.style.display = e.target.value === 'custom' ? 'flex' : 'none';
+    const d = $('local-dailytime-wrap');
+    if (d) d.style.display = e.target.value === '1440' ? 'flex' : 'none';
   });
 
   // "Backup now": save settings first (so the latest path/mode is used), then
@@ -12756,6 +12759,10 @@ async function openSettings() {
       if ($('cfg-local-interval-custom')) $('cfg-local-interval-custom').value = Math.max(1, Math.round(blMin / 1440));
       if ($('local-interval-custom-wrap')) $('local-interval-custom-wrap').style.display = 'flex';
     }
+    // Daily time picker: visible only when "Daily" is the chosen frequency.
+    const dt = $('cfg-local-dailytime');
+    if (dt) dt.value = (/^\d{1,2}:\d{2}$/.test(cfg.sync?.local?.dailyTime || '')) ? cfg.sync.local.dailyTime : '18:00';
+    if ($('local-dailytime-wrap')) $('local-dailytime-wrap').style.display = (blMin === 1440) ? 'flex' : 'none';
   }
   if ($('cfg-backup-keep'))    $('cfg-backup-keep').value    = String(cfg.sync?.local?.keepLast ?? 5);
 
@@ -12912,6 +12919,9 @@ function buildSyncConfig(form, prev) {
     enabled: !!form.localOn && !!String(form.localPath || '').trim(), path: form.localPath || '',
     folder: false, archive: true, archiveOnly: true,
     intervalMinutes: form.backupIntervalMinutes, keepLast,
+    // Fixed daily clock time, only when "Daily" is chosen (empty otherwise → plain
+    // interval). The scheduler runs once at/after this hour each day (same-day catch-up).
+    dailyTime: form.backupDailyTime || '',
   };
   const transport = kind === 'webdav' ? 'webdav' : (vpn ? 'vpn' : 'samba');
   const twWebdav = (kind === 'webdav')
@@ -12981,6 +12991,7 @@ function buildFormFromConfig(cfg) {
     webdavUrl: wdSrc.url || '', webdavUser: wdSrc.username || '', webdavPass: wdSrc.password || '',
     backupFolder, syncFolder, localPath: (s.local && s.local.path) || '',
     backupIntervalMinutes: (s.local && s.local.intervalMinutes) || 1440,
+    backupDailyTime: (s.local && /^\d{1,2}:\d{2}$/.test(s.local.dailyTime || '')) ? s.local.dailyTime : '18:00',
     keepLast: (s.local && s.local.keepLast) != null ? s.local.keepLast
       : (s.vpn && s.vpn.keepLast) != null ? s.vpn.keepLast : 5,
     syncIntervalMinutes: tw.intervalMinutes || 15,
@@ -13157,6 +13168,13 @@ async function saveSettings() {
       const v = $('cfg-local-interval')?.value;
       if (v === 'custom') return (parseInt($('cfg-local-interval-custom')?.value) || 2) * 1440;
       return parseFloat(v) || 1440;
+    })(),
+    // The fixed clock time for a DAILY backup — only meaningful (and only applied
+    // below) when the frequency is "Daily"; otherwise it carries no weight.
+    backupDailyTime: (() => {
+      const v = $('cfg-local-interval')?.value;
+      const t = $('cfg-local-dailytime')?.value || '';
+      return (v === '1440' && /^\d{1,2}:\d{2}$/.test(t)) ? t : '';
     })(),
     keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
     syncIntervalMinutes: (() => {

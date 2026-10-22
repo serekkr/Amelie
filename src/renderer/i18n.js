@@ -289,6 +289,7 @@ const TRANSLATIONS = {
     'settings.sync_interval': 'Intervallo sync',
     'settings.minutes':       'minuti',
     'settings.days':          'giorni',
+    'settings.daily_at':      'alle',
 
     // Settings — sync section headers
     'sync.wg_smb':            'WireGuard + SMB / NFS',
@@ -1243,6 +1244,7 @@ const TRANSLATIONS = {
     'settings.sync_interval': 'Sync interval',
     'settings.minutes':       'minutes',
     'settings.days':          'days',
+    'settings.daily_at':      'at',
 
     // Settings — sync
     'sync.wg_smb':            'WireGuard + SMB / NFS',
@@ -2181,6 +2183,7 @@ const TRANSLATIONS = {
     'settings.sync_interval': 'Synchronisierungsintervall',
     'settings.minutes': 'Minuten',
     'settings.days': 'Tage',
+    'settings.daily_at': 'um',
     'sync.wg_smb': 'WireGuard + SMB / NFS',
     'sync.webdav': 'WebDAV',
     'sync.local': 'Lokal',
@@ -3030,6 +3033,7 @@ const TRANSLATIONS = {
     'settings.sync_interval': 'Intervalo de sincronización',
     'settings.minutes': 'minutos',
     'settings.days': 'días',
+    'settings.daily_at': 'a las',
     'sync.wg_smb': 'WireGuard + SMB / NFS',
     'sync.webdav': 'WebDAV',
     'sync.local': 'Local',
@@ -3879,6 +3883,7 @@ const TRANSLATIONS = {
     'settings.sync_interval': 'Intervalle de synchronisation',
     'settings.minutes': 'minutes',
     'settings.days': 'jours',
+    'settings.daily_at': 'à',
     'sync.wg_smb': 'WireGuard + SMB / NFS',
     'sync.webdav': 'WebDAV',
     'sync.local': 'Local',
@@ -4728,6 +4733,7 @@ const TRANSLATIONS = {
     'settings.sync_interval': 'Interwał synchronizacji',
     'settings.minutes': 'minut',
     'settings.days': 'dni',
+    'settings.daily_at': 'o',
     'sync.wg_smb': 'WireGuard + SMB / NFS',
     'sync.webdav': 'WebDAV',
     'sync.local': 'Lokalny',
@@ -5576,6 +5582,7 @@ const TRANSLATIONS = {
     'settings.sync_interval': 'Interval de sincronizare',
     'settings.minutes': 'minute',
     'settings.days': 'zile',
+    'settings.daily_at': 'la',
     'sync.wg_smb': 'WireGuard + SMB / NFS',
     'sync.webdav': 'WebDAV',
     'sync.local': 'Local',
