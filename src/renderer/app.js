@@ -18369,7 +18369,7 @@ function renderRecentView() {
     // and clicks as a single entry.
     if (it.path) main.title = it.path;
     main.appendChild(name);
-    if (mod) { const sub = document.createElement('div'); sub.className = 'simple-sub'; sub.textContent = window.i18n.t('recent.modified') + ' ' + _fmtDateDMY(mod); main.appendChild(sub); }
+    if (mod) { const sub = document.createElement('div'); sub.className = 'simple-sub'; sub.textContent = window.i18n.t('recent.modified') + ' ' + _fmtDateTimeDMY(mod); main.appendChild(sub); }
     main.addEventListener('click', () => _openByPath(it.path, it.name));
     row.appendChild(main);
     c.appendChild(row);
@@ -18639,6 +18639,8 @@ function _fmtDueDMY(due) { const d = new Date(due); if (isNaN(d)) return ''; con
 function _fmtDate(ms) { const d = new Date(ms); if (isNaN(d)) return '—'; return d.toLocaleString(undefined, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }); }
 // Explicit day/month/year (never locale-reordered) — used in the Recents view.
 function _fmtDateDMY(ms) { const d = new Date(ms); if (isNaN(d)) return '—'; const p = n => String(n).padStart(2, '0'); return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear(); }
+// Same, WITH the time — for the "Modified" lines where the hour matters (Recent view).
+function _fmtDateTimeDMY(ms) { const d = new Date(ms); if (isNaN(d)) return '—'; const p = n => String(n).padStart(2, '0'); return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
 function _isOverdue(due) { const d = new Date(due); return !isNaN(d) && d.getTime() < Date.now(); }
 
 // The board lives in a TAB of its own: opening it from a notification (or
