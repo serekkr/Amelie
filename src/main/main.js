@@ -5552,6 +5552,14 @@ function _attachmentPlacement() {
   let homes = null;
   for (const node of nodes) {
     let folders = usage.get(node.attachmentName);
+    // An IMAGE a note embeds belongs to that note: show it INSIDE the note, never as
+    // a separate tree row (serekkr, 22/10/2026 — "non si devono piu' vedere nella
+    // root, non ce li ho messi io"). An Obsidian import links its photos from the
+    // notes, so listing every one of them scattered a copy across the tree / the root.
+    // PDFs, audio and video a note links STILL get a row, so a document or a recording
+    // stays reachable without opening its note. An image NO note uses falls through
+    // below (its dragged-to folder, else the root) so a dropped photo is still findable.
+    if (node.type === 'image' && folders && folders.size) continue;
     // Linked by no note: the folder the sidebar order keeps it in (dragged there,
     // or where an import found it), else the root, where it can still be found.
     if (!folders || !folders.size) folders = (homes || (homes = _attachmentHomes())).get(node.path);
