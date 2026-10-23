@@ -10270,7 +10270,7 @@ function setupSettings() {
         // Backup ('sync') / Sync ('twoway') tabs: reset to the DEFAULT view on
         // entry — drop any open Riconfigura/expanded form so switching tabs
         // doesn't keep a half-edited wizard around.
-        if (btn.dataset.tab === 'sync')   { _smbExpanded.backup = false; try { updateWgConfiguredView(); } catch (_) {} applySmbCollapse('backup'); collapseAllBackupSections(); try { refreshLastBackupLine(); } catch (_) {} }
+        if (btn.dataset.tab === 'sync')   { _smbExpanded.backup = false; try { updateWgConfiguredView(); } catch (_) {} applySmbCollapse('backup'); collapseAllBackupSections(); try { refreshBackupStatusLines(); } catch (_) {} }
         // Opening Sync shows ONE method — the pill's — like opening Backup does.
         if (btn.dataset.tab === 'twoway') { _smbExpanded.sync   = false; try { updateTwowayConnView(); refreshTwowayVpnOnDisk(); } catch (_) {} applySmbCollapse('sync'); openOnlyTwowaySection(null); }
       });
@@ -11107,9 +11107,24 @@ function setupSettings() {
   $('cfg-local-interval')?.addEventListener('change', e => {
     const w = $('local-interval-custom-wrap');
     if (w) w.style.display = e.target.value === 'custom' ? 'flex' : 'none';
-    const d = $('local-dailytime-wrap');
-    if (d) d.style.display = e.target.value === '1440' ? 'flex' : 'none';
+    try { updateDailyTimeWraps(); } catch (_) {}
   });
+
+  // Setting a daily backup time and pressing Enter (or leaving the field) SAVES it and
+  // shows "✓ Salvato", so you know it registered (serekkr, 23/10/2026). Works for both
+  // the Local and the Remote time; the confirmation flashes on the relevant line too.
+  const _wireDailyTimeSave = (id, fam) => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('change', async () => {
+      try { await saveSettings(); } catch (_) {}
+      try { showToast(window.i18n.t('settings.backup_saved')); } catch (_) {}
+      try { const st = await window.inkwell.getSyncState?.(); updateBackupDestLines(st || {}, fam); } catch (_) {}
+    });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
+  };
+  _wireDailyTimeSave('cfg-local-dailytime', 'local');
+  _wireDailyTimeSave('cfg-remote-dailytime', 'remote');
 
   // "Backup now": save settings first (so the latest path/mode is used), then
   // force a manual one-way backup to ALL enabled destinations. Shared by the
@@ -12827,10 +12842,13 @@ async function openSettings() {
       if ($('cfg-local-interval-custom')) $('cfg-local-interval-custom').value = Math.max(1, Math.round(blMin / 1440));
       if ($('local-interval-custom-wrap')) $('local-interval-custom-wrap').style.display = 'flex';
     }
-    // Daily time picker: visible only when "Daily" is the chosen frequency.
+    // Daily time pickers (Local + Remote, separate): visible only when "Daily" is the
+    // chosen frequency, and the one shown depends on the destination being viewed.
     const dt = $('cfg-local-dailytime');
     if (dt) dt.value = (/^\d{1,2}:\d{2}$/.test(cfg.sync?.local?.dailyTime || '')) ? cfg.sync.local.dailyTime : '18:00';
-    if ($('local-dailytime-wrap')) $('local-dailytime-wrap').style.display = (blMin === 1440) ? 'flex' : 'none';
+    const rdt = $('cfg-remote-dailytime');
+    if (rdt) rdt.value = (/^\d{1,2}:\d{2}$/.test(cfg.sync?.remoteDailyTime || '')) ? cfg.sync.remoteDailyTime : (dt ? dt.value : '18:00');
+    try { updateDailyTimeWraps(); } catch (_) {}
   }
   if ($('cfg-backup-keep'))    $('cfg-backup-keep').value    = String(cfg.sync?.local?.keepLast ?? 5);
 
@@ -13036,6 +13054,9 @@ function buildSyncConfig(form, prev) {
       // so a remote preserved above still counts as "on".
       enabled: !!(webdav.enabled || sambaLan.enabled || vpnObj.enabled || local.enabled || twoway.enabled),
       backupTransport: pS.backupTransport || 'local',
+      // Remote's OWN daily backup time (separate from local.dailyTime), so Local and the
+      // remote can run at different hours (serekkr, 23/10/2026). Empty unless "Daily".
+      remoteDailyTime: form.backupRemoteDailyTime || '',
       vpn: vpnObj, samba: pS.samba, sambaLan, webdav, local, twoway,
     },
   };
@@ -13084,6 +13105,7 @@ function buildFormFromConfig(cfg) {
     backupFolder, syncFolder, localPath: (s.local && s.local.path) || '',
     backupIntervalMinutes: (s.local && s.local.intervalMinutes) || 1440,
     backupDailyTime: (s.local && /^\d{1,2}:\d{2}$/.test(s.local.dailyTime || '')) ? s.local.dailyTime : '18:00',
+    backupRemoteDailyTime: (/^\d{1,2}:\d{2}$/.test(s.remoteDailyTime || '')) ? s.remoteDailyTime : '20:00',
     keepLast: (s.local && s.local.keepLast) != null ? s.local.keepLast
       : (s.vpn && s.vpn.keepLast) != null ? s.vpn.keepLast : 5,
     syncIntervalMinutes: tw.intervalMinutes || 15,
@@ -13175,6 +13197,8 @@ function applyRemoteUiVisibility() {
   show('clear-remote-row', !local);
   show('remote-samba-block', kind === 'samba');
   show('remote-webdav-block', kind === 'webdav');
+  try { updateDailyTimeWraps(); } catch (_) {}        // show the Local/Remote time picker for this kind
+  try { refreshBackupStatusLines(); } catch (_) {}    // and this destination's "Ultimo backup" line
   show('remote-vpn-wizard', kind === 'samba');       // always available: add/manage a VPN (optional)
   // ONE connection test, never two: the direct Samba test when no VPN is loaded,
   // the wizard's Samba-over-VPN test (wstep-4) only when a VPN is present.
@@ -13299,10 +13323,16 @@ async function saveSettings() {
       return parseFloat(v) || 1440;
     })(),
     // The fixed clock time for a DAILY backup — only meaningful (and only applied
-    // below) when the frequency is "Daily"; otherwise it carries no weight.
+    // below) when the frequency is "Daily"; otherwise it carries no weight. Local and
+    // Remote keep SEPARATE times (serekkr, 23/10/2026).
     backupDailyTime: (() => {
       const v = $('cfg-local-interval')?.value;
       const t = $('cfg-local-dailytime')?.value || '';
+      return (v === '1440' && /^\d{1,2}:\d{2}$/.test(t)) ? t : '';
+    })(),
+    backupRemoteDailyTime: (() => {
+      const v = $('cfg-local-interval')?.value;
+      const t = $('cfg-remote-dailytime')?.value || '';
       return (v === '1440' && /^\d{1,2}:\d{2}$/.test(t)) ? t : '';
     })(),
     keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
@@ -13857,11 +13887,12 @@ function setupSync() {
       syncStatusDot.className = 'sync-idle';
       console.error('[Sync error]', data.error);
     }
-    // "Ultimo backup" line in Settings → Backup. Update the time whenever a backup run
-    // reports back, and flash "✓ Salvato" when one just finished OK (serekkr, 23/10/2026).
-    if (data.lastBackupAt) {
-      const justSaved = (data.op === 'backup' && data.status === 'ok');
-      updateLastBackupLine(data.lastBackupAt, justSaved);
+    // Per-destination "Ultimo backup" lines in Settings → Backup. Update the times
+    // whenever a backup run reports back, and flash "✓ Salvato" on the destination that
+    // just finished OK (serekkr, 23/10/2026). data.target: 'local' | 'remote' | null(all).
+    if (data.op === 'backup') {
+      const justSaved = (data.status === 'ok') ? (data.target || 'all') : null;
+      updateBackupDestLines(data, justSaved);
     }
     logSyncEventNotif(data);
   });
@@ -18779,26 +18810,64 @@ function _fmtDateTimeDMY(ms) { const d = new Date(ms); if (isNaN(d)) return '—
 // Same, with seconds — the "Ultimo backup" line mirrors the GGMMAAAA_HH_MM_SS file stamp.
 function _fmtDateTimeDMYS(ms) { const d = new Date(ms); if (isNaN(d)) return '—'; const p = n => String(n).padStart(2, '0'); return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); }
 
-// Fill the "Ultimo backup: <data>" line in Settings → Backup. `saved` briefly shows a
-// green "✓ Salvato" badge when a backup just completed.
-let _lastBackupSavedTimer = null;
-function updateLastBackupLine(lastBackupAt, saved) {
-  const when  = document.getElementById('local-last-backup-when');
-  const badge = document.getElementById('local-last-backup-saved');
-  if (when) when.textContent = lastBackupAt ? _fmtDateTimeDMYS(lastBackupAt) : '—';
-  if (badge && saved) {
-    badge.style.display = '';
-    if (_lastBackupSavedTimer) clearTimeout(_lastBackupSavedTimer);
-    _lastBackupSavedTimer = setTimeout(() => { badge.style.display = 'none'; }, 4000);
+// Which backup destinations are ACTIVE right now (from the saved config). Local and the
+// remote family (WebDAV or Samba — one at a time) are independent; both can be on.
+function _backupActiveDests() {
+  const s = (state.config && state.config.sync) || {};
+  return {
+    local:  !!(s.local && s.local.enabled && s.local.path),
+    webdav: !!(s.webdav && s.webdav.enabled),
+    samba:  !!((s.vpn && s.vpn.enabled) || (s.samba && s.samba.enabled) || (s.sambaLan && s.sambaLan.enabled)),
+  };
+}
+
+// The per-destination "Ultimo backup" lines (one in each of the Local/Samba/WebDAV
+// blocks). Each is shown ONLY when that destination is active — so a destination you
+// never turned on shows nothing (serekkr, 23/10/2026). Local uses its own clock; WebDAV
+// and Samba share the remote clock (the remote is one at a time). `which` restricts the
+// green "✓ Salvato" flash to the destination(s) that just saved/backed up.
+const _lastBackupSavedTimers = {};
+function updateBackupDestLines(times, savedWhich) {
+  const active = _backupActiveDests();
+  const t = times || {};
+  const clock = { local: t.lastBackupAtLocal || t.lastBackupAt, webdav: t.lastBackupAtRemote || t.lastBackupAt, samba: t.lastBackupAtRemote || t.lastBackupAt };
+  const flashFam = (k) => savedWhich === 'all' || savedWhich === k
+    || (savedWhich === 'remote' && (k === 'webdav' || k === 'samba'))
+    || (savedWhich === 'local' && k === 'local');
+  for (const k of ['local', 'webdav', 'samba']) {
+    const row = document.getElementById('lastbk-' + k);
+    if (!row) continue;
+    if (!active[k]) { row.style.display = 'none'; continue; }
+    row.style.display = '';
+    const when = row.querySelector('.lastbk-when');
+    if (when) when.textContent = clock[k] ? _fmtDateTimeDMYS(clock[k]) : '—';
+    const badge = row.querySelector('.lastbk-saved');
+    if (badge && savedWhich && flashFam(k)) {
+      badge.style.display = '';
+      if (_lastBackupSavedTimers[k]) clearTimeout(_lastBackupSavedTimers[k]);
+      _lastBackupSavedTimers[k] = setTimeout(() => { badge.style.display = 'none'; }, 4000);
+    }
   }
 }
-// Populate the line from the stored state (called when Settings → Backup opens, so it
-// shows the last backup even if no run happened this session).
-async function refreshLastBackupLine() {
+// Populate the lines from the stored state (called when Settings → Backup opens, or the
+// viewed destination changes, so each shows its last backup even with no run this session).
+async function refreshBackupStatusLines() {
   try {
     const st = await window.inkwell.getSyncState?.();
-    updateLastBackupLine(st && st.lastBackupAt, false);
+    updateBackupDestLines(st || {}, null);
   } catch (_) { /* best-effort */ }
+}
+
+// Show the right daily-time picker (Local vs Remote) — only in "Daily" frequency, and
+// matched to the destination being viewed. Both can be configured; you see one at a time
+// because the Backup panel shows one destination block at a time.
+function updateDailyTimeWraps() {
+  const daily = ($('cfg-local-interval')?.value === '1440');
+  const kind = (typeof currentRemoteKind === 'function') ? currentRemoteKind() : 'local';
+  const lw = $('local-dailytime-wrap');
+  const rw = $('remote-dailytime-wrap');
+  if (lw) lw.style.display = (daily && kind === 'local') ? 'flex' : 'none';
+  if (rw) rw.style.display = (daily && (kind === 'webdav' || kind === 'samba')) ? 'flex' : 'none';
 }
 function _isOverdue(due) { const d = new Date(due); return !isNaN(d) && d.getTime() < Date.now(); }
 

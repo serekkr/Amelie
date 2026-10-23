@@ -324,15 +324,20 @@ class SyncManager {
     }
   }
 
-  _recordBackupState(vaultSig, results) {
-    this._updateSyncState({
-      lastBackupAt: new Date().toISOString(),
+  _recordBackupState(vaultSig, results, target = null) {
+    const now = new Date().toISOString();
+    const patch = {
+      lastBackupAt: now,
       vaultSig,
       dests: this._backupDestSignature(this.config),
       // WHAT was written, per destination, so a later press can go and look
       // instead of taking the fingerprint's word for it.
       artifacts: SyncManager._backupArtifacts(results),
-    });
+    };
+    // Per-destination clocks for the daily schedule and the "Ultimo backup" lines.
+    if (!target || target === 'local')  patch.lastBackupAtLocal  = now;
+    if (!target || target === 'remote') patch.lastBackupAtRemote = now;
+    this._updateSyncState(patch);
   }
 
   /**
@@ -568,26 +573,51 @@ class SyncManager {
   // backup is on a plain interval instead. Set when the user picks "Daily" and an
   // hour in the Backup settings (sync.local.dailyTime). A missing/garbled value
   // falls back to the interval behaviour.
-  _backupDailyTime() {
-    const t = this.config?.sync?.local?.dailyTime;
-    return (typeof t === 'string' && /^\d{1,2}:\d{2}$/.test(t)) ? t : null;
+  // Daily clock time for a destination. Local and Remote keep SEPARATE times so one
+  // can back up at 11:50 and the other at 20:00 (serekkr, 23/10/2026): local →
+  // sync.local.dailyTime, remote → sync.remoteDailyTime (and if the remote one is
+  // blank it falls back to the local time, so a remote still runs daily). A blank/bad
+  // value means "not daily mode" → the interval behaviour. `which` defaults to local
+  // so the old no-arg callers keep working.
+  _backupDailyTime(which = 'local') {
+    const s = this.config?.sync || {};
+    const ok = (t) => (typeof t === 'string' && /^\d{1,2}:\d{2}$/.test(t)) ? t : null;
+    if (which === 'remote') return ok(s.remoteDailyTime) || ok(s.local && s.local.dailyTime);
+    return ok(s.local && s.local.dailyTime);
   }
 
-  // In daily-time mode: is today's backup due? True once today's scheduled hour has
-  // passed AND no backup has run since it — so a launch at 22:00 after a missed 18:00
-  // still backs up today (serekkr, 22/10/2026), and only ONCE per day (a run moves
-  // lastBackupAt past today's time, so it stops being due until tomorrow). Skipped
-  // days are NOT back-filled: only today's run is ever caught up.
-  _dailyBackupDue() {
-    const m = /^(\d{1,2}):(\d{2})$/.exec(this._backupDailyTime() || '');
+  // Is this destination a backup target right now?
+  _localBackupOn()  { const l = this.config?.sync?.local; return !!(l && l.enabled && l.path); }
+  _remoteBackupOn() { const s = this.config?.sync || {}; return !!(s.webdav?.enabled || s.vpn?.enabled || s.samba?.enabled || s.sambaLan?.enabled); }
+
+  // In daily-time mode: is today's backup due for this destination? True once today's
+  // scheduled hour has passed AND no backup to THIS destination has run since it — so a
+  // launch at 22:00 after a missed 18:00 still backs up today (serekkr, 22/10/2026),
+  // and only ONCE per day per destination. Local and Remote are tracked apart
+  // (lastBackupAtLocal / lastBackupAtRemote); a run with no per-destination stamp yet
+  // (upgrade from the single-schedule version) counts as "never" → due once.
+  _dailyBackupDue(which = 'local') {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(this._backupDailyTime(which) || '');
     if (!m) return false;
     const now = new Date();
     const scheduled = new Date(now);
     scheduled.setHours(+m[1], +m[2], 0, 0);
     if (now < scheduled) return false;                 // today's time not reached yet
-    const at = Date.parse(this._syncState?.lastBackupAt || '');
+    const key = which === 'remote' ? 'lastBackupAtRemote' : 'lastBackupAtLocal';
+    const at = Date.parse((this._syncState && this._syncState[key]) || '');
     if (!Number.isFinite(at)) return true;             // never backed up → due
     return at < scheduled.getTime();                   // last run was before today's time
+  }
+
+  // Stamp "a backup to this destination reached a conclusion now" — the global clock
+  // (for interval catch-up) plus the per-destination clocks the daily schedule and the
+  // "Ultimo backup" lines read. target null = both (a run that wrote everything).
+  _stampBackupTime(target) {
+    const now = new Date().toISOString();
+    const patch = { lastBackupAt: now };
+    if (!target || target === 'local')  patch.lastBackupAtLocal  = now;
+    if (!target || target === 'remote') patch.lastBackupAtRemote = now;
+    this._updateSyncState(patch);
   }
 
   /**
@@ -633,19 +663,22 @@ class SyncManager {
     this._cancelCatchUp();
     const jobs = [];
 
-    if (this._anyBackupDestination() && this._backupDailyTime()) {
-      // Fixed daily clock time: catch up TODAY's run if its hour has already passed
-      // and it hasn't happened yet (app was off at the scheduled time).
-      if (this._dailyBackupDue()) {
-        console.log(`[Sync] Daily backup time ${this._backupDailyTime()} already passed and not done today — catching up`);
-        // Daily mode writes a copy at the set time EVERY day (force), even if the vault
-        // is unchanged: the user wants one dated snapshot per day carrying that time
-        // (serekkr, 23/10/2026). _dailyBackupDue still gates it to once a day; the
-        // interval mode below keeps its skip-if-unchanged.
-        jobs.push({ what: 'backup', run: () => this._anyBackupDestination() && this.runBackup({ force: true, manual: false }) });
-      } else {
-        console.log(`[Sync] Daily backup at ${this._backupDailyTime()} — not due yet / already done today`);
+    if (this._anyBackupDestination() && (this._backupDailyTime('local') || this._backupDailyTime('remote'))) {
+      // Fixed daily clock time, SEPARATE per destination: catch up TODAY's run for each
+      // one whose hour has already passed and hasn't happened yet (app was off at the
+      // scheduled time). Daily mode writes a copy at the set time EVERY day (force),
+      // even if the vault is unchanged — the user wants one dated snapshot per day per
+      // destination carrying that time (serekkr, 23/10/2026). _dailyBackupDue gates
+      // each to once a day; the interval mode below keeps its skip-if-unchanged.
+      if (this._localBackupOn() && this._dailyBackupDue('local')) {
+        console.log(`[Sync] Daily LOCAL backup ${this._backupDailyTime('local')} passed, not done today — catching up`);
+        jobs.push({ what: 'backup', run: () => this._localBackupOn() && this.runBackup({ force: true, manual: false, target: 'local' }) });
       }
+      if (this._remoteBackupOn() && this._dailyBackupDue('remote')) {
+        console.log(`[Sync] Daily REMOTE backup ${this._backupDailyTime('remote')} passed, not done today — catching up`);
+        jobs.push({ what: 'backup', run: () => this._remoteBackupOn() && this.runBackup({ force: true, manual: false, target: 'remote' }) });
+      }
+      if (!jobs.length) console.log(`[Sync] Daily backup — nothing due yet / already done today`);
     } else if (this._anyBackupDestination()) {
       const min = this._backupIntervalMinutes();
       const { overdue, sinceMin } = this._overdueBy('lastBackupAt', min);
@@ -756,13 +789,17 @@ class SyncManager {
     // frequency (default hourly — a sensible backup cadence).
     const backupOn = (s.local?.enabled && s.local?.path) || s.vpn?.enabled || s.samba?.enabled || s.sambaLan?.enabled || s.webdav?.enabled;
     if (backupOn) {
-      const daily = this._backupDailyTime();
+      const daily = this._backupDailyTime('local') || this._backupDailyTime('remote');
       if (daily) {
-        // Daily at a fixed clock time: poll every 5 min and run when today's hour has
-        // passed and today's backup hasn't happened yet (_dailyBackupDue gates it to
-        // once per day). 5 min = the backup lands within 5 min of the set time.
-        this._backupTimer = setInterval(() => { if (this._dailyBackupDue()) this.runBackup({ force: true, manual: false }); }, 5 * 60 * 1000);
-        console.log(`[Sync] Daily backup at ${daily} (checked every 5 min)`);
+        // Daily at a fixed clock time, SEPARATE per destination: poll every 5 min and run
+        // each destination when ITS hour has passed and ITS backup hasn't happened today
+        // (_dailyBackupDue gates each to once per day). Sequential (await) so the second
+        // doesn't hit "Already syncing". 5 min = the backup lands within 5 min of the time.
+        this._backupTimer = setInterval(async () => {
+          if (this._localBackupOn()  && this._dailyBackupDue('local'))  await this.runBackup({ force: true, manual: false, target: 'local' });
+          if (this._remoteBackupOn() && this._dailyBackupDue('remote')) await this.runBackup({ force: true, manual: false, target: 'remote' });
+        }, 5 * 60 * 1000);
+        console.log(`[Sync] Daily backup — local ${this._backupDailyTime('local') || '—'}, remote ${this._backupDailyTime('remote') || '—'} (checked every 5 min)`);
       } else {
         const min = this._backupIntervalMinutes();
         this._backupTimer = setInterval(() => this.runBackup(), min * 60 * 1000);
@@ -935,14 +972,14 @@ class SyncManager {
    * (the 2026-09-10 report). `_backupWaiting` holds the next slot while we wait
    * so the two-way timer cannot take it first.
    */
-  async runBackup({ force = false, manual = force } = {}) {
-    if (!manual || !this._busy()) return await this._runBackup({ force, manual });
+  async runBackup({ force = false, manual = force, target = null } = {}) {
+    if (!manual || !this._busy()) return await this._runBackup({ force, manual, target });
     this._backupWaiting = true;
     try {
       if (!await this._awaitTurn()) {
         return { success: false, error: 'Sincronizzazione ancora in corso: backup non eseguito. Riprova, oppure disattiva temporaneamente il sync.' };
       }
-      return await this._runBackup({ force, manual });
+      return await this._runBackup({ force, manual, target });
     } finally {
       this._backupWaiting = false;
     }
@@ -955,7 +992,10 @@ class SyncManager {
   // following `force` (the "Back up now" button is the usual forced run). The
   // first backup of a freshly enabled destination forces WITHOUT being manual —
   // nobody pressed anything — so it must be able to say so.
-  async _runBackup({ force = false, manual = force } = {}) {
+  // `target` ('local' | 'remote' | null): which destination(s) to write. The daily
+  // schedule fires one destination at a time so each can run at its own hour; null
+  // (manual button, interval mode) writes every enabled destination as before.
+  async _runBackup({ force = false, manual = force, target = null } = {}) {
     if (this._syncPausedPlaintext()) return { success: false, skipped: true, plaintextOpen: true, error: 'Cifratura a riposo disattivata: backup in pausa per non esporre i file in chiaro. Riattiva "Cifra i file a riposo".' };
     if (this._busy()) return { success: false, error: 'Already syncing' };
     // No enabled destination → don't pretend "backup complete". Tell the user.
@@ -993,11 +1033,11 @@ class SyncManager {
       // time for a press of the button.
       if (manual || !this._emptyBackupNotified) {
         if (!manual) this._emptyBackupNotified = true;
-        this._setStatus('ok', null, { op: 'backup', manual: !!manual, unchanged: true, empty: true });
+        this._setStatus('ok', null, { op: 'backup', manual: !!manual, unchanged: true, empty: true, target: target || null });
       }
       // Moves the clock like any skip, or every app start would find a backup
       // overdue and say it again.
-      this._updateSyncState({ lastBackupAt: new Date().toISOString() });
+      this._stampBackupTime(target);
       return { success: true, skipped: true, empty: true };
     }
     // Nothing in the vault but the welcome note the app wrote itself: there is nothing
@@ -1011,7 +1051,7 @@ class SyncManager {
       console.log('[Sync] Only the welcome note in the vault — nothing of the user\'s to back up yet');
       // The clock moves like any other skip, or every start would find a backup
       // overdue and come straight back here.
-      this._updateSyncState({ lastBackupAt: new Date().toISOString() });
+      this._stampBackupTime(target);
       this._setStatus('idle');
       return { success: true, skipped: true, onlyWelcome: true };
     }
@@ -1030,7 +1070,7 @@ class SyncManager {
         if (missing.length) {
           console.log('[Sync] Vault unchanged, but the last copy is missing from: ' + missing.join(', ') + ' — backing up anyway');
           this._skipNotified = false;
-          return await this._doBackup(sig, { manual, reason: 'missing' });
+          return await this._doBackup(sig, { manual, reason: 'missing', target });
         }
       }
       console.log('[Sync] Vault unchanged — automatic backup skipped');
@@ -1044,7 +1084,7 @@ class SyncManager {
       // a button is owed a reply every time.
       if (manual || !this._skipNotified) {
         if (!manual) this._skipNotified = true;
-        this._setStatus('ok', null, { op: 'backup', manual: !!manual, unchanged: true });
+        this._setStatus('ok', null, { op: 'backup', manual: !!manual, unchanged: true, target: target || null });
       }
       // A skip IS a run that reached a conclusion, so it moves the clock. Only
       // _recordBackupState used to, i.e. only a real copy — so once the vault had
@@ -1054,24 +1094,24 @@ class SyncManager {
       // in an hour and you got five of them, on an hourly schedule.
       // Only the time is written: vaultSig, dests and artifacts still describe the
       // last real copy, which is what "Back up now" goes and verifies.
-      this._updateSyncState({ lastBackupAt: new Date().toISOString() });
+      this._stampBackupTime(target);
       return { success: true, skipped: true, unchanged: true };
     }
     this._skipNotified = false;
-    return await this._doBackup(sig, { manual, forced: force });
+    return await this._doBackup(sig, { manual, forced: force, target });
   }
 
   /** The copy itself, shared by a normal run and by one the verification forced. */
-  async _doBackup(sig, { manual = false, forced = false, reason = null } = {}) {
+  async _doBackup(sig, { manual = false, forced = false, reason = null, target = null } = {}) {
     // Same rule as the two-way pass: a backup running every half minute must
     // not narrate itself in the bell. Manual runs and failures always do.
-    const meta = { op: 'backup', manual: !!manual,
+    const meta = { op: 'backup', manual: !!manual, target: target || null,
                    quiet: !manual && this._quietInterval(this._backupIntervalMinutes()) };
     this._setStatus('syncing', null, meta);
     this._progress({ op: 'backup', phase: 'running' });
     console.log('[Sync] Backup run...', forced ? '(forced)' : (reason === 'missing' ? '(copy was missing)' : ''));
     try {
-      const results = await this._runBackupInner();
+      const results = await this._runBackupInner(target);
       this.lastSync = new Date().toISOString();
       // A destination that failed (e.g. Samba mount) is recorded as { error }
       // inside results without aborting the others. Surface those so the UI
@@ -1086,7 +1126,7 @@ class SyncManager {
         return { success: false, error: SyncManager._publicError(msg), results, lastSync: this.lastSync };
       }
       this._lastBackupSig = sig;   // remember success → skip next time if unchanged
-      this._recordBackupState(sig, results);   // when, and what was written where
+      this._recordBackupState(sig, results, target);   // when, and what was written where
       // Tell the renderer WHICH destinations were written, so the notification can
       // name them. "Backup completed" alone is ambiguous when more than one
       // destination exists: a run that only wrote the local folder looked exactly
@@ -1460,10 +1500,14 @@ class SyncManager {
     };
   }
 
-  async _runBackupInner() {
+  async _runBackupInner(target = null) {
+    // target 'local' writes only the Local destination; 'remote' only WebDAV/Samba;
+    // null (manual / interval) writes every enabled one, as before.
+    const wantLocal  = !target || target === 'local';
+    const wantRemote = !target || target === 'remote';
     const results = { webdav: null, samba: null, local: null };
     // WebDAV sync
-    if (this.config.sync?.webdav?.enabled && this.webdavClient) {
+    if (wantRemote && this.config.sync?.webdav?.enabled && this.webdavClient) {
       const wcfg = this.config.sync.webdav;
       // Folder sync unless "archive only" OR the folder snapshot is explicitly off.
       if (wcfg.folder !== false && !wcfg.archiveOnly) results.webdav = await this._syncWebDAV();
@@ -1472,12 +1516,12 @@ class SyncManager {
     // Local folder backup (one-way) (+ tar.gz if requested). A path is required — an
     // enabled-but-pathless local is skipped quietly instead of throwing (the gates above
     // already keep a pathless local from counting as a destination; this is defence).
-    if (this.config.sync?.local?.enabled && this.config.sync.local.path) {
+    if (wantLocal && this.config.sync?.local?.enabled && this.config.sync.local.path) {
       results.local = await this._syncLocal();
     }
     // Samba / WireGuard share — config lives under sync.vpn (or legacy sync.samba).
     const scfg = this._sambaConfig();
-    if (scfg && scfg.enabled) {
+    if (wantRemote && scfg && scfg.enabled) {
       // BOTH backup modes off (no folder snapshot, no archive) → nothing to
       // write. This is now a VALID state (the user can turn off both formats to
       // stop backup content), so SKIP quietly — no error notification, and don't
@@ -3211,8 +3255,14 @@ class SyncManager {
       error,
       lastSync: this.lastSync,
       // Last time a backup run reached a conclusion (a real copy OR a skip) — drives
-      // the "Ultimo backup" line in the Backup settings.
-      lastBackupAt: (this._syncState && this._syncState.lastBackupAt) || null,
+      // the per-destination "Ultimo backup" lines in the Backup settings. Local and
+      // Remote are tracked apart so each can run on its own daily time.
+      lastBackupAt:      (this._syncState && this._syncState.lastBackupAt) || null,
+      lastBackupAtLocal: (this._syncState && this._syncState.lastBackupAtLocal) || null,
+      lastBackupAtRemote:(this._syncState && this._syncState.lastBackupAtRemote) || null,
+      // Which destination this backup targeted ('local' | 'remote' | null = all) — the
+      // renderer flashes "✓ Salvato" on the matching per-destination line.
+      target: (meta && meta.target) || null,
       op: meta && meta.op ? meta.op : null,
       manual: !!(meta && meta.manual),
       // A pass frequent enough that announcing it would be noise.

@@ -4591,9 +4591,12 @@ ipcMain.handle('sync:report', async (_, id) => (syncManager ? syncManager.getSyn
 // Last-backup / last-sync timestamps, so Settings → Backup can show "Ultimo backup"
 // the moment it opens (not only after a run fires a status update).
 ipcMain.handle('sync:getState', async () => {
-  if (!syncManager) return { lastBackupAt: null, lastSync: null };
+  if (!syncManager) return { lastBackupAt: null, lastBackupAtLocal: null, lastBackupAtRemote: null, lastSync: null };
+  const st = syncManager._syncState || {};
   return {
-    lastBackupAt: (syncManager._syncState && syncManager._syncState.lastBackupAt) || null,
+    lastBackupAt: st.lastBackupAt || null,
+    lastBackupAtLocal: st.lastBackupAtLocal || null,
+    lastBackupAtRemote: st.lastBackupAtRemote || null,
     lastSync: syncManager.lastSync || null,
   };
 });

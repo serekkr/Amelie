@@ -627,6 +627,11 @@
                     </div>
                     <div id="local-test-result" class="test-result"></div>
                   </div>
+                  <div class="last-backup-line backup-dest-status" id="lastbk-local" style="display:none">
+                    <span data-i18n="settings.last_backup">Ultimo backup</span>:
+                    <span class="lastbk-when">—</span>
+                    <span class="lastbk-saved last-backup-saved" style="display:none" data-i18n="settings.backup_saved">✓ Salvato</span>
+                  </div>
                 </div>
 
                 <!-- ── SAMBA block ── -->
@@ -799,6 +804,11 @@
                     </div>
                     <div id="sb-test-summary" class="test-summary" style="display:none;margin-top:8px"></div>
                   </div>
+                  <div class="last-backup-line backup-dest-status" id="lastbk-samba" style="display:none">
+                    <span data-i18n="settings.last_backup">Ultimo backup</span>:
+                    <span class="lastbk-when">—</span>
+                    <span class="lastbk-saved last-backup-saved" style="display:none" data-i18n="settings.backup_saved">✓ Salvato</span>
+                  </div>
                 </div><!-- remote-samba-block -->
 
                 <!-- ── WEBDAV block ── -->
@@ -816,6 +826,11 @@
                     <button class="btn-test" id="btn-test-webdav" data-i18n="sync.test_connection_btn">Testa connessione</button>
                   </div>
                   <div id="webdav-test-result" class="test-result"></div>
+                  <div class="last-backup-line backup-dest-status" id="lastbk-webdav" style="display:none">
+                    <span data-i18n="settings.last_backup">Ultimo backup</span>:
+                    <span class="lastbk-when">—</span>
+                    <span class="lastbk-saved last-backup-saved" style="display:none" data-i18n="settings.backup_saved">✓ Salvato</span>
+                  </div>
                 </div><!-- remote-webdav-block -->
               </div>
             </div><!-- bksec-remote -->
@@ -903,13 +918,14 @@
                       <span data-i18n="settings.days">giorni</span>
                     </div>
                     <div class="sip-custom-wrap" id="local-dailytime-wrap" style="display:none;margin-top:8px;align-items:center;gap:6px">
+                      <span class="dailytime-kind">Local</span>
                       <span data-i18n="settings.daily_at">alle</span>
                       <input type="time" id="cfg-local-dailytime" value="18:00" />
                     </div>
-                    <div id="local-last-backup" class="last-backup-line" style="margin-top:8px">
-                      <span data-i18n="settings.last_backup">Ultimo backup</span>:
-                      <span id="local-last-backup-when">—</span>
-                      <span id="local-last-backup-saved" class="last-backup-saved" style="display:none" data-i18n="settings.backup_saved">✓ Salvato</span>
+                    <div class="sip-custom-wrap" id="remote-dailytime-wrap" style="display:none;margin-top:8px;align-items:center;gap:6px">
+                      <span class="dailytime-kind">Remote</span>
+                      <span data-i18n="settings.daily_at">alle</span>
+                      <input type="time" id="cfg-remote-dailytime" value="20:00" />
                     </div>
                   </div>
                   <div>
