@@ -10510,6 +10510,15 @@ function setupSettings() {
     $(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
   });
   $('btn-sb-run-test')?.addEventListener('click', () => runSambaLanTest());
+  // Bottom "Testa connessione" for Samba (next to Clear config): runs the SAME test as the
+  // in-place one — the VPN-over-Samba test when a VPN .conf is present, otherwise the direct
+  // Samba test. The status lights still render in their existing place (serekkr, 23/10/2026).
+  $('btn-sb-test-bottom')?.addEventListener('click', async () => {
+    let confExists = false;
+    try { const c = await window.inkwell.wg.getConf(); confExists = !!(c && (c.exists || c.ovpnExists)); } catch (_) {}
+    if (confExists) { try { runConnectionTest(); return; } catch (_) {} }
+    try { runSambaLanTest(); } catch (_) {}
+  });
   $('sb-reconfigure')?.addEventListener('click', () => { _sbExpanded = true; applySambaLanCollapse(); });
   // No confirm dialog — same convention as the other Remove buttons here.
   $('btn-sb-remove')?.addEventListener('click', async () => {
@@ -13209,6 +13218,7 @@ function applyRemoteUiVisibility() {
   show('remote-samba-block', kind === 'samba');
   show('remote-webdav-block', kind === 'webdav');
   show('btn-test-webdav', kind === 'webdav');         // WebDAV test now lives in the bottom clear-config row
+  show('btn-sb-test-bottom', kind === 'samba');       // Samba test trigger in the bottom row (lights stay in the VPN card)
   try { updateDailyTimeWraps(); } catch (_) {}        // show the Local/Remote time picker for this kind
   try { refreshBackupStatusLines(); } catch (_) {}    // and this destination's "Ultimo backup" line
   show('remote-vpn-wizard', kind === 'samba');       // always available: add/manage a VPN (optional)

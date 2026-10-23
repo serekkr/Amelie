@@ -790,7 +790,9 @@
                   <!-- Samba write test WITHOUT VPN (reach + write only). Button first;
                        the checklist rows appear only after the test runs. -->
                   <div id="remote-samba-lantest" style="margin-top:12px">
-                    <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end">
+                    <!-- The trigger moved to the bottom row (btn-sb-test-bottom); this one is kept
+                         hidden so its wiring stays valid and the lights below still render here. -->
+                    <div style="display:none">
                       <button class="btn-test-run" id="btn-sb-run-test"><span data-i18n="sync.test_connection_btn">Testa connessione</span></button>
                     </div>
                     <div class="test-checklist" id="sb-test-checklist" style="display:none;margin-top:8px">
@@ -953,8 +955,11 @@
             <div id="clear-remote-row" style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px">
               <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap">
                 <!-- Test connection sits here at the bottom, next to Clear config (serekkr, 23/10/2026).
-                     Shown only for WebDAV (applyRemoteUiVisibility); Samba has its own test flow above. -->
+                     WebDAV: its own test button. Samba: a trigger that runs the existing test (the
+                     status lights stay in the VPN card so the import wizard isn't disturbed). Each is
+                     shown only for its kind (applyRemoteUiVisibility). -->
                 <button class="btn-test" id="btn-test-webdav" data-i18n="sync.test_connection_btn" style="display:none">Testa connessione</button>
+                <button class="btn-test" id="btn-sb-test-bottom" data-i18n="sync.test_connection_btn" style="display:none">Testa connessione</button>
                 <button class="btn-test" id="btn-clear-remote" data-i18n="sync.clear_config">Cancella configurazione</button>
               </div>
               <div id="webdav-test-result" class="test-result"></div>
