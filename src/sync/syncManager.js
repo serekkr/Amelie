@@ -118,6 +118,11 @@ class SyncManager {
   // reload that gained nothing (that would swallow the run the burst started).
   _FIRST_BACKUP_DELAY_MS = 5000;
   _scheduleFirstBackup(reason) {
+    // In daily-time mode the fixed-hour scheduler (and its same-day catch-up) already
+    // makes the first copy AT the chosen hour. An immediate copy here would back up
+    // BEFORE that time (serekkr, 23/10/2026: set to 12:40, it ran at 12:39 and the
+    // "Ultimo backup" read 12:39). So in daily mode do nothing — the daily timer owns it.
+    if (this._backupDailyTime('local') || this._backupDailyTime('remote')) return;
     if (this._firstBackupTimer) clearTimeout(this._firstBackupTimer);
     this._firstBackupTimer = setTimeout(() => {
       this._firstBackupTimer = null;
@@ -791,14 +796,15 @@ class SyncManager {
     if (backupOn) {
       const daily = this._backupDailyTime('local') || this._backupDailyTime('remote');
       if (daily) {
-        // Daily at a fixed clock time, SEPARATE per destination: poll every 5 min and run
+        // Daily at a fixed clock time, SEPARATE per destination: poll every 60 s and run
         // each destination when ITS hour has passed and ITS backup hasn't happened today
         // (_dailyBackupDue gates each to once per day). Sequential (await) so the second
-        // doesn't hit "Already syncing". 5 min = the backup lands within 5 min of the time.
+        // doesn't hit "Already syncing". 60 s = the backup lands within a minute of the
+        // set time (serekkr wants 12:40 to mean 12:40, not up to 12:45).
         this._backupTimer = setInterval(async () => {
           if (this._localBackupOn()  && this._dailyBackupDue('local'))  await this.runBackup({ force: true, manual: false, target: 'local' });
           if (this._remoteBackupOn() && this._dailyBackupDue('remote')) await this.runBackup({ force: true, manual: false, target: 'remote' });
-        }, 5 * 60 * 1000);
+        }, 60 * 1000);
         console.log(`[Sync] Daily backup — local ${this._backupDailyTime('local') || '—'}, remote ${this._backupDailyTime('remote') || '—'} (checked every 5 min)`);
       } else {
         const min = this._backupIntervalMinutes();
