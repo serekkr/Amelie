@@ -18855,7 +18855,10 @@ function updateBackupDestLines(times, savedWhich) {
   const kind = (typeof currentRemoteKind === 'function') ? currentRemoteKind() : 'local';
   const fam = kind === 'local' ? 'local' : 'remote';
   const active = _backupActiveDests();
-  const on = fam === 'local' ? active.local : (active.webdav || active.samba);
+  // Show only for the SPECIFIC destination being viewed and only if IT is active — not the
+  // whole remote family. Otherwise, with WebDAV active, viewing Samba showed WebDAV's time
+  // (13:06) even though Samba backed up nothing (serekkr, 23/10/2026).
+  const on = kind === 'local' ? active.local : kind === 'webdav' ? active.webdav : active.samba;
   if (!on) { row.style.display = 'none'; return; }
   row.style.display = '';
   const t = times || {};
