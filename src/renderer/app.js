@@ -13200,6 +13200,7 @@ function applyRemoteUiVisibility() {
   show('clear-remote-row', !local);
   show('remote-samba-block', kind === 'samba');
   show('remote-webdav-block', kind === 'webdav');
+  show('btn-test-webdav', kind === 'webdav');         // WebDAV test now lives in the bottom clear-config row
   try { updateDailyTimeWraps(); } catch (_) {}        // show the Local/Remote time picker for this kind
   try { refreshBackupStatusLines(); } catch (_) {}    // and this destination's "Ultimo backup" line
   show('remote-vpn-wizard', kind === 'samba');       // always available: add/manage a VPN (optional)

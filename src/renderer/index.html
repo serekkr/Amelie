@@ -812,10 +812,6 @@
                     <div><label data-i18n="sync.webdav_pass">Password / App token</label><div style="position:relative"><input type="text" id="cfg-webdav-pass" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:32px;-webkit-text-security:disc" /><button type="button" id="cfg-webdav-pass-eye" class="pass-eye" tabindex="-1" title="Mostra/nascondi" aria-label="Mostra/nascondi" data-i18n-title="common.show_hide" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;display:flex;align-items:center;line-height:0"></button></div></div>
                   </div>
                   <input type="hidden" id="cfg-webdav-path" />
-                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
-                    <button class="btn-test" id="btn-test-webdav" data-i18n="sync.test_connection_btn">Testa connessione</button>
-                  </div>
-                  <div id="webdav-test-result" class="test-result"></div>
                 </div><!-- remote-webdav-block -->
               </div>
             </div><!-- bksec-remote -->
@@ -952,8 +948,14 @@
             <!-- Clear the saved details of the current destination. For Samba/WebDAV it sits at
                  the very bottom, under the two-way-sync and backup panels; for LOCAL it moves
                  next to "Test path" instead (see #btn-clear-local), so this row is hidden then. -->
-            <div id="clear-remote-row" style="display:flex;justify-content:flex-end;border-top:1px solid var(--border);padding-top:12px;margin-top:8px">
-              <button class="btn-test" id="btn-clear-remote" data-i18n="sync.clear_config">Cancella configurazione</button>
+            <div id="clear-remote-row" style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px">
+              <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap">
+                <!-- Test connection sits here at the bottom, next to Clear config (serekkr, 23/10/2026).
+                     Shown only for WebDAV (applyRemoteUiVisibility); Samba has its own test flow above. -->
+                <button class="btn-test" id="btn-test-webdav" data-i18n="sync.test_connection_btn" style="display:none">Testa connessione</button>
+                <button class="btn-test" id="btn-clear-remote" data-i18n="sync.clear_config">Cancella configurazione</button>
+              </div>
+              <div id="webdav-test-result" class="test-result"></div>
             </div>
 
           </div><!-- tab-sync -->
