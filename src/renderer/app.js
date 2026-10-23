@@ -11127,21 +11127,23 @@ function setupSettings() {
   const _wireDailyTimeSave = (id, fam) => {
     const el = $(id);
     if (!el) return;
-    el.addEventListener('change', async () => {
-      try { await saveSettings(); } catch (_) {}
-      // "✓ Salvato" RIGHT NEXT TO the time field, for both Local and Remote — shown even
-      // when the destination isn't active yet (serekkr, 23/10/2026: it must appear on
-      // Local too, like WebDAV/Samba). No bottom toast. Also refresh the Ultimo-backup line.
-      const wrap = el.closest('.sip-custom-wrap');
-      const badge = wrap && wrap.querySelector('.dailytime-saved');
-      if (badge) {
-        badge.style.display = '';
-        // Short flash: a time input fires 'change' on every spinner step, so a long badge
-        // reset on each one made it look permanent (serekkr, 23/10/2026). ~1.6 s is enough.
-        if (el._savedTimer) clearTimeout(el._savedTimer);
-        el._savedTimer = setTimeout(() => { badge.style.display = 'none'; }, 1600);
-      }
-      try { const st = await window.inkwell.getSyncState?.(); updateBackupDestLines(st || {}, null); } catch (_) {}
+    el.addEventListener('change', () => {
+      // DEBOUNCE 2s: a time input fires 'change' on every spinner step, so saving and
+      // flashing on each one made "✓ Salvato" appear instantly and flicker while you set
+      // the hour. Wait until you've stopped for 2s, THEN save and show it once (serekkr,
+      // 23/10/2026: "il saved mettilo dopo 2 sec non istante"). For Local and Remote alike.
+      if (el._saveDebounce) clearTimeout(el._saveDebounce);
+      el._saveDebounce = setTimeout(async () => {
+        try { await saveSettings(); } catch (_) {}
+        const wrap = el.closest('.sip-custom-wrap');
+        const badge = wrap && wrap.querySelector('.dailytime-saved');
+        if (badge) {
+          badge.style.display = '';
+          if (el._savedTimer) clearTimeout(el._savedTimer);
+          el._savedTimer = setTimeout(() => { badge.style.display = 'none'; }, 1600);
+        }
+        try { const st = await window.inkwell.getSyncState?.(); updateBackupDestLines(st || {}, null); } catch (_) {}
+      }, 2000);
     });
     el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
   };
