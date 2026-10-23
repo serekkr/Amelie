@@ -18821,32 +18821,31 @@ function _backupActiveDests() {
   };
 }
 
-// The per-destination "Ultimo backup" lines (one in each of the Local/Samba/WebDAV
-// blocks). Each is shown ONLY when that destination is active — so a destination you
-// never turned on shows nothing (serekkr, 23/10/2026). Local uses its own clock; WebDAV
-// and Samba share the remote clock (the remote is one at a time). `which` restricts the
-// green "✓ Salvato" flash to the destination(s) that just saved/backed up.
-const _lastBackupSavedTimers = {};
+// The single "Ultimo backup" line in the Backup section (under the frequency/time row).
+// It follows the destination you're VIEWING (the kind selector): Local shows the local
+// clock, WebDAV/Samba show the remote clock. Hidden when that destination isn't on — so
+// a destination you never turned on shows nothing (serekkr, 23/10/2026). `savedWhich`
+// ('local' | 'remote' | 'all') flashes the green "✓ Salvato" when it matches.
+let _lastBackupSavedTimer = null;
 function updateBackupDestLines(times, savedWhich) {
+  const row = document.getElementById('backup-last-line');
+  if (!row) return;
+  const kind = (typeof currentRemoteKind === 'function') ? currentRemoteKind() : 'local';
+  const fam = kind === 'local' ? 'local' : 'remote';
   const active = _backupActiveDests();
+  const on = fam === 'local' ? active.local : (active.webdav || active.samba);
+  if (!on) { row.style.display = 'none'; return; }
+  row.style.display = '';
   const t = times || {};
-  const clock = { local: t.lastBackupAtLocal || t.lastBackupAt, webdav: t.lastBackupAtRemote || t.lastBackupAt, samba: t.lastBackupAtRemote || t.lastBackupAt };
-  const flashFam = (k) => savedWhich === 'all' || savedWhich === k
-    || (savedWhich === 'remote' && (k === 'webdav' || k === 'samba'))
-    || (savedWhich === 'local' && k === 'local');
-  for (const k of ['local', 'webdav', 'samba']) {
-    const row = document.getElementById('lastbk-' + k);
-    if (!row) continue;
-    if (!active[k]) { row.style.display = 'none'; continue; }
-    row.style.display = '';
-    const when = row.querySelector('.lastbk-when');
-    if (when) when.textContent = clock[k] ? _fmtDateTimeDMYS(clock[k]) : '—';
-    const badge = row.querySelector('.lastbk-saved');
-    if (badge && savedWhich && flashFam(k)) {
-      badge.style.display = '';
-      if (_lastBackupSavedTimers[k]) clearTimeout(_lastBackupSavedTimers[k]);
-      _lastBackupSavedTimers[k] = setTimeout(() => { badge.style.display = 'none'; }, 4000);
-    }
+  const when = fam === 'local' ? (t.lastBackupAtLocal || t.lastBackupAt) : (t.lastBackupAtRemote || t.lastBackupAt);
+  const whenEl = row.querySelector('.lastbk-when');
+  if (whenEl) whenEl.textContent = when ? _fmtDateTimeDMYS(when) : '—';
+  const flash = savedWhich === 'all' || savedWhich === fam;
+  const badge = row.querySelector('.lastbk-saved');
+  if (badge && savedWhich && flash) {
+    badge.style.display = '';
+    if (_lastBackupSavedTimer) clearTimeout(_lastBackupSavedTimer);
+    _lastBackupSavedTimer = setTimeout(() => { badge.style.display = 'none'; }, 4000);
   }
 }
 // Populate the lines from the stored state (called when Settings → Backup opens, or the
