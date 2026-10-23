@@ -12952,18 +12952,27 @@ function buildSyncConfig(form, prev) {
     share: form.smbShare || '', username: form.smbUser || '', password: form.smbPass || '',
   };
   const remoteOn = !!form.backupRemoteOn;
-  const sambaLan = (kind === 'samba' && !vpn)
+  // The REAL selected kind ('webdav' | 'samba' | 'local') — `kind` above remaps local→samba.
+  // A remote NOT currently being viewed must be PRESERVED, not forced off: merely selecting
+  // another destination to look at (or editing Local) used to disable the active remote and
+  // "move" the green to the clicked one (serekkr, 23/10/2026). Only turning a DIFFERENT
+  // remote ON disables the others (mutual exclusivity on an explicit action). Local backup
+  // is independent and never disables a remote.
+  const selKind = form.kind === 'webdav' ? 'webdav' : form.kind === 'local' ? 'local' : 'samba';
+  const turningOnRemote = (selKind === 'webdav' || selKind === 'samba') && remoteOn;
+  const keepOrOff = (prevEnabled) => turningOnRemote ? false : !!prevEnabled;
+  const sambaLan = (selKind === 'samba' && !vpn)
     ? { ...smbServer, remoteSubPath: form.backupFolder || '', useWireGuard: false,
         folder: false, archive: true, archiveOnly: true, keepLast, enabled: remoteOn }
-    : { ...(pS.sambaLan || {}), enabled: false };
-  const vpnObj = (kind === 'samba' && vpn)
+    : { ...(pS.sambaLan || {}), enabled: selKind === 'samba' ? false : keepOrOff(pS.sambaLan && pS.sambaLan.enabled) };
+  const vpnObj = (selKind === 'samba' && vpn)
     ? { ...(form.vpnCfg || {}), enabled: remoteOn, syncOnly: !!form.vpnSyncOnly, keepLast }
-    : { ...(pS.vpn || {}), enabled: false, syncOnly: !!form.vpnSyncOnly };
-  const webdav = (kind === 'webdav')
+    : { ...(pS.vpn || {}), enabled: selKind === 'samba' ? false : keepOrOff(pS.vpn && pS.vpn.enabled), syncOnly: !!form.vpnSyncOnly };
+  const webdav = (selKind === 'webdav')
     ? { url: form.webdavUrl || '', username: form.webdavUser || '', password: form.webdavPass || '',
         remotePath: form.backupFolder || 'amelie/backup',
         folder: false, archive: true, archiveOnly: true, keepLast, enabled: remoteOn }
-    : { ...(pS.webdav || {}), enabled: false };
+    : { ...(pS.webdav || {}), enabled: keepOrOff(pS.webdav && pS.webdav.enabled) };
   const local = {
     // A local destination with no path is not really configured: saving it enabled makes
     // the scheduler throw "percorso mancante" and file a bogus "backup failed" (serekkr,
@@ -12984,8 +12993,21 @@ function buildSyncConfig(form, prev) {
     ? { ...smbServer, remoteSubPath: form.syncFolder || '' } : (pS.twoway && pS.twoway.smb);
   const twSmbLan = (kind === 'samba' && !vpn)
     ? { ...smbServer, remoteSubPath: form.syncFolder || '' } : (pS.twoway && pS.twoway.smbLan);
+  // Two-way is a SINGLE sync. Same preservation rule as the backup remotes: if the sync
+  // toggle for the VIEWED method is off, don't clobber a sync that is active on a DIFFERENT
+  // method — keep it, with its own transport/config. Turning sync ON for the viewed method
+  // makes that the sync (and its own family becomes the one remote in use).
+  const prevTw = pS.twoway || {};
+  const selFam = selKind === 'webdav' ? 'webdav' : selKind === 'samba' ? 'samba' : null;
+  const prevTwFam = prevTw.transport === 'webdav' ? 'webdav' : 'samba';
+  let twEnabled, twTransport, twView;
+  if (form.syncOn) { twEnabled = true; twTransport = transport; twView = transport; }
+  else if (prevTw.enabled && selFam && prevTwFam !== selFam) {
+    // a sync active on the OTHER method — preserve it untouched
+    twEnabled = true; twTransport = prevTw.transport || transport; twView = prevTw.transportView || twTransport;
+  } else { twEnabled = false; twTransport = transport; twView = transport; }
   const twoway = {
-    enabled: !!form.syncOn, transport, useWireGuard: transport === 'vpn', transportView: transport,
+    enabled: twEnabled, transport: twTransport, useWireGuard: twTransport === 'vpn', transportView: twView,
     webdav: twWebdav, smb: twSmb, smbLan: twSmbLan,
     subPath: (pS.twoway && pS.twoway.subPath) || '',
     conflictCopies: form.conflictCopies !== false, propagateDeletes: true,
@@ -12994,7 +13016,9 @@ function buildSyncConfig(form, prev) {
   return {
     autoSaveSeconds: form.autoSaveSeconds || 3,
     sync: {
-      enabled: remoteOn || !!form.localOn || !!form.syncOn,
+      // Reflect the REAL enabled states (after preservation), not just the viewed toggles —
+      // so a remote preserved above still counts as "on".
+      enabled: !!(webdav.enabled || sambaLan.enabled || vpnObj.enabled || local.enabled || twoway.enabled),
       backupTransport: pS.backupTransport || 'local',
       vpn: vpnObj, samba: pS.samba, sambaLan, webdav, local, twoway,
     },
@@ -13103,6 +13127,24 @@ function updateDestinationActiveIcons() {
     b.classList.toggle('dest-active', !!active[b.dataset.remote]));
 }
 
+// On switching the viewed destination, make the shared on/off toggles reflect THAT
+// destination's SAVED state — so merely looking at another method doesn't carry the
+// previous one's "on" over to it (serekkr, 23/10/2026).
+function syncRemoteTogglesFromKind(kind) {
+  const s = (state.config && state.config.sync) || {};
+  const b = $('cfg-backup-remote-on'), so = $('cfg-sync-on');
+  if (kind === 'local') {
+    if (b) b.checked = !!(s.local && s.local.enabled);
+    if (so) so.checked = false;
+  } else if (kind === 'webdav') {
+    if (b) b.checked = !!(s.webdav && s.webdav.enabled);
+    if (so) so.checked = !!(s.twoway && s.twoway.enabled && s.twoway.transport === 'webdav');
+  } else {
+    if (b) b.checked = !!((s.vpn && s.vpn.enabled) || (s.samba && s.samba.enabled) || (s.sambaLan && s.sambaLan.enabled));
+    if (so) so.checked = !!(s.twoway && s.twoway.enabled && s.twoway.transport !== 'webdav');
+  }
+}
+
 function applyRemoteUiVisibility() {
   const kind = currentRemoteKind();
   const local = kind === 'local';
@@ -13186,6 +13228,9 @@ function setupRemoteUi() {
   document.querySelectorAll('#remote-kind-seg .vpn-type-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const el = $('cfg-remote-kind'); if (el) el.value = btn.dataset.remote;
+      // Reflect the clicked destination's own saved on/off BEFORE saving, so viewing it
+      // doesn't carry the previous destination's "on" over and steal its active state.
+      try { syncRemoteTogglesFromKind(btn.dataset.remote); } catch (_) {}
       applyRemoteUiVisibility();
       try { updateWgConfiguredView(); } catch (_) {}
       saveSettings().catch(() => {});
