@@ -18677,9 +18677,18 @@ async function renderTagsView() {
     //    Must start with a letter, may contain letters/digits/_/-/ (no spaces).
     //    Preceded by start-of-string or whitespace so "#" inside a URL/word and
     //    markdown headings ("# Titolo", followed by a space) are NOT matched.
+    //    Code is NOT prose: a "#pippo" inside a ``` fenced block ``` or an inline
+    //    `code` span is a comment/selector, never a tag, so strip code first
+    //    (serekkr, 23/10/2026). An unterminated fence strips to end of note.
+    const scan = body
+      .replace(/```[\s\S]*?```/g, '\n')      // closed ``` fences
+      .replace(/~~~[\s\S]*?~~~/g, '\n')      // closed ~~~ fences
+      .replace(/```[\s\S]*$/g, '\n')         // an unterminated ``` fence → to end
+      .replace(/~~~[\s\S]*$/g, '\n')
+      .replace(/`[^`\n]+`/g, ' ');           // inline `code`
     const re = /(^|\s)#([A-Za-z][\w-]*)/g;
     let mm;
-    while ((mm = re.exec(body)) !== null) add(mm[2]);
+    while ((mm = re.exec(scan)) !== null) add(mm[2]);
   }
   const keys = Object.keys(tagMap).sort();
   c.innerHTML = '';
