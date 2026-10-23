@@ -715,12 +715,23 @@ class SyncManager {
     return require('../main/credCrypto').decSecret(v);
   }
 
+  // Nextcloud/ownCloud "/remote.php/dav/files" needs the USERNAME segment to resolve
+  // (…/dav/files/<user>). A URL saved without it 404s on every request (serekkr,
+  // 23/10/2026: "backup failed invalid response 404 not found"). Append the username
+  // when it's missing; a URL that already carries the segment (or any other endpoint)
+  // is left untouched.
+  static _webdavBaseUrl(rawUrl, username) {
+    let u = String(rawUrl || '').trim().replace(/\/+$/, '');
+    if (/\/remote\.php\/dav\/files$/i.test(u) && username) u += '/' + encodeURIComponent(String(username).trim());
+    return u;
+  }
+
   _setupWebDAV() {
     const cfg = this.config?.sync?.webdav;
     if (cfg?.enabled && cfg.url) {
       try {
         const { createClient } = require('webdav');
-        this.webdavClient = createClient(cfg.url, {
+        this.webdavClient = createClient(SyncManager._webdavBaseUrl(cfg.url, cfg.username), {
           username: cfg.username || '',
           password: this._decSecret(cfg.password) || '',
         });
@@ -837,7 +848,7 @@ class SyncManager {
       const url = String(w.url || '').trim();
       if (!url) return null;
       const { createClient } = require('webdav');
-      const client = createClient(url, { username: w.username || '', password: this._decSecret(w.password) || '' });
+      const client = createClient(SyncManager._webdavBaseUrl(url, w.username), { username: w.username || '', password: this._decSecret(w.password) || '' });
       const base = '/' + String(w.remotePath || 'amelie/sync').replace(/^\/+|\/+$/g, '');
       // Cheap first: one Depth:0 stat of the sync folder. Nextcloud (and most
       // servers) bubble any child change up into the folder's ETag, so an ETag
@@ -2597,7 +2608,7 @@ class SyncManager {
     const url = (wcfg.url || '').trim();
     if (!url) throw new Error('Two-way WebDAV: URL mancante');
     const base = '/' + String(wcfg.remotePath || 'amelie/sync').replace(/^\/+|\/+$/g, '');
-    const client = createClient(url, { username: wcfg.username || '', password: this._decSecret(wcfg.password) || '' });
+    const client = createClient(SyncManager._webdavBaseUrl(url, wcfg.username), { username: wcfg.username || '', password: this._decSecret(wcfg.password) || '' });
     // Folders, all of them, before the first PUT: one flat MKCOL each, shallowest
     // level first, six at a time — never { recursive: true } from inside an upload.
     //

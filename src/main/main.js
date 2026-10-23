@@ -5373,8 +5373,15 @@ ipcMain.handle('sync:testLocalPath', async (_, localPath) => {
 // 'self', no connect-src) AND by CORS (file:// origin) → "Failed to fetch".
 // Node has no such restriction. Mirrors the old PROPFIND: 207/200 = OK.
 ipcMain.handle('sync:testWebdav', async (_, cfg = {}) => {
-  const rawUrl = (cfg.url || '').trim();
+  let rawUrl = (cfg.url || '').trim();
   if (!rawUrl) return { ok: false, error: 'URL vuoto' };
+  // Test the SAME URL the client will use: Nextcloud's /remote.php/dav/files needs the
+  // username segment, or every real request 404s. Append it when missing so the test
+  // reflects reality (and blocks a config that would fail at backup time).
+  {
+    const base = rawUrl.replace(/\/+$/, '');
+    if (/\/remote\.php\/dav\/files$/i.test(base) && cfg.username) rawUrl = base + '/' + encodeURIComponent(String(cfg.username).trim());
+  }
   let u;
   try { u = new URL(rawUrl); } catch (_) { return { ok: false, error: 'URL non valido' }; }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return { ok: false, error: 'URL deve iniziare con http:// o https://' };
@@ -5396,18 +5403,13 @@ ipcMain.handle('sync:testWebdav', async (_, cfg = {}) => {
     }, (res) => {
       res.resume();   // drain
       const s = res.statusCode;
+      // Short messages, as asked (serekkr, 23/10/2026): auth vs unreachable, nothing more.
       if (s === 207 || s === 200) resolve({ ok: true, status: s });
-      else if (s === 401 || s === 403) resolve({ ok: false, status: s, error: `Autenticazione fallita (${s}) — controlla utente/password` });
-      else resolve({ ok: false, status: s, error: `Risposta ${s} ${res.statusMessage || ''}`.trim() });
+      else if (s === 401 || s === 403) resolve({ ok: false, status: s, error: 'Autenticazione fallita' });
+      else resolve({ ok: false, status: s, error: 'Server irraggiungibile' });
     });
-    req.on('timeout', () => { req.destroy(new Error('Timeout: il server non risponde')); });
-    req.on('error', (e) => {
-      let msg = e.message;
-      if (e.code === 'ENOTFOUND') msg = 'Host non trovato (controlla l\'URL)';
-      else if (e.code === 'ECONNREFUSED') msg = 'Connessione rifiutata (porta/servizio)';
-      else if (e.code && /CERT|SELF_SIGNED|ALT_NAME/.test(e.code)) msg = 'Certificato TLS non valido: ' + e.code;
-      resolve({ ok: false, error: msg });
-    });
+    req.on('timeout', () => { req.destroy(new Error('Timeout')); });
+    req.on('error', () => { resolve({ ok: false, error: 'Server irraggiungibile' }); });
     req.end('<?xml version="1.0"?><propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>');
   });
 });

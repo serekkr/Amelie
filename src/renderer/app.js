@@ -10566,27 +10566,34 @@ function setupSettings() {
   // (same method): no "WebDAV sync + Samba backup" mix (serekkr, 23/10/2026). Local
   // backup is NOT remote and is always allowed alongside (e.g. Local + WebDAV backup).
   // Families: 'webdav' vs 'samba' (VPN and LAN both land on a Samba share).
+  // The REMOTE backup's family right now, from the VISIBLE controls (segmented kind +
+  // the on/off toggle) — reliable, unlike the hidden cfg-*-enabled mirrors which get no
+  // user 'change' event. null when no remote backup is on (Local is not a remote family).
   function _backupRemoteFamily() {
-    if ($('cfg-webdav-enabled')?.checked) return 'webdav';
-    if ($('cfg-samba-enabled')?.checked || $('cfg-vpn-enabled')?.checked) return 'samba';
-    return null;
+    if (!$('cfg-backup-remote-on')?.checked) return null;
+    const k = currentRemoteKind();
+    return k === 'webdav' ? 'webdav' : k === 'samba' ? 'samba' : null;
   }
   function _syncFamilyChecked() {
     if ($('cfg-tw-webdav-enabled')?.checked) return 'webdav';
     if ($('cfg-tw-lan-enabled')?.checked || $('cfg-tw-samba-enabled')?.checked) return 'samba';
     return null;
   }
-  function backupSyncSamePlaceGuard(which) {
-    const me = $('cfg-' + which + '-enabled'); if (!me || !me.checked) return false;
-    const bf = which === 'webdav' ? 'webdav' : 'samba';
+  $('cfg-webdav-enabled')?.addEventListener('change', () => backupRemoteExclusiveGuard('webdav'));
+  $('cfg-vpn-enabled')?.addEventListener('change', () => backupRemoteExclusiveGuard('vpn'));
+  $('cfg-samba-enabled')?.addEventListener('change', () => backupRemoteExclusiveGuard('samba'));
+  // Backup (remote) + sync must be the SAME place: turning the remote backup ON while
+  // sync runs on the OTHER method is refused (serekkr, 23/10/2026). Local backup exempt.
+  $('cfg-backup-remote-on')?.addEventListener('change', () => {
+    const bf = _backupRemoteFamily();            // null for Local or when off
     const sf = _syncFamilyChecked();
-    if (sf && sf !== bf) { me.checked = false; showToast('✗ ' + window.i18n.t('sync.same_place')); try { updateActionNowButtons(); } catch (_) {} return true; }
-    return false;
-  }
-  const _backupEnableGuard = (which) => { if (backupRemoteExclusiveGuard(which)) return; backupSyncSamePlaceGuard(which); };
-  $('cfg-webdav-enabled')?.addEventListener('change', () => _backupEnableGuard('webdav'));
-  $('cfg-vpn-enabled')?.addEventListener('change', () => _backupEnableGuard('vpn'));
-  $('cfg-samba-enabled')?.addEventListener('change', () => _backupEnableGuard('samba'));
+    if (bf && sf && bf !== sf) {
+      $('cfg-backup-remote-on').checked = false;
+      showToast('✗ ' + window.i18n.t('sync.same_place'));
+      try { updateActionNowButtons(); } catch (_) {}
+      try { updateDestinationActiveIcons(); } catch (_) {}
+    }
+  }, true);   // capture: run BEFORE the saveSettings handler below
   // Gate: the Samba destination can't be switched on until its write test passed
   // — same rule the WebDAV toggle follows, so an unusable share can't sit
   // "enabled" and fail silently at backup time.
@@ -13081,10 +13088,26 @@ function remoteHasVpn() {
   return !!(v && v.wgConfig);
 }
 
+// Fill the destination button GREEN when that destination is ACTIVE (backup or sync on),
+// for Samba (VPN) / WebDAV / Local (serekkr, 23/10/2026). Derived from the saved config
+// so it reflects the real state; one remote (Samba OR WebDAV) at a time, Local independent.
+function updateDestinationActiveIcons() {
+  const s = (state.config && state.config.sync) || {};
+  const active = {
+    local:  !!(s.local && s.local.enabled),
+    samba:  !!((s.vpn && s.vpn.enabled) || (s.samba && s.samba.enabled) || (s.sambaLan && s.sambaLan.enabled)
+             || (s.twoway && s.twoway.enabled && s.twoway.transport !== 'webdav')),
+    webdav: !!((s.webdav && s.webdav.enabled) || (s.twoway && s.twoway.enabled && s.twoway.transport === 'webdav')),
+  };
+  document.querySelectorAll('#remote-kind-seg .vpn-type-btn').forEach(b =>
+    b.classList.toggle('dest-active', !!active[b.dataset.remote]));
+}
+
 function applyRemoteUiVisibility() {
   const kind = currentRemoteKind();
   const local = kind === 'local';
   const vpn = kind === 'samba' && remoteHasVpn();
+  try { updateDestinationActiveIcons(); } catch (_) {}
   const show = (id, on) => { const el = $(id); if (el) el.style.display = on ? '' : 'none'; };
   document.querySelectorAll('#remote-kind-seg .vpn-type-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.remote === kind));
@@ -13235,6 +13258,7 @@ async function saveSettings() {
   const config = buildSyncConfig(form, state.config || {});
   await window.inkwell.writeConfig(config);
   state.config = config;
+  try { updateDestinationActiveIcons(); } catch (_) {}   // refresh the green "active" buttons
   syncHiddenTogglesFromForm(form);
   state._backupSmbCommitted = null;
   updateSyncButtonVisibility();

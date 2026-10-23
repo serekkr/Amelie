@@ -2199,6 +2199,9 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 }
 .sip-custom-wrap input:focus { border-color: var(--accent-dim); }
 .sip-custom-wrap span { font-size: 13px; color: var(--text-2); }
+/* The daily-time field (HH:MM) needs more room than the 70px days-number input, or the
+   native time widget clips to "18:" instead of "18:00" (serekkr, 23/10/2026). */
+#cfg-local-dailytime { width: auto; min-width: 130px; }
 
 /* View-width pills (wide ↔ readable line length) */
 .view-width-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
@@ -2632,6 +2635,10 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   /* Just the 1px border. It carried an inset 1px shadow of the same colour too, which
      doubled it to a 2px ring — thicker than anything else in the panel. */
   border-color: var(--accent); box-shadow: none;
+}
+/* Filled GREEN when that destination is ACTIVE (backup or sync on) — serekkr 23/10/2026. */
+.vpn-type-btn.dest-active, .vpn-type-btn.dest-active:hover {
+  background: var(--accent); color: #fff; border-color: var(--accent);
 }
 
 /* ─── Font dropdown ─────────────────────────────────────────── */
