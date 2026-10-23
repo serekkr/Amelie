@@ -13029,17 +13029,28 @@ function buildSyncConfig(form, prev) {
         remotePath: form.backupFolder || 'amelie/backup',
         folder: false, archive: true, archiveOnly: true, keepLast, enabled: remoteOn }
     : { ...(pS.webdav || {}), enabled: keepOrOff(pS.webdav && pS.webdav.enabled) };
-  const local = {
-    // A local destination with no path is not really configured: saving it enabled makes
-    // the scheduler throw "percorso mancante" and file a bogus "backup failed" (serekkr,
-    // 20/10/2026). Enabled only WITH a path.
-    enabled: !!form.localOn && !!String(form.localPath || '').trim(), path: form.localPath || '',
-    folder: false, archive: true, archiveOnly: true,
-    intervalMinutes: form.backupIntervalMinutes, keepLast,
-    // Fixed daily clock time, only when "Daily" is chosen (empty otherwise → plain
-    // interval). The scheduler runs once at/after this hour each day (same-day catch-up).
-    dailyTime: form.backupDailyTime || '',
-  };
+  // Local backup is INDEPENDENT of the remotes and must be PRESERVED when you are
+  // viewing a remote (serekkr, 23/10/2026: Local + WebDAV both green, closed/reopened,
+  // clicked WebDAV to look at it → Local turned off). form.localOn is `isLocal && toggle`,
+  // so it is false whenever the viewed kind isn't Local — rebuilding `enabled` from it
+  // there wiped an active Local. So build from the form ONLY when Local is the kind being
+  // viewed; otherwise keep the saved Local (enabled/path/dailyTime), updating just the
+  // shared frequency/keep. A pathless Local still can't be enabled (bogus "backup failed").
+  const pL = pS.local || {};
+  const local = (selKind === 'local')
+    ? {
+        enabled: !!form.localOn && !!String(form.localPath || '').trim(), path: form.localPath || '',
+        folder: false, archive: true, archiveOnly: true,
+        intervalMinutes: form.backupIntervalMinutes, keepLast,
+        dailyTime: form.backupDailyTime || '',
+      }
+    : {
+        ...pL,
+        enabled: !!pL.enabled && !!String(pL.path || '').trim(), path: pL.path || '',
+        folder: false, archive: true, archiveOnly: true,
+        intervalMinutes: form.backupIntervalMinutes, keepLast,
+        dailyTime: pL.dailyTime || '',
+      };
   const transport = kind === 'webdav' ? 'webdav' : (vpn ? 'vpn' : 'samba');
   const twWebdav = (kind === 'webdav')
     ? { url: form.webdavUrl || '', username: form.webdavUser || '', password: form.webdavPass || '',
