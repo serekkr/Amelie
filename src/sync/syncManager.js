@@ -638,7 +638,11 @@ class SyncManager {
       // and it hasn't happened yet (app was off at the scheduled time).
       if (this._dailyBackupDue()) {
         console.log(`[Sync] Daily backup time ${this._backupDailyTime()} already passed and not done today — catching up`);
-        jobs.push({ what: 'backup', run: () => this._anyBackupDestination() && this.runBackup({ manual: false }) });
+        // Daily mode writes a copy at the set time EVERY day (force), even if the vault
+        // is unchanged: the user wants one dated snapshot per day carrying that time
+        // (serekkr, 23/10/2026). _dailyBackupDue still gates it to once a day; the
+        // interval mode below keeps its skip-if-unchanged.
+        jobs.push({ what: 'backup', run: () => this._anyBackupDestination() && this.runBackup({ force: true, manual: false }) });
       } else {
         console.log(`[Sync] Daily backup at ${this._backupDailyTime()} — not due yet / already done today`);
       }
@@ -757,7 +761,7 @@ class SyncManager {
         // Daily at a fixed clock time: poll every 5 min and run when today's hour has
         // passed and today's backup hasn't happened yet (_dailyBackupDue gates it to
         // once per day). 5 min = the backup lands within 5 min of the set time.
-        this._backupTimer = setInterval(() => { if (this._dailyBackupDue()) this.runBackup({ manual: false }); }, 5 * 60 * 1000);
+        this._backupTimer = setInterval(() => { if (this._dailyBackupDue()) this.runBackup({ force: true, manual: false }); }, 5 * 60 * 1000);
         console.log(`[Sync] Daily backup at ${daily} (checked every 5 min)`);
       } else {
         const min = this._backupIntervalMinutes();
@@ -1814,7 +1818,13 @@ class SyncManager {
   _dateStamp() {
     const d = new Date();
     const p2 = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}_${p2(d.getHours())}-${p2(d.getMinutes())}-${p2(d.getSeconds())}`;
+    // Formato leggibile all'italiana GGMMAAAA_HH_MM_SS (serekkr, 23/10/2026),
+    // es. 23102026_11_50_00. I nomi scritti prima restano in giro sotto il vecchio
+    // YYYY-MM-DD_HH-MM-SS, quindi retention e restore devono riconoscere entrambi:
+    // _ARCHIVE_RE/_archiveStamp per gli archivi, _SNAPSHOT_RE/_snapshotStamp per le
+    // cartelle. L'ordinamento della rotazione NON usa più il nome (col giorno davanti
+    // l'ordine alfabetico non è cronologico) ma lo stamp parsato o l'mtime.
+    return `${p2(d.getDate())}${p2(d.getMonth() + 1)}${d.getFullYear()}_${p2(d.getHours())}_${p2(d.getMinutes())}_${p2(d.getSeconds())}`;
   }
 
   // Snapshot folder name: the dated stamp carrying the SAME "amelie-vault-" prefix
@@ -1822,10 +1832,26 @@ class SyncManager {
   // (e.g. amelie-vault-2026-06-20_19-48-00).
   _snapshotName() { return `amelie-vault-${this._dateStamp()}`; }
 
-  // Matches a snapshot folder name: the new "amelie-vault-" prefix (optional, so
-  // legacy date-only folders are still recognised) + YYYY-MM-DD with an optional
-  // _HH-MM-SS suffix. Retention uses this to clean up both old and new layouts.
-  static get _SNAPSHOT_RE() { return /^(amelie-vault-)?\d{4}-\d{2}-\d{2}(_\d{2}-\d{2}-\d{2})?$/; }
+  // Matches a snapshot folder name: the "amelie-vault-" prefix (optional, so legacy
+  // date-only folders are still recognised) followed by EITHER the new readable
+  // DDMMYYYY_HH_MM_SS stamp or the older YYYY-MM-DD[_HH-MM-SS]. Retention uses this
+  // to clean up every layout.
+  static get _SNAPSHOT_RE() { return /^(amelie-vault-)?(\d{8}_\d{2}_\d{2}_\d{2}|\d{4}-\d{2}-\d{2}(_\d{2}-\d{2}-\d{2})?)$/; }
+
+  /**
+   * A sortable YYYYMMDDHHMMSS lifted out of a snapshot FOLDER name (either spelling),
+   * or null for a name that is not one of ours. Same reason as _archiveStamp: with the
+   * day-first spelling the plain name does NOT sort chronologically, so retention must
+   * compare the parsed stamp, never the name.
+   */
+  static _snapshotStamp(name) {
+    const s = String(name || '').replace(/^amelie-vault-/, '');
+    let m = /^(\d{2})(\d{2})(\d{4})_(\d{2})_(\d{2})_(\d{2})$/.exec(s);   // DD MM YYYY HH MM SS (new)
+    if (m) return m[3] + m[2] + m[1] + m[4] + m[5] + m[6];
+    m = /^(\d{4})-(\d{2})-(\d{2})(?:_(\d{2})-(\d{2})-(\d{2}))?$/.exec(s); // YYYY-MM-DD[_HH-MM-SS] (old)
+    if (m) return m[1] + m[2] + m[3] + (m[4] || '00') + (m[5] || '00') + (m[6] || '00');
+    return null;
+  }
 
   /**
    * Retention for dated snapshot folders (YYYY-MM-DD) under baseDir: keep only the
@@ -1839,8 +1865,9 @@ class SyncManager {
     try {
       const dirs = fs.readdirSync(baseDir, { withFileTypes: true })
         .filter(e => e.isDirectory() && SyncManager._SNAPSHOT_RE.test(e.name))
-        .map(e => e.name)
-        .sort();   // names sort chronologically (date then time)
+        .map(e => ({ name: e.name, t: fs.statSync(path.join(baseDir, e.name)).mtimeMs }))
+        .sort((a, b) => a.t - b.t)   // oldest first — by mtime, so the day-first name format doesn't matter
+        .map(e => e.name);
       for (const name of dirs.slice(0, Math.max(0, dirs.length - n))) {
         try { fs.rmSync(path.join(baseDir, name), { recursive: true, force: true }); console.log('[Local] pruned old dated folder', name); } catch (_) {}
       }
@@ -1856,16 +1883,24 @@ class SyncManager {
    */
   static get _ARCHIVE_RE() { return /^amelie-vault-(\d{4})-?(\d{2})-?(\d{2})[_-](\d{2})-?(\d{2})-?(\d{2})\.tar\.gz$/; }
 
+  // New readable spelling: amelie-vault-DDMMYYYY_HH_MM_SS.tar.gz. Separate regex
+  // because its groups are day-first and have to be REORDERED to sort.
+  static get _ARCHIVE_RE_NEW() { return /^amelie-vault-(\d{2})(\d{2})(\d{4})_(\d{2})_(\d{2})_(\d{2})\.tar\.gz$/; }
+
   /**
-   * A sortable YYYYMMDDHHMMSS lifted out of either spelling, or null for a name
-   * that is not one of ours. Sorting the NAMES instead does the wrong thing the
-   * moment the two spellings share a directory: `amelie-vault-2026-09-17_…` and
-   * `amelie-vault-20260917-…` agree up to "2026", and then '-' (0x2D) sorts below
-   * '0' (0x30), so every new archive looks OLDER than every old one and retention
-   * deletes the newest first. Compare the parsed stamps, never the names.
+   * A sortable YYYYMMDDHHMMSS lifted out of ANY spelling, or null for a name that is
+   * not one of ours. Sorting the NAMES instead does the wrong thing the moment two
+   * spellings share a directory (and the new day-first one does not sort at all):
+   * `amelie-vault-2026-09-17_…`, `amelie-vault-20260917-…` and
+   * `amelie-vault-23102026_…` do not agree digit-for-digit in chronological order.
+   * Compare the parsed stamps, never the names. The new spelling is tried first; its
+   * mandatory underscores keep it from ever matching an old hyphenated name.
    */
   static _archiveStamp(name) {
-    const m = SyncManager._ARCHIVE_RE.exec(String(name || ''));
+    const s = String(name || '');
+    const mn = SyncManager._ARCHIVE_RE_NEW.exec(s);          // DD MM YYYY HH MM SS (new)
+    if (mn) return mn[3] + mn[2] + mn[1] + mn[4] + mn[5] + mn[6];
+    const m = SyncManager._ARCHIVE_RE.exec(s);               // YYYY MM DD HH MM SS (old)
     return m ? m.slice(1, 7).join('') : null;
   }
 
@@ -1966,8 +2001,10 @@ class SyncManager {
     try { items = await client.getDirectoryContents(root); } catch (_) { return; }
     const dated = items
       .filter(it => it.type === 'directory' && SyncManager._SNAPSHOT_RE.test(it.basename))
-      .map(it => it.basename)
-      .sort();
+      .map(it => ({ n: it.basename, k: SyncManager._snapshotStamp(it.basename) }))
+      .filter(x => x.k)
+      .sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : 0))   // oldest first, by parsed stamp (name isn't chronological)
+      .map(x => x.n);
     for (const name of dated.slice(0, Math.max(0, dated.length - n))) {
       try { await client.deleteFile(`${root}/${name}`); console.log('[WebDAV] pruned old dated folder', name); }
       catch (_) { /* best-effort */ }
@@ -2058,10 +2095,15 @@ class SyncManager {
     if (!Array.isArray(list)) return;
     const found = [];
     for (const e of list) {
-      // Keep only names that are a snapshot timestamp AND a directory.
-      if (e.dir && /^(?:amelie-vault-)?\d{4}-\d{2}-\d{2}(?:_\d{2}-\d{2}-\d{2})?$/.test(e.name || '')) found.push(e.name);
+      // Keep only names that are a snapshot timestamp AND a directory (any spelling).
+      if (e.dir && SyncManager._SNAPSHOT_RE.test(e.name || '')) found.push(e.name);
     }
-    const sorted = [...new Set(found)].sort();
+    // By the PARSED stamp, oldest first — the day-first name doesn't sort chronologically.
+    const sorted = [...new Set(found)]
+      .map(n => ({ n, k: SyncManager._snapshotStamp(n) }))
+      .filter(x => x.k)
+      .sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : 0))
+      .map(x => x.n);
     const toDelete = sorted.slice(0, Math.max(0, sorted.length - n));
     for (const d of toDelete) { try { await this._smb(cfg, ['deltree', subPath + '/' + d], { timeout: 120000 }); } catch (_) {} }
     if (toDelete.length) console.log('[Samba] Rotation: removed', toDelete.length, 'old dated folders');
@@ -3168,6 +3210,9 @@ class SyncManager {
       status,
       error,
       lastSync: this.lastSync,
+      // Last time a backup run reached a conclusion (a real copy OR a skip) — drives
+      // the "Ultimo backup" line in the Backup settings.
+      lastBackupAt: (this._syncState && this._syncState.lastBackupAt) || null,
       op: meta && meta.op ? meta.op : null,
       manual: !!(meta && meta.manual),
       // A pass frequent enough that announcing it would be noise.

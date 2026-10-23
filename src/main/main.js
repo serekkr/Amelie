@@ -4588,6 +4588,16 @@ ipcMain.on('sync:massDeleteAnswer', (_e, { id, choice } = {}) => {
 ipcMain.handle('sync:reports', async () => (syncManager ? syncManager.listSyncReports() : []));
 ipcMain.handle('sync:report', async (_, id) => (syncManager ? syncManager.getSyncReport(String(id || '')) : null));
 
+// Last-backup / last-sync timestamps, so Settings → Backup can show "Ultimo backup"
+// the moment it opens (not only after a run fires a status update).
+ipcMain.handle('sync:getState', async () => {
+  if (!syncManager) return { lastBackupAt: null, lastSync: null };
+  return {
+    lastBackupAt: (syncManager._syncState && syncManager._syncState.lastBackupAt) || null,
+    lastSync: syncManager.lastSync || null,
+  };
+});
+
 // Force a two-way sync (the toolbar Sync button).
 ipcMain.handle('sync:triggerTwoway', async () => {
   if (syncManager) return syncManager.runTwoway({ manual: true });

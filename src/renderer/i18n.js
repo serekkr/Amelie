@@ -292,6 +292,8 @@ const TRANSLATIONS = {
     'settings.minutes':       'minuti',
     'settings.days':          'giorni',
     'settings.daily_at':      'alle',
+    'settings.last_backup':   'Ultimo backup',
+    'settings.backup_saved':  '✓ Salvato',
 
     // Settings — sync section headers
     'sync.wg_smb':            'WireGuard + SMB / NFS',
@@ -1250,6 +1252,8 @@ const TRANSLATIONS = {
     'settings.minutes':       'minutes',
     'settings.days':          'days',
     'settings.daily_at':      'at',
+    'settings.last_backup':   'Last backup',
+    'settings.backup_saved':  '✓ Saved',
 
     // Settings — sync
     'sync.wg_smb':            'WireGuard + SMB / NFS',

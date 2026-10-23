@@ -2202,6 +2202,8 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 /* The daily-time field (HH:MM) needs more room than the 70px days-number input, or the
    native time widget clips to "18:" instead of "18:00" (serekkr, 23/10/2026). */
 #cfg-local-dailytime { width: auto; min-width: 130px; }
+.last-backup-line { font-size: 12px; color: var(--text-3); }
+.last-backup-saved { color: var(--green); font-weight: 600; margin-left: 6px; }
 
 /* View-width pills (wide ↔ readable line length) */
 .view-width-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }

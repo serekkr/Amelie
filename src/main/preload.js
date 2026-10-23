@@ -125,6 +125,7 @@ contextBridge.exposeInMainWorld('inkwell', {
   triggerTwoway: () => ipcRenderer.invoke('sync:triggerTwoway'),
   syncReports: () => ipcRenderer.invoke('sync:reports'),
   syncReport: (id) => ipcRenderer.invoke('sync:report', id),
+  getSyncState: () => ipcRenderer.invoke('sync:getState'),
   triggerBackup: () => ipcRenderer.invoke('sync:triggerBackup'),
   testLocalPath: (p) => ipcRenderer.invoke('sync:testLocalPath', p),
   testWebdav: (cfg) => ipcRenderer.invoke('sync:testWebdav', cfg),

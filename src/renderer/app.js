@@ -10270,7 +10270,7 @@ function setupSettings() {
         // Backup ('sync') / Sync ('twoway') tabs: reset to the DEFAULT view on
         // entry — drop any open Riconfigura/expanded form so switching tabs
         // doesn't keep a half-edited wizard around.
-        if (btn.dataset.tab === 'sync')   { _smbExpanded.backup = false; try { updateWgConfiguredView(); } catch (_) {} applySmbCollapse('backup'); collapseAllBackupSections(); }
+        if (btn.dataset.tab === 'sync')   { _smbExpanded.backup = false; try { updateWgConfiguredView(); } catch (_) {} applySmbCollapse('backup'); collapseAllBackupSections(); try { refreshLastBackupLine(); } catch (_) {} }
         // Opening Sync shows ONE method — the pill's — like opening Backup does.
         if (btn.dataset.tab === 'twoway') { _smbExpanded.sync   = false; try { updateTwowayConnView(); refreshTwowayVpnOnDisk(); } catch (_) {} applySmbCollapse('sync'); openOnlyTwowaySection(null); }
       });
@@ -13856,6 +13856,12 @@ function setupSync() {
       // Don't flash the icon orange/red; the error is reported via notifications.
       syncStatusDot.className = 'sync-idle';
       console.error('[Sync error]', data.error);
+    }
+    // "Ultimo backup" line in Settings → Backup. Update the time whenever a backup run
+    // reports back, and flash "✓ Salvato" when one just finished OK (serekkr, 23/10/2026).
+    if (data.lastBackupAt) {
+      const justSaved = (data.op === 'backup' && data.status === 'ok');
+      updateLastBackupLine(data.lastBackupAt, justSaved);
     }
     logSyncEventNotif(data);
   });
@@ -18770,6 +18776,30 @@ function _fmtDate(ms) { const d = new Date(ms); if (isNaN(d)) return '—'; retu
 function _fmtDateDMY(ms) { const d = new Date(ms); if (isNaN(d)) return '—'; const p = n => String(n).padStart(2, '0'); return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear(); }
 // Same, WITH the time — for the "Modified" lines where the hour matters (Recent view).
 function _fmtDateTimeDMY(ms) { const d = new Date(ms); if (isNaN(d)) return '—'; const p = n => String(n).padStart(2, '0'); return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+// Same, with seconds — the "Ultimo backup" line mirrors the GGMMAAAA_HH_MM_SS file stamp.
+function _fmtDateTimeDMYS(ms) { const d = new Date(ms); if (isNaN(d)) return '—'; const p = n => String(n).padStart(2, '0'); return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); }
+
+// Fill the "Ultimo backup: <data>" line in Settings → Backup. `saved` briefly shows a
+// green "✓ Salvato" badge when a backup just completed.
+let _lastBackupSavedTimer = null;
+function updateLastBackupLine(lastBackupAt, saved) {
+  const when  = document.getElementById('local-last-backup-when');
+  const badge = document.getElementById('local-last-backup-saved');
+  if (when) when.textContent = lastBackupAt ? _fmtDateTimeDMYS(lastBackupAt) : '—';
+  if (badge && saved) {
+    badge.style.display = '';
+    if (_lastBackupSavedTimer) clearTimeout(_lastBackupSavedTimer);
+    _lastBackupSavedTimer = setTimeout(() => { badge.style.display = 'none'; }, 4000);
+  }
+}
+// Populate the line from the stored state (called when Settings → Backup opens, so it
+// shows the last backup even if no run happened this session).
+async function refreshLastBackupLine() {
+  try {
+    const st = await window.inkwell.getSyncState?.();
+    updateLastBackupLine(st && st.lastBackupAt, false);
+  } catch (_) { /* best-effort */ }
+}
 function _isOverdue(due) { const d = new Date(due); return !isNaN(d) && d.getTime() < Date.now(); }
 
 // The board lives in a TAB of its own: opening it from a notification (or
