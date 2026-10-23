@@ -11120,9 +11120,17 @@ function setupSettings() {
     if (!el) return;
     el.addEventListener('change', async () => {
       try { await saveSettings(); } catch (_) {}
-      // No bottom toast here — the inline "✓ Salvato" badge next to "Ultimo backup" is
-      // enough (serekkr, 23/10/2026: "basta la notifica saved").
-      try { const st = await window.inkwell.getSyncState?.(); updateBackupDestLines(st || {}, fam); } catch (_) {}
+      // "✓ Salvato" RIGHT NEXT TO the time field, for both Local and Remote — shown even
+      // when the destination isn't active yet (serekkr, 23/10/2026: it must appear on
+      // Local too, like WebDAV/Samba). No bottom toast. Also refresh the Ultimo-backup line.
+      const wrap = el.closest('.sip-custom-wrap');
+      const badge = wrap && wrap.querySelector('.dailytime-saved');
+      if (badge) {
+        badge.style.display = '';
+        if (el._savedTimer) clearTimeout(el._savedTimer);
+        el._savedTimer = setTimeout(() => { badge.style.display = 'none'; }, 4000);
+      }
+      try { const st = await window.inkwell.getSyncState?.(); updateBackupDestLines(st || {}, null); } catch (_) {}
     });
     el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
   };
