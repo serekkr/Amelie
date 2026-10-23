@@ -10556,7 +10556,9 @@ function setupSettings() {
     const other = _BK_REMOTES.filter(k => k !== which).map(box).find(el => el && el.checked);
     if (me && me.checked && other) {
       me.checked = false;
-      showToast('✗ ' + window.i18n.t('sync.backup_one_remote'));
+      // No toast here — the "1 remoto alla volta" block (_oneRemoteGuard → sync.same_place)
+      // already explains it on the visible toggles. This older guard stays as a silent
+      // safety on the hidden mirrors (serekkr, 23/10/2026: "leva la scritta one remote").
       try { updateActionNowButtons(); } catch (_) {}
       return true;
     }
@@ -11118,7 +11120,8 @@ function setupSettings() {
     if (!el) return;
     el.addEventListener('change', async () => {
       try { await saveSettings(); } catch (_) {}
-      try { showToast(window.i18n.t('settings.backup_saved')); } catch (_) {}
+      // No bottom toast here — the inline "✓ Salvato" badge next to "Ultimo backup" is
+      // enough (serekkr, 23/10/2026: "basta la notifica saved").
       try { const st = await window.inkwell.getSyncState?.(); updateBackupDestLines(st || {}, fam); } catch (_) {}
     });
     el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
