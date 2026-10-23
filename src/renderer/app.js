@@ -10582,18 +10582,34 @@ function setupSettings() {
   $('cfg-webdav-enabled')?.addEventListener('change', () => backupRemoteExclusiveGuard('webdav'));
   $('cfg-vpn-enabled')?.addEventListener('change', () => backupRemoteExclusiveGuard('vpn'));
   $('cfg-samba-enabled')?.addEventListener('change', () => backupRemoteExclusiveGuard('samba'));
-  // Backup (remote) + sync must be the SAME place: turning the remote backup ON while
-  // sync runs on the OTHER method is refused (serekkr, 23/10/2026). Local backup exempt.
-  $('cfg-backup-remote-on')?.addEventListener('change', () => {
-    const bf = _backupRemoteFamily();            // null for Local or when off
-    const sf = _syncFamilyChecked();
-    if (bf && sf && bf !== sf) {
-      $('cfg-backup-remote-on').checked = false;
+  // ONE remote at a time: with a remote (Samba or WebDAV) already active for backup OR
+  // sync, turning ON the OTHER remote's backup/sync is REFUSED — you must switch the
+  // other off first (serekkr, 23/10/2026: "1 remote alla volta"). Local backup is exempt.
+  // The currently ACTIVE remote family, from the saved config.
+  const _activeRemoteFam = () => {
+    const s = (state.config && state.config.sync) || {};
+    if ((s.webdav && s.webdav.enabled) || (s.twoway && s.twoway.enabled && s.twoway.transport === 'webdav')) return 'webdav';
+    if ((s.vpn && s.vpn.enabled) || (s.samba && s.samba.enabled) || (s.sambaLan && s.sambaLan.enabled)
+        || (s.twoway && s.twoway.enabled && s.twoway.transport !== 'webdav')) return 'samba';
+    return null;
+  };
+  const _selRemoteFam = () => { const k = currentRemoteKind(); return k === 'webdav' ? 'webdav' : k === 'samba' ? 'samba' : null; };
+  // Returns true (and reverts the toggle) if turning this one ON would mean two remotes.
+  const _oneRemoteGuard = (toggleId) => {
+    const el = $(toggleId); if (!el || !el.checked) return false;
+    const sel = _selRemoteFam(); if (!sel) return false;            // Local → always allowed
+    const act = _activeRemoteFam();
+    if (act && act !== sel) {
+      el.checked = false;
       showToast('✗ ' + window.i18n.t('sync.same_place'));
       try { updateActionNowButtons(); } catch (_) {}
       try { updateDestinationActiveIcons(); } catch (_) {}
+      return true;
     }
-  }, true);   // capture: run BEFORE the saveSettings handler below
+    return false;
+  };
+  $('cfg-backup-remote-on')?.addEventListener('change', () => _oneRemoteGuard('cfg-backup-remote-on'), true);
+  $('cfg-sync-on')?.addEventListener('change', () => _oneRemoteGuard('cfg-sync-on'), true);
   // Gate: the Samba destination can't be switched on until its write test passed
   // — same rule the WebDAV toggle follows, so an unusable share can't sit
   // "enabled" and fail silently at backup time.
