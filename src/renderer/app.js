@@ -11136,8 +11136,10 @@ function setupSettings() {
       const badge = wrap && wrap.querySelector('.dailytime-saved');
       if (badge) {
         badge.style.display = '';
+        // Short flash: a time input fires 'change' on every spinner step, so a long badge
+        // reset on each one made it look permanent (serekkr, 23/10/2026). ~1.6 s is enough.
         if (el._savedTimer) clearTimeout(el._savedTimer);
-        el._savedTimer = setTimeout(() => { badge.style.display = 'none'; }, 4000);
+        el._savedTimer = setTimeout(() => { badge.style.display = 'none'; }, 1600);
       }
       try { const st = await window.inkwell.getSyncState?.(); updateBackupDestLines(st || {}, null); } catch (_) {}
     });
