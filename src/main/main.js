@@ -2772,38 +2772,12 @@ ipcMain.handle('vault:disableEncryption', async (_, passphrase) => {
   return { ok: true, converted: decReport?.converted ?? 0, failed: decReport?.failed?.length ?? 0 };
 });
 
-// Switch between "encrypted at rest" and "plaintext while open" WITHOUT changing
-// the passphrase. Requires the vault to be unlocked.
-ipcMain.handle('vault:setRestMode', async (_, openPlaintext) => {
-  const cfg = readAppConfig();
-  if (!cfg.encryption?.enabled) return { ok: false, error: 'Encryption non attiva', code: 'ENC_INACTIVE' };
-  const want = !!openPlaintext;
-  const isPlain = (cfg.encryption.openPlaintext === true);
-  if (want === isPlain) {
-    // No transition needed — just persist the flag.
-    cfg.encryption.openPlaintext = want; writeAppConfig(cfg); return { ok: true };
-  }
-  let modeReport = null;
-  if (want) {
-    // at-rest → plaintext: need the live key.
-    const key = ENCRYPTION_KEY;
-    if (!key) return { ok: false, error: 'Vault bloccato' };
-    writeVerifyToken(key);
-    try { modeReport = decryptVaultToDisk(key); } catch (e) { return { ok: false, error: 'Decifratura fallita' }; }
-    _REENCRYPT_KEY = key; _reencryptDone = false;
-    ENCRYPTION_KEY = null;
-  } else {
-    // plaintext → at-rest: encrypt now with the stashed key.
-    const key = _REENCRYPT_KEY || ENCRYPTION_KEY;
-    if (!key) return { ok: false, error: 'Vault bloccato' };
-    try { modeReport = encryptVaultToDisk(key); } catch (e) { return { ok: false, error: 'Cifratura fallita' }; }
-    ENCRYPTION_KEY = key; _REENCRYPT_KEY = null;
-  }
-  cfg.encryption.openPlaintext = want;
-  writeAppConfig(cfg);
-  refreshSyncPlaintextFlag();   // pause sync while plaintext / resume when at-rest
-  return { ok: true, converted: modeReport?.converted ?? 0, failed: modeReport?.failed?.length ?? 0 };
-});
+// Rest-mode ("plaintext while open") was removed from the UI: encryption is
+// binary now — ciphertext at rest when ON, plaintext when OFF. The old
+// `vault:setRestMode` IPC and its preload binding are gone so nothing can set
+// `openPlaintext` true behind the UI's back; enableEncryption always stores it
+// false. The read sites below tolerate a stale `true` from a pre-removal config
+// but no live path produces one.
 
 // Verify a passphrase against the vault and, on success, set ENCRYPTION_KEY.
 // Shared by the manual unlock overlay and the remember-password auto-unlock.

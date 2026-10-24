@@ -23,7 +23,6 @@ contextBridge.exposeInMainWorld('inkwell', {
     autoUnlock:        ()           => ipcRenderer.invoke('vault:autoUnlock'),
     enableEncryption: (pass, algo, openPlaintext) => ipcRenderer.invoke('vault:enableEncryption', pass, algo, openPlaintext),
     disableEncryption:(pass)       => ipcRenderer.invoke('vault:disableEncryption', pass),
-    setRestMode:      (openPlaintext) => ipcRenderer.invoke('vault:setRestMode', openPlaintext),
     changePassphrase: (old, nw)    => ipcRenderer.invoke('vault:changePassphrase', old, nw),
   },
 
