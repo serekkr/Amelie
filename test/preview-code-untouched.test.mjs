@@ -47,7 +47,9 @@ function extract(name) {
 }
 
 const pre = new Function(`var EMOJI_MAP = { smile: '\u{1F642}' };
+var EMBED_ATT_EXT_RE = /\\.(png|jpe?g|gif|webp|svg|bmp|pdf|mp4|mov|webm|mp3|wav|m4a)$/i;
 ${extract('_rewriteOutsideCode')}
+${extract('_deindentImageOnlyLines')}
 ${extract('_preprocessMarkdown')}
 return _preprocessMarkdown;`)();
 // jsdom only to read text back out of the rendered HTML, the way the app does.

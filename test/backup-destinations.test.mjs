@@ -29,7 +29,13 @@ const check = (name, pass, detail = '') => results.push({ name, pass: !!pass, de
 // both are stubbed out — reloadConfig's own bookkeeping is what's under test.
 function mgr(cfg) {
   const m = new SyncManager('/nonexistent/notes', '/nonexistent/attachments', '/nonexistent/settings.json');
-  m.config = cfg;
+  // The real app normalises config to archive-only (.tar.gz) at startup via
+  // _forceArchiveOnly, so this.config is always in that shape. reloadConfig
+  // normalises its incoming config the same way, so the previous config it
+  // compares against must be normalised too — otherwise the folder→archive flip
+  // alone makes every first reload look like a destination change. Mirror the
+  // startup normalisation here so the signature comparison is apples-to-apples.
+  m.config = m._forceArchiveOnly(cfg);
   m._lastBackupSig = '42:1024:1785845798000';   // as if a backup had just succeeded
   m.ensureVpnTunnel = async () => {};
   m._startAutoSync = () => {};
@@ -74,13 +80,11 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   check('pointing the share at another folder drops it', m._lastBackupSig === null, `_lastBackupSig=${m._lastBackupSig}`);
 }
 
-// ── Asking for a format the last run never produced ───────────────────────────
-{
-  const m = mgr(LOCAL_ONLY());
-  const next = clone(LOCAL_ONLY()); next.sync.local.archive = true;
-  m.reloadConfig(next);
-  check('adding the .tar.gz archive drops it', m._lastBackupSig === null, `_lastBackupSig=${m._lastBackupSig}`);
-}
+// ── (Format change removed) ───────────────────────────────────────────────────
+// Backups are archive-only (.tar.gz) now — _forceArchiveOnly normalises every
+// enabled destination to folder=false, archive=true, archiveOnly=true. There is
+// no folder-snapshot to switch away from any more, so "adding the archive" is no
+// longer a distinct change and the old case for it has been dropped.
 
 // ── What must NOT reset it: an idle vault has to keep being skipped ───────────
 {

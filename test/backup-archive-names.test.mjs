@@ -46,15 +46,15 @@ const mgr = () => {
 {
   const m = mgr();
   const file = path.basename(await m.createArchive(DEST));
-  const FOLDER_STYLE = /^amelie-vault-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.tar\.gz$/;
-  check('the archive is named YYYY-MM-DD_HH-MM-SS, like a dated folder', FOLDER_STYLE.test(file), file);
+  const FOLDER_STYLE = /^amelie-vault-\d{8}_\d{2}_\d{2}_\d{2}\.tar\.gz$/;   // DDMMYYYY_HH_MM_SS
+  check('the archive is named DDMMYYYY_HH_MM_SS, like a dated folder', FOLDER_STYLE.test(file), file);
   check('and NOT the old compressed spelling', !/^amelie-vault-\d{8}-\d{6}\.tar\.gz$/.test(file), file);
 
   // The two halves of one backup, side by side.
   const folder = m._snapshotName();
   const stamp = (s) => s.replace(/^amelie-vault-/, '').replace(/\.tar\.gz$/, '');
   check('archive and folder share the prefix and the stamp shape',
-    stamp(file).length === stamp(folder).length && /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/.test(stamp(folder)),
+    stamp(file).length === stamp(folder).length && /^\d{8}_\d{2}_\d{2}_\d{2}$/.test(stamp(folder)),
     `${file}  vs  ${folder}`);
   check('and the folder pattern still recognises the folder',
     SyncManager._SNAPSHOT_RE.test(folder), folder);
