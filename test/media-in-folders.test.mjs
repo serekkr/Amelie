@@ -1,11 +1,18 @@
-// A photo, a recording or a video is listed in the FOLDER whose notes use it.
+// What the sidebar does with an attachment a note links (serekkr, 22/10/2026).
 //
 // Attachments all live in one flat place on disk (attachments/{videos,images,
 // audio,pdf}/) and the sidebar used to list them only at the vault ROOT — so a
 // vault with folders piled every video, recording and PDF at the bottom of the
-// tree, nowhere near the notes they belong to. Nothing moves on disk: the tree
-// now shows each attachment inside the folder that links it, in every one of
-// them when several do, and keeps the unlinked ones at the root.
+// tree, nowhere near the notes they belong to. Nothing moves on disk; the rules
+// now are:
+//   • an image, recording or video a note links does NOT appear as its own tree
+//     row at all (not in a folder, not at the root) — it lives only inside the
+//     note, because the user never put those rows there himself;
+//   • a PDF a note links KEEPS its row (a document stays reachable from the tree
+//     without opening its note) and is shown inside the folder whose notes link
+//     it, in every one of them when several do;
+//   • an attachment NO note uses stays where it was put — the folder the sidebar
+//     order keeps it in, else the root, where it can still be found.
 //
 // The rule for "linked" is shared with attachment:usedBy and the unused-media
 // sweep (attachmentRefsIn) — if those three ever disagreed, the sweep could
@@ -47,14 +54,15 @@ const extractLine = (name) => {
 const VAULT = fs.mkdtempSync(path.join(os.tmpdir(), 'amelie-folders-'));
 const w = (rel, body) => { fs.mkdirSync(path.dirname(path.join(VAULT, rel)), { recursive: true }); fs.writeFileSync(path.join(VAULT, rel), body); };
 w('notes/diario.md',            '---\ncreated: 2026-08-01 09:00\n---\n\nUn appunto. [doc](attachments/pdf/manuale.pdf)\n');
-w('notes/Progetti/piano.md',    '---\ncreated: 2026-08-02 09:00\n---\n\n![](attachments/videos/clip.mp4{width=400})\n');
+w('notes/Progetti/piano.md',    '---\ncreated: 2026-08-02 09:00\n---\n\n![](attachments/videos/clip.mp4{width=400}) e [rel](attachments/pdf/rel%20finale.pdf)\n');
 w('notes/Progetti/2026/q3.md',  '---\ncreated: 2026-08-03 09:00\n---\n\nNiente media qui.\n');
-w('notes/Riunioni/lunedi.md',   '---\ncreated: 2026-08-04 09:00\n---\n\n[audio](inkwell://attachments/audio/nota%20vocale.m4a) e il [video](attachments/videos/clip.mp4)\n');
+w('notes/Riunioni/lunedi.md',   '---\ncreated: 2026-08-04 09:00\n---\n\n[audio](inkwell://attachments/audio/nota%20vocale.m4a) e il [video](attachments/videos/clip.mp4) e [rel](attachments/pdf/rel%20finale.pdf)\n');
 w('notes/Archivio/vecchio.md',  '---\ncreated: 2026-08-05 09:00\n---\n\nSolo testo.\n');
 w('attachments/videos/clip.mp4',        'v');
 w('attachments/audio/nota vocale.m4a',  'a');
 w('attachments/images/orfana.png',      'i');
 w('attachments/pdf/manuale.pdf',        'p');
+w('attachments/pdf/rel finale.pdf',     'r');
 
 // The shipped functions, with only the module-level values they read stubbed.
 const src = `
@@ -89,13 +97,18 @@ const folder = (t, name) => (t.find(n => n.type === 'folder' && n.name === name)
 const names = (nodes) => nodes.map(n => n.name).join(', ');
 const mediaIn = (nodes) => nodes.filter(n => ['pdf', 'image', 'audio', 'video'].includes(n.type)).map(n => n.name);
 
-// ── 1. media lands in the folder that uses it ───────────────────────────────
-check('the video is listed inside the folder whose note embeds it',
-  mediaIn(folder(tree, 'Progetti')).includes('clip.mp4'), names(folder(tree, 'Progetti')));
+// ── 1. a linked PDF lands in the folder that uses it; other media vanish ─────
+check('the PDF is listed inside the folder whose note links it',
+  mediaIn(folder(tree, 'Progetti')).includes('rel finale.pdf'), names(folder(tree, 'Progetti')));
 check('a percent-encoded link with a space in the name still resolves',
-  mediaIn(folder(tree, 'Riunioni')).includes('nota vocale.m4a'), names(folder(tree, 'Riunioni')));
-check('the same video used from a second folder shows in that one too',
-  mediaIn(folder(tree, 'Riunioni')).includes('clip.mp4'), names(folder(tree, 'Riunioni')));
+  mediaIn(folder(tree, 'Progetti')).includes('rel finale.pdf'), names(folder(tree, 'Progetti')));
+check('the same PDF used from a second folder shows in that one too',
+  mediaIn(folder(tree, 'Riunioni')).includes('rel finale.pdf'), names(folder(tree, 'Riunioni')));
+check('a video a note embeds is NOT a tree row — it lives inside the note',
+  !mediaIn(folder(tree, 'Progetti')).includes('clip.mp4') && !mediaIn(folder(tree, 'Riunioni')).includes('clip.mp4'),
+  `Progetti: ${names(folder(tree, 'Progetti'))} | Riunioni: ${names(folder(tree, 'Riunioni'))}`);
+check('neither is a recording a note links',
+  !mediaIn(folder(tree, 'Riunioni')).includes('nota vocale.m4a'), names(folder(tree, 'Riunioni')));
 check('a folder whose notes use no media gets none',
   mediaIn(folder(tree, 'Archivio')).length === 0, names(folder(tree, 'Archivio')));
 check('and neither does a nested folder that links nothing',
@@ -107,13 +120,14 @@ check('a PDF linked from a root note stays at the root',
   mediaIn(tree).includes('manuale.pdf'), names(tree));
 check('media nobody links stays at the root, where it can still be found',
   mediaIn(tree).includes('orfana.png'), names(tree));
-check('the video is NOT left at the root as well',
+check('the video is NOT left at the root either — it is nowhere in the tree',
   !mediaIn(tree).includes('clip.mp4'), names(tree));
 
 // ── 3. every kind of node is still ordered the way it was ───────────────────
+// A linked video is gone, so the row that follows the note here is its PDF.
 const kinds = folder(tree, 'Progetti').map(n => n.type);
 check('folders first, then notes, then media — inside a subfolder too',
-  kinds.join(',') === 'folder,note,video', kinds.join(','));
+  kinds.join(',') === 'folder,note,pdf', kinds.join(','));
 
 // ── 4. the same rule everywhere ─────────────────────────────────────────────
 const refs = [...api.attachmentRefsIn('![](attachments/videos/clip.mp4{width=400}) [x](attachments/pdf/a.pdf#page=2) <img src="inkwell://attachments/images/b%20c.png">')];
@@ -140,8 +154,8 @@ check('a refresh with nothing changed re-reads no note at all',
   afterCache === 0, `${afterCache} notes re-read`);
 check('after one note changes, exactly that note is read again',
   afterEdit.length === 1 && afterEdit[0].endsWith('vecchio.md'), afterEdit.join(', '));
-check('and the photo it now links moves out of the root into that folder',
-  mediaIn(folder(tree2, 'Archivio')).includes('orfana.png') && !mediaIn(tree2).includes('orfana.png'),
+check('and the photo it now links leaves the root without surfacing in the folder',
+  !mediaIn(tree2).includes('orfana.png') && !mediaIn(folder(tree2, 'Archivio')).includes('orfana.png'),
   `Archivio: ${names(folder(tree2, 'Archivio'))} | root: ${names(tree2)}`);
 
 // ── 6. an attachment NO note uses stays where it was put ────────────────────
@@ -154,7 +168,7 @@ const ORDER = path.join(VAULT, 'notes/.amelie-order.json');
 const writeOrder = (o) => fs.writeFileSync(ORDER, JSON.stringify(o));
 writeOrder({ '': ['attachments/pdf/sciolto.pdf'], 'Progetti/2026': ['q3.md', 'attachments/pdf/sciolto.pdf'],
              'Sparita': ['attachments/pdf/altro.pdf'],
-             'Archivio': ['attachments/videos/clip.mp4'] });
+             'Archivio': ['attachments/pdf/rel finale.pdf', 'attachments/videos/clip.mp4'] });
 {
   const t = api.listNotesRecursive(path.join(VAULT, 'notes'));
   check('an unlinked PDF the order keeps in a folder is listed in that folder',
@@ -163,9 +177,11 @@ writeOrder({ '': ['attachments/pdf/sciolto.pdf'], 'Progetti/2026': ['q3.md', 'at
     !mediaIn(t).includes('sciolto.pdf'), names(t));
   check('a folder that no longer exists does not hide it: back to the root',
     mediaIn(t).includes('altro.pdf'), names(t));
-  check('a file a note uses goes where its notes are, whatever the order says',
-    !mediaIn(folder(t, 'Archivio')).includes('clip.mp4') && mediaIn(folder(t, 'Progetti')).includes('clip.mp4'),
-    `Archivio: ${names(folder(t, 'Archivio'))}`);
+  check('a PDF a note uses goes where its notes are, whatever the order says',
+    !mediaIn(folder(t, 'Archivio')).includes('rel finale.pdf') && mediaIn(folder(t, 'Progetti')).includes('rel finale.pdf'),
+    `Archivio: ${names(folder(t, 'Archivio'))} | Progetti: ${names(folder(t, 'Progetti'))}`);
+  check('and a video a note uses stays hidden even when the order names a folder for it',
+    !mediaIn(folder(t, 'Archivio')).includes('clip.mp4'), names(folder(t, 'Archivio')));
 }
 {
   fs.rmSync(ORDER, { force: true });
