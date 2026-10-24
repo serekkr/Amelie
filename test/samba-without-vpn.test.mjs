@@ -188,20 +188,22 @@ const T = (tw) => SyncManager._twowayTransport(tw);
     `${none._twowayConfigured()}`);
 }
 
-// ── A 30-second pass must be cheap, and silent ──────────────────────────────
-// The "realtime" option is gone: the frequency itself goes down to 30 seconds.
+// ── A short pass must be cheap, and silent ──────────────────────────────────
+// The "realtime" option is gone: the frequency itself is a number of minutes,
+// floored per transport (Samba's floor is 1 min; see 1b335c8 and sync-timers).
 // At that cadence a full pass every tick would keep the share busy for nothing,
 // so the tick asks two cheap questions first — did the vault change, did the
 // remote folder change — and only then does the work. And it must not narrate
-// itself: a line in the bell twice a minute is noise.
+// itself: a line in the bell every minute is noise.
 {
   const CONN = { ip: '192.168.30.10', host: '192.168.30.10', share: 'saturn', remoteSubPath: 'amelie/sync' };
   const cfg = (intervalMinutes) => ({ sync: { twoway: { enabled: true, intervalMinutes,
     transport: 'samba', useWireGuard: false, smbLan: CONN } } });
 
-  check('half a minute survives being read back', mgr(cfg(0.5))._twowayIntervalMinutes() === 0.5,
+  check('a sub-minute choice is floored to the Samba 1-min minimum',
+    mgr(cfg(0.5))._twowayIntervalMinutes() === SyncManager._MIN_TWOWAY_SMB,
     `${mgr(cfg(0.5))._twowayIntervalMinutes()}`);
-  check('and nothing shorter is accepted', mgr(cfg(0.01))._twowayIntervalMinutes() === 0.5,
+  check('and nothing shorter slips past that floor', mgr(cfg(0.01))._twowayIntervalMinutes() === SyncManager._MIN_TWOWAY_SMB,
     `${mgr(cfg(0.01))._twowayIntervalMinutes()}`);
   check('an hourly setting is untouched', mgr(cfg(60))._twowayIntervalMinutes() === 60,
     `${mgr(cfg(60))._twowayIntervalMinutes()}`);
@@ -212,8 +214,8 @@ const T = (tw) => SyncManager._twowayTransport(tw);
   {
     const legacy = { sync: { twoway: { enabled: true, realtime: true, intervalMinutes: 15,
       transport: 'samba', useWireGuard: false, smbLan: CONN } } };
-    check('a legacy realtime profile ticks at 30 s without touching Settings',
-      mgr(legacy)._twowayIntervalMinutes() === 0.5, `${mgr(legacy)._twowayIntervalMinutes()}`);
+    check('a legacy realtime profile ticks at the Samba floor without touching Settings',
+      mgr(legacy)._twowayIntervalMinutes() === SyncManager._MIN_TWOWAY_SMB, `${mgr(legacy)._twowayIntervalMinutes()}`);
   }
 
   // The tick: nothing changed on either side → no pass at all.
