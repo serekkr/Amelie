@@ -2073,6 +2073,13 @@ async function _finalizeRestore(srcDir, passphrase, { move = false, cleanup = nu
       if (fs.existsSync(ATTACHMENTS_DIR)) { const b = path.join(vaultDir, `attachments.bak-restore-${stamp}`); fs.renameSync(ATTACHMENTS_DIR, b); kept.push(path.basename(b)); }
       put(srcAtt, ATTACHMENTS_DIR);
     }
+    // todo/ — the ToDo board, only if the backup carried it (current aside, like notes).
+    const srcTodo = path.join(srcDir, 'todo');
+    if (fs.existsSync(srcTodo)) {
+      const todoDir = path.join(vaultDir, 'todo');
+      if (fs.existsSync(todoDir)) { const b = path.join(vaultDir, `todo.bak-restore-${stamp}`); fs.renameSync(todoDir, b); kept.push(path.basename(b)); }
+      put(srcTodo, todoDir);
+    }
     // Envelope header (.amelie-vault.json).
     if (fs.existsSync(srcHeader)) {
       const destHeader = path.join(vaultDir, '.amelie-vault.json');

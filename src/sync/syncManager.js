@@ -1812,6 +1812,10 @@ class SyncManager {
     // attachments the .tar.gz would silently omit every image/PDF on restore.
     const entries = ['notes'];
     if (fs.existsSync(path.join(vaultDir, 'attachments'))) entries.push('attachments');
+    // ToDos live at the vault root too (todo/<bucket>/…). Without them a restore
+    // would silently drop the whole ToDo board. (When the vault is encrypted the
+    // todo files are already encrypted on disk, so they ride along as-is.)
+    if (fs.existsSync(path.join(vaultDir, 'todo'))) entries.push('todo');
     // Also bundle the envelope header (.amelie-vault.json) so a restored archive
     // on another PC carries the wrapped DEK + salt and can be unlocked.
     if (fs.existsSync(path.join(vaultDir, '.amelie-vault.json'))) entries.push('.amelie-vault.json');
