@@ -1,12 +1,21 @@
-// The 30-second cadence must mean the same thing for EVERY method, not just for
-// the Samba (LAN) share it was found broken on.
+// The frequency rules must mean the same thing for EVERY method, not just for
+// the Samba (LAN) share the faults were found on.
 //
 // v1.0.45 fixed a two-way sync that never got a timer because the condition
 // deciding "does this deserve one" knew only `twoway.smb`. v1.0.46 then fixed a
-// migration (`realtime: true` → 30 s) that lived only in the settings screen, so
-// the engine kept reading the old 15 minutes. Both faults were found on ONE
-// method. Nothing so far asserts that VPN, WebDAV, the legacy mounted folder and
-// the BACKUP timer behave the same — which is what these checks are for.
+// migration (`realtime: true`, once → 30 s) that lived only in the settings
+// screen, so the engine kept reading the old 15 minutes. Both faults were found
+// on ONE method. Nothing so far asserts that VPN, WebDAV, the legacy mounted
+// folder and the BACKUP timer behave the same — which is what these checks are for.
+//
+// Since 1b335c8 (18/10/2026) the sub-minute floor is per-TRANSPORT, because "did
+// the remote change?" costs wildly different amounts: WebDAV's recursive PROPFIND
+// is expensive, so its floor is 5 min (_MIN_TWOWAY_WEBDAV); Samba/VPN/legacy do a
+// cheap SMB listing, floor 1 min (_MIN_TWOWAY_SMB); and the one-way backup, whose
+// "is a copy due?" check is a local fingerprint, has its own 1-min floor
+// (_MIN_BACKUP_INTERVAL). A `realtime: true` profile now migrates to that floor,
+// not to a bare 30 s. The half-minute still survives being READ (_readInterval /
+// _MIN_INTERVAL) — parseFloat, not parseInt — the floor is applied on top.
 //
 // Driven against the real SyncManager with no Electron: the class requires
 // electron lazily, inside the methods that talk to a window, and none of those
@@ -74,8 +83,9 @@ for (const [name, dest] of Object.entries(BACKUP_DESTS)) {
     const cfg = { sync: { enabled: true, local: { enabled: false, intervalMinutes: min }, [name]: clone(dest) } };
     if (name === 'local') cfg.sync.local = { ...clone(dest), intervalMinutes: min };
     const t = timersOf(cfg);
-    check(`backup destination "${name}" gets a timer at ${min} min`, t.backup === min,
-      `timer=${t.backup} min`);
+    const expect = Math.max(min, SyncManager._MIN_BACKUP_INTERVAL);   // backup floor is 1 min
+    check(`backup destination "${name}" gets a timer at ${min} min (floor ${SyncManager._MIN_BACKUP_INTERVAL})`,
+      t.backup === expect, `timer=${t.backup} min, expected ${expect}`);
   }
   const cfg = { sync: { enabled: true, local: { enabled: false }, [name]: clone(dest) } };
   check(`backup destination "${name}" counts as a destination`, mgr(cfg)._anyBackupDestination(), '');
@@ -89,13 +99,18 @@ for (const [name, dest] of Object.entries(BACKUP_DESTS)) {
 }
 {
   // parseInt('0.5') is 0, which is falsy, which is the hourly default. That is
-  // exactly how the half-minute choice was lost once already.
+  // exactly how the half-minute choice was lost once already — so the half-minute
+  // must survive being READ (parseFloat). The backup interval then applies its own
+  // 1-min engine floor on top (1b335c8), so a 0.5 ends up at 1, not at the default.
+  check('a stored 0.5 reads back as half a minute at the read layer, not the default',
+    SyncManager._readInterval(0.5, 60) === SyncManager._MIN_INTERVAL,
+    `got ${SyncManager._readInterval(0.5, 60)}`);
   const m = mgr({ sync: { local: { intervalMinutes: 0.5 } } });
-  check('a stored 0.5 reads back as half a minute, not the default',
-    m._backupIntervalMinutes() === 0.5, `got ${m._backupIntervalMinutes()}`);
+  check('and the backup interval floors it to the 1-min backup minimum, not the hourly default',
+    m._backupIntervalMinutes() === SyncManager._MIN_BACKUP_INTERVAL, `got ${m._backupIntervalMinutes()}`);
   const floored = mgr({ sync: { local: { intervalMinutes: 0.1 } } })._backupIntervalMinutes();
   check('and anything shorter is floored, never rounded down to zero',
-    floored === SyncManager._MIN_INTERVAL, `got ${floored}`);
+    floored === SyncManager._MIN_BACKUP_INTERVAL, `got ${floored}`);
 }
 
 // ── The four two-way methods ─────────────────────────────────────────────────
@@ -123,16 +138,21 @@ for (const [name, shape] of Object.entries(TWOWAY)) {
     !!mgr(twCfg(name))._twowayRemoteFolder(), `got ${JSON.stringify(mgr(twCfg(name))._twowayRemoteFolder())}`);
   check(`"${name}" counts as configured`, mgr(twCfg(name))._twowayConfigured(), '');
 
+  // The sub-minute floor depends on the transport (webdav 5 min, the rest 1 min).
+  const floor = name === 'webdav' ? SyncManager._MIN_TWOWAY_WEBDAV : SyncManager._MIN_TWOWAY_SMB;
   for (const min of [0.5, 15, 60, 1440]) {
     const t = timersOf(twCfg(name, { intervalMinutes: min }));
-    check(`two-way "${name}" gets a timer at ${min} min`, t.twoway === min, `timer=${t.twoway} min`);
+    const expect = Math.max(min, floor);
+    check(`two-way "${name}" gets a timer at ${min} min (floor ${floor})`,
+      t.twoway === expect, `timer=${t.twoway} min, expected ${expect}`);
   }
 
   // The migration that was written in the renderer and forgotten in the engine.
   // It is not a Samba thing: any profile saved with the old option carries it.
+  // The flag no longer means a bare 30 s — it drops the stale 15 for the floor.
   const t = timersOf(twCfg(name, { realtime: true, intervalMinutes: 15 }));
-  check(`two-way "${name}": a saved realtime:true means 30 s, not the stale 15`,
-    t.twoway === 0.5, `timer=${t.twoway} min`);
+  check(`two-way "${name}": a saved realtime:true drops the stale 15 for the floor`,
+    t.twoway === floor, `timer=${t.twoway} min, expected ${floor}`);
 
   // Nothing to sync with → no timer at all, whatever the method.
   const empty = clone(TWOWAY[name]);
@@ -407,7 +427,8 @@ for (const [name, shape] of Object.entries(TWOWAY)) {
                         remoteSubPath: 'amelie/sync', username: 'u', password: 'p' } } } };
   const t = timersOf(both);
   check('both on: the backup timer is created, on the backup frequency', t.backup === 60, `backup=${t.backup}`);
-  check('both on: the two-way timer is created, on its own 30 s', t.twoway === 0.5, `twoway=${t.twoway}`);
+  check('both on: the two-way timer is created, floored to its 1-min Samba minimum',
+    t.twoway === SyncManager._MIN_TWOWAY_SMB, `twoway=${t.twoway}`);
   check('both on: neither timer displaces the other', t.backup !== null && t.twoway !== null,
     `backup=${t.backup} twoway=${t.twoway}`);
 
@@ -466,8 +487,9 @@ for (const [name, shape] of Object.entries(TWOWAY)) {
 {
   for (const name of Object.keys(TWOWAY)) {
     const m = mgr(twCfg(name, { realtime: true, intervalMinutes: 15 }));
-    check(`catch-up reads "${name}" at the migrated 30 s, like the timer`,
-      m._twowayIntervalMinutes() === 0.5, `got ${m._twowayIntervalMinutes()}`);
+    const floor = name === 'webdav' ? SyncManager._MIN_TWOWAY_WEBDAV : SyncManager._MIN_TWOWAY_SMB;
+    check(`catch-up reads "${name}" at the migrated floor, like the timer`,
+      m._twowayIntervalMinutes() === floor, `got ${m._twowayIntervalMinutes()}, expected ${floor}`);
   }
 }
 
