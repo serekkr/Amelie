@@ -2107,6 +2107,12 @@
         </div>
       </div>
 
+      <!-- Page numbers (desktop PDF only; hidden on Android, whose print path can't do footers) -->
+      <div id="export-pagenum-row" style="display:flex;align-items:center;gap:8px">
+        <input id="export-pagenum" type="checkbox" style="accent-color:var(--accent);cursor:pointer;width:16px;height:16px"/>
+        <label for="export-pagenum" style="font-family:var(--ui-font);font-size:14px;color:var(--text-2);cursor:pointer" data-i18n="export.page_numbers">Numeri di pagina</label>
+      </div>
+
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:2px">
         <button id="export-modal-cancel" data-i18n="common.cancel" style="background:var(--bg-2);border:1px solid var(--border);border-radius:6px;color:#fff;font-family:var(--ui-font);font-size:14px;padding:7px 16px;cursor:pointer">Annulla</button>
         <button id="export-modal-ok" data-i18n="export.do_export" style="background:var(--bg-3);border:1px solid var(--border-light);border-radius:6px;color:#fff;font-family:var(--ui-font);font-size:14px;padding:7px 20px;cursor:pointer">Esporta</button>

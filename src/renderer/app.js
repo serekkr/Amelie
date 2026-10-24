@@ -7696,7 +7696,7 @@ const PDF_PAGE_RATIO = { A4: 1.414, A3: 1.414, A5: 1.419, Letter: 1.294, Legal: 
 
 // Show the export options dialog. Resolves to an options object, or null if the
 // user cancels. Remembers the last choices for the next export.
-let _exportOpts = { fontPct: 100, orientation: 'portrait', pageSize: 'A4', margins: 'normal', theme: 'light' };
+let _exportOpts = { fontPct: 100, orientation: 'portrait', pageSize: 'A4', margins: 'normal', theme: 'light', pageNumbers: false };
 function showExportModal() {
   return new Promise(resolve => {
     const modal = $('export-modal');
@@ -7707,6 +7707,7 @@ function showExportModal() {
     const themeBox  = $('export-theme');
     const pageSel   = $('export-pagesize');
     const marginSel = $('export-margins');
+    const pageNumBox = $('export-pagenum');
     const okBtn     = $('export-modal-ok');
     const cancelBtn = $('export-modal-cancel');
 
@@ -7721,6 +7722,11 @@ function showExportModal() {
     marginSel.value = _exportOpts.margins;
     setSeg(orientBox, _exportOpts.orientation);
     setSeg(themeBox, _exportOpts.theme);
+    if (pageNumBox) pageNumBox.checked = !!_exportOpts.pageNumbers;
+    // Page numbers are a desktop-PDF feature (Chromium footer templates); Android's
+    // print path can't honour them, so hide the toggle when running inside Capacitor.
+    const pageNumRow = $('export-pagenum-row');
+    if (pageNumRow) pageNumRow.style.display = window.Capacitor ? 'none' : 'flex';
 
     modal.style.display = 'flex';
     setTimeout(() => okBtn.focus(), 60);
@@ -7750,6 +7756,7 @@ function showExportModal() {
         theme: themeBox.querySelector('.export-seg-btn.active')?.dataset.val || 'light',
         pageSize: pageSel.value,
         margins: marginSel.value,
+        pageNumbers: pageNumBox ? pageNumBox.checked : false,
       };
       cleanup(_exportOpts);
     };
@@ -7825,7 +7832,10 @@ async function exportNoteToPdf() {
   // drive it through a CSS @page rule + preferCSSPageSize on the main side — the
   // @page margin gives it the same per-page spacing as the other formats.
   const isWideFmt = opts.pageSize === 'Wide';
-  const pageCss = isWideFmt ? `@page{size:13.333in 7.5in;margin:${effPageMargin}in}` : '';
+  // With page numbers on, give the Wide @page a bigger bottom margin so the
+  // Chromium footer has room (top horizontal bottom).
+  const wideBottom = opts.pageNumbers ? Math.max(effPageMargin, 0.45) : effPageMargin;
+  const pageCss = isWideFmt ? `@page{size:13.333in 7.5in;margin:${effPageMargin}in ${effPageMargin}in ${wideBottom}in}` : '';
 
   const doc =
 `<!DOCTYPE html>
@@ -7839,8 +7849,8 @@ async function exportNoteToPdf() {
 <body><article class="amelie-pdf">${bodyHtml}</article></body></html>`;
 
   const printOpts = isWideFmt
-    ? { wide: true }
-    : { landscape: opts.orientation === 'landscape', pageSize: opts.pageSize, margin: effPageMargin };
+    ? { wide: true, pageNumbers: !!opts.pageNumbers }
+    : { landscape: opts.orientation === 'landscape', pageSize: opts.pageSize, margin: effPageMargin, pageNumbers: !!opts.pageNumbers };
 
   const btn = $('btn-export-pdf');
   if (btn) btn.classList.add('active');

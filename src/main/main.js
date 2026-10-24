@@ -3452,10 +3452,25 @@ ipcMain.handle('note:exportPdf', async (_, name, html, opts) => {
   // The 16:9 "Wide" format is driven by a CSS @page rule embedded in the HTML;
   // here we just honour it via preferCSSPageSize (custom pageSize objects fail
   // to print in this Electron build, so this is the only reliable path).
+  const pageNumbers = o.pageNumbers === true;
+  // With page numbers on, the footer is drawn in the bottom page margin — make sure
+  // there's room for it even when the user picked small/no margins.
+  const bottomM = pageNumbers ? Math.max(m, 0.45) : m;
+
   const printOpts = o.wide
     ? { printBackground: true, preferCSSPageSize: true }
     : { printBackground: true, landscape, pageSize,
-        margins: { marginType: 'custom', top: m, bottom: m, left: m, right: m } };
+        margins: { marginType: 'custom', top: m, bottom: bottomM, left: m, right: m } };
+  // Chromium footer: page numbers centred at the bottom ("3 / 12"). An empty header
+  // template suppresses Chromium's default date/title header; footerTemplate needs an
+  // explicit font-size (its default is 0, i.e. invisible).
+  if (pageNumbers) {
+    printOpts.displayHeaderFooter = true;
+    printOpts.headerTemplate = '<span></span>';
+    printOpts.footerTemplate =
+      '<div style="width:100%;font-size:9px;color:#777;text-align:center;margin:0;padding:0 8px;">'
+      + '<span class="pageNumber"></span> / <span class="totalPages"></span></div>';
+  }
 
   // Stage the HTML as a temp file so it loads from disk (lets inkwell:// images
   // resolve) rather than from a data: URL. The HTML holds the DECRYPTED note
