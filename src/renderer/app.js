@@ -4454,6 +4454,7 @@ async function createNewNote(folder = '') {
   // so the editor opens blank with the cursor ready to type.
   const defaultContent = '';
   await window.inkwell.writeNote(filePath, defaultContent);
+  markNewAtBottom(filePath);   // a new note lands at the bottom of its level
   openFolderAncestors(folder);
   await loadTree();
   openTab({ path: filePath, name: finalName, content: defaultContent });
@@ -4477,6 +4478,7 @@ async function createNewFolder(parent = '') {
   }
   const folderPath = parent ? `${parent}/${finalName}` : finalName;
   await window.inkwell.createFolder(folderPath);
+  markNewAtBottom(folderPath);   // a new folder lands at the bottom of its level
   // Keep the parent (and the new folder itself) expanded so it appears nested.
   openFolderAncestors(folderPath);
   await loadTree();
@@ -8421,6 +8423,16 @@ function removeFromTreeOrder(path) {
 // Places are only ever ADDED: a path missing right now — half-way through a sync,
 // say — keeps its place for when it comes back.
 let _treeOrderGrew = false;
+// Paths just created or imported this session (a note, folder, drawing, imported
+// file…) that must land at the very BOTTOM of their level. In a level that
+// already has a saved order a new item falls to the end on its own (Infinity, see
+// below); this set is what also pins it on a level with NO saved order yet, where
+// the folders-first default would otherwise sort a fresh FOLDER up among the
+// folders instead of at the bottom (serekkr, 26/10/2026). applyManualOrder writes
+// the bottom position into the saved order and clears the mark, so afterwards the
+// normal saved-order path keeps it there.
+const _newAtBottom = new Set();
+function markNewAtBottom(path) { if (path) _newAtBottom.add(path); }
 function applyManualOrder(nodes, folderPath = '') {
   const order = treeOrder[folderPath];
   let out;
@@ -8435,6 +8447,17 @@ function applyManualOrder(nodes, folderPath = '') {
     });
   } else {
     out = [...nodes.filter(n => n.type === 'folder'), ...nodes.filter(isFileNode)];  // default: folders first
+  }
+  // Freshly created/imported items go to the very bottom, overriding folders-first.
+  // Done once here (then the mark is cleared) so the bottom position is what gets
+  // written into the saved order just below and survives the next loads.
+  if (_newAtBottom.size) {
+    const isPinned = n => n.path && _newAtBottom.has(n.path);
+    const pinned = out.filter(isPinned);
+    if (pinned.length) {
+      out = [...out.filter(n => !isPinned(n)), ...pinned];
+      pinned.forEach(n => _newAtBottom.delete(n.path));
+    }
   }
   const saved = new Set(order || []);
   const unsaved = out.filter(n => n.path && !saved.has(n.path)).map(n => n.path);
@@ -14492,6 +14515,7 @@ async function newDraw() {
   while (flat.some(x => x.path === pathFor(name))) name = `${stamp} (${counter++})`;
   const filePath = pathFor(name);
   await window.inkwell.writeNote(filePath, EMPTY_DRAW);
+  markNewAtBottom(filePath);   // a new drawing lands at the bottom of its level
   if (folder) openFolderAncestors(folder);
   await loadTree();
   clearFolderTarget();   // the drawing is open now; the folder was only where to put it
