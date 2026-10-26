@@ -9974,12 +9974,14 @@ function sortFolderChildren(folderNode, mode) {
 // ── Sort order of the whole tree (the ⇅ button) ─────────────────────────────
 // Obsidian's file explorer offers one sort for the whole tree; this is the same
 // idea, with the one choice Obsidian cannot have — Manual, Amelie's saved drag
-// order — kept as the DEFAULT, because every vault here was arranged by hand
-// before this button existed.
+// order. The DEFAULT is name A→Z (serekkr, 26/10/2026): an alphabetical order is
+// the SAME on every device without syncing anything, where Manual lives in a
+// per-device .amelie-order.json and so drifts between the desktop and Android.
+// Manual stays available from the ⇅ menu for anyone who wants the hand order.
 const TREE_SORTS = ['manual', 'name-asc', 'name-desc', 'mod-desc', 'mod-asc', 'cre-desc', 'cre-asc'];
 let treeSortMode = (() => {
-  try { const v = localStorage.getItem('amelie-tree-sort'); return TREE_SORTS.includes(v) ? v : 'manual'; }
-  catch (_) { return 'manual'; }
+  try { const v = localStorage.getItem('amelie-tree-sort'); return TREE_SORTS.includes(v) ? v : 'name-asc'; }
+  catch (_) { return 'name-asc'; }
 })();
 
 // Folders FIRST at every level, whatever the sort — as in Obsidian, and as the

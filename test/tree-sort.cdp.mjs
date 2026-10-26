@@ -10,7 +10,8 @@
 // Checked here, against the running app, on a vault whose names, modification times
 // and creation dates all disagree on purpose (so a passing sort cannot be the file
 // system's own order by luck):
-//   · the default is Manual, and the saved drag order is what you see,
+//   · the default is Name A → Z (so the order matches across devices without
+//     syncing anything), and Manual — the saved drag order — is one menu pick away,
 //   · each of the six sorts really reorders the tree, folders always first,
 //   · sorting is a view: .amelie-order.json is not rewritten by it,
 //   · the choice survives a reload, and is readable without guessing: the tooltip
@@ -101,11 +102,12 @@ const btnState = () => ev(`(() => { const b = document.getElementById('btn-sort'
 const MANUAL = ['Zeta', 'Alfa', 'dino', 'anna', 'carla', 'bruno'];
 const orderFile = () => { try { return JSON.parse(fs.readFileSync(ORDER, 'utf8'))['']; } catch (_) { return null; } };
 
-check('the tree opens in the hand-made order', JSON.stringify(await rows()) === JSON.stringify(MANUAL),
+check('the tree opens in Name A → Z (the default since 26/10/2026)',
+  JSON.stringify(await rows()) === JSON.stringify(['Alfa', 'Zeta', 'anna', 'bruno', 'carla', 'dino']),
   JSON.stringify(await rows()));
 {
   const b = await btnState();
-  check('and the tooltip says so', !!b && /manual/i.test(b.title), JSON.stringify(b));
+  check('and the tooltip says A → Z', !!b && /a → z/i.test(b.title), JSON.stringify(b));
 }
 
 await pick('name-asc');
