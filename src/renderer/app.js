@@ -16842,13 +16842,74 @@ function insertTable(rows, cols) {
 // ─── Table context menu (in preview) ─────────────────────────────────────────
 
 let tableCtxCell = null;
+let tableCtxRange = null;
 
 function showTableContextMenu(e, cell) {
   tableCtxCell = cell;
+  // The cell is a contentEditable, so clicking a menu item will blur it and the
+  // selection collapses. Capture it now (if it lies inside this cell) and restore
+  // it before Cut/Copy/Paste run on it.
+  tableCtxRange = null;
+  try {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && cell.contains(sel.anchorNode) && cell.contains(sel.focusNode)) {
+      tableCtxRange = sel.getRangeAt(0).cloneRange();
+    }
+  } catch (_) {}
   const menu = $('table-ctx-menu');
   menu.style.left = e.clientX + 'px';
   menu.style.top  = e.clientY + 'px';
   menu.style.display = 'block';
+}
+
+// Re-focus the cell and restore the selection we saved when the menu opened, so
+// the clipboard op targets the cell's text and not the menu button. With no saved
+// selection (collapsed right-click), select the whole cell for Cut/Copy and put the
+// caret at the end for Paste.
+function _restoreTableCtxSelection(wholeCellIfEmpty) {
+  const cell = tableCtxCell;
+  if (!cell) return null;
+  cell.focus();
+  const sel = window.getSelection();
+  if (!sel) return cell;
+  sel.removeAllRanges();
+  if (tableCtxRange && !tableCtxRange.collapsed) {
+    sel.addRange(tableCtxRange);
+  } else {
+    const r = document.createRange();
+    r.selectNodeContents(cell);
+    if (!wholeCellIfEmpty) r.collapse(false); // caret at end for Paste
+    sel.addRange(r);
+  }
+  return cell;
+}
+
+async function tableClipboard(action) {
+  $('table-ctx-menu').style.display = 'none';
+  const cell = _restoreTableCtxSelection(action !== 'paste');
+  if (!cell) return;
+  const strip = (s) => (s || '').replace(/​/g, '');
+  try {
+    if (action === 'copy') {
+      const txt = strip(window.getSelection().toString());
+      if (txt) await navigator.clipboard.writeText(txt);
+    } else if (action === 'cut') {
+      const txt = strip(window.getSelection().toString());
+      if (txt) await navigator.clipboard.writeText(txt);
+      document.execCommand('delete');       // removes the selection from the cell
+      syncCellToMarkdown(cell.closest('table'), cell);
+    } else if (action === 'paste') {
+      let txt = '';
+      try { txt = await navigator.clipboard.readText(); } catch (_) {}
+      // A table cell is a single line: fold any pasted newlines into spaces (pipes
+      // are escaped later by syncCellToMarkdown).
+      txt = strip(txt).replace(/\r?\n+/g, ' ');
+      if (txt) {
+        document.execCommand('insertText', false, txt);
+        syncCellToMarkdown(cell.closest('table'), cell);
+      }
+    }
+  } catch (_) {}
 }
 
 function setupTableContextMenu() {
@@ -16859,6 +16920,9 @@ function setupTableContextMenu() {
     if (!e.target.closest('#table-ctx-menu')) menu.style.display = 'none';
   });
 
+  $('tctx-cut')?.addEventListener('click',   () => tableClipboard('cut'));
+  $('tctx-copy')?.addEventListener('click',  () => tableClipboard('copy'));
+  $('tctx-paste')?.addEventListener('click', () => tableClipboard('paste'));
   $('tctx-add-row-below')?.addEventListener('click',  () => tableEditRow('add-below'));
   $('tctx-add-row-above')?.addEventListener('click',  () => tableEditRow('add-above'));
   $('tctx-add-col-right')?.addEventListener('click',  () => tableEditCol('add-right'));
