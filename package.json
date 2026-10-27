@@ -54,6 +54,7 @@
     "test:syncsamba": "node test/sync-samba-no-vpn.cdp.mjs",
     "test:images": "node test/images-foldered.cdp.mjs",
     "test:tablecols": "node test/table-columns-fit.cdp.mjs",
+    "test:tableclip": "node test/table-clipboard.cdp.mjs",
     "test:inputcap": "node test/input-cap-vs-editor.cdp.mjs",
     "test:updatecheck": "node test/update-check.cdp.mjs",
     "test:viewicons": "node test/view-icon-toggle.cdp.mjs",
