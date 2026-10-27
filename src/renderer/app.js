@@ -9092,22 +9092,44 @@ function setupContextMenu() {
   });
 }
 
-// The tree row the context menu is currently acting on — a transparent fill with a
-// grey 1px border, so you can see which item the menu targets. It moves to whatever
-// row you right-click and is cleared on the next click (menu item or outside).
+// The tree row the context menu is currently acting on. A grey 1px border is drawn by a
+// full-width overlay (#tree-ctx-outline) laid over the row — full width at every nesting
+// depth, like Obsidian, with the text left indented. It moves to whatever row you
+// right-click and is cleared on the next click (menu item or outside).
+let _ctxOutlineEl = null;
+function _ensureCtxOutline() {
+  const ft = $('file-tree'); if (!ft) return null;
+  if (_ctxOutlineEl && _ctxOutlineEl.isConnected) return _ctxOutlineEl;
+  const el = document.createElement('div');
+  el.id = 'tree-ctx-outline'; el.setAttribute('aria-hidden', 'true');
+  ft.appendChild(el); _ctxOutlineEl = el; return el;
+}
+function _placeCtxOutline(row) {
+  const ft = $('file-tree'); const el = _ensureCtxOutline();
+  if (!ft || !el) return;
+  // Position in the tree's scroll content so it stays glued to the row (even on scroll),
+  // but span the full sidebar width (left/right:0) regardless of the row's own indent.
+  const rr = row.getBoundingClientRect(), fr = ft.getBoundingClientRect();
+  el.style.top = (rr.top - fr.top + ft.scrollTop) + 'px';
+  el.style.height = rr.height + 'px';
+  el.style.display = 'block';
+}
 function clearCtxTarget() {
   document.querySelectorAll('.tree-note.ctx-target, .tree-folder.ctx-target')
     .forEach(r => r.classList.remove('ctx-target'));
+  if (_ctxOutlineEl) _ctxOutlineEl.style.display = 'none';
 }
 
 function showContextMenu(e, node) {
   e.preventDefault();
   state.contextTarget = node;
-  // Mark the right-clicked row (the listener is bound to the row, so currentTarget IS it).
+  // Mark the right-clicked row (the listener is bound to the row, so currentTarget IS it)
+  // and lay the full-width border overlay over it.
   clearCtxTarget();
   const row = e.currentTarget;
   if (node && row && row.classList && (row.classList.contains('tree-note') || row.classList.contains('tree-folder'))) {
     row.classList.add('ctx-target');
+    _placeCtxOutline(row);
   }
   const menu = $('context-menu');
   const isFolder = node ? node.type === 'folder' : false;

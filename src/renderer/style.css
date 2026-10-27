@@ -696,6 +696,8 @@ html.is-mac #titlebar { padding-left: 72px; }
    region moves; they stay on the sidebar's own colour. */
 #file-tree {
   flex: 1; overflow-y: auto; overflow-x: hidden; padding-bottom: 20px;
+  /* Containing block for #tree-ctx-outline (the full-width right-click border overlay). */
+  position: relative;
   /* See #sidebar-views: this is that row's old margin-bottom, moved in here so the gap
      under its rule is painted the tree's colour instead of the sidebar's. */
   padding-top: calc(6px * var(--toolbar-zoom, 1));
@@ -755,17 +757,18 @@ html.is-mac #titlebar { padding-left: 72px; }
 .tree-note.active {
   background: var(--selected-mask); color: var(--text-0);
 }
-/* La riga su cui il tasto destro sta agendo. Il menu cambia bersaglio ogni volta che
-   clicchi col destro su una riga diversa, quindi quella su cui agira' va marcata, tolta
-   al click successivo (voce del menu o fuori). Senza, l'evidenziazione restava sulla
-   riga selezionata prima e il menu sembrava riferirsi a QUELLA (serekkr, 27/10/2026:
-   nota→cartella, nota→nota, e viceversa). Solo un BORDO grigio di 1px, ADDITIVO: non
-   tocca lo sfondo, cosi' una riga normale resta trasparente col bordo, e una riga gia'
-   selezionata/aperta tiene il suo colore di highlight E prende il bordo sopra (serekkr,
-   27/10/2026: "se faccio click destro su quello gia' selezionato si deve fare la riga col
-   bordo e il colore highlight di prima"). Il bordo e' un box-shadow inset, non un border
-   vero, cosi' non sposta icona/nome di 1px (niente scatto quando il bersaglio si muove). */
-.tree-note.ctx-target, .tree-folder.ctx-target {
+/* La riga su cui il tasto destro sta agendo: un BORDO grigio di 1px a LARGHEZZA PIENA,
+   come Obsidian (serekkr 27/10/2026, "in obsidian mi sembrano uguali"). Il bordo NON sta
+   sulla riga — una riga annidata e' spostata a destra dal margine di .tree-folder-children,
+   quindi un box-shadow sulla riga sarebbe piu' stretto ai livelli profondi. Lo disegna un
+   overlay (#tree-ctx-outline) posizionato in JS sopra la riga ma esteso a tutta la sidebar,
+   cosi' la dimensione e' uguale per nota, cartella e file a qualsiasi profondita' e il testo
+   resta rientrato. ADDITIVO: trasparente, quindi una riga normale resta trasparente col
+   bordo, e una gia' selezionata/aperta tiene il suo colore di highlight sotto E il bordo
+   sopra ("se faccio click destro su quello gia' selezionato si deve fare la riga col bordo
+   e il colore highlight di prima"). .ctx-target resta solo come marcatore logico. */
+#tree-ctx-outline {
+  position: absolute; left: 0; right: 0; display: none; pointer-events: none; z-index: 3;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-1) 55%, transparent);
 }
 /* Briefly flash a tree node just created/revealed (e.g. PDF "save as new"). */
