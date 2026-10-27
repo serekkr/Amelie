@@ -759,12 +759,13 @@ html.is-mac #titlebar { padding-left: 72px; }
    clicchi col destro su una riga diversa, quindi quella su cui agira' va marcata, tolta
    al click successivo (voce del menu o fuori). Senza, l'evidenziazione restava sulla
    riga selezionata prima e il menu sembrava riferirsi a QUELLA (serekkr, 27/10/2026:
-   nota→cartella, nota→nota, e viceversa). Come l'ha chiesto: sfondo TRASPARENTE e un
-   BORDO grigio di 1px — niente riempimento, niente accento. Il bordo e' un box-shadow
-   inset, non un border vero, cosi' non sposta icona/nome di 1px (niente scatto quando il
-   bersaglio si muove). Vince sopra .active cosi' il bersaglio e' esplicito. */
+   nota→cartella, nota→nota, e viceversa). Solo un BORDO grigio di 1px, ADDITIVO: non
+   tocca lo sfondo, cosi' una riga normale resta trasparente col bordo, e una riga gia'
+   selezionata/aperta tiene il suo colore di highlight E prende il bordo sopra (serekkr,
+   27/10/2026: "se faccio click destro su quello gia' selezionato si deve fare la riga col
+   bordo e il colore highlight di prima"). Il bordo e' un box-shadow inset, non un border
+   vero, cosi' non sposta icona/nome di 1px (niente scatto quando il bersaglio si muove). */
 .tree-note.ctx-target, .tree-folder.ctx-target {
-  background: transparent;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-1) 55%, transparent);
 }
 /* Briefly flash a tree node just created/revealed (e.g. PDF "save as new"). */
