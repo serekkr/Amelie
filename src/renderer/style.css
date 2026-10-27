@@ -30,6 +30,9 @@
   --text-3: #4f4f4f;
   /* Small icons that must read clearly without competing with the white ones. */
   --icon-strong: color-mix(in srgb, var(--text-0) 15%, var(--text-1));
+  /* Text-selection background. A clearly visible medium blue — the old #142c4b sat
+     only a hair above the dark page and vanished. Opaque, letters keep their colour. */
+  --sel-bg: #2f5ea3;
   --accent: #3fb950;
   --accent-dim: #238636;
   --accent-glow: rgba(63,185,80,0.12);
@@ -286,6 +289,8 @@
   --text-1: #4a4540;
   --text-2: #7a7268;
   --text-3: #a09890;
+  /* Light theme: dark text sits on the selection, so a pale blue instead of the dark one. */
+  --sel-bg: #a9cdf2;
   --accent: #2e6e45;
   --accent-dim: #1f4d30;
   --accent-glow: rgba(46,110,69,0.10);
@@ -495,7 +500,7 @@
    a translucent wash: a wash takes the colour of whatever is under it, so one selection
    running from a paragraph through a code block came out in two shades. Only the
    background is replaced — the letters keep their own colour, syntax colours included. */
-::selection { background: #142c4b; }
+::selection { background: var(--sel-bg); }
 
 /* Native widgets draw with the browser's OWN accent — a blue that belongs to Chromium,
    not to the theme: the highlighted row in an open <select>, a checkbox tick, a radio
@@ -1480,7 +1485,7 @@ kbd {
   box-sizing: border-box; overflow-y: scroll; overflow-x: hidden;
 }
 #markdown-editor::placeholder { color: var(--text-3); }
-#markdown-editor::selection { background: #142c4b; }
+#markdown-editor::selection { background: var(--sel-bg); }
 /* CodeMirror editor mount (experimental engine, behind the amelie-cm flag) */
 #cm-mount { position: relative; z-index: 2; flex: 1; min-height: 0; overflow: hidden; }
 /* Opaque background: the CM editor sits at z-index 2 over the legacy overlay layers
@@ -1528,7 +1533,7 @@ kbd {
 #cm-mount .cm-vlnums > div { line-height: var(--editor-line-height); }
 #cm-mount .cm-activeLine { background: transparent; }
 /* !important: CodeMirror ships its own selection layer and would win otherwise. */
-#cm-mount .cm-selectionBackground, #cm-mount .cm-content ::selection { background: #142c4b !important; }
+#cm-mount .cm-selectionBackground, #cm-mount .cm-content ::selection { background: var(--sel-bg) !important; }
 /* 2px, over CodeMirror's own 1.2: a hairline caret in a 15px proportional font is easy
    to lose in the text, and it was the accent colour that used to make it findable. */
 #cm-mount .cm-cursor { border-left-color: var(--text-0); border-left-width: 2px; }
