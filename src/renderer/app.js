@@ -8936,6 +8936,9 @@ function setupContextMenu() {
       menu.style.display = 'none';
     }
   });
+  // Clear the right-click target highlight on the next click — a menu item (action done)
+  // or anywhere outside. Capture phase so it runs regardless of what the click lands on.
+  document.addEventListener('click', clearCtxTarget, true);
 
   // Right-click on empty area of file tree → create note/folder at root
   $('file-tree').addEventListener('contextmenu', e => {
@@ -9089,9 +9092,23 @@ function setupContextMenu() {
   });
 }
 
+// The tree row the context menu is currently acting on — a transparent fill with a
+// grey 1px border, so you can see which item the menu targets. It moves to whatever
+// row you right-click and is cleared on the next click (menu item or outside).
+function clearCtxTarget() {
+  document.querySelectorAll('.tree-note.ctx-target, .tree-folder.ctx-target')
+    .forEach(r => r.classList.remove('ctx-target'));
+}
+
 function showContextMenu(e, node) {
   e.preventDefault();
   state.contextTarget = node;
+  // Mark the right-clicked row (the listener is bound to the row, so currentTarget IS it).
+  clearCtxTarget();
+  const row = e.currentTarget;
+  if (node && row && row.classList && (row.classList.contains('tree-note') || row.classList.contains('tree-folder'))) {
+    row.classList.add('ctx-target');
+  }
   const menu = $('context-menu');
   const isFolder = node ? node.type === 'folder' : false;
   const hasTarget = !!node;
