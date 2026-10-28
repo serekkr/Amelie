@@ -2244,14 +2244,16 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   color: var(--text-1); font-family: var(--ui-font); font-size: 13px; padding: 5px 8px; outline: none;
 }
 #cfg-local-dailytime:focus, #cfg-remote-dailytime:focus { border-color: var(--accent); }
+/* NO invert filter here: color-scheme:dark already draws the clock glyph LIGHT, so
+   inverting it turned it black again — nearly invisible on the grey field (serekkr,
+   28/10/2026). Just make it clickable and a touch brighter. The light theme (below)
+   keeps the scheme light, where the native glyph is dark on the light field. */
 #cfg-local-dailytime::-webkit-calendar-picker-indicator,
-#cfg-remote-dailytime::-webkit-calendar-picker-indicator { filter: invert(0.85); cursor: pointer; opacity: .8; }
+#cfg-remote-dailytime::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .9; }
 #cfg-local-dailytime::-webkit-calendar-picker-indicator:hover,
 #cfg-remote-dailytime::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 [data-theme="light"] #cfg-local-dailytime,
 [data-theme="light"] #cfg-remote-dailytime { color-scheme: light; }
-[data-theme="light"] #cfg-local-dailytime::-webkit-calendar-picker-indicator,
-[data-theme="light"] #cfg-remote-dailytime::-webkit-calendar-picker-indicator { filter: none; }
 #local-dailytime-wrap, #remote-dailytime-wrap { flex-wrap: wrap; }
 .dailytime-saved { margin-left: 4px; }
 .last-backup-line { font-size: 12px; color: var(--text-3); margin-top: 8px; }
