@@ -1467,7 +1467,7 @@ const TRANSLATIONS = {
     'todo.dismiss':             'Dismiss notification',
     'todo.filter_tomorrow':     'Tomorrow',
     'todo.alert_custom':        'Custom…',
-    'todo.minutes_before':      'minutes before',
+    'todo.minutes_before':      'Set minutes',
     'todo.set_date':            'Set due date',
     'todo.clear_date':          'Clear',
     'todo.save':                'Save',

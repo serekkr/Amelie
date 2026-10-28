@@ -19382,11 +19382,26 @@ function _buildDateField(initial) {
     pop.appendChild(grid);
     const timeRow = document.createElement('div'); timeRow.className = 'dp-time';
     const clk = document.createElement('span'); clk.textContent = '🕒';
-    const hSel = document.createElement('select'); for (let h = 0; h < 24; h++) { const o = document.createElement('option'); o.value = h; o.textContent = String(h).padStart(2, '0'); if (h === hh) o.selected = true; hSel.appendChild(o); }
-    const mSel = document.createElement('select'); for (let m = 0; m < 60; m += 5) { const o = document.createElement('option'); o.value = m; o.textContent = String(m).padStart(2, '0'); if (m === mm) o.selected = true; mSel.appendChild(o); }
-    hSel.onchange = () => hh = parseInt(hSel.value, 10); mSel.onchange = () => mm = parseInt(mSel.value, 10);
+    // Dark hour/minute columns — same look as the backup time picker (.tp-*), replacing
+    // the native <select> whose dropdown painted a blue we can't theme (serekkr, 28/10).
+    const mkTcol = (count, step, cur, set) => {
+      const col = document.createElement('div'); col.className = 'tp-col';
+      const list = document.createElement('div'); list.className = 'tp-list dp-tp-list';
+      for (let i = 0; i < count; i += step) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'tp-item'; b.dataset.v = i;
+        b.textContent = String(i).padStart(2, '0');
+        if (i === cur) b.classList.add('sel');
+        b.addEventListener('click', () => { set(i); list.querySelectorAll('.tp-item').forEach(x => x.classList.toggle('sel', +x.dataset.v === i)); });
+        list.appendChild(b);
+      }
+      col.appendChild(list);
+      setTimeout(() => { try { list.querySelector('.tp-item.sel')?.scrollIntoView({ block: 'center' }); } catch (_) {} }, 0);
+      return col;
+    };
+    const hCol = mkTcol(24, 1, hh, v => hh = v);
+    const mCol = mkTcol(60, 5, mm, v => mm = v);
     const colon = document.createElement('span'); colon.textContent = ':'; colon.className = 'dp-colon';
-    timeRow.append(clk, hSel, colon, mSel); pop.appendChild(timeRow);
+    timeRow.append(clk, hCol, colon, mCol); pop.appendChild(timeRow);
     const act = document.createElement('div'); act.className = 'dp-actions';
     const clear = document.createElement('button'); clear.type = 'button'; clear.className = 'dp-clear'; clear.textContent = window.i18n.t('todo.clear_date');
     const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'dp-ok'; ok.textContent = 'OK';
