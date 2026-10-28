@@ -11248,6 +11248,56 @@ function setupSettings() {
   _wireDailyTimeSave('cfg-local-dailytime', 'local');
   _wireDailyTimeSave('cfg-remote-dailytime', 'remote');
 
+  // Custom DARK time picker for the backup daily-time fields. The native <input
+  // type=time> dropdown paints its selected/hover rows a bright blue we cannot
+  // recolour from CSS (accent-color never reaches that popup here — serekkr,
+  // 28/10/2026). So we hide the native picker (CSS) and open our own dark one,
+  // themed to the app. The <input> stays the value holder: we set its .value and
+  // fire 'change', so _wireDailyTimeSave above still saves exactly as before.
+  const attachDarkTimePicker = (id) => {
+    const input = $(id);
+    if (!input || input._tpAttached) return;
+    input._tpAttached = true;
+    const wrap = document.createElement('span'); wrap.className = 'tp-wrap';
+    input.parentNode.insertBefore(wrap, input); wrap.appendChild(input);
+    const CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'tp-trigger'; btn.innerHTML = CLOCK;
+    wrap.appendChild(btn);
+    const pop = document.createElement('div'); pop.className = 'tp-pop'; pop.style.display = 'none';
+    const mkCol = (label, n) => {
+      const col = document.createElement('div'); col.className = 'tp-col';
+      const h = document.createElement('div'); h.className = 'tp-col-h'; h.textContent = label; col.appendChild(h);
+      const list = document.createElement('div'); list.className = 'tp-list';
+      for (let i = 0; i < n; i++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'tp-item'; b.dataset.v = i; b.textContent = String(i).padStart(2, '0'); list.appendChild(b); }
+      col.appendChild(list); return { col, list };
+    };
+    const hc = mkCol('H', 24), mc = mkCol('M', 60);
+    pop.append(hc.col, mc.col); document.body.appendChild(pop);
+    const parse = () => { const m = /^(\d{1,2}):(\d{2})$/.exec(input.value || ''); return m ? [Math.min(23, +m[1]), Math.min(59, +m[2])] : [null, null]; };
+    const mark = () => { const [h, mi] = parse();
+      hc.list.querySelectorAll('.tp-item').forEach(b => b.classList.toggle('sel', +b.dataset.v === h));
+      mc.list.querySelectorAll('.tp-item').forEach(b => b.classList.toggle('sel', +b.dataset.v === mi)); };
+    const setPart = (which, v) => { let [h, mi] = parse(); if (h == null) { h = 18; mi = 0; }
+      if (which === 'h') h = v; else mi = v;
+      input.value = String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
+      input.dispatchEvent(new Event('change', { bubbles: true })); mark(); };
+    hc.list.addEventListener('click', e => { const b = e.target.closest('.tp-item'); if (b) setPart('h', +b.dataset.v); });
+    mc.list.addEventListener('click', e => { const b = e.target.closest('.tp-item'); if (b) setPart('m', +b.dataset.v); });
+    const place = () => { const r = btn.getBoundingClientRect(); pop.style.display = 'flex';
+      const pw = pop.offsetWidth, ph = pop.offsetHeight; let left = r.left, top = r.bottom + 4;
+      if (left + pw > window.innerWidth - 8) left = window.innerWidth - 8 - pw;
+      if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - 4 - ph);
+      pop.style.left = Math.max(8, left) + 'px'; pop.style.top = top + 'px'; };
+    const onDoc = (ev) => { if (!pop.contains(ev.target) && !btn.contains(ev.target)) close(); };
+    const onKey = (ev) => { if (ev.key === 'Escape') close(); };
+    function open() { mark(); place(); pop.querySelectorAll('.tp-item.sel').forEach(b => { try { b.scrollIntoView({ block: 'center' }); } catch (_) {} });
+      setTimeout(() => { document.addEventListener('mousedown', onDoc, true); document.addEventListener('keydown', onKey, true); }, 0); }
+    function close() { pop.style.display = 'none'; document.removeEventListener('mousedown', onDoc, true); document.removeEventListener('keydown', onKey, true); }
+    btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); if (pop.style.display === 'none') open(); else close(); });
+  };
+  attachDarkTimePicker('cfg-local-dailytime');
+  attachDarkTimePicker('cfg-remote-dailytime');
+
   // "Backup now": save settings first (so the latest path/mode is used), then
   // force a manual one-way backup to ALL enabled destinations. Shared by the
   // top-of-tab button and the per-section (Local) button.
