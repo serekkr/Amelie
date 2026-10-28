@@ -19475,8 +19475,9 @@ function _todoInlineEditor(bucket, it) {
   save.addEventListener('click', doSave);
   cancel.addEventListener('click', () => renderTodoView());
   ta.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSave(); }
-    else if (e.key === 'Escape') { e.preventDefault(); renderTodoView(); }
+    // Enter no longer creates the task — only the Save button does (serekkr,
+    // 28/10/2026). Enter is left to insert a normal newline in the field.
+    if (e.key === 'Escape') { e.preventDefault(); renderTodoView(); }
   });
   setTimeout(() => ta.focus(), 30);
   return wrap;
