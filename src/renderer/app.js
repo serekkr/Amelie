@@ -121,6 +121,13 @@ function hideAllSpecialViews() {
   const mv = $('media-view-overlay'); if (mv) mv.style.display = 'none';
   pauseMediaViewUnlessActive();
   const tv = $('todo-view');       if (tv) tv.style.display = 'none';
+  // Leaving the ToDo view (opening a note, another tab…) closes the sticky quick-add
+  // so it isn't still open when you come back (serekkr, 28/10/2026).
+  try {
+    const ar = document.getElementById('todo-add-row');
+    const ed = ar && ar.querySelector('.todo-editor');
+    if (ed) { _todoEditorClose = null; ar.innerHTML = ''; ar.appendChild(_todoAddTrigger()); }
+  } catch (_) {}
   const bc = $('btn-canvas');  if (bc) bc.classList.remove('active');
   _kanbanOpen = false;
   // Restore the Files icon: leaving the ToDo board (for draw/pdf/note)
