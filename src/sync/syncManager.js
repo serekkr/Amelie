@@ -15,6 +15,11 @@ class SyncManager {
   constructor(notesDir, attachmentsDir, configFile) {
     this.notesDir = notesDir;
     this.attachmentsDir = attachmentsDir;
+    // ToDo reminders live in <vault>/todo/<bucket>/ (sibling of notes/ +
+    // attachments/). They must ride the live two-way sync like everything else:
+    // Android already syncs todo/, but Linux only knew notes+attachments, so a
+    // reminder set on one device never reached the other (serekkr, 28/10/2026).
+    this.todoDir = path.join(path.dirname(notesDir), 'todo');
     this.configFile = configFile;
     this.config = {};
     this.status = 'idle'; // idle | syncing | error | ok
@@ -22,6 +27,28 @@ class SyncManager {
     this.webdavClient = null;
     // True while a MANUAL backup is queued behind a run in flight — see runBackup.
     this._backupWaiting = false;
+  }
+
+  // ─── Vault sync roots ──────────────────────────────────────────────────────
+  // A remote-relative path is one of notes/… , attachments/… or todo/… . These
+  // three helpers map such a path back to its local root and sub-path, and tell
+  // a stray (markers, .amelie-vault.json) from a vault file — so todo/ is treated
+  // exactly like attachments/ everywhere the two-way engine lists or moves files.
+  _dirForRel(rel) {
+    const r = String(rel);
+    if (r.startsWith('attachments/')) return this.attachmentsDir;
+    if (r.startsWith('todo/')) return this.todoDir;
+    return this.notesDir;
+  }
+  _subForRel(rel) {
+    const r = String(rel);
+    if (r.startsWith('attachments/')) return r.slice('attachments/'.length);
+    if (r.startsWith('todo/')) return r.slice('todo/'.length);
+    return r.slice('notes/'.length);
+  }
+  _isVaultRel(rel) {
+    const r = String(rel);
+    return r.startsWith('notes/') || r.startsWith('attachments/') || r.startsWith('todo/');
   }
 
   async init() {
@@ -1238,6 +1265,9 @@ class SyncManager {
     // single note left the fingerprint identical, every scheduled run skipped,
     // and those files reached no destination until some note happened to change.
     walk(this.attachmentsDir);
+    // Same reasoning for ToDo: a reminder added/edited without touching a note
+    // must move the fingerprint, or the two-way tick would skip and never push it.
+    walk(this.todoDir);
     return `${count}:${size}:${Math.round(maxMtime)}`;
   }
 
@@ -2396,11 +2426,13 @@ class SyncManager {
     // Ensure base + the two subfolders exist (mkdirp is recursive).
     try { await this._smb(cfg, ['mkdirp', base + '/notes']); } catch (_) {}
     try { await this._smb(cfg, ['mkdirp', base + '/attachments']); } catch (_) {}
+    try { await this._smb(cfg, ['mkdirp', base + '/todo']); } catch (_) {}
 
     const remote = await this._smbListRecursive(cfg, base);
     const localNotes = this._getAllLocalFiles(this.notesDir, '').filter(f => !f.relPath.startsWith('attachments/')).map(f => ({ rel: 'notes/' + f.relPath, abs: f.absPath }));
     const localAtt   = this._getAllLocalFiles(this.attachmentsDir, '').map(f => ({ rel: 'attachments/' + f.relPath, abs: f.absPath }));
-    const local = [...localNotes, ...localAtt];
+    const localTodo  = this._getAllLocalFiles(this.todoDir, '').map(f => ({ rel: 'todo/' + f.relPath, abs: f.absPath }));
+    const local = [...localNotes, ...localAtt, ...localTodo];
     const localMap = {};
     for (const f of local) localMap[f.rel] = fs.statSync(f.abs).mtimeMs;
     const TOL = 3000;
@@ -2443,12 +2475,12 @@ class SyncManager {
     };
     const absOf = (rel) => {
       const r = String(rel);
-      const dir = r.startsWith('attachments/') ? this.attachmentsDir : this.notesDir;
-      const sub = r.startsWith('attachments/') ? r.slice('attachments/'.length) : r.slice('notes/'.length);
+      const dir = this._dirForRel(r);
+      const sub = this._subForRel(r);
       const p = path.join(dir, sub);
       // rel can come from the UNTRUSTED remote listing — a malicious/compromised
       // server could serve a name with `../` to write outside the vault. Confine
-      // the resolved path to its notes/attachments root.
+      // the resolved path to its notes/attachments/todo root.
       const root = path.resolve(dir);
       const res = path.resolve(p);
       if (res !== root && !res.startsWith(root + path.sep)) throw new Error('Unsafe sync path: ' + r);
@@ -2475,7 +2507,7 @@ class SyncManager {
       try { fs.unlinkSync(abs); } catch (e) { if (e.code !== 'ENOENT') return false; }
       // Best-effort: prune now-empty parent dirs up to (but not including) the root.
       let dir = path.dirname(abs);
-      const stopAt = rel.startsWith('attachments/') ? this.attachmentsDir : this.notesDir;
+      const stopAt = this._dirForRel(rel);
       while (dir.startsWith(stopAt) && dir !== stopAt) {
         try { if (fs.readdirSync(dir).length === 0) fs.rmdirSync(dir); else break; } catch (_) { break; }
         dir = path.dirname(dir);
@@ -2494,7 +2526,7 @@ class SyncManager {
     const allRels = new Set();
     for (const f of local) allRels.add(f.rel);
     for (const rel of Object.keys(remote)) {
-      if (rel.startsWith('notes/') || rel.startsWith('attachments/')) allRels.add(rel);
+      if (this._isVaultRel(rel)) allRels.add(rel);
     }
 
     // SAFETY: never let an empty remote listing turn into a mass local wipe.
@@ -2505,7 +2537,7 @@ class SyncManager {
     // delete propagation this run.
     let pd = propagateDeletes;
     if (pd) {
-      const remoteCount = Object.keys(remote).filter(r => r.startsWith('notes/') || r.startsWith('attachments/')).length;
+      const remoteCount = Object.keys(remote).filter(r => this._isVaultRel(r)).length;
       if (remoteCount === 0 && (Object.keys(st).length > 0 || local.length > 0)) {
         pd = false;
         console.warn('[Two-way] remote listing empty but baseline/local non-empty — skipping delete propagation this run (suspected listing failure)');
@@ -2524,7 +2556,7 @@ class SyncManager {
       }
     }
     const approved = await this._holdMassDelete(plan, {
-      remoteTotal: Object.keys(remote).filter(r => r.startsWith('notes/') || r.startsWith('attachments/')).length,
+      remoteTotal: Object.keys(remote).filter(r => this._isVaultRel(r)).length,
       localTotal: local.length,
       target: `${cfg.host || cfg.ip}/${cfg.share}/${base}`,
     });
@@ -2759,7 +2791,7 @@ class SyncManager {
         for (const seg of parts) { d += '/' + seg; dirsDone.add(d); }
       }
     }
-    if (!listed || !Object.keys(remote).length) await ensureDirs([base + '/notes', base + '/attachments']);
+    if (!listed || !Object.keys(remote).length) await ensureDirs([base + '/notes', base + '/attachments', base + '/todo']);
 
     // Refuse a folder already claimed by BACKUP (same rule as Samba). The backup
     // side refuses a folder claimed by SYNC (.amelie-sync) — see _syncWebDAV.
@@ -2769,7 +2801,8 @@ class SyncManager {
 
     const localNotes = this._getAllLocalFiles(this.notesDir, '').filter(f => !f.relPath.startsWith('attachments/')).map(f => ({ rel: 'notes/' + f.relPath, abs: f.absPath }));
     const localAtt   = this._getAllLocalFiles(this.attachmentsDir, '').map(f => ({ rel: 'attachments/' + f.relPath, abs: f.absPath }));
-    const local = [...localNotes, ...localAtt];
+    const localTodo  = this._getAllLocalFiles(this.todoDir, '').map(f => ({ rel: 'todo/' + f.relPath, abs: f.absPath }));
+    const local = [...localNotes, ...localAtt, ...localTodo];
     const localMap = {};
     for (const f of local) localMap[f.rel] = fs.statSync(f.abs).mtimeMs;
     const TOL = 3000;
@@ -2790,12 +2823,12 @@ class SyncManager {
     const getBase = (rel) => { const v = st[rel]; if (v == null) return null; if (typeof v === 'number') return { r: v, l: v }; return { r: +v.r || 0, l: +v.l || 0 }; };
     const absOf = (rel) => {
       const r = String(rel);
-      const dir = r.startsWith('attachments/') ? this.attachmentsDir : this.notesDir;
-      const sub = r.startsWith('attachments/') ? r.slice('attachments/'.length) : r.slice('notes/'.length);
+      const dir = this._dirForRel(r);
+      const sub = this._subForRel(r);
       const p = path.join(dir, sub);
       // rel can come from the UNTRUSTED remote listing — a malicious/compromised
       // server could serve a name with `../` to write outside the vault. Confine
-      // the resolved path to its notes/attachments root.
+      // the resolved path to its notes/attachments/todo root.
       const root = path.resolve(dir);
       const res = path.resolve(p);
       if (res !== root && !res.startsWith(root + path.sep)) throw new Error('Unsafe sync path: ' + r);
@@ -2828,7 +2861,7 @@ class SyncManager {
       const abs = absOf(rel);
       try { fs.unlinkSync(abs); } catch (e) { if (e.code !== 'ENOENT') return false; }
       let dir = path.dirname(abs);
-      const stopAt = rel.startsWith('attachments/') ? this.attachmentsDir : this.notesDir;
+      const stopAt = this._dirForRel(rel);
       while (dir.startsWith(stopAt) && dir !== stopAt) {
         try { if (fs.readdirSync(dir).length === 0) fs.rmdirSync(dir); else break; } catch (_) { break; }
         dir = path.dirname(dir);
@@ -2847,13 +2880,13 @@ class SyncManager {
 
     const allRels = new Set();
     for (const f of local) allRels.add(f.rel);
-    for (const rel of Object.keys(remote)) { if (rel.startsWith('notes/') || rel.startsWith('attachments/')) allRels.add(rel); }
+    for (const rel of Object.keys(remote)) { if (this._isVaultRel(rel)) allRels.add(rel); }
 
     // Anti-wipe: an empty remote listing with existing baseline/local is almost
     // certainly a failed PROPFIND — don't propagate that as a mass delete.
     let pd = propagateDeletes;
     if (pd) {
-      const remoteCount = Object.keys(remote).filter(r => r.startsWith('notes/') || r.startsWith('attachments/')).length;
+      const remoteCount = Object.keys(remote).filter(r => this._isVaultRel(r)).length;
       if (remoteCount === 0 && (Object.keys(st).length > 0 || local.length > 0)) {
         pd = false;
         console.warn('[Two-way WebDAV] remote listing empty but baseline/local non-empty — skipping delete propagation this run');
@@ -2873,7 +2906,7 @@ class SyncManager {
     let host = url;
     try { host = new URL(url).host; } catch (_) {}
     const approved = await this._holdMassDelete(plan, {
-      remoteTotal: Object.keys(remote).filter(r => r.startsWith('notes/') || r.startsWith('attachments/')).length,
+      remoteTotal: Object.keys(remote).filter(r => this._isVaultRel(r)).length,
       localTotal: local.length,
       target: host + base,
     });
@@ -3012,11 +3045,16 @@ class SyncManager {
     const remoteBase        = path.join(mountPath, subPath);
     const remoteNotes       = path.join(remoteBase, 'notes');
     const remoteAttachments = path.join(remoteBase, 'attachments');
+    const remoteTodo        = path.join(remoteBase, 'todo');
 
     // Ensure remote folders exist (create on first sync)
-    [remoteBase, remoteNotes, remoteAttachments].forEach(d => {
+    [remoteBase, remoteNotes, remoteAttachments, remoteTodo].forEach(d => {
       if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
     });
+    // todo/ is created on disk only when the first reminder is made; notes/ and
+    // attachments/ always exist. Create it so rsync's source dir is never missing
+    // (a missing source would fail the whole rsync and drop to file-by-file copy).
+    if (!fs.existsSync(this.todoDir)) { try { fs.mkdirSync(this.todoDir, { recursive: true }); } catch (_) {} }
 
     // Archive only: skip copying the folder, just create the .tar.gz
     if (opts.archiveOnly) {
@@ -3065,6 +3103,8 @@ class SyncManager {
         if (!opts.oneWay) execFileSync(rs.bin, [...base, remoteNotes + '/', this.notesDir + '/'], eo);
         execFileSync(rs.bin, [...base, ...del, this.attachmentsDir + '/', remoteAttachments + '/'], eo);
         if (!opts.oneWay) execFileSync(rs.bin, [...base, remoteAttachments + '/', this.attachmentsDir + '/'], eo);
+        execFileSync(rs.bin, [...base, ...del, this.todoDir + '/', remoteTodo + '/'], eo);
+        if (!opts.oneWay) execFileSync(rs.bin, [...base, remoteTodo + '/', this.todoDir + '/'], eo);
         console.log(`[Sync] rsync ${opts.oneWay ? 'one-way done (local → remote)' : 'two-way done (local is master)'} [${rs.label}]`);
         const r = { method: 'rsync', direction: opts.oneWay ? 'one-way' : 'two-way' };
         if (opts.archive) r.archive = path.basename(await this.createArchive(remoteBase));
@@ -3081,6 +3121,7 @@ class SyncManager {
     const syncDirs = [
       { local: this.notesDir,       remote: remoteNotes       },
       { local: this.attachmentsDir, remote: remoteAttachments },
+      { local: this.todoDir,        remote: remoteTodo        },
     ];
 
     for (const { local, remote } of syncDirs) {
