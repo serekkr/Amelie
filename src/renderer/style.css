@@ -4552,6 +4552,11 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .todo-tree-entry .tree-folder-icon svg { color: var(--accent); }
 .todo-tree-entry.active { background: var(--bg-3); }
 .todo-tree-entry.active .tree-name { color: var(--accent); }
+/* On hover: NO wide row highlight (override .tree-folder:hover) — only the NAME
+   lights up green (serekkr, 28/10/2026: "solo la scritta si deve illuminare di
+   verde, senza tabella larga"). The active row keeps its own background. */
+.todo-tree-entry:not(.active):hover { background: transparent; }
+.todo-tree-entry:hover .tree-name { color: var(--accent); }
 
 /* ─── Kanban ToDo board ──────────────────────────────────────── */
 #kanban-view { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
