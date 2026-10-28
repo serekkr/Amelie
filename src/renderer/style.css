@@ -4597,7 +4597,9 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
   /* Writing a task uses the editor font too, so what you type looks like what you'll read. */
   color: var(--text-0); font-family: var(--editor-font-family); font-size: 14px; padding: 7px 9px; outline: none;
 }
-.kc-text:focus { border-color: var(--accent); }
+/* New-task / edit-task field: focus border a muted off-white that blends with the UI,
+   NOT green (serekkr, 28/10/2026: "non farlo verde, farlo bianco scuro per abbinarsi"). */
+.kc-text:focus { border-color: var(--border-light); }
 .kc-meta { display: flex; gap: 6px; flex-wrap: wrap; }
 .kc-due, .kc-alert {
   background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px;
