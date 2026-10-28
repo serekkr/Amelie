@@ -4550,7 +4550,7 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .kc-meta { display: flex; gap: 6px; flex-wrap: wrap; }
 .kc-due, .kc-alert {
   background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px;
-  color: var(--text-1); font-family: var(--ui-font); font-size: 13px; padding: 5px 7px; outline: none; flex: 1; min-width: 0;
+  color: var(--text-1); font-family: var(--ui-font); font-size: 13px; padding: 5px 7px; outline: none; flex: 1; min-width: 110px;
 }
 .kc-due:focus, .kc-alert:focus { border-color: var(--accent); }
 .kc-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
@@ -4563,7 +4563,11 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .kc-alert-custom:focus { border-color: var(--accent); }
 
 /* Custom calendar (dark) */
-.dp-wrap { position: relative; flex: 1; min-width: 150px; }
+/* min-width holds the full localized date+time ("28/10/2026, 14:30") so the
+   trigger label never gets ellipsis-clipped when the "minutes before" field
+   shares the row — with flex-wrap, that field drops to the next line instead of
+   squeezing the date (serekkr, 28/10/2026: "la data si vede tagliata"). */
+.dp-wrap { position: relative; flex: 1; min-width: 185px; }
 .dp-trigger { display: flex; align-items: center; gap: 7px; width: 100%; box-sizing: border-box; background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; color: var(--text-1); font-family: var(--ui-font); font-size: 13px; padding: 6px 9px; cursor: pointer; text-align: left; }
 .dp-trigger:hover { border-color: var(--border-light); }
 .dp-trigger svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--accent); }

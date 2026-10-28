@@ -468,6 +468,20 @@ async function switchTab(idx) {
   try { updateTitleForFocus(); } catch (_) {}
 }
 
+// After a drag-move renames the OPEN note on disk, its tab already points at the new
+// path but the peripheral view — breadcrumb, status-bar path, the tree highlight —
+// still reads the old location, so the note felt "disconnected" until you clicked it
+// again (serekkr, 28/10/2026: trascinata in un'altra cartella, "resta scollegata
+// finché non ci riclicco"). Re-assert the active tab: switchTab's SAME-note path
+// (tab.path === _cmLoadedPath) keeps the live editor content and caret — it does NOT
+// reload — and only refreshes that stale peripheral UI. No-op unless the moved note
+// is the one on screen. Call it AFTER the tree arrays + renderTree are settled.
+async function reconnectActiveAfterMove(newPath) {
+  if (!newPath) return;
+  const t = getActiveTab();
+  if (t && !t.type && t.path === newPath) { try { await switchTab(activeTabIdx); } catch (_) {} }
+}
+
 // Bring the split pane in line with the tab being shown.
 // Each tab carries its own split (or none). Called from switchTab, and from the paths that
 // change which note the tab shows — the pane is pinned to the TAB, so it stays put while the
@@ -3371,6 +3385,7 @@ function makeFolderEl(node, parentArray, folderPath = '') {
         saveManualOrder(srcParent, found.parentArr);
       }
       renderTree();
+      await reconnectActiveAfterMove(moved.path);   // on-screen note: refresh its stale breadcrumb/path
     } else if (state.draggingFolder) {
       state.draggingFolder = false;
       if (srcPath === node.path || node.path.startsWith(srcPath + '/')) return; // prevent drop into self/descendant
@@ -3583,6 +3598,7 @@ function makeNoteEl(node, parentArray, folderPath = '') {
     // move, not a reorder: that one is visible whatever the sort.)
     if (treeSortMode !== 'manual' && srcFolder === (folderPath || '')) showToast(window.i18n.t('sort.manual_hint'), 4000);
     renderTree();
+    if (wasNote) await reconnectActiveAfterMove(moved.path);   // on-screen note: refresh its stale breadcrumb/path
   });
   return el;
 }
@@ -4586,10 +4602,14 @@ async function deleteNote(node, { bulk = false } = {}) {
     if (!bulk) await loadTree();
     return;
   }
-  await window.inkwell.deleteNote(node.path);
-  // Remember it for "Annulla eliminazione" — but only a single, deliberate delete. A bulk
-  // delete is a set we don't rebuild from one note, so it clears the offer instead.
-  _lastDeletedNote = bulk ? null : { path: node.path, name: node.name };
+  // Update the VIEW first, THEN delete on disk: jumping to the neighbour used to
+  // wait on the system-trash call (a visible beat on a single delete — serekkr,
+  // 28/10/2026: "se cancello una nota deve andare subito su la prossima nota la
+  // vista"). We never read the note again in between — switchTab loads the
+  // NEIGHBOUR, and the file is still on disk for these few lines — so moving the
+  // trash call below the UI only makes the view feel instant. The switchTab
+  // data-loss guard finds no tab left at _cmLoadedPath (the deleted path, just
+  // spliced), so nothing stale is flushed anywhere.
   // Close the tab if this note is open
   const tabIdx = tabs.findIndex(t => t.path === node.path);
   if (tabIdx !== -1) {
@@ -4610,6 +4630,10 @@ async function deleteNote(node, { bulk = false } = {}) {
     }
     if (!bulk) renderTabBar();
   }
+  await window.inkwell.deleteNote(node.path);
+  // Remember it for "Annulla eliminazione" — but only a single, deliberate delete. A bulk
+  // delete is a set we don't rebuild from one note, so it clears the offer instead.
+  _lastDeletedNote = bulk ? null : { path: node.path, name: node.name };
   if (!bulk) await loadTree();
 }
 
