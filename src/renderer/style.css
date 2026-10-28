@@ -2240,6 +2240,11 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #cfg-local-dailytime, #cfg-remote-dailytime {
   width: auto; min-width: 130px; flex: 0 0 auto;
   color-scheme: dark;
+  /* The highlighted hour/minute in the native dropdown used the browser's default
+     light blue, which clashed with the theme. accent-color repaints that selection
+     with the app's DIM accent — a darker, more subdued shade that sits better behind
+     the numbers than the full-bright accent (serekkr, 28/10/2026: "scuri"). */
+  accent-color: var(--accent-dim);
   background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px;
   color: var(--text-1); font-family: var(--ui-font); font-size: 13px; padding: 5px 8px; outline: none;
 }
