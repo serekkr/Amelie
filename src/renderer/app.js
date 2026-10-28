@@ -19356,16 +19356,19 @@ function _buildDateField(initial) {
   let hh = selDate ? selDate.getHours() : 9, mm = selDate ? selDate.getMinutes() : 0;
   function renderCal() {
     pop.innerHTML = '';
+    // Calendar (left) and time (right) sit side by side in .dp-body, split by a
+    // vertical divider (serekkr, 28/10/2026: "l'orario spostalo sul lato destro").
+    const cal = document.createElement('div'); cal.className = 'dp-cal';
     const head = document.createElement('div'); head.className = 'dp-head';
     const prev = document.createElement('button'); prev.type = 'button'; prev.className = 'dp-nav'; prev.textContent = '‹';
     const lbl = document.createElement('span'); lbl.className = 'dp-month'; lbl.textContent = view.toLocaleString(undefined, { month: 'long', year: 'numeric' });
     const next = document.createElement('button'); next.type = 'button'; next.className = 'dp-nav'; next.textContent = '›';
     prev.onclick = () => { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); renderCal(); };
     next.onclick = () => { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); renderCal(); };
-    head.append(prev, lbl, next); pop.appendChild(head);
+    head.append(prev, lbl, next); cal.appendChild(head);
     const wd = document.createElement('div'); wd.className = 'dp-weekdays';
     ['L', 'M', 'M', 'G', 'V', 'S', 'D'].forEach(d => { const s = document.createElement('span'); s.textContent = d; wd.appendChild(s); });
-    pop.appendChild(wd);
+    cal.appendChild(wd);
     const grid = document.createElement('div'); grid.className = 'dp-grid';
     const year = view.getFullYear(), month = view.getMonth();
     const startDow = (new Date(year, month, 1).getDay() + 6) % 7;
@@ -19379,7 +19382,7 @@ function _buildDateField(initial) {
       cell.onclick = () => { selDate = new Date(year, month, d); renderCal(); };
       grid.appendChild(cell);
     }
-    pop.appendChild(grid);
+    cal.appendChild(grid);
     const timeRow = document.createElement('div'); timeRow.className = 'dp-time';
     const clk = document.createElement('span'); clk.textContent = '🕒';
     // Dark hour/minute columns — same look as the backup time picker (.tp-*), replacing
@@ -19401,7 +19404,9 @@ function _buildDateField(initial) {
     const hCol = mkTcol(24, 1, hh, v => hh = v);
     const mCol = mkTcol(60, 5, mm, v => mm = v);
     const colon = document.createElement('span'); colon.textContent = ':'; colon.className = 'dp-colon';
-    timeRow.append(clk, hCol, colon, mCol); pop.appendChild(timeRow);
+    timeRow.append(clk, hCol, colon, mCol);
+    const body = document.createElement('div'); body.className = 'dp-body';
+    body.append(cal, timeRow); pop.appendChild(body);
     const act = document.createElement('div'); act.className = 'dp-actions';
     const clear = document.createElement('button'); clear.type = 'button'; clear.className = 'dp-clear'; clear.textContent = window.i18n.t('todo.clear_date');
     const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'dp-ok'; ok.textContent = 'OK';
