@@ -4641,7 +4641,8 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .dp-day.empty { cursor: default; }
 .dp-day.today { box-shadow: inset 0 0 0 1px var(--border-light); }
 .dp-day.sel { background: var(--accent); color: #fff; }
-.dp-time { display: flex; align-items: center; gap: 6px; margin: 10px 0 8px; justify-content: center; }
+/* Divider line between the calendar grid and the time columns (serekkr, 28/10/2026). */
+.dp-time { display: flex; align-items: center; gap: 6px; margin: 10px 0 8px; justify-content: center; border-top: 1px solid var(--border); padding-top: 10px; }
 .dp-time select { background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; color: var(--text-1); font-family: var(--editor-font); font-size: 13px; padding: 4px 6px; outline: none; }
 /* Dark hour/minute columns inside the calendar popup (reuse the backup .tp-* look),
    kept compact so the popup doesn't grow tall. */
