@@ -4729,10 +4729,10 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .tv-filter:hover { color: var(--text-0); border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
 .tv-filter.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-.todo-sec-head { display: flex; align-items: center; gap: 8px; margin: 18px 0 4px; padding: 3px 8px; border: 1px solid transparent; border-radius: 7px; font-family: var(--ui-font); font-size: 16px; font-weight: 600; color: var(--text-1); transition: border-color .15s, box-shadow .15s, color .15s; }
-/* Hover lights the border green with a soft glow, like the rest of Amelie
-   (serekkr, 28/10/2026: "il hover sopra today/tomorrow deve illuminare verde i bordi"). */
-.todo-sec-head:hover { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); color: var(--accent); }
+.todo-sec-head { display: flex; align-items: center; gap: 8px; margin: 18px 0 4px; font-family: var(--ui-font); font-size: 16px; font-weight: 600; color: var(--text-1); transition: color .15s; }
+/* Hover lights ONLY the title green — no box, no bordered bar (serekkr, 28/10/2026:
+   "solo il titolo verde senza la barra con i bordi"). */
+.todo-sec-head:hover { color: var(--accent); }
 .todo-section-overdue .todo-sec-head { color: var(--red, #e5534b); }
 .todo-sec-count { font-family: var(--editor-font); font-size: 12px; color: var(--text-3); }
 .todo-sec-empty { color: var(--text-3); font-size: 14px; padding: 4px 4px 8px; }

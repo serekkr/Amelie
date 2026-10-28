@@ -11298,6 +11298,18 @@ function setupSettings() {
   attachDarkTimePicker('cfg-local-dailytime');
   attachDarkTimePicker('cfg-remote-dailytime');
 
+  // One editor at a time: clicking anywhere OUTSIDE an open ToDo editor — another
+  // task, a section header, the ToDo tree entry, today/tomorrow — closes it (serekkr,
+  // 28/10/2026). Clicks INSIDE the editor (its text field, buttons, and the date-picker
+  // popup which lives within it) are left alone. One document listener, added once.
+  if (!window._todoEditorOutsideClose) {
+    window._todoEditorOutsideClose = true;
+    document.addEventListener('mousedown', (ev) => {
+      const ed = document.querySelector('.todo-editor');
+      if (ed && !ed.contains(ev.target)) { try { renderTodoView(); } catch (_) {} }
+    }, true);
+  }
+
   // "Backup now": save settings first (so the latest path/mode is used), then
   // force a manual one-way backup to ALL enabled destinations. Shared by the
   // top-of-tab button and the per-section (Local) button.
