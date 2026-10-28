@@ -11304,9 +11304,15 @@ function setupSettings() {
   // popup which lives within it) are left alone. One document listener, added once.
   if (!window._todoEditorOutsideClose) {
     window._todoEditorOutsideClose = true;
-    document.addEventListener('mousedown', (ev) => {
+    // On CLICK (not mousedown) so starting a DRAG on another task does not yank the
+    // editor shut mid-drag (which flashed the whole list). Closes IN PLACE via the
+    // editor's own close fn — no full re-render — then the click reaches whatever was
+    // clicked (e.g. another task's row, which opens its editor): a fluid switch.
+    document.addEventListener('click', (ev) => {
       const ed = document.querySelector('.todo-editor');
-      if (ed && !ed.contains(ev.target)) { try { renderTodoView(); } catch (_) {} }
+      if (!ed || ed.contains(ev.target)) return;
+      if (_todoEditorClose) { try { _todoEditorClose(); return; } catch (_) {} }
+      try { renderTodoView(); } catch (_) {}
     }, true);
   }
 
@@ -19199,6 +19205,7 @@ async function closeKanban() {
 function setTodoFilter(f) { _todoFilter = f; renderTodoView(); }
 
 async function renderTodoView() {
+  _todoEditorClose = null;   // a full re-render discards any open editor
   const list = $('todo-view-list'); if (!list) return;
   let data; try { data = await window.inkwell.todo.list(); } catch(_) { data = _emptyTodoBuckets(); }
   _todoCache = data;
@@ -19460,6 +19467,11 @@ function _buildDateField(initial) {
   return { el: wrap, getValue: () => value };
 }
 
+// Close function of the currently-open ToDo editor, if any: restores the editor's
+// own row (or the + trigger) IN PLACE — no full re-render — so closing on an outside
+// click is fluid, not a whole-list flash (serekkr, 28/10/2026).
+let _todoEditorClose = null;
+
 function _todoInlineEditor(bucket, it) {
   const wrap = document.createElement('div'); wrap.className = 'todo-editor';
   const ta = document.createElement('textarea'); ta.className = 'kc-text'; ta.rows = 1; ta.placeholder = window.i18n.t('todo.new_task'); ta.value = it ? it.text : '';
@@ -19479,8 +19491,17 @@ function _todoInlineEditor(bucket, it) {
   const cancel = document.createElement('button'); cancel.className = 'kc-cancel'; cancel.textContent = window.i18n.t('common.cancel');
   actions.append(cancel, save);
   wrap.append(ta, meta, actions);
+  // Close WITHOUT saving, in place: swap the editor back for its task row (or the +
+  // trigger for a new task) — no renderTodoView, so no flash. Used by the outside-click.
+  const closeInPlace = () => {
+    if (_todoEditorClose === closeInPlace) _todoEditorClose = null;
+    try { wrap.replaceWith(it ? _todoRow(it) : _todoAddTrigger()); }
+    catch (_) { try { renderTodoView(); } catch (__) {} }
+  };
+  _todoEditorClose = closeInPlace;
   const getAlert = () => alert.value === 'custom' ? (customInp.value ? String(parseInt(customInp.value, 10)) : '') : alert.value;
   const doSave = async () => {
+    _todoEditorClose = null;
     const text = ta.value.trim();
     if (!text) { renderTodoView(); return; }
     const av = getAlert();
@@ -19490,11 +19511,11 @@ function _todoInlineEditor(bucket, it) {
     renderTodoView(); refreshTodoAlerts();
   };
   save.addEventListener('click', doSave);
-  cancel.addEventListener('click', () => renderTodoView());
+  cancel.addEventListener('click', () => { _todoEditorClose = null; renderTodoView(); });
   ta.addEventListener('keydown', e => {
     // Enter no longer creates the task — only the Save button does (serekkr,
     // 28/10/2026). Enter is left to insert a normal newline in the field.
-    if (e.key === 'Escape') { e.preventDefault(); renderTodoView(); }
+    if (e.key === 'Escape') { e.preventDefault(); _todoEditorClose = null; renderTodoView(); }
   });
   setTimeout(() => ta.focus(), 30);
   return wrap;
