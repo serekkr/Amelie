@@ -11311,6 +11311,7 @@ function setupSettings() {
     document.addEventListener('click', (ev) => {
       const ed = document.querySelector('.todo-editor');
       if (!ed || ed.contains(ev.target)) return;
+      if (ed.closest('#todo-add-row')) return;   // the quick-add (new task) is sticky — don't close it on an outside click
       if (_todoEditorClose) { try { _todoEditorClose(); return; } catch (_) {} }
       try { renderTodoView(); } catch (_) {}
     }, true);
@@ -19202,16 +19203,25 @@ async function closeKanban() {
   const tv = $('todo-view'); if (tv) tv.style.display = 'none';
   const vf = $('view-files'); if (vf) vf.classList.remove('kanban-active');
 }
-function setTodoFilter(f) { _todoFilter = f; renderTodoView(); }
+function setTodoFilter(f) { _todoFilter = f; renderTodoView({ resetAdd: true }); }   // changing day closes the quick-add
 
-async function renderTodoView() {
-  _todoEditorClose = null;   // a full re-render discards any open editor
+async function renderTodoView(opts = {}) {
+  // The "new task" quick-add editor is STICKY: once open it survives the re-renders
+  // caused by moving/editing OTHER todos, so you can organise while adding (serekkr,
+  // 28/10/2026). It closes only on an explicit reset — a filter change, Save, Cancel
+  // or Esc — which pass { resetAdd: true }.
+  const addRow = $('todo-add-row');
+  const addEd = addRow && addRow.querySelector('.todo-editor');
+  const keepAdd = !!addEd && !opts.resetAdd;
+  if (!keepAdd) _todoEditorClose = null;   // discard edit editors / a reset add editor
   const list = $('todo-view-list'); if (!list) return;
   let data; try { data = await window.inkwell.todo.list(); } catch(_) { data = _emptyTodoBuckets(); }
   _todoCache = data;
   document.querySelectorAll('.tv-filter').forEach(b => b.classList.toggle('active', b.dataset.f === _todoFilter));
-  const addRow = $('todo-add-row');
-  if (addRow) { addRow.style.display = (_todoFilter === 'done') ? 'none' : ''; addRow.innerHTML = ''; addRow.appendChild(_todoAddTrigger()); }
+  if (addRow) {
+    addRow.style.display = (_todoFilter === 'done') ? 'none' : '';
+    if (!keepAdd) { addRow.innerHTML = ''; addRow.appendChild(_todoAddTrigger()); }
+  }
   list.innerHTML = '';
   // "Scaduti" (overdue): a VIRTUAL section at the top gathering every not-done task
   // whose deadline has passed, pulled out of today/tomorrow/upcoming so they're seen
@@ -19503,19 +19513,19 @@ function _todoInlineEditor(bucket, it) {
   const doSave = async () => {
     _todoEditorClose = null;
     const text = ta.value.trim();
-    if (!text) { renderTodoView(); return; }
+    if (!text) { renderTodoView({ resetAdd: true }); return; }
     const av = getAlert();
     const dueVal = datePicker.getValue();
     if (it) await window.inkwell.todo.update(bucket, it.file, text, dueVal, av);
     else await window.inkwell.todo.create(bucket, text, dueVal, av);
-    renderTodoView(); refreshTodoAlerts();
+    renderTodoView({ resetAdd: true }); refreshTodoAlerts();
   };
   save.addEventListener('click', doSave);
-  cancel.addEventListener('click', () => { _todoEditorClose = null; renderTodoView(); });
+  cancel.addEventListener('click', () => { _todoEditorClose = null; renderTodoView({ resetAdd: true }); });
   ta.addEventListener('keydown', e => {
     // Enter no longer creates the task — only the Save button does (serekkr,
     // 28/10/2026). Enter is left to insert a normal newline in the field.
-    if (e.key === 'Escape') { e.preventDefault(); _todoEditorClose = null; renderTodoView(); }
+    if (e.key === 'Escape') { e.preventDefault(); _todoEditorClose = null; renderTodoView({ resetAdd: true }); }
   });
   setTimeout(() => ta.focus(), 30);
   return wrap;
