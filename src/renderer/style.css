@@ -4559,7 +4559,11 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .kc-save:hover { background: var(--accent); color: #fff; }
 .kc-cancel { color: var(--text-2); }
 .kc-cancel:hover { color: var(--text-0); border-color: var(--border-light); }
-.kc-alert-custom { background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; color: var(--text-1); font-family: var(--ui-font); font-size: 13px; padding: 5px 7px; outline: none; width: 120px; }
+/* The "minutes before" field goes on its OWN full-width row when shown: its
+   placeholder ("minutes before") never fit a narrow fixed box, and squeezing it
+   onto the date/alert line left it tiny (serekkr, 28/10/2026: "la tabella e'
+   piccola, minutes before non sta dentro, deve essere piu' grande"). */
+.kc-alert-custom { background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; color: var(--text-1); font-family: var(--ui-font); font-size: 13px; padding: 5px 7px; outline: none; flex: 1 1 100%; width: auto; min-width: 150px; box-sizing: border-box; }
 .kc-alert-custom:focus { border-color: var(--accent); }
 
 /* Custom calendar (dark) */
