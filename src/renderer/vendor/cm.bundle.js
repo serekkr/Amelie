@@ -20335,7 +20335,10 @@
             keymap.of([fenceEnterNoop, fenceEnter, plainEnter, ...defaultKeymap, ...historyKeymap, indentWithTab]),
             fenceField,
             codeBlockPlugin,
-            codeHighlightPlugin,
+            // codeHighlightPlugin DELIBERATELY OFF (serekkr, 28/10/2026): the code-block
+            // CONTENT must stay PLAIN in edit mode — syntax colours belong to view/reading
+            // mode only. codeBlockPlugin stays, so blocks keep their grey background box
+            // (visually distinct) while editing, just uncoloured.
             linkColorPlugin,
             tagColorPlugin,
             tickPlugin,
