@@ -1833,6 +1833,12 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #preview-content a:hover { text-decoration: underline; }
 #preview-content a:visited { color: #a07ddc; }
 
+/* Emphasis (_italic_ / *italic*) takes the theme ACCENT colour in the rendered
+   view — serekkr, 28/10/2026, wanting Obsidian's coloured italics. View/reading
+   mode only (the edit overlay is left plain); both the main preview and the split
+   pane. Still italic — just coloured on top. */
+#preview-content em, #preview-content-b em { color: var(--accent); }
+
 #preview-content code {
   /* A word of code inside a sentence reads at the sentence's own size: 1em, the same as
      edit mode. Block code and tables stay a step below at .95em. */
