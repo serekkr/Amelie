@@ -1597,7 +1597,7 @@ kbd {
    red #fb484d (280) and reported the XML tags as grey; the controls (body text must
    read grey, a string must read green) are what caught it.
       comandi / keywords   #dfdd70  yellow
-      strings              #46ce6e  green
+      strings              #ce9178  salmon (was green; green now only inline code + italics)
       flags                #54dedc  cyan
       numbers              #a781ff  purple
       tag names, operators #fb484d  red
@@ -1615,7 +1615,10 @@ kbd {
   --hl-comment: #666666;
   --hl-keyword: #dfdd70; --hl-builtin: #dfdd70; --hl-def: #54dedc; --hl-type: #dfdd70;
   --hl-meta: #dfdd70;
-  --hl-string: #46ce6e; --hl-number: #a781ff; --hl-property: #54dedc;
+  /* Strings in a warm salmon (VS Code Dark+ style), NOT green: green is already the
+     accent used for inline `code` and italics, so keeping it out of code blocks stops
+     a YAML/shell block reading as a wall of green (serekkr, 28/10/2026). */
+  --hl-string: #ce9178; --hl-number: #a781ff; --hl-property: #54dedc;
   --hl-var2: #54dedc;   --hl-atom: #a781ff;
   --md-link: #58a6ff;
   /* The surface a code block sits on, in BOTH modes, and under a table header. Built
@@ -2604,12 +2607,16 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .hljs-selector-tag, .hljs-doctag { color: var(--hl-keyword); }
 /* Built-ins follow edit mode (orange), not the keyword red they used to share. */
 .hljs-built_in, .hljs-type { color: var(--hl-builtin); }
-.hljs-string, .hljs-attr, .hljs-template-tag, .hljs-addition,
+.hljs-string, .hljs-template-tag, .hljs-addition,
 .hljs-regexp, .hljs-meta .hljs-string { color: var(--hl-string); }
 .hljs-number, .hljs-symbol, .hljs-bullet { color: var(--hl-number); }
 .hljs-title, .hljs-section, .hljs-title.function_,
 .hljs-title.class_ { color: var(--hl-def); }
 .hljs-variable, .hljs-template-variable, .hljs-params { color: var(--hl-var2); }
+/* YAML/JSON keys (.hljs-attr) get the PROPERTY colour, NOT the string colour —
+   otherwise a `key: value` file came out key AND value the same green and read as
+   one flat block (serekkr, 28/10/2026: "yaml vedo tutto verde e brutto"). */
+.hljs-attr { color: var(--hl-property); }
 /* Tag names red, like Obsidian: measured #fb484d on `<clickhouse>` / `<path>`. The
    angle brackets come out a dimmer red there (#97393b on a 1px stroke); painting
    .hljs-tag the same red as .hljs-name puts bracket and name on one colour, which is
