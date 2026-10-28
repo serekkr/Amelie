@@ -4730,8 +4730,10 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .tv-filter.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 /* No hover effect on the section titles — nothing happens on mouse-over (serekkr,
-   28/10/2026: "lasciale cosi', quando passo sopra non deve fare niente"). */
-.todo-sec-head { display: flex; align-items: center; gap: 8px; margin: 18px 0 4px; font-family: var(--ui-font); font-size: 16px; font-weight: 600; color: var(--text-1); }
+   28/10/2026: "lasciale cosi', quando passo sopra non deve fare niente").
+   padding so the title clears the section's left edge: when dragging a task in, the
+   drop-hover inset green border used to clip the first letter of Today/Tomorrow. */
+.todo-sec-head { display: flex; align-items: center; gap: 8px; margin: 18px 0 4px; padding: 0 8px; font-family: var(--ui-font); font-size: 16px; font-weight: 600; color: var(--text-1); }
 .todo-section-overdue .todo-sec-head { color: var(--red, #e5534b); }
 .todo-sec-count { font-family: var(--editor-font); font-size: 12px; color: var(--text-3); }
 .todo-sec-empty { color: var(--text-3); font-size: 14px; padding: 4px 4px 8px; }
