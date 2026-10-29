@@ -55,10 +55,10 @@
      can override these; without an override the classic palette applies. */
   /* Heading ladder (view mode): distinct, common hues per level, no green (green is
      the accent used for inline code + italics). H1 blu, H2 ambra, H3 viola, H4 ciano. */
-  --h1: #5a84d4;
-  --h2: #5a84d4;
-  --h3: #5a84d4;
-  --h4: #5a84d4;
+  --h1: #3fb950;
+  --h2: #3fb950;
+  --h3: #3fb950;
+  --h4: #3fb950;
   --link: #5b8def;
   /* The default font, and the value the very first paint uses — applyAppearance
      overwrites both from the saved pref a moment later, so keep them equal to
@@ -452,10 +452,10 @@
      in the theme, not two that almost match. */
   /* Scala titoli comune: H1 blu, H2 ambra, H3 viola, H4 ciano (no verde — accento).
      serekkr 29/10/2026: su graphite H1 blu, H2 ambra. */
-  --h1: #5a84d4;
-  --h2: #5a84d4;
-  --h3: #5a84d4;
-  --h4: #5a84d4;
+  --h1: #3fb950;
+  --h2: #3fb950;
+  --h3: #3fb950;
+  --h4: #3fb950;
   /* Blue, and the only frankly blue thing in the theme: with a green accent a link
      can keep its own hue, which is the clearest way to say it is not an accent. It
      stayed put through the violet and navy accents that came before. */
@@ -1899,7 +1899,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
      Same dedicated value as #cm-mount .cm-inline-code. Block code (#preview-content pre
      code) resets background to none, so only inline code gets this. */
   background: color-mix(in srgb, #000 30%, var(--bg-0)); border: none;
-  border-radius: 4px; padding: 0 4px; color: var(--accent);
+  border-radius: 4px; padding: 0 4px; color: #5a84d4;
 }
 #preview-content pre {
   position: relative;
@@ -4562,7 +4562,7 @@ kbd {
   /* Darker pill than the shared --code-bg wash (serekkr, 29/10/2026: "più scura").
      Dedicated value so code blocks / view stay untouched. Tweak the 30% to taste. */
   background: color-mix(in srgb, #000 30%, var(--bg-0));
-  border-radius: 4px; padding: 0 3px; color: var(--accent);
+  border-radius: 4px; padding: 0 3px; color: #5a84d4;
 }
 
 /* Accent on hover for the ICONS of the two accent-coloured palettes — Green Dark (the
