@@ -763,10 +763,10 @@ html.is-mac #titlebar { padding-left: 72px; }
      29/10/2026: "farlo così anche sul lato sinistro dove sono le note/cartelle"). */
   background: color-mix(in srgb, #000 30%, var(--bg-0)); color: var(--text-0);
   border-radius: 6px;
-  /* Green accent strip on the left, like the Index's selected row (serekkr,
-     29/10/2026: "molto bella, mettilo anche sul pannello delle note"). Inset
-     box-shadow, not a border, so the text doesn't shift and it follows the radius. */
-  box-shadow: inset 2px 0 0 0 var(--accent);
+  /* Green accent strips on BOTH sides, like the Index's selected row (serekkr,
+     29/10/2026: "mettilo anche sul lato destro"). Inset box-shadow, not borders, so
+     the text doesn't shift and they follow the radius. */
+  box-shadow: inset 2px 0 0 0 var(--accent), inset -2px 0 0 0 var(--accent);
 }
 /* La riga su cui il tasto destro sta agendo: un BORDO grigio di 1px a LARGHEZZA PIENA,
    come Obsidian (serekkr 27/10/2026, "in obsidian mi sembrano uguali"). Il bordo NON sta
@@ -3304,7 +3304,9 @@ body.split-open .pane-flash::after {
   color: var(--text-2); cursor: pointer; line-height: 1.5;
   /* Wrap long headings instead of cutting them with an ellipsis. */
   white-space: normal; overflow-wrap: anywhere;
-  border-left: 2px solid transparent;
+  /* Both side borders reserved transparent so colouring them on .active never
+     reflows the row (serekkr, 29/10/2026 wanted the green strip on the right too). */
+  border-left: 2px solid transparent; border-right: 2px solid transparent;
   transition: color .12s, background .12s;
   user-select: none;
 }
@@ -3326,7 +3328,7 @@ body.split-open .pane-flash::after {
      marks it; the dark pill (same value as the inline-code chip and the sidebar's
      selected note) and the white text do the rest. The weight bump also reflowed the
      row a hair, so it's gone. */
-  color: var(--text-0); border-left-color: var(--accent);
+  color: var(--text-0); border-left-color: var(--accent); border-right-color: var(--accent);
   background: color-mix(in srgb, #000 30%, var(--bg-0)); font-weight: normal;
   border-radius: 6px;
 }
