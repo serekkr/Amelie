@@ -762,6 +762,7 @@ html.is-mac #titlebar { padding-left: 72px; }
   /* Same dark pill as the Index's selected row and the inline-code chip (serekkr,
      29/10/2026: "farlo così anche sul lato sinistro dove sono le note/cartelle"). */
   background: color-mix(in srgb, #000 30%, var(--bg-0)); color: var(--text-0);
+  border-radius: 6px;
 }
 /* La riga su cui il tasto destro sta agendo: un BORDO grigio di 1px a LARGHEZZA PIENA,
    come Obsidian (serekkr 27/10/2026, "in obsidian mi sembrano uguali"). Il bordo NON sta
@@ -3323,6 +3324,7 @@ body.split-open .pane-flash::after {
      row a hair, so it's gone. */
   color: var(--text-0); border-left-color: var(--accent);
   background: color-mix(in srgb, #000 30%, var(--bg-0)); font-weight: normal;
+  border-radius: 6px;
 }
 
 /* ─── Frontmatter inline date sep ───────────────────────────── */
