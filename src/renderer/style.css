@@ -4849,6 +4849,12 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 /* A divider line between the stacked sections (today / tomorrow / upcoming / done)
    so the voci read as separate blocks (serekkr, 28/10/2026). Not above the first. */
 .todo-section + .todo-section { border-top: 1px solid color-mix(in srgb, var(--text-1) 32%, transparent); margin-top: 12px; padding-top: 8px; }
+/* A touch of green at the start of each section that follows a divider (Tomorrow,
+   Upcoming, Done) — same accent strip used on the Index and the selected note
+   (serekkr, 29/10/2026). */
+.todo-section + .todo-section .todo-sec-head::before {
+  content: ''; align-self: stretch; width: 3px; border-radius: 2px; background: var(--accent); margin: 2px 2px 2px 0;
+}
 .todo-section.drop-hover { background: var(--accent-glow, rgba(91,141,239,.12)); box-shadow: inset 0 0 0 1px var(--accent); }
 .todo-row { cursor: grab; }
 .todo-row:active { cursor: grabbing; }
