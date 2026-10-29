@@ -763,6 +763,10 @@ html.is-mac #titlebar { padding-left: 72px; }
      29/10/2026: "farlo così anche sul lato sinistro dove sono le note/cartelle"). */
   background: color-mix(in srgb, #000 30%, var(--bg-0)); color: var(--text-0);
   border-radius: 6px;
+  /* Green accent strip on the left, like the Index's selected row (serekkr,
+     29/10/2026: "molto bella, mettilo anche sul pannello delle note"). Inset
+     box-shadow, not a border, so the text doesn't shift and it follows the radius. */
+  box-shadow: inset 2px 0 0 0 var(--accent);
 }
 /* La riga su cui il tasto destro sta agendo: un BORDO grigio di 1px a LARGHEZZA PIENA,
    come Obsidian (serekkr 27/10/2026, "in obsidian mi sembrano uguali"). Il bordo NON sta
