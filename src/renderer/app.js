@@ -11307,13 +11307,9 @@ function setupSettings() {
       if (el._saveDebounce) clearTimeout(el._saveDebounce);
       el._saveDebounce = setTimeout(async () => {
         try { await saveSettings(); } catch (_) {}
-        const wrap = el.closest('.sip-custom-wrap');
-        const badge = wrap && wrap.querySelector('.dailytime-saved');
-        if (badge) {
-          badge.style.display = '';
-          if (el._savedTimer) clearTimeout(el._savedTimer);
-          el._savedTimer = setTimeout(() => { badge.style.display = 'none'; }, 1600);
-        }
+        // No per-field "Saved" badge next to the time anymore — the single top-right
+        // "✓ Salvato" flash is the confirmation now (serekkr, 29/10/2026: the two were
+        // redundant).
         try { const st = await window.inkwell.getSyncState?.(); updateBackupDestLines(st || {}, null); } catch (_) {}
       }, 2000);
     });
