@@ -19357,6 +19357,7 @@ function showTodoView() {
 }
 function openKanban() { openTodoView(); }   // alias (voce ToDo nell'albero / addTodo)
 let _todoReturnPath = null;   // the note the board was opened from
+let _todoOpenAddPending = false;   // one-shot: next renderTodoView opens the quick-add editor (from addTodo)
 
 async function closeKanban() {
   if (!_kanbanOpen) return;
@@ -19388,13 +19389,27 @@ async function renderTodoView(opts = {}) {
   const addEd = addRow && addRow.querySelector('.todo-editor');
   const keepAdd = !!addEd && !opts.resetAdd;
   if (!keepAdd) _todoEditorClose = null;   // discard edit editors / a reset add editor
+  // Open the quick-add editor as part of THIS render (not via a delayed click after
+  // it) so "Create a new todo" shows the board with the editor already open, with no
+  // flash of the closed add-row first (serekkr, 29/10/2026). Consume the flag once.
+  const openAdd = !!opts.openAdd || _todoOpenAddPending;
+  _todoOpenAddPending = false;
   const list = $('todo-view-list'); if (!list) return;
   let data; try { data = await window.inkwell.todo.list(); } catch(_) { data = _emptyTodoBuckets(); }
   _todoCache = data;
   document.querySelectorAll('.tv-filter').forEach(b => b.classList.toggle('active', b.dataset.f === _todoFilter));
   if (addRow) {
-    addRow.style.display = (_todoFilter === 'done') ? 'none' : '';
-    if (!keepAdd) { addRow.innerHTML = ''; addRow.appendChild(_todoAddTrigger()); }
+    const onDone = (_todoFilter === 'done');
+    addRow.style.display = onDone ? 'none' : '';
+    if (!keepAdd) {
+      addRow.innerHTML = '';
+      if (openAdd && !onDone) {
+        const bucket = _todoFilter === 'upcoming' ? 'upcoming' : 'today';
+        addRow.appendChild(_todoInlineEditor(bucket, null));   // editor already open
+      } else {
+        addRow.appendChild(_todoAddTrigger());
+      }
+    }
   }
   list.innerHTML = '';
   // "Scaduti" (overdue): a VIRTUAL section at the top gathering every not-done task
@@ -19706,12 +19721,14 @@ function _todoInlineEditor(bucket, it) {
 }
 
 async function addTodo() {
-  const wasOpen = _kanbanOpen;
-  openTodoView();   // re-renders, clearing any stray open editor
-  setTimeout(() => {
-    const t = $('todo-add-row')?.querySelector('.todo-add-trigger');
-    if (t && !document.querySelector('.todo-editor')) t.click();
-  }, wasOpen ? 30 : 150);
+  // Show the board with the quick-add ALREADY open (no closed-then-open flash). The
+  // flag is consumed by the next renderTodoView: when we're not on the board yet it
+  // fires through openTodoView → switchTab → showTodoView → renderTodoView; when we
+  // already are, openTodoView would no-op, so we render here.
+  const already = _kanbanOpen && $('todo-view') && $('todo-view').style.display !== 'none';
+  _todoOpenAddPending = true;
+  if (already) await renderTodoView({ openAdd: true, resetAdd: true });
+  else openTodoView();
 }
 
 // ── Notifiche ToDo (scadenze + avvisi) ─────────────────────────────────────
