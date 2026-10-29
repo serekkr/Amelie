@@ -19878,6 +19878,62 @@
       }
     }
   }, { decorations: (v) => v.decorations });
+  var _inFence = (fences, pos) => {
+    for (let i2 = 0; i2 + 1 < fences.length; i2 += 2) {
+      if (pos > fences[i2] && pos < fences[i2 + 1]) return true;
+    }
+    return false;
+  };
+  var _hLineDeco = {};
+  var headLineDeco = (lvl) => _hLineDeco[lvl] || (_hLineDeco[lvl] = Decoration.line({ class: "cm-md-heading cm-md-h" + lvl }));
+  var headingSizePlugin = ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.decorations = this.build(view);
+    }
+    update(u) {
+      if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view);
+    }
+    build(view) {
+      const builder = new RangeSetBuilder();
+      const doc2 = view.state.doc;
+      const fences = view.state.field(fenceField);
+      for (const { from, to } of view.visibleRanges) {
+        let p = from;
+        while (p <= to) {
+          const line = doc2.lineAt(p);
+          const m = /^(#{1,6})(?:\s|$)/.exec(line.text);
+          if (m && !_inFence(fences, line.from)) builder.add(line.from, line.from, headLineDeco(m[1].length));
+          p = line.to + 1;
+        }
+      }
+      return builder.finish();
+    }
+  }, { decorations: (v) => v.decorations });
+  var _boldMark = Decoration.mark({ class: "cm-md-bold" });
+  var boldPlugin = ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.decorations = this.build(view);
+    }
+    update(u) {
+      if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view);
+    }
+    build(view) {
+      const builder = new RangeSetBuilder();
+      const doc2 = view.state.doc;
+      const fences = view.state.field(fenceField);
+      const re = /\*\*(?!\s)([^*\n]+?)\*\*/g;
+      for (const { from, to } of view.visibleRanges) {
+        const text = doc2.sliceString(from, to);
+        let m;
+        re.lastIndex = 0;
+        while (m = re.exec(text)) {
+          const start = from + m.index;
+          if (!_inFence(fences, start)) builder.add(start, start + m[0].length, _boldMark);
+        }
+      }
+      return builder.finish();
+    }
+  }, { decorations: (v) => v.decorations });
   var mdLinkMark = Decoration.mark({ class: "cm-md-link" });
   var LINK_RE = /!?\[(?:[^\[\]\n]|\[[^\[\]\n]*\])*\]\([^)\n]*\)|\[\[[^\]\n]*\]\]/g;
   var linkColorPlugin = ViewPlugin.fromClass(class {
@@ -20339,6 +20395,8 @@
             // CONTENT must stay PLAIN in edit mode — syntax colours belong to view/reading
             // mode only. codeBlockPlugin stays, so blocks keep their grey background box
             // (visually distinct) while editing, just uncoloured.
+            headingSizePlugin,
+            boldPlugin,
             linkColorPlugin,
             tagColorPlugin,
             tickPlugin,

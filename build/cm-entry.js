@@ -547,6 +547,55 @@ const codeHighlightPlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: (v) => v.decorations });
 
+// ── Heading SIZE + bold in edit mode (Obsidian-style) ──────────────────────────
+// serekkr, 29/10/2026: in edit mode the `# …`/`## …` lines should read at the
+// view-mode size, and `**bold**` should look bold — like Obsidian's editor. Both
+// are cheap viewport-scoped decorations (no markdown Lezer parser), and both skip
+// fenced code blocks. Size/weight only — the heading COLOUR stays in view mode.
+const _inFence = (fences, pos) => { for (let i = 0; i + 1 < fences.length; i += 2) { if (pos > fences[i] && pos < fences[i + 1]) return true; } return false; };
+const _hLineDeco = {};
+const headLineDeco = (lvl) => (_hLineDeco[lvl] || (_hLineDeco[lvl] = Decoration.line({ class: 'cm-md-heading cm-md-h' + lvl })));
+const headingSizePlugin = ViewPlugin.fromClass(class {
+  constructor(view) { this.decorations = this.build(view); }
+  update(u) { if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view); }
+  build(view) {
+    const builder = new RangeSetBuilder();
+    const doc = view.state.doc;
+    const fences = view.state.field(fenceField);
+    for (const { from, to } of view.visibleRanges) {
+      let p = from;
+      while (p <= to) {
+        const line = doc.lineAt(p);
+        const m = /^(#{1,6})(?:\s|$)/.exec(line.text);
+        if (m && !_inFence(fences, line.from)) builder.add(line.from, line.from, headLineDeco(m[1].length));
+        p = line.to + 1;
+      }
+    }
+    return builder.finish();
+  }
+}, { decorations: (v) => v.decorations });
+
+const _boldMark = Decoration.mark({ class: 'cm-md-bold' });
+const boldPlugin = ViewPlugin.fromClass(class {
+  constructor(view) { this.decorations = this.build(view); }
+  update(u) { if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view); }
+  build(view) {
+    const builder = new RangeSetBuilder();
+    const doc = view.state.doc;
+    const fences = view.state.field(fenceField);
+    const re = /\*\*(?!\s)([^*\n]+?)\*\*/g;   // **bold**, same line, no leading space
+    for (const { from, to } of view.visibleRanges) {
+      const text = doc.sliceString(from, to);
+      let m; re.lastIndex = 0;
+      while ((m = re.exec(text))) {
+        const start = from + m.index;
+        if (!_inFence(fences, start)) builder.add(start, start + m[0].length, _boldMark);
+      }
+    }
+    return builder.finish();
+  }
+}, { decorations: (v) => v.decorations });
+
 // ── Blue links (edit mode) ─────────────────────────────────────────────────────
 // Colour every markdown link + wiki-link + attachment link blue, WITHOUT the markdown
 // language parser (which was the O(doc) cost we removed). A cheap regex runs over ONLY
@@ -1158,6 +1207,8 @@ window.AmelieCM = {
           // CONTENT must stay PLAIN in edit mode — syntax colours belong to view/reading
           // mode only. codeBlockPlugin stays, so blocks keep their grey background box
           // (visually distinct) while editing, just uncoloured.
+          headingSizePlugin,
+          boldPlugin,
           linkColorPlugin,
           tagColorPlugin,
           tickPlugin,

@@ -1675,6 +1675,14 @@ kbd {
 #cm-mount .cm-hl-property{ color: var(--hl-property); }
 #cm-mount .cm-hl-type    { color: var(--hl-type); }
 #cm-mount .cm-hl-var2    { color: var(--hl-var2); }
+/* Edit mode: headings sized like VIEW mode (Obsidian-style), and **bold** shown bold
+   (serekkr, 29/10/2026). Size/weight only — the heading COLOUR stays in view mode. */
+#cm-mount .cm-md-heading { font-weight: 700; }
+#cm-mount .cm-md-h1 { font-size: 1.9em; }
+#cm-mount .cm-md-h2 { font-size: 1.45em; }
+#cm-mount .cm-md-h3 { font-size: 1.15em; }
+#cm-mount .cm-md-h4, #cm-mount .cm-md-h5, #cm-mount .cm-md-h6 { font-size: 1em; }
+#cm-mount .cm-md-bold { font-weight: 700; }
 /* ── Line-number gutter (edit view only, toggled in Settings → General) ──────
    Sits inside the editor's existing 60px left padding so the text column does
    NOT shift. Numbers are absolutely positioned at each LOGICAL line's measured
