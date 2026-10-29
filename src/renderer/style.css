@@ -1456,8 +1456,8 @@ kbd {
 #editor-highlight .hl-hide { color: transparent; }
 /* In-note search match highlight (rendered in the overlay because the
    textarea text is transparent — only this overlay is visible). */
-#editor-highlight .search-match { background: rgba(255,221,87,.30); border-radius: 2px; }
-#editor-highlight .search-match.current { background: rgba(255,221,87,.55); outline: 1px solid rgba(255,221,87,.85); }
+#editor-highlight .search-match { background: color-mix(in srgb, var(--yellow) 72%, #000 28%); border-radius: 2px; }
+#editor-highlight .search-match.current { background: color-mix(in srgb, var(--yellow) 92%, #000 8%); outline: 1px solid var(--yellow); border-radius: 2px; }
 /* ==text== markdown highlight — yellow wash ONLY in the rendered preview
    (<mark class="md-highlight">). In edit mode it stays plain (no yellow). */
 #editor-highlight .md-hl { background: transparent; }
@@ -1598,10 +1598,9 @@ kbd {
    ahead of you — so you can tell which one the counter points at without comparing
    line weights. Green marks "this one" everywhere else in the app too. */
 #cm-mount .cm-search-hit {
-  background: transparent; border-radius: 2px;
-  outline: 1px solid color-mix(in srgb, var(--yellow) 70%, transparent);
+  background: color-mix(in srgb, var(--yellow) 72%, #000 28%); border-radius: 2px;
 }
-#cm-mount .cm-search-current { background: transparent; outline: 2px solid var(--accent); }
+#cm-mount .cm-search-current { background: color-mix(in srgb, var(--yellow) 92%, #000 8%); border-radius: 2px; outline: 1px solid var(--yellow); }
 /* Same monospace as the rendered block above, so a fence looks identical either side
    of the edit/view toggle — which is the rule the old proportional choice existed to
    protect, kept here while changing what the two agree ON. */
@@ -4032,10 +4031,9 @@ body.split-open .pane-flash::after {
 /* Same treatment in the preview as in the editor (see .cm-search-hit): outlined, never
    filled, and the text keeps its own colour. */
 .note-search-highlight {
-  background: transparent; border-radius: 2px;
-  outline: 1px solid color-mix(in srgb, var(--yellow) 70%, transparent);
+  background: color-mix(in srgb, var(--yellow) 72%, #000 28%); border-radius: 2px;
 }
-.note-search-highlight.current { background: transparent; outline: 2px solid var(--accent); }
+.note-search-highlight.current { background: color-mix(in srgb, var(--yellow) 92%, #000 8%); border-radius: 2px; outline: 1px solid var(--yellow); }
 
 /* ─── File drop overlay ─────────────────────────────────────── */
 /* ─── PDF overlay ───────────────────────────────────────────── */
