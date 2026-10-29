@@ -1192,7 +1192,9 @@ kbd {
   padding: 0 1px; border-radius: 3px;
   transition: color .12s, background .12s;
 }
-.note-breadcrumb .crumb:hover { color: var(--accent); text-decoration: underline; }
+/* Hover changes ONLY the cursor (the hand, from .crumb) — no colour, no underline,
+   no tooltip: serekkr asked that the title not react on hover beyond the pointer
+   (30/10/2026). The reveal/highlight in the tree happens on click. */
 /* The note itself: prominent, like a title — e grande come gli altri titoli di
    pannello (pdf, immagine, media), non come il percorso che la precede. */
 .note-breadcrumb .crumb-note { color: var(--text-0); font-weight: 500; font-size: var(--title-font-size); }

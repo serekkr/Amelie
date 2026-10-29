@@ -4319,7 +4319,8 @@ function renderBreadcrumb(tab) {
     const seg = document.createElement('span');
     seg.className = 'crumb crumb-folder';
     seg.textContent = part;
-    seg.title = folderPath;
+    // No title tooltip: hovering the path should only change the cursor to a hand,
+    // not pop the folder path (serekkr, 30/10/2026). The click still reveals it in the tree.
     seg.addEventListener('click', () => revealFolderInTree(folderPath));
     bc.appendChild(seg);
 
@@ -4334,7 +4335,8 @@ function renderBreadcrumb(tab) {
   const noteSeg = document.createElement('span');
   noteSeg.className = 'crumb crumb-note';
   noteSeg.textContent = noteName;
-  noteSeg.title = tab.path;
+  // No title tooltip on hover — just the hand cursor; the click still reveals + highlights
+  // the note in the left tree (serekkr, 30/10/2026).
   noteSeg.addEventListener('click', () => revealNoteInTree(tab.path));
   // Double click → rename inline directly.
   noteSeg.addEventListener('dblclick', (e) => {
