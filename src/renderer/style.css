@@ -4716,8 +4716,8 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .dp-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
 .dp-clear { background: transparent; border: none; color: var(--text-3); font-size: 13px; cursor: pointer; font-family: var(--ui-font); padding: 5px 8px; }
 .dp-clear:hover { color: var(--red); }
-.dp-ok { background: var(--accent); border: none; color: #fff; border-radius: 6px; padding: 5px 18px; font-size: 14px; font-weight: 500; cursor: pointer; font-family: var(--ui-font); }
-.dp-ok:hover { filter: brightness(1.1); }
+.dp-ok { background: var(--bg-2); border: 1px solid var(--border-light); color: var(--text-0); border-radius: 6px; padding: 5px 18px; font-size: 14px; font-weight: 500; cursor: pointer; font-family: var(--ui-font); }
+.dp-ok:hover { background: var(--bg-3); border-color: var(--accent); }
 
 /* Emoji picker */
 #emoji-picker { position: fixed; z-index: 3000; width: 372px; background: var(--bg-2); border: 1px solid var(--border-light); border-radius: 10px; box-shadow: 0 16px 50px rgba(0,0,0,.55); padding: 8px; }

@@ -11346,10 +11346,10 @@ function setupSettings() {
     const hc = mkCol('H', 24), mc = mkCol('M', 60);
     pop.append(hc.col, mc.col); document.body.appendChild(pop);
     const parse = () => { const m = /^(\d{1,2}):(\d{2})$/.exec(input.value || ''); return m ? [Math.min(23, +m[1]), Math.min(59, +m[2])] : [null, null]; };
-    const mark = () => { const [h, mi] = parse();
+    const mark = () => { let [h, mi] = parse(); if (h == null) { h = 12; mi = 0; }   // default 12:00 shown selected
       hc.list.querySelectorAll('.tp-item').forEach(b => b.classList.toggle('sel', +b.dataset.v === h));
       mc.list.querySelectorAll('.tp-item').forEach(b => b.classList.toggle('sel', +b.dataset.v === mi)); };
-    const setPart = (which, v) => { let [h, mi] = parse(); if (h == null) { h = 18; mi = 0; }
+    const setPart = (which, v) => { let [h, mi] = parse(); if (h == null) { h = 12; mi = 0; }
       if (which === 'h') h = v; else mi = v;
       input.value = String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
       input.dispatchEvent(new Event('change', { bubbles: true })); mark(); };
@@ -19358,6 +19358,7 @@ function showTodoView() {
 function openKanban() { openTodoView(); }   // alias (voce ToDo nell'albero / addTodo)
 let _todoReturnPath = null;   // the note the board was opened from
 let _todoOpenAddPending = false;   // one-shot: next renderTodoView opens the quick-add editor (from addTodo)
+let _todoOpenEditFor = null;       // one-shot: next renderTodoView opens THIS task (by .file) in its edit editor
 
 async function closeKanban() {
   if (!_kanbanOpen) return;
@@ -19481,6 +19482,9 @@ function _todoAddTrigger() {
 }
 
 function _todoRow(it) {
+  // Asked to open this task in edit (from a click on its pencil/title while another
+  // editor was open) → render it AS the editor instead of a row.
+  if (_todoOpenEditFor != null && it.file === _todoOpenEditFor) { _todoOpenEditFor = null; return _todoInlineEditor(it.bucket, it); }
   const row = document.createElement('div'); row.className = 'todo-row' + (it.bucket === 'done' ? ' done' : '');
   row.draggable = true;
   row.addEventListener('dragstart', e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/file', it.file); e.dataTransfer.setData('text/from', it.bucket); _todoDragFrom = it.bucket; _todoDragFile = it.file; row.classList.add('dragging'); });
@@ -19516,12 +19520,12 @@ function _todoRow(it) {
   const main = document.createElement('div'); main.className = 'todo-main';
   const title = document.createElement('div'); title.className = 'todo-title'; title.textContent = it.title || '(vuoto)';
   title.addEventListener('click', () => {
-    // Close any editor already open first — including the STICKY new-task quick-add
-    // at the top — so clicking edit on a task switches straight to editing it
-    // (serekkr, 29/10/2026). _todoEditorClose swaps the open editor back for its row
-    // (or the + trigger) in place, no re-render.
-    if (_todoEditorClose) { try { _todoEditorClose(); } catch (_) {} }
-    row.replaceWith(_todoInlineEditor(it.bucket, it));
+    // Open THIS task in edit, closing whatever editor is open first — including the
+    // STICKY new-task quick-add at the top (serekkr, 29/10/2026). Done via a flagged
+    // re-render (resetAdd closes the quick-add; _todoRow opens the editor for this
+    // item) so it's robust regardless of event timing / stale rows.
+    _todoOpenEditFor = it.file;
+    renderTodoView({ resetAdd: true });
   });
   main.appendChild(title);
   if (it.due) {
@@ -19542,12 +19546,12 @@ function _todoRow(it) {
   ed.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
   ed.addEventListener('click', e => {
     e.stopPropagation();
-    // Close any editor already open first — including the STICKY new-task quick-add
-    // at the top — so clicking edit on a task switches straight to editing it
-    // (serekkr, 29/10/2026). _todoEditorClose swaps the open editor back for its row
-    // (or the + trigger) in place, no re-render.
-    if (_todoEditorClose) { try { _todoEditorClose(); } catch (_) {} }
-    row.replaceWith(_todoInlineEditor(it.bucket, it));
+    // Open THIS task in edit, closing whatever editor is open first — including the
+    // STICKY new-task quick-add at the top (serekkr, 29/10/2026). Done via a flagged
+    // re-render (resetAdd closes the quick-add; _todoRow opens the editor for this
+    // item) so it's robust regardless of event timing / stale rows.
+    _todoOpenEditFor = it.file;
+    renderTodoView({ resetAdd: true });
   });
   actions.appendChild(ed);
   if (it.bucket !== 'done') {
@@ -19579,7 +19583,7 @@ function _buildDateField(initial) {
   const pop = document.createElement('div'); pop.className = 'dp-pop'; pop.style.display = 'none';
   let view = value && !isNaN(new Date(value)) ? new Date(value) : new Date();
   let selDate = value && !isNaN(new Date(value)) ? new Date(value) : null;
-  let hh = selDate ? selDate.getHours() : 9, mm = selDate ? selDate.getMinutes() : 0;
+  let hh = selDate ? selDate.getHours() : 12, mm = selDate ? selDate.getMinutes() : 0;   // default 12:00
   function renderCal() {
     pop.innerHTML = '';
     // Calendar (left) and time (right) sit side by side in .dp-body, split by a
@@ -19610,7 +19614,6 @@ function _buildDateField(initial) {
     }
     cal.appendChild(grid);
     const timeRow = document.createElement('div'); timeRow.className = 'dp-time';
-    const clk = document.createElement('span'); clk.textContent = '🕒';
     // Dark hour/minute columns — same look as the backup time picker (.tp-*), replacing
     // the native <select> whose dropdown painted a blue we can't theme (serekkr, 28/10).
     const mkTcol = (count, step, cur, set) => {
@@ -19630,7 +19633,7 @@ function _buildDateField(initial) {
     const hCol = mkTcol(24, 1, hh, v => hh = v);
     const mCol = mkTcol(60, 5, mm, v => mm = v);
     const colon = document.createElement('span'); colon.textContent = ':'; colon.className = 'dp-colon';
-    timeRow.append(clk, hCol, colon, mCol);
+    timeRow.append(hCol, colon, mCol);
     const body = document.createElement('div'); body.className = 'dp-body';
     body.append(cal, timeRow); pop.appendChild(body);
     const act = document.createElement('div'); act.className = 'dp-actions';
