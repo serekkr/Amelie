@@ -4661,7 +4661,7 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .kc-meta { display: flex; gap: 6px; flex-wrap: wrap; }
 .kc-due, .kc-alert {
   background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px;
-  color: var(--text-1); font-family: var(--ui-font); font-size: 13px; padding: 5px 7px; outline: none; flex: 1; min-width: 110px;
+  color: var(--text-1); font-family: var(--ui-font); font-size: 14.5px; padding: 8px 10px; outline: none; flex: 1; min-width: 110px;
   /* Dark native dropdown (no bright cyan/blue/purple system highlight on the
      selected option) — serekkr, 29/10/2026. color-scheme darkens the menu;
      accent-color forces the highlighted option to a dark grey instead of the
@@ -4690,7 +4690,7 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
    shares the row — with flex-wrap, that field drops to the next line instead of
    squeezing the date (serekkr, 28/10/2026: "la data si vede tagliata"). */
 .dp-wrap { position: relative; flex: 1; min-width: 185px; }
-.dp-trigger { display: flex; align-items: center; gap: 7px; width: 100%; box-sizing: border-box; background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; color: var(--text-1); font-family: var(--ui-font); font-size: 13px; padding: 6px 9px; cursor: pointer; text-align: left; }
+.dp-trigger { display: flex; align-items: center; gap: 7px; width: 100%; box-sizing: border-box; background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; color: var(--text-1); font-family: var(--ui-font); font-size: 14.5px; padding: 8px 10px; cursor: pointer; text-align: left; }
 .dp-trigger:hover { border-color: var(--border-light); }
 .dp-trigger svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--accent); }
 .dp-trigger span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
