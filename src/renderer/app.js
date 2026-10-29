@@ -13196,7 +13196,7 @@ async function openSettings() {
     const dt = $('cfg-local-dailytime');
     if (dt) dt.value = (/^\d{1,2}:\d{2}$/.test(cfg.sync?.local?.dailyTime || '')) ? cfg.sync.local.dailyTime : '18:00';
     const rdt = $('cfg-remote-dailytime');
-    if (rdt) rdt.value = (/^\d{1,2}:\d{2}$/.test(cfg.sync?.remoteDailyTime || '')) ? cfg.sync.remoteDailyTime : (dt ? dt.value : '18:00');
+    if (rdt) rdt.value = (/^\d{1,2}:\d{2}$/.test(cfg.sync?.remoteDailyTime || '')) ? cfg.sync.remoteDailyTime : (dt ? dt.value : '12:00');
     try { updateDailyTimeWraps(); } catch (_) {}
   }
   if ($('cfg-backup-keep'))    $('cfg-backup-keep').value    = String(cfg.sync?.local?.keepLast ?? 5);
@@ -13465,8 +13465,8 @@ function buildFormFromConfig(cfg) {
     webdavUrl: wdSrc.url || '', webdavUser: wdSrc.username || '', webdavPass: wdSrc.password || '',
     backupFolder, syncFolder, localPath: (s.local && s.local.path) || '',
     backupIntervalMinutes: (s.local && s.local.intervalMinutes) || 1440,
-    backupDailyTime: (s.local && /^\d{1,2}:\d{2}$/.test(s.local.dailyTime || '')) ? s.local.dailyTime : '18:00',
-    backupRemoteDailyTime: (/^\d{1,2}:\d{2}$/.test(s.remoteDailyTime || '')) ? s.remoteDailyTime : '20:00',
+    backupDailyTime: (s.local && /^\d{1,2}:\d{2}$/.test(s.local.dailyTime || '')) ? s.local.dailyTime : '12:00',
+    backupRemoteDailyTime: (/^\d{1,2}:\d{2}$/.test(s.remoteDailyTime || '')) ? s.remoteDailyTime : '12:00',
     keepLast: (s.local && s.local.keepLast) != null ? s.local.keepLast
       : (s.vpn && s.vpn.keepLast) != null ? s.vpn.keepLast : 5,
     syncIntervalMinutes: tw.intervalMinutes || 15,
