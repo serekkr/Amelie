@@ -4694,33 +4694,33 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .dp-trigger:hover { border-color: var(--border-light); }
 .dp-trigger svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--accent); }
 .dp-trigger span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dp-pop { position: absolute; z-index: 50; top: calc(100% + 4px); left: 0; width: auto; background: var(--bg-2); border: 1px solid var(--border-light); border-radius: 10px; box-shadow: 0 16px 50px rgba(0,0,0,.55); padding: 10px; }
+.dp-pop { position: absolute; z-index: 50; top: calc(100% + 4px); left: 0; width: auto; background: var(--bg-2); border: 1px solid var(--border-light); border-radius: 12px; box-shadow: 0 16px 50px rgba(0,0,0,.55); padding: 16px; }
 /* Calendar (left) + time (right), side by side. */
-.dp-body { display: flex; gap: 12px; align-items: stretch; }
-.dp-cal { width: 224px; flex: 0 0 auto; }
+.dp-body { display: flex; gap: 18px; align-items: stretch; }
+.dp-cal { width: 288px; flex: 0 0 auto; }
 .dp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.dp-month { font-family: var(--ui-font); font-size: 14px; font-weight: 600; color: var(--text-0); text-transform: capitalize; }
-.dp-nav { width: 26px; height: 26px; border: none; background: transparent; color: var(--text-2); border-radius: 6px; cursor: pointer; font-size: 19px; line-height: 1; }
+.dp-month { font-family: var(--ui-font); font-size: 16px; font-weight: 600; color: var(--text-0); text-transform: capitalize; }
+.dp-nav { width: 32px; height: 32px; border: none; background: transparent; color: var(--text-2); border-radius: 6px; cursor: pointer; font-size: 23px; line-height: 1; }
 .dp-nav:hover { background: var(--bg-4); color: var(--text-0); }
-.dp-weekdays, .dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-.dp-weekdays span { text-align: center; font-size: 11px; color: var(--text-3); padding: 2px 0; font-family: var(--editor-font); }
-.dp-day { height: 28px; border: none; background: transparent; color: var(--text-1); border-radius: 6px; cursor: pointer; font-size: 13px; font-family: var(--ui-font); }
+.dp-weekdays, .dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.dp-weekdays span { text-align: center; font-size: 13px; color: var(--text-3); padding: 3px 0; font-family: var(--editor-font); }
+.dp-day { height: 36px; border: none; background: transparent; color: var(--text-1); border-radius: 7px; cursor: pointer; font-size: 15px; font-family: var(--ui-font); }
 .dp-day:hover:not(.empty) { background: var(--bg-4); color: var(--text-0); }
 .dp-day.empty { cursor: default; }
 .dp-day.today { box-shadow: inset 0 0 0 1px var(--border-light); }
 .dp-day.sel { background: var(--accent); color: #fff; }
 /* Time sits to the RIGHT of the calendar, split off by a VERTICAL divider
    (serekkr, 28/10/2026 — moved from under the grid; there's room to the side). */
-.dp-time { display: flex; align-items: center; gap: 6px; margin: 0; justify-content: center; border-left: 1px solid var(--border); padding-left: 12px; }
+.dp-time { display: flex; align-items: center; gap: 8px; margin: 0; justify-content: center; border-left: 1px solid var(--border); padding-left: 16px; }
 .dp-time select { background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; color: var(--text-1); font-family: var(--editor-font); font-size: 13px; padding: 4px 6px; outline: none; }
 .dp-time-clk { display: inline-flex; align-items: center; color: var(--text-2); }
-.dp-time-clk svg { width: 15px; height: 15px; }
+.dp-time-clk svg { width: 18px; height: 18px; }
 /* Dark hour/minute columns (reuse the backup .tp-* look); taller now that they have
    the full height of the calendar beside them. */
-.dp-time .dp-tp-list { max-height: 196px; min-width: 46px; }
-.dp-time .tp-item { padding: 4px 0; }
+.dp-time .dp-tp-list { max-height: 252px; min-width: 56px; }
+.dp-time .tp-item { padding: 6px 0; font-size: 15px; }
 .dp-colon { color: var(--text-3); }
-.dp-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.dp-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .dp-clear { background: transparent; border: none; color: var(--text-3); font-size: 13px; cursor: pointer; font-family: var(--ui-font); padding: 5px 8px; }
 .dp-clear:hover { color: var(--red); }
 .dp-ok { background: var(--bg-2); border: 1px solid var(--border-light); color: var(--text-0); border-radius: 6px; padding: 5px 18px; font-size: 14px; font-weight: 500; cursor: pointer; font-family: var(--ui-font); }
