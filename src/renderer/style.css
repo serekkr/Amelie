@@ -53,10 +53,12 @@
   --focus-ring: #c9a96e;
   /* Headings & links — themable: every [data-theme] block (built-in or custom)
      can override these; without an override the classic palette applies. */
-  --h1: #4ade80;
-  --h2: #34d399;
-  --h3: #2dd4bf;
-  --h4: #6ee7b7;
+  /* Heading ladder (view mode): distinct, common hues per level, no green (green is
+     the accent used for inline code + italics). H1 blu, H2 viola, H3 ambra, H4 ciano. */
+  --h1: #61afef;
+  --h2: #c678dd;
+  --h3: #e5c07b;
+  --h4: #56b6c2;
   --link: #5b8def;
   /* The default font, and the value the very first paint uses — applyAppearance
      overwrites both from the saved pref a moment later, so keep them equal to
@@ -1805,10 +1807,13 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
    editor, where markdown is all white now) — the hierarchy reads from SIZE, not
    colour. Was per-heading --h1..--h4 (greens/blues) which the user found harder to
    read / inconsistent with the edit view. */
-#preview-content h1 { font-size: 1.9em; color: var(--text-0); border-bottom: 1px solid color-mix(in srgb, var(--text-0) 18%, transparent); padding-bottom: .3em; }
-#preview-content h2 { font-size: 1.45em; color: var(--text-0); }
-#preview-content h3 { font-size: 1.15em; color: var(--text-0); }
-#preview-content h4 { font-size: 1em;    color: var(--text-0); }
+/* Coloured heading ladder, one hue per level (# ## ### ####), VIEW/reading mode only
+   — the edit overlay stays plain (serekkr, 29/10/2026). Each theme supplies its own
+   --h1..--h4; the default set is a varied, conventional blue/purple/amber/cyan. */
+#preview-content h1 { font-size: 1.9em; color: var(--h1); border-bottom: 1px solid color-mix(in srgb, var(--text-0) 18%, transparent); padding-bottom: .3em; }
+#preview-content h2 { font-size: 1.45em; color: var(--h2); }
+#preview-content h3 { font-size: 1.15em; color: var(--h3); }
+#preview-content h4 { font-size: 1em;    color: var(--h4); }
 /* h5/h6 had NO font-size of their own, so the browser default took over (0.83em /
    0.67em = 12.45px / 10.05px against a 15px note): "##### PFSENSE 1" came out
    SMALLER than the text around it, and smaller than the same line in the editor,
