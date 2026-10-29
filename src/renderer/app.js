@@ -19251,6 +19251,37 @@ function _reorderTodo(bucket, file, beforeFile) {
 const ALERT_OPTS = [['', 'todo.no_alert'], ['5', 'todo.alert_5'], ['15', 'todo.alert_15'], ['30', 'todo.alert_30'], ['60', 'todo.alert_60'], ['1440', 'todo.alert_1d'], ['custom', 'todo.alert_custom']];
 const ALERT_PRESETS = ['5', '15', '30', '60', '1440'];
 
+// A small DARK custom dropdown replacing a native <select>: Chromium paints the
+// native popup with the OS highlight (blue/cyan/purple on hover and selection)
+// that CSS can't tame, so we draw our own (serekkr, 29/10/2026). opts: [[value,
+// label],…]. Returns { el, get() }. Hover/selection are dark, on-theme.
+function _buildDarkSelect(opts, current, onChange) {
+  const wrap = document.createElement('div'); wrap.className = 'kc-sel';
+  let value = current;
+  const labelOf = (v) => { const o = opts.find(x => x[0] === v); return o ? o[1] : (opts[0] ? opts[0][1] : ''); };
+  const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'kc-sel-btn';
+  const txt = document.createElement('span'); txt.className = 'kc-sel-txt'; txt.textContent = labelOf(value);
+  const car = document.createElement('span'); car.className = 'kc-sel-caret'; car.textContent = '▾';
+  btn.append(txt, car);
+  const pop = document.createElement('div'); pop.className = 'kc-sel-pop'; pop.style.display = 'none';
+  opts.forEach(([v, l]) => {
+    const item = document.createElement('button'); item.type = 'button';
+    item.className = 'kc-sel-item' + (v === value ? ' sel' : ''); item.textContent = l;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation(); value = v; txt.textContent = l;
+      pop.querySelectorAll('.kc-sel-item').forEach(x => x.classList.toggle('sel', x === item));
+      close(); if (onChange) onChange(v);
+    });
+    pop.appendChild(item);
+  });
+  wrap.append(btn, pop);
+  const onDoc = (e) => { if (!wrap.contains(e.target)) close(); };
+  function close() { pop.style.display = 'none'; document.removeEventListener('click', onDoc, true); }
+  function open() { pop.style.display = 'block'; setTimeout(() => document.addEventListener('click', onDoc, true), 0); }
+  btn.addEventListener('click', (e) => { e.stopPropagation(); (pop.style.display === 'none') ? open() : close(); });
+  return { el: wrap, get: () => value };
+}
+
 function _fmtDue(due) { const d = new Date(due); if (isNaN(d)) return ''; return d.toLocaleString(undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
 // Reminder due date as explicit day/month/year + time (Notifications view).
 function _fmtDueDMY(due) { const d = new Date(due); if (isNaN(d)) return ''; const p = n => String(n).padStart(2, '0'); return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
@@ -19695,15 +19726,17 @@ function _todoInlineEditor(bucket, it) {
   setTimeout(_taGrow, 0);   // size to the initial text (edit mode)
   const meta = document.createElement('div'); meta.className = 'kc-meta';
   const datePicker = _buildDateField(it && it.due ? it.due : '');
-  const alert = document.createElement('select'); alert.className = 'kc-alert';
   const curAlert = it ? String(it.alert || '') : '';
   const isCustom = curAlert !== '' && !ALERT_PRESETS.includes(curAlert);
-  ALERT_OPTS.forEach(([v, k]) => { const o = document.createElement('option'); o.value = v; o.textContent = window.i18n.t(k); if (v === curAlert || (v === 'custom' && isCustom)) o.selected = true; alert.appendChild(o); });
   const customInp = document.createElement('input'); customInp.type = 'number'; customInp.min = '1'; customInp.className = 'kc-alert-custom';
   customInp.placeholder = window.i18n.t('todo.minutes_before'); customInp.style.display = isCustom ? '' : 'none';
   if (isCustom) customInp.value = curAlert;
-  alert.addEventListener('change', () => { customInp.style.display = alert.value === 'custom' ? '' : 'none'; if (alert.value === 'custom') customInp.focus(); });
-  meta.append(datePicker.el, alert, customInp);
+  const alertSel = _buildDarkSelect(
+    ALERT_OPTS.map(([v, k]) => [v, window.i18n.t(k)]),
+    isCustom ? 'custom' : curAlert,
+    (v) => { customInp.style.display = v === 'custom' ? '' : 'none'; if (v === 'custom') customInp.focus(); }
+  );
+  meta.append(datePicker.el, alertSel.el, customInp);
   const actions = document.createElement('div'); actions.className = 'kc-actions';
   const save = document.createElement('button'); save.className = 'kc-save'; save.textContent = window.i18n.t('todo.save');
   const cancel = document.createElement('button'); cancel.className = 'kc-cancel'; cancel.textContent = window.i18n.t('common.cancel');
@@ -19717,7 +19750,7 @@ function _todoInlineEditor(bucket, it) {
     catch (_) { try { renderTodoView(); } catch (__) {} }
   };
   _todoEditorClose = closeInPlace;
-  const getAlert = () => alert.value === 'custom' ? (customInp.value ? String(parseInt(customInp.value, 10)) : '') : alert.value;
+  const getAlert = () => alertSel.get() === 'custom' ? (customInp.value ? String(parseInt(customInp.value, 10)) : '') : alertSel.get();
   const doSave = async () => {
     _todoEditorClose = null;
     const text = ta.value.trim();
