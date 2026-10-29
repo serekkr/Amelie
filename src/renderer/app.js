@@ -13612,8 +13612,8 @@ function populateUnifiedBackupUi(cfg) {
   setV('cfg-smb-ip', form.smbIp); setV('cfg-smb-share', form.smbShare);
   setV('cfg-smb-user', form.smbUser); setV('cfg-smb-pass', form.smbPass);
   setV('cfg-webdav-url', form.webdavUrl); setV('cfg-webdav-user', form.webdavUser); setV('cfg-webdav-pass', form.webdavPass);
-  setV('cfg-backup-folder', form.backupFolder);
-  setV('cfg-sync-folder', form.syncFolder);
+  setV('cfg-backup-folder', (form.backupFolder || '').replace(/^\/+/, ''));
+  setV('cfg-sync-folder', (form.syncFolder || '').replace(/^\/+/, ''));
   setV('cfg-smb-path', form.backupFolder);
   setV('cfg-webdav-path', form.backupFolder);
   setC('cfg-backup-remote-on', form.kind === 'local' ? form.localOn : form.backupRemoteOn);
@@ -13660,8 +13660,11 @@ function setupRemoteUi() {
 async function saveSettings() {
   const kind = currentRemoteKind();
   const vpnOn = kind === 'samba' && remoteHasVpn();   // VPN used only if a profile is loaded
-  const backupFolder = ($('cfg-backup-folder')?.value || '').trim();
-  const syncFolder = ($('cfg-sync-folder')?.value || '').trim();
+  // Strip a leading slash so backup and sync paths are stored the same way
+  // (amelie/backup, amelie/sync) — the slash was optional and only cosmetic
+  // inconsistency (serekkr, 29/10/2026).
+  const backupFolder = ($('cfg-backup-folder')?.value || '').trim().replace(/^\/+/, '');
+  const syncFolder = ($('cfg-sync-folder')?.value || '').trim().replace(/^\/+/, '');
   // buildVpnConfig reads cfg-smb-path for the share path → feed it the backup folder.
   if ($('cfg-smb-path')) $('cfg-smb-path').value = backupFolder;
   if ($('cfg-webdav-path')) $('cfg-webdav-path').value = backupFolder;
@@ -13691,12 +13694,13 @@ async function saveSettings() {
     backupDailyTime: (() => {
       const v = $('cfg-local-interval')?.value;
       const t = $('cfg-local-dailytime')?.value || '';
-      return (v === '1440' && /^\d{1,2}:\d{2}$/.test(t)) ? t : '';
+      // A time-of-day applies to Daily, Weekly AND Custom(days) — not to hourly.
+      return (['1440', '10080', 'custom'].includes(v) && /^\d{1,2}:\d{2}$/.test(t)) ? t : '';
     })(),
     backupRemoteDailyTime: (() => {
       const v = $('cfg-local-interval')?.value;
       const t = $('cfg-remote-dailytime')?.value || '';
-      return (v === '1440' && /^\d{1,2}:\d{2}$/.test(t)) ? t : '';
+      return (['1440', '10080', 'custom'].includes(v) && /^\d{1,2}:\d{2}$/.test(t)) ? t : '';
     })(),
     keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
     syncIntervalMinutes: (() => {
@@ -19428,10 +19432,10 @@ async function refreshBackupStatusLines() {
 // matched to the destination being viewed. Both can be configured; you see one at a time
 // because the Backup panel shows one destination block at a time.
 function updateDailyTimeWraps() {
-  // Show the time-of-day field for DAILY and WEEKLY backups (serekkr, 29/10/2026:
-  // weekly was missing the time to run it).
+  // Show the time-of-day field for DAILY, WEEKLY and CUSTOM(days) backups (serekkr,
+  // 29/10/2026) — so you know exactly when it runs. Not for hourly.
   const iv = $('cfg-local-interval')?.value;
-  const daily = (iv === '1440' || iv === '10080');
+  const daily = (iv === '1440' || iv === '10080' || iv === 'custom');
   const kind = (typeof currentRemoteKind === 'function') ? currentRemoteKind() : 'local';
   const lw = $('local-dailytime-wrap');
   const rw = $('remote-dailytime-wrap');

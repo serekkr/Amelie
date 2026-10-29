@@ -638,7 +638,14 @@ class SyncManager {
     const key = which === 'remote' ? 'lastBackupAtRemote' : 'lastBackupAtLocal';
     const at = Date.parse((this._syncState && this._syncState[key]) || '');
     if (!Number.isFinite(at)) return true;             // never backed up → due
-    return at < scheduled.getTime();                   // last run was before today's time
+    // Interval-aware so Weekly / Custom(N days) run every N days AT the set time, not
+    // every day (serekkr, 29/10/2026). Daily (interval ≤ 1440) keeps the exact old
+    // behaviour: due if the last run was before today's scheduled time.
+    const intervalMin = this._backupIntervalMinutes();
+    const threshold = intervalMin <= 1440
+      ? scheduled.getTime()
+      : scheduled.getTime() - (intervalMin - 1440) * 60000;
+    return at < threshold;
   }
 
   // Two-way SYNC on a fixed clock time (sync.twoway.dailyTime "HH:MM"), mirroring the
