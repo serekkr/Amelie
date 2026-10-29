@@ -4708,6 +4708,8 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
    (serekkr, 28/10/2026 — moved from under the grid; there's room to the side). */
 .dp-time { display: flex; align-items: center; gap: 6px; margin: 0; justify-content: center; border-left: 1px solid var(--border); padding-left: 12px; }
 .dp-time select { background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; color: var(--text-1); font-family: var(--editor-font); font-size: 13px; padding: 4px 6px; outline: none; }
+.dp-time-clk { display: inline-flex; align-items: center; color: var(--text-2); }
+.dp-time-clk svg { width: 15px; height: 15px; }
 /* Dark hour/minute columns (reuse the backup .tp-* look); taller now that they have
    the full height of the calendar beside them. */
 .dp-time .dp-tp-list { max-height: 196px; min-width: 46px; }

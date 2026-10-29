@@ -19614,6 +19614,9 @@ function _buildDateField(initial) {
     }
     cal.appendChild(grid);
     const timeRow = document.createElement('div'); timeRow.className = 'dp-time';
+    // Subtle dark SVG clock instead of the bright white 🕒 emoji (serekkr, 29/10/2026).
+    const clk = document.createElement('span'); clk.className = 'dp-time-clk';
+    clk.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9.5V13l2.5 1.5"/><path d="M5 3 2.5 5.5"/><path d="m19 3 2.5 2.5"/></svg>';
     // Dark hour/minute columns — same look as the backup time picker (.tp-*), replacing
     // the native <select> whose dropdown painted a blue we can't theme (serekkr, 28/10).
     const mkTcol = (count, step, cur, set) => {
@@ -19633,7 +19636,7 @@ function _buildDateField(initial) {
     const hCol = mkTcol(24, 1, hh, v => hh = v);
     const mCol = mkTcol(60, 5, mm, v => mm = v);
     const colon = document.createElement('span'); colon.textContent = ':'; colon.className = 'dp-colon';
-    timeRow.append(hCol, colon, mCol);
+    timeRow.append(clk, hCol, colon, mCol);
     const body = document.createElement('div'); body.className = 'dp-body';
     body.append(cal, timeRow); pop.appendChild(body);
     const act = document.createElement('div'); act.className = 'dp-actions';
