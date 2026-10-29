@@ -895,17 +895,20 @@
                       <option value="10080" data-i18n="settings.freq_weekly">Settimanale</option>
                       <option value="custom" data-i18n="settings.interval_custom">Custom</option>
                     </select>
-                    <div class="sip-custom-wrap" id="local-interval-custom-wrap" style="display:none;margin-top:8px">
-                      <input type="number" id="cfg-local-interval-custom" min="1" max="60" value="2" />
-                      <span data-i18n="settings.days">giorni</span>
-                    </div>
-                    <div class="sip-custom-wrap" id="local-dailytime-wrap" style="display:none;margin-top:8px;align-items:center;gap:6px">
-                      <input type="time" id="cfg-local-dailytime" value="18:00" />
-                      <span class="dailytime-saved last-backup-saved" style="display:none" data-i18n="settings.backup_saved">✓ Salvato</span>
-                    </div>
-                    <div class="sip-custom-wrap" id="remote-dailytime-wrap" style="display:none;margin-top:8px;align-items:center;gap:6px">
-                      <input type="time" id="cfg-remote-dailytime" value="20:00" />
-                      <span class="dailytime-saved last-backup-saved" style="display:none" data-i18n="settings.backup_saved">✓ Salvato</span>
+                    <!-- Days (Custom) and the time-of-day sit on the SAME row (serekkr, 29/10/2026). -->
+                    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:8px">
+                      <div class="sip-custom-wrap" id="local-interval-custom-wrap" style="display:none">
+                        <input type="number" id="cfg-local-interval-custom" min="1" max="60" value="2" />
+                        <span data-i18n="settings.days">giorni</span>
+                      </div>
+                      <div class="sip-custom-wrap" id="local-dailytime-wrap" style="display:none;align-items:center;gap:6px">
+                        <input type="time" id="cfg-local-dailytime" value="18:00" />
+                        <span class="dailytime-saved last-backup-saved" style="display:none" data-i18n="settings.backup_saved">✓ Salvato</span>
+                      </div>
+                      <div class="sip-custom-wrap" id="remote-dailytime-wrap" style="display:none;align-items:center;gap:6px">
+                        <input type="time" id="cfg-remote-dailytime" value="20:00" />
+                        <span class="dailytime-saved last-backup-saved" style="display:none" data-i18n="settings.backup_saved">✓ Salvato</span>
+                      </div>
                     </div>
                   </div>
                   <div>
