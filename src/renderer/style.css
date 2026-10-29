@@ -2765,9 +2765,15 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .vpn-type-btn.dest-active, .vpn-type-btn.dest-active:hover {
   background: var(--bg-3); color: var(--text-0);
 }
-.vpn-type-btn.dest-active::after {
+/* Status dot on the destination buttons only: dim grey = OFF, glowing green = active
+   (serekkr, 29/10/2026). Scoped to #remote-kind-seg[data-remote] so the transport
+   pills (WireGuard/OpenVPN) and the Restore button don't get one. */
+#remote-kind-seg .vpn-type-btn[data-remote]::after {
   content: ''; position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
-  width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent);
+  width: 7px; height: 7px; border-radius: 50%; background: var(--text-3);
+}
+#remote-kind-seg .vpn-type-btn[data-remote].dest-active::after {
+  background: var(--accent); box-shadow: 0 0 6px var(--accent);
 }
 
 /* ─── Font dropdown ─────────────────────────────────────────── */
