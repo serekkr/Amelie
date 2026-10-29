@@ -1697,7 +1697,7 @@ kbd {
 #cm-mount .cm-hl-var2    { color: var(--hl-var2); }
 /* Edit mode: headings sized like VIEW mode (view-mode-style), and **bold** shown bold
    (serekkr, 29/10/2026). Size/weight only — the heading COLOUR stays in view mode. */
-#cm-mount .cm-md-heading { font-weight: 700; }
+#cm-mount .cm-md-heading { font-weight: normal; }
 #cm-mount .cm-md-h1 { font-size: 1.9em; }
 #cm-mount .cm-md-h2 { font-size: 1.45em; }
 #cm-mount .cm-md-h3 { font-size: 1.15em; }
@@ -1829,8 +1829,9 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 }
 #preview-content h1,#preview-content h2,#preview-content h3,
 #preview-content h4,#preview-content h5,#preview-content h6 {
-  font-weight: 600;
-  font-family: var(--editor-font-family); font-weight: var(--note-weight);
+  /* Headings are NOT bold, in view or edit (serekkr, 29/10/2026) — the size and
+     colour carry the hierarchy; a bold **word** inside a heading still shows bold. */
+  font-family: var(--editor-font-family); font-weight: normal;
   /* Top margin kept SMALL: it is `em`, so on a big heading (h1 = 1.9em) a 1.5em
      margin became ~2.85em ≈ 43px and left a huge gap before the title (serekkr,
      29/10/2026: "spazio immenso tra le ultime due"). */
