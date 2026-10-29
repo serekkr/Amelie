@@ -3964,11 +3964,15 @@ body.split-open .pane-flash::after {
    the search puts the field beside the icon on the same line. It used to be a strip
    of its own below the toolbar, with its own --bg-1 background and bottom rule —
    both gone, since the row it is in already draws them. */
+/* The whole search cluster (field + lens) is pinned to the right edge of the dates
+   row. The lens is always present, so it fixes the row's height and clicking it only
+   reveals the field to its left — nothing grows, nothing shifts. */
+#note-search-cluster {
+  display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0;
+}
 #note-search-bar {
   display: flex; align-items: center; gap: 7px;
-  /* margin-left:auto pins it to the right edge of the dates row, in the empty space
-     the "created / last edited" text never fills, directly under the Index lens. */
-  padding: 0; margin-left: auto; margin-right: 0; background: transparent;
+  padding: 0; margin: 0; background: transparent;
   border: none; flex-shrink: 0;
 }
 /* `color: inherit` matters: the prev/next buttons set their own colour (and a
