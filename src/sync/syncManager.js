@@ -2017,8 +2017,36 @@ class SyncManager {
     await this.webdavClient.putFileContents(remote, fs.readFileSync(file), { overwrite: true });
     try { fs.unlinkSync(file); } catch (_) {}
     try { await this._webdavWriteFile(this.webdavClient, remoteDir, SyncManager._MARK_BACKUP); } catch (_) {}
+    // Rotate old archives: keep only the newest `keepLast` .tar.gz. This was
+    // MISSING (Local and Samba rotate theirs via _pruneArchives/_smbPruneArchives,
+    // but the WebDAV archive path never pruned) — so webdav archives grew without
+    // bound and "keep last N" was silently ignored (serekkr, 29/10/2026: 6 with
+    // keep=5).
+    try { await this._webdavPruneArchives(remoteDir, this.config.sync.webdav.keepLast); } catch (_) {}
     console.log('[WebDAV] Archive uploaded', remote);
     return path.basename(file);
+  }
+
+  /** Keep only the newest `keepLast` amelie-vault-*.tar.gz archives on WebDAV.
+   *  keepLast falsy/0 → keep everything. Matches both name spellings via
+   *  _archiveStamp and sorts by the PARSED stamp (the day-first name doesn't sort). */
+  async _webdavPruneArchives(remoteDir, keepLast) {
+    const n = parseInt(keepLast);
+    if (!n || n < 1) return;
+    const client = this.webdavClient;
+    let items = [];
+    try { items = await client.getDirectoryContents(remoteDir); } catch (_) { return; }
+    const found = items
+      .filter(it => it.type === 'file')
+      .map(it => ({ name: it.basename, k: SyncManager._archiveStamp(it.basename) }))
+      .filter(x => x.k);                                  // ours, in either spelling
+    const sorted = found.sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : 0)).map(x => x.name);  // oldest first
+    const toDelete = sorted.slice(0, Math.max(0, sorted.length - n));
+    for (const name of toDelete) {
+      try { await client.deleteFile(`${remoteDir}/${name}`); console.log('[WebDAV] pruned old archive', name); }
+      catch (_) { /* best-effort */ }
+    }
+    if (toDelete.length) console.log('[WebDAV] Rotation: removed', toDelete.length, 'old remote archives');
   }
 
   // ─── WebDAV Sync ──────────────────────────────────────────────────────────
