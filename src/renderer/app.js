@@ -2572,20 +2572,22 @@ async function restoreSession() {
     }
     const { paths = [], activePath, activeType } = JSON.parse(raw);
     const flat = flattenTree(state.notes);
-    // Restore ONLY plain notes, and LAZILY (activate=false): create the tab in the
-    // bar but don't read/render its file. Drawings, PDFs, images and audio/video are
-    // intentionally NOT reopened at startup (user preference: notes only).
+    // Restore the plain-note tabs LAZILY (activate=false): create the tab in the bar
+    // but don't read/render its file. (Non-note items aren't kept as background tabs.)
     for (const path of paths) {
       const node = flat.find(n => n.path === path);
       if (node && (!node.type || node.type === 'note')) openTab(node, false);
     }
+    // Land on the LAST item viewed before closing — WHATEVER its type: note, PDF,
+    // image, drawing or audio/video (serekkr, 29/10/2026: "mostrami l'ultima nota o
+    // pdf o immagine che guardavo"). openNote routes by type and opens its view/tab.
+    if (activePath) {
+      const activeNode = flat.find(n => n.path === activePath);
+      if (activeNode) { renderTabBar(); try { await openNote(activeNode); } catch (_) {} return; }
+    }
+    // Active item gone (deleted since) → fall back to the last restored note, or nothing.
     if (tabs.length === 0) { renderTabBar(); return; }
-    // Land on the note that was active (matched by path). If the active tab was a
-    // drawing / PDF / image / player (not restored), fall back to the LAST note.
-    let idx = (activePath && (!activeType || activeType === 'note'))
-      ? tabs.findIndex(t => t.path === activePath) : -1;
-    if (idx < 0) idx = tabs.length - 1;
-    await switchTab(idx);
+    await switchTab(tabs.length - 1);
   } catch(_) {}
 }
 
