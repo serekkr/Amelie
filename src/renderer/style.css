@@ -4710,6 +4710,10 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .kc-sel-item { display: block; width: 100%; text-align: left; background: transparent; border: none; border-radius: 5px; color: var(--text-1); font-family: var(--ui-font); font-size: 14px; padding: 7px 10px; cursor: pointer; white-space: nowrap; }
 .kc-sel-item:hover { background: var(--bg-4); color: var(--text-0); }
 .kc-sel-item.sel { background: color-mix(in srgb, #000 30%, var(--bg-0)); color: var(--text-0); }
+/* Settings window close (X): always red (serekkr, 29/10/2026). */
+#settings-close { color: var(--red, #e5534b); }
+#settings-close:hover { color: var(--red, #e5534b); background: color-mix(in srgb, var(--red, #e5534b) 18%, transparent); }
+
 /* Autosave confirmation flash for the Backup/Sync tab (no Save button needed). */
 #tab-sync { position: relative; }
 #backup-autosave-flash {
