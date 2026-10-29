@@ -19424,13 +19424,10 @@ function updateBackupDestLines(times, savedWhich) {
   const when = fam === 'local' ? (t.lastBackupAtLocal || t.lastBackupAt) : (t.lastBackupAtRemote || t.lastBackupAt);
   const whenEl = row.querySelector('.lastbk-when');
   if (whenEl) whenEl.textContent = when ? _fmtDateTimeDMYS(when) : '—';
-  const flash = savedWhich === 'all' || savedWhich === fam;
+  // No per-destination "saved" badge on activate/save — the single top-right
+  // "✓ Salvato" flash is the only confirmation now (serekkr, 29/10/2026).
   const badge = row.querySelector('.lastbk-saved');
-  if (badge && savedWhich && flash) {
-    badge.style.display = '';
-    if (_lastBackupSavedTimer) clearTimeout(_lastBackupSavedTimer);
-    _lastBackupSavedTimer = setTimeout(() => { badge.style.display = 'none'; }, 4000);
-  }
+  if (badge) badge.style.display = 'none';
 }
 // Populate the lines from the stored state (called when Settings → Backup opens, or the
 // viewed destination changes, so each shows its last backup even with no run this session).
