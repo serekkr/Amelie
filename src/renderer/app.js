@@ -19694,7 +19694,7 @@ function _buildDateField(initial) {
     // by the overflow (serekkr, 29/10/2026).
     try {
       const r = pop.getBoundingClientRect();
-      const over = r.right - (window.innerWidth - 10);
+      const over = r.right - (window.innerWidth - 48);
       if (over > 0) pop.style.left = (-Math.ceil(over)) + 'px';
     } catch (_) {}
     setTimeout(() => {
@@ -19760,13 +19760,19 @@ function _todoInlineEditor(bucket, it) {
   let initRemind = '', initPreset = '';
   if (curRemind) { initRemind = curRemind; initPreset = 'custom'; }
   else if (curAlert && it && it.due) {
+    // Legacy todo (alert = minutes-before) → pre-fill the reminder to due − alert.
     const dt = new Date(it.due).getTime();
-    if (!isNaN(dt)) { initRemind = _toLocalInput(dt - parseInt(curAlert, 10) * 60000); initPreset = ALERT_PRESETS.includes(curAlert) ? curAlert : 'custom'; }
+    if (!isNaN(dt)) { initRemind = _toLocalInput(dt - parseInt(curAlert, 10) * 60000); initPreset = 'custom'; }
   }
   const remindPicker = _buildDateField(initRemind);
   remindPicker.el.style.display = initPreset ? '' : 'none';
+  // Reminder options kept small (serekkr, 29/10/2026): No reminder, 15 min before,
+  // 1 hour before, Custom. The two offsets pre-fill the reminder picker relative to
+  // the due; Custom leaves it free; either way the picker (absolute date+time) is
+  // what's saved.
+  const REMIND_OPTS = [['', 'todo.no_alert'], ['15', 'todo.alert_15'], ['60', 'todo.alert_60'], ['custom', 'todo.alert_custom']];
   const alertSel = _buildDarkSelect(
-    ALERT_OPTS.map(([v, k]) => [v, window.i18n.t(k)]),
+    REMIND_OPTS.map(([v, k]) => [v, window.i18n.t(k)]),
     initPreset,
     (v) => {
       if (v === '') { remindPicker.el.style.display = 'none'; remindPicker.setValue(''); return; }
