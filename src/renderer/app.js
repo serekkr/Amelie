@@ -11385,7 +11385,10 @@ function setupSettings() {
     const txt = document.createElement('span'); txt.className = 'kc-sel-txt';
     const car = document.createElement('span'); car.className = 'kc-sel-caret'; car.textContent = '▾';
     btn.append(txt, car);
-    const pop = document.createElement('div'); pop.className = 'kc-sel-pop'; pop.style.display = 'none';
+    // The popup lives on <body> and is position:fixed so the Settings modal's
+    // scroll/overflow can't clip it (that's what looked broken) — same trick as the
+    // dark time picker.
+    const pop = document.createElement('div'); pop.className = 'kc-sel-pop dark-select-pop'; pop.style.display = 'none';
     const syncUI = () => {
       const o = sel.options[sel.selectedIndex]; txt.textContent = o ? o.textContent : '';
       // Re-read labels from the (possibly i18n-translated) options each time, so the
@@ -11398,11 +11401,37 @@ function setupSettings() {
       item.addEventListener('click', (e) => { e.stopPropagation(); sel.value = o.value; sel.dispatchEvent(new Event('change', { bubbles: true })); syncUI(); close(); });
       pop.appendChild(item);
     });
-    wrap.append(btn, pop);
+    wrap.appendChild(btn);
+    document.body.appendChild(pop);
     wrap.addEventListener('mouseenter', syncUI);   // belt-and-suspenders: label always current
-    const onDoc = (e) => { if (!wrap.contains(e.target)) close(); };
-    function close() { pop.style.display = 'none'; document.removeEventListener('click', onDoc, true); }
-    function open() { syncUI(); pop.style.display = 'block'; setTimeout(() => document.addEventListener('click', onDoc, true), 0); }
+    const onDoc = (e) => { if (!wrap.contains(e.target) && !pop.contains(e.target)) close(); };
+    const onReposition = () => { if (pop.style.display !== 'none') close(); };
+    function close() {
+      pop.style.display = 'none';
+      document.removeEventListener('click', onDoc, true);
+      window.removeEventListener('scroll', onReposition, true);
+      window.removeEventListener('resize', onReposition);
+    }
+    function place() {
+      syncUI();
+      const r = btn.getBoundingClientRect();
+      pop.style.display = 'block';
+      pop.style.minWidth = r.width + 'px';
+      const pw = pop.offsetWidth, ph = pop.offsetHeight;
+      let left = r.left, top = r.bottom + 4;
+      if (left + pw > window.innerWidth - 8) left = window.innerWidth - 8 - pw;
+      if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - 4 - ph);
+      pop.style.left = Math.max(8, left) + 'px';
+      pop.style.top = top + 'px';
+    }
+    function open() {
+      place();
+      setTimeout(() => {
+        document.addEventListener('click', onDoc, true);
+        window.addEventListener('scroll', onReposition, true);
+        window.addEventListener('resize', onReposition);
+      }, 0);
+    }
     btn.addEventListener('click', (e) => { e.stopPropagation(); pop.style.display === 'none' ? open() : close(); });
     sel.addEventListener('change', syncUI);
     sel._darkSync = syncUI;   // loadSettings sets .value directly → call this to refresh the label
