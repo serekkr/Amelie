@@ -955,8 +955,8 @@ function setupEditorToolbarToggle() {
   document.getElementById('cfg-editor-toolbar')?.addEventListener('change', e => applyEditorToolbar(e.target.checked));
 }
 
-// Make the preview checkboxes clickable and kept in sync with the markdown
-// (Obsidian style). marked generates them \`disabled\`: here we re-enable them, and on
+// Make the preview checkboxes clickable and kept in sync with the markdown.
+// marked generates them \`disabled\`: here we re-enable them, and on
 // each click we toggle \`- [ ]\` ↔ \`- [x]\` in the source note.
 function enhanceCheckboxes() {
   const boxes = previewContent.querySelectorAll('input[type="checkbox"]');
@@ -1400,7 +1400,7 @@ const THEMES = {
   // on; its ACCENT is the same green as Green Dark, which is why the surface colour is
   // what the name has to carry. The id stays 'serekkr': it is DEFAULT_THEME, the value
   // in localStorage and the [data-theme] attribute in style.css, so renaming it would
-  // need a migration (cf. RENAMED, obsidian -> graphite) and would drop the theme of
+  // need a migration (cf. RENAMED, old theme id -> graphite) and would drop the theme of
   // every existing profile. Only the label moved.
   serekkr:       { label: 'Cyan Dark',     attr: 'serekkr'   },
   graphite:      { label: 'Graphite',      attr: 'graphite'  },
@@ -1880,7 +1880,7 @@ function maybeShowLangSetup() {
   ov.querySelectorAll('.lang-pill').forEach(p => p.addEventListener('click', () => { ov.style.display = 'none'; }));
 }
 
-// ─── View width (wide ↔ readable line length, Obsidian-style) ────────────────
+// ─── View width (wide ↔ readable line length) ────────────────
 // 'wide'     → editor & preview use the full pane width (almost to the window edge)
 // 'readable' → content centered with a max line length, easier to read
 function applyViewWidth(mode) {
@@ -2935,7 +2935,7 @@ function allFolderKeys(nodes = state.notes, out = []) {
   return out;
 }
 
-// The sidebar's close/open-all button, the one Obsidian's file explorer has. One
+// The sidebar's close/open-all button, the one a file explorer has. One
 // button doing two opposite things, so the icon and the tooltip both have to name
 // the NEXT click, not the current state: chevrons together + "close all" while
 // anything is open, chevrons apart + "open all" once nothing is.
@@ -3075,7 +3075,7 @@ async function moveFolderOnDisk(oldPath, newPath) {
 }
 
 // ── Multi-selection in the tree (Shift / Ctrl + click) ──────────────────────
-// Obsidian's gesture, for Obsidian's two reasons: drag a handful of notes into a
+// A familiar gesture, for two reasons: drag a handful of notes into a
 // folder, or delete them in one go. A plain click is untouched — it opens the note
 // and becomes the anchor the next Shift+click measures from.
 //
@@ -3798,7 +3798,7 @@ function parseFrontmatter(content) {
   return { fm, body };
 }
 
-// An Obsidian-style date block (`---` / `created:` / `updated:` / `---`) that is
+// A frontmatter-style date block (`---` / `created:` / `updated:` / `---`) that is
 // NOT the file's real top frontmatter — e.g. one left a blank line down by an
 // import, so it never gets stripped — otherwise renders horribly: the opening
 // `---` becomes a horizontal rule and the `key: value` lines, "underlined" by
@@ -3833,7 +3833,7 @@ function dividerizeSetextRules(md) {
 }
 
 // The body every preview/TOC path should render: real top frontmatter removed
-// (parseFrontmatter), any stray Obsidian date block shown as plain text
+// (parseFrontmatter), any stray date block shown as plain text
 // (unwrapStrayFrontmatter), and setext `---` headings turned into plain rules
 // (dividerizeSetextRules). Kept in one place so the render, the TOC heading
 // walk, and jump-to-heading all agree on line/char offsets — every transform
@@ -4505,8 +4505,8 @@ async function createNewNote(folder = '') {
 async function createNewFolder(parent = '') {
   if (typeof parent !== 'string') parent = '';
   // The folder is created and goes STRAIGHT into its inline rename with the name
-  // selected: type, press Enter. That is what Finder, Explorer, VS Code and
-  // Obsidian all do. It used to be created already named with today's date —
+  // selected: type, press Enter. That is what Finder, Explorer and VS Code
+  // all do. It used to be created already named with today's date —
   // a decision the app made for you, and then a second pass to undo it. (A NOTE
   // still takes the date: for a note of the day that name is the point.)
   // Esc, or clicking away, leaves the default name, so nothing is half-created.
@@ -4719,7 +4719,7 @@ let _inlineRenameOpen = false;
 let _treeRefreshHeld = false;
 
 // Inline rename — no popup. Reveals the node in the tree, turns its label into
-// an editable input (Obsidian/VS Code style). Enter or blur confirms, Esc cancels.
+// an editable input (VS Code style). Enter or blur confirms, Esc cancels.
 async function renameNote(node) {
   if (!node) return;
   const isFolder = node.type === 'folder';
@@ -5318,8 +5318,8 @@ function setupEditor() {
   _editorDragoverHandler = e => e.preventDefault();
   editor.addEventListener('dragover', _editorDragoverHandler);
   _editorDropHandler = async e => {
-    // An item dragged from the SIDEBAR and let go in the note becomes a link, as in
-    // Obsidian — the drag carries its tree path as text, and the editor used to paste
+    // An item dragged from the SIDEBAR and let go in the note becomes a link
+    // — the drag carries its tree path as text, and the editor used to paste
     // that path verbatim (2026-09-30). A note → [[note]] (spelled with its path when
     // the name is not unique), an attachment → its embed/link, a folder → nothing.
     if (state.draggingNote || state.draggingAttach || state.draggingFolder) {
@@ -5798,7 +5798,7 @@ function _attachmentTarget(name) {
 const _sidebarMediaTarget = _attachmentTarget;
 
 // In the rendered preview, links to AUDIO and VIDEO attachments become inline
-// players, Obsidian-style (the markdown source keeps a plain link — portable
+// players (the markdown source keeps a plain link — portable
 // and diff-friendly). A `{width=N}` right after the link sizes the video and
 // the drag handle persists it back into the markdown. The historical "video
 // can't play" turned out to be the old protocol's broken Range support (fixed
@@ -6548,12 +6548,12 @@ function _rewriteOutsideCode(body, fn) {
   return lines.join('\n');
 }
 
-// Extensions Amelie files under attachments/ — the set the Obsidian import filters
+// Extensions Amelie files under attachments/ — the set the import filters
 // embeds by (main.js: ATT_ANY_RE). Kept in sync by eye; a new media type added there
 // should be added here too.
 const EMBED_ATT_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp|pdf|mp4|mov|webm|mp3|wav|m4a)$/i;
 
-// Resolve an Obsidian embed target (`![[Serbia diagram.png]]`, possibly a path or a
+// Resolve a wiki embed target (`![[Serbia diagram.png]]`, possibly a path or a
 // name that differs from the stored one by spaces↔underscores↔dashes) to the live
 // attachment node's `attachments/…` path. Mirrors resolveNoteLink's forgiving ladder,
 // but over attachment nodes only. null when nothing in the vault matches.
@@ -6568,7 +6568,7 @@ function _embedAttachmentPath(rawTarget) {
   const tAlpha = normAlpha(basename(target));
   let atts;
   try { atts = flattenTree(state.notes).filter(isAttachNode); } catch (_) { return null; }
-  // 0) a path-qualified target (`attachments/pdf/x.pdf`, or an Obsidian folder path)
+  // 0) a path-qualified target (`attachments/pdf/x.pdf`, or a vault folder path)
   if (target.includes('/')) {
     const tp = target.replace(/^(?:inkwell:\/\/)?attachments\//i, '').toLowerCase();
     const byPath = atts.find(n => n.path.replace(/^attachments\//i, '').toLowerCase() === tp)
@@ -6582,7 +6582,7 @@ function _embedAttachmentPath(rawTarget) {
   return hit ? hit.path : null;
 }
 
-// The markup an embed expands to — IDENTICAL to what the Obsidian import writes into the
+// The markup an embed expands to — IDENTICAL to what the import writes into the
 // file (main.js attMarkup), so a note displayed with a live `![[x]]` reads exactly like
 // one imported long ago: images inline (📷, with {width=N} when the alias is a number),
 // audio/video as the embed form the preview turns into a player (🎵/🎬), everything else
@@ -6600,7 +6600,7 @@ function _embedMarkupFor(attPath, alias) {
 // A picture on its own line, indented with spaces, is read by marked as an INDENTED
 // CODE BLOCK (4+ leading spaces) and PRINTED as text instead of shown. An image is
 // never code: strip the leading whitespace from any line that is ONLY an image — an
-// Obsidian embed `![[pic.png]]` or a markdown `![alt](url)` — so it always renders,
+// wiki embed `![[pic.png]]` or a markdown `![alt](url)` — so it always renders,
 // left-aligned, no matter how far it was indented. Fenced code blocks are left alone.
 function _deindentImageOnlyLines(body) {
   const lines = body.split('\n');
@@ -6624,9 +6624,9 @@ function _deindentImageOnlyLines(body) {
 function _preprocessMarkdown(body) {
   body = _deindentImageOnlyLines(body);
   return _rewriteOutsideCode(body, seg => seg
-    // Obsidian embeds `![[file]]` → the attachment, shown inline. Amelie expanded these
+    // Wiki embeds `![[file]]` → the attachment, shown inline. Amelie expanded these
     // only at IMPORT time, so a note that still carries the raw embed (imported through a
-    // different tool, pasted, synced from Obsidian) showed nothing — the `[[note links]]`
+    // different tool, pasted, synced from elsewhere) showed nothing — the `[[note links]]`
     // rule below even turned the inner `[[file.png]]` into a dead "!note-link". Resolved
     // HERE, display-only: the file on disk is never rewritten. Must run BEFORE the note
     // rule so the brackets are gone before it looks. A target that is not an attachment
@@ -6898,7 +6898,7 @@ function enhancePreviewContent(token, widthsByTable) {
   // Colour #tags blue (after code decoration so code spans are already skipped).
   try { highlightInlineTags(previewContent); } catch (_) {}
 
-  // Task-list checkboxes: make them clickable (Obsidian style)
+  // Task-list checkboxes: make them clickable
   enhanceCheckboxes();
 
   // Audio/video attachment links → inline players (resizable video here:
@@ -6919,7 +6919,7 @@ function enhancePreviewContent(token, widthsByTable) {
     setupImageResize(img, handle);
 
     // A vault image whose file is gone (deleted attachment) → show a placeholder
-    // naming it, like Obsidian's "name not found", instead of a dead broken-image
+    // naming it, like a "name not found" marker, instead of a dead broken-image
     // icon (asked 2026-10-22). Only for attachment images; a remote/data URL that
     // fails for another reason is left alone.
     const _src = img.getAttribute('src') || '';
@@ -9185,7 +9185,7 @@ function setupContextMenu() {
 
 // The tree row the context menu is currently acting on. A grey 1px border is drawn by a
 // full-width overlay (#tree-ctx-outline) laid over the row — full width at every nesting
-// depth, like Obsidian, with the text left indented. It moves to whatever row you
+// depth, with the text left indented. It moves to whatever row you
 // right-click and is cleared on the next click (menu item or outside).
 let _ctxOutlineEl = null;
 function _ensureCtxOutline() {
@@ -9495,7 +9495,7 @@ let _focusedPane = 'main';    // main | split — last pane the user interacted 
 // transient blur between them makes an activeElement check unreliable — the rAF would read
 // "not in the tree" and grab focus back, sending Canc into the text. This intent flag is set
 // by the row click and cleared once the open has fully settled, and every editor.focus() on
-// the open path honours it. Obsidian-style: a row click SELECTS the note (focus stays on the
+// the open path honours it. By design: a row click SELECTS the note (focus stays on the
 // tree, so Canc deletes it); you click into the editor to type.
 let _keepTreeFocus = false;
 
@@ -10102,8 +10102,8 @@ function sortFolderChildren(folderNode, mode) {
 }
 
 // ── Sort order of the whole tree (the ⇅ button) ─────────────────────────────
-// Obsidian's file explorer offers one sort for the whole tree; this is the same
-// idea, with the one choice Obsidian cannot have — Manual, Amelie's saved drag
+// A file explorer offers one sort for the whole tree; this is the same
+// idea, with one extra choice — Manual, Amelie's saved drag
 // order. The DEFAULT is name A→Z (serekkr, 26/10/2026): an alphabetical order is
 // the SAME on every device without syncing anything, where Manual lives in a
 // per-device .amelie-order.json and so drifts between the desktop and Android.
@@ -10114,7 +10114,7 @@ let treeSortMode = (() => {
   catch (_) { return 'name-asc'; }
 })();
 
-// Folders FIRST at every level, whatever the sort — as in Obsidian, and as the
+// Folders FIRST at every level, whatever the sort — the common convention, and as the
 // manual order's own default does. A date sort reads the date of the item itself;
 // a folder has none on this tree, so folders keep their names' order among
 // themselves instead of all piling up at one end.
@@ -10255,7 +10255,7 @@ function resolveNoteLink(rawTarget) {
 }
 
 // A markdown link to a note — `[Legacy - Easy](Legacy.md)`, `(<with spaces.md>)`,
-// `(Heist%20Box.md#enum)` — resolved the way Obsidian writes them: relative to the
+// `(Heist%20Box.md#enum)` — resolved the way such links are written: relative to the
 // folder of the note it is in, then from the vault root, then by name like a
 // [[link]]. null for web addresses, anchors, attachments and anything not a note.
 // Used by the reading view, which used to treat them as unknown addresses and do
@@ -10474,7 +10474,7 @@ function setupSettings() {
     if (state.multiSel.size > 1) { try { await deleteTreeSelection(); } catch (_) {} return; }
     // Otherwise the row the tree is pointing at: the one picked with Ctrl+click, or —
     // and this is what was asked for on 12/10/2026, "voglio cancellare anche la nota
-    // selezionata", the way Obsidian does it — the note that is open and highlighted.
+    // selezionata", the familiar behaviour — the note that is open and highlighted.
     // No question, like every other single delete here; what makes that safe is that
     // deleting now goes to the system trash (main.js: trashOrRemove).
     const only = state.multiSel.size === 1 ? [...state.multiSel][0] : (state.selAnchor || state.currentPath);
@@ -11173,7 +11173,7 @@ function setupSettings() {
       r = accepted;
     }
     if (r && r.ok && r.obsidian) {
-      // An Obsidian vault was IMPORTED (links converted, attachments filed), not
+      // A foreign vault was IMPORTED (links converted, attachments filed), not
       // swapped in: nothing reloads, so the tree has to be read again here.
       await loadTree();
       const msg = `${window.i18n.t(r.notes === 1 ? 'toast.note_imported' : 'toast.notes_imported', { n: r.notes || 0 })} · ${r.images || 0} img · ${r.pdfs || 0} pdf`;
@@ -11218,12 +11218,12 @@ function setupSettings() {
     if (!picked) return;
     $('cfg-import-path').value = picked;
     if (res) { res.textContent = window.i18n.t('settings.importing'); res.className = 'test-result'; }
-    // Use the Obsidian importer (same as drag-drop): it copies attachments AND rewrites
+    // Use the vault importer (same as drag-drop): it copies attachments AND rewrites
     // the note links (![[img]] / ![](img) → Amelie's attachment markup), so images show
     // up. The old importFolder copied notes verbatim and left every embed broken
     // (serekkr, 21/10/2026).
     // flat=true: the folder's CONTENTS go to the vault root (root notes + folders show at
-    // the top, like Obsidian) instead of being nested under a container folder (serekkr, 21/10).
+    // the top) instead of being nested under a container folder (serekkr, 21/10).
     const result = await window.inkwell.vault.importObsidian(picked, '', true);
     if (result && result.ok) {
       if (res) {
@@ -18455,7 +18455,7 @@ function setupFileDrop() {
     // RELIABLE folder detection: webkitGetAsEntry is flaky for directories on Linux
     // (and Electron 32+ removed File.path), so resolve the real FS path via
     // webUtils.getPathForFile and let MAIN decide which are folders. A dropped FOLDER
-    // → main-process Obsidian import (reads from disk; notes + images + PDFs + embed
+    // → main-process vault import (reads from disk; notes + images + PDFs + embed
     // rewriting). This is the primary path; the webkitGetAsEntry logic below is a fallback.
     const _paths = flat.map(f => { try { return window.inkwell.getPathForFile ? window.inkwell.getPathForFile(f) : ''; } catch (_) { return ''; } }).filter(Boolean);
     if (_paths.length) {
@@ -18575,8 +18575,8 @@ function setupFileDrop() {
     const baseFolder = _extDropTarget;
     _clearExtDropTarget();
 
-    // Drop anything inside a hidden/dot segment (.obsidian/.trash/.stversions/.git…) so
-    // an Obsidian vault's service folders never get imported as notes/attachments.
+    // Drop anything inside a hidden/dot segment (.trash/.stversions/.git…) so
+    // a vault's service folders never get imported as notes/attachments.
     const gathered = (entries.length ? await _gatherEntries(entries) : flat.map(f => ({ file: f, rel: f.name })))
       .filter(g => !g.rel.split('/').some(s => s.startsWith('.')));
     const mdFiles   = gathered.filter(g => /\.(md|markdown|txt)$/i.test(g.rel));
@@ -18584,12 +18584,12 @@ function setupFileDrop() {
     const drawFiles = gathered.filter(g => /\.draw$/i.test(g.rel));
     if (!mdFiles.length && !pdfFiles.length && !drawFiles.length) return;
 
-    // ── Obsidian-style import: bring in referenced images/PDFs/media and rewrite
-    // Obsidian embeds (![[file]]) + local links into Amelie's format, so attachments
+    // ── Vault import: bring in referenced images/PDFs/media and rewrite
+    // wiki embeds (![[file]]) + local links into Amelie's format, so attachments
     // survive the import instead of being discarded. Attachments are saved FIRST so the
     // note rewrite can point at their final (sanitized) names. Only for FOLDER drops
     // (hasDir) — a loose file drop keeps its old behaviour (a single PDF opens in a tab
-    // below). Skips hidden dirs (.obsidian/.trash/.stversions/…).
+    // below). Skips hidden dirs (.trash/.stversions/…).
     const IMG_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
     const AV_EXT_RE  = /\.(mp4|mov|webm|mp3|wav|m4a)$/i;
     const ATT_ANY_RE = /\.(png|jpe?g|gif|webp|svg|bmp|pdf|mp4|mov|webm|mp3|wav|m4a)$/i;
@@ -18681,7 +18681,7 @@ function setupFileDrop() {
     }
 
     // Images/audio/video referenced by the notes ARE imported (above) and their
-    // Obsidian embeds rewritten; loose scripts and other unref'd types are skipped.
+    // wiki embeds rewritten; loose scripts and other unref'd types are skipped.
 
     // Loose single-PDF drop → save to attachments/pdf/ and open it in a viewer tab.
     // For a FOLDER import the PDFs are already handled above (saved to attachments/pdf/

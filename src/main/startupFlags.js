@@ -39,14 +39,14 @@ function startupFlags(cfg) {
 
   // Grayscale text instead of subpixel (LCD) text. A LOOK, decided once for the
   // whole app, not a workaround for one box — which is why it sits up here.
-  // Measured from one screenshot holding Amelie and Obsidian side by side on the
+  // Measured from one screenshot holding Amelie and a reference app side by side on the
   // same display, same scale, same capture (2026-10-14), counting glyph pixels
   // whose channels disagree by more than 12 — a coloured fringe is what subpixel
   // rendering leaves and grayscale cannot:
-  //     Amelie    87.7% of glyph pixels fringed
-  //     Obsidian   0.0%
+  //     Amelie      87.7% of glyph pixels fringed
+  //     Reference    0.0%
   // That is the whole of "quanto brutto e sfocato si vede in Amelie e che bello
-  // si vede in Obsidian". Fringes are sharper only when the engine's idea of the
+  // si vede nel riferimento". Fringes are sharper only when the engine's idea of the
   // panel's subpixel order is right and the glyphs land on whole pixels; under a
   // fractional display scale (this one runs at about 1.2) they land between
   // pixels and the colour reads as haze on the letters.

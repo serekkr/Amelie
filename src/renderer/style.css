@@ -76,7 +76,7 @@
   --radius: 6px;
   /* Appearance — tunable from settings */
   /* 3px, up from 1 (2026-10-14). Same screenshot, the other way round: the names in
-     the left panel sat 26 device pixels apart here against 32 there — Obsidian gives
+     the left panel sat 26 device pixels apart here against 32 there — the reference gives
      its editor LESS room per line and its file list MORE, and this app did the
      opposite on both counts. Padding is added, so this works whatever the note-list
      font is set to: +4 CSS pixels a row, which at his scale is +4.9 device — the gap
@@ -119,7 +119,7 @@
   --tree-guide-w: 0.5px;
   --editor-font-size: 15px;
   /* 1.58, down from 1.85 (2026-10-14). Measured off one screenshot with Amelie and
-     Obsidian open together: the rows of note text ran 34 device pixels apart here
+     the reference open together: the rows of note text ran 34 device pixels apart here
      against 29 there, and 29/34 of 1.85 is 1.58. The glyphs themselves were already
      the same size in both — x-height 10 device pixels either side — so what made the
      other one read better was the pitch, not the type.
@@ -731,7 +731,7 @@ html.is-mac #titlebar { padding-left: 72px; }
 }
 /* A note has no folder icon/chevron, so its name sat ~23px left of the folder names on the
    same level. Indent it by the icon(16)+gap(7) so note names line up UNDER the folder names,
-   the way Obsidian shows root notes with a space on the left (serekkr, 21/10/2026, foto 7). */
+   the way the reference shows root notes with a space on the left (serekkr, 21/10/2026, foto 7). */
 .tree-note { padding-left: calc(14px + 16px + 7px); }
 /* La cartella SELEZIONATA: lo stesso grigio dell'hover, ma piu' deciso — "deve vedersi
    un po' di grigio tipo quando faccio hover piu scuro". 18% contro il 10% dell'hover:
@@ -752,8 +752,8 @@ html.is-mac #titlebar { padding-left: 72px; }
   background: var(--active-bg);
 }
 /* La nota aperta: SOLO il riempimento, niente verde (15/10/2026, "quando seleziono
-   una nota si deve vedere come in obsidian... non solo il colore della nota o cartella
-   o file verde"). Misurato sullo screenshot di Obsidian dello stesso vault: barra
+   una nota si deve vedere come nel riferimento... non solo il colore della nota o cartella
+   o file verde"). Misurato sullo screenshot di riferimento dello stesso vault: barra
    laterale #2c2c2c — identica alla nostra in graphite — riga selezionata #3a3a3a, e
    il testo che passa da #b2b2b2 a #d9d9d9. Nessun colore: un grigio piu' chiaro e le
    lettere piu' accese. Qui il colore serviva all'ICONA della riga, perche' il nome era
@@ -769,7 +769,7 @@ html.is-mac #titlebar { padding-left: 72px; }
   box-shadow: inset 2px 0 0 0 var(--accent), inset -2px 0 0 0 var(--accent);
 }
 /* La riga su cui il tasto destro sta agendo: un BORDO grigio di 1px a LARGHEZZA PIENA,
-   come Obsidian (serekkr 27/10/2026, "in obsidian mi sembrano uguali"). Il bordo NON sta
+   come nel riferimento (serekkr 27/10/2026, "nel riferimento mi sembrano uguali"). Il bordo NON sta
    sulla riga — una riga annidata e' spostata a destra dal margine di .tree-folder-children,
    quindi un box-shadow sulla riga sarebbe piu' stretto ai livelli profondi. Lo disegna un
    overlay (#tree-ctx-outline) posizionato in JS sopra la riga ma esteso a tutta la sidebar,
@@ -960,7 +960,7 @@ html.is-mac #titlebar { padding-left: 72px; }
    2026-09-16 — Inter DOES ship a Light face, so every rule that said 300 for the old
    Helvetica (which had none, and was drawn Regular anyway) got thinner the day the
    app moved to Inter. The note text was put back to 400 then; this panel was missed,
-   and a 13px Light grey on #2a2a2a is what "lo vedo un po' sfocato" is. Obsidian's
+   and a 13px Light grey on #2a2a2a is what "lo vedo un po' sfocato" is. The reference
    file explorer, the comparison the user made, is 13px at weight 400 on #b3b3b3 over
    #262626 — the same size and all but the same grey: the weight was the difference.
    No letter-spacing either: .01em of 13px is 0.13px per letter, which cannot land on
@@ -1609,11 +1609,11 @@ kbd {
    proportional so it stays right when the font is zoomed. */
 #cm-mount .cm-cb-first { border-top-left-radius: 7px; border-top-right-radius: 7px; padding-top: calc(0.14 * var(--editor-line-height) * 1em); }
 #cm-mount .cm-cb-last  { border-bottom-left-radius: 7px; border-bottom-right-radius: 7px; padding-bottom: calc(0.14 * var(--editor-line-height) * 1em); }
-/* ── Code syntax colours, OBSIDIAN'S FIVE (2026-10-15, user's choice). This replaces
+/* ── Code syntax colours, THE CHOSEN FIVE (2026-10-15, user's choice). This replaces
    the green+yellow split of 2026-08-18 (green for what IS code, yellow for what code
    CARRIES), which in turn had replaced github-dark. Five hues, not two, so a role no
    longer has to be read off a SHADE of the same colour.
-   Every value below was measured off the user's own Obsidian screenshot (333.png,
+   Every value below was measured off the user's own reference screenshot (333.png,
    reading mode on #222222, code panel #282828), taking the most SATURATED pixel of each
    token — antialiasing can only pull a glyph TOWARDS the background, never past the
    real colour, so the most saturated pixel IS the colour. First attempt took the pixel
@@ -1626,14 +1626,14 @@ kbd {
       numbers              #a781ff  purple
       tag names, operators #fb484d  red
       comments             #666666  grey
-   Cyan also takes the roles Obsidian gives no sample of here (definitions, properties,
+   Cyan also takes the roles the reference gives no sample of here (definitions, properties,
    params): that part is REASONING, not measurement.
    These drive BOTH modes: #cm-mount .cm-hl-* while writing and the .hljs-* rules in the
    preview, so a block looks the same either side of the toggle. Dark themes here; the
    light theme below is NOT touched — these six are measured against a near-black panel
-   and there is no measurement of Obsidian's light palette to copy. ──────────────────────────────────────────────────────── */
+   and there is no measurement of the reference's light palette to copy. ──────────────────────────────────────────────────────── */
 :root {
-  /* #666666 is Obsidian's own comment grey. On its #282828 panel that is 2.6:1; on the
+  /* #666666 is the reference's own comment grey. On its #282828 panel that is 2.6:1; on the
      darker panel a code block sits on here it measures 3.0:1, so it reads no worse than
      the screenshot it came from — but it IS dimmer than the #7d8590 it replaces. */
   --hl-comment: #666666;
@@ -1666,7 +1666,7 @@ kbd {
 :root[data-theme="graphite"] {
   /* SOPRA la pagina, non sotto (2026-10-15). Fino a oggi era #000 al 22%, un gradino
      PIU SCURO: misurato sullo screenshot di serekkr, pagina #262626 e blocco #202020,
-     cioe' -6 di luminanza. Obsidian fa l'opposto sullo stesso appunto: pagina #222222,
+     cioe' -6 di luminanza. Il riferimento fa l'opposto sullo stesso appunto: pagina #222222,
      blocco #282828, +6. Un pannello piu scuro su una pagina scura si legge come un
      buco; piu chiaro si legge come una scheda. Bianco al 3% su #212121 da' esattamente
      #282828, lo stesso pannello misurato da loro, nella direzione giusta (il 4%
@@ -1695,7 +1695,7 @@ kbd {
 #cm-mount .cm-hl-property{ color: var(--hl-property); }
 #cm-mount .cm-hl-type    { color: var(--hl-type); }
 #cm-mount .cm-hl-var2    { color: var(--hl-var2); }
-/* Edit mode: headings sized like VIEW mode (Obsidian-style), and **bold** shown bold
+/* Edit mode: headings sized like VIEW mode (view-mode-style), and **bold** shown bold
    (serekkr, 29/10/2026). Size/weight only — the heading COLOUR stays in view mode. */
 #cm-mount .cm-md-heading { font-weight: 700; }
 #cm-mount .cm-md-h1 { font-size: 1.9em; }
@@ -1800,7 +1800,7 @@ kbd {
    text now starts further LEFT than edit-mode text, because the editor still holds its
    own gutter column. An empty band down the left of a page with nothing in it was the
    worse of the two. */
-/* ── View width: readable line length (Obsidian-style) ──────────────
+/* ── View width: readable line length ──────────────
    Wide (default): editor + preview fill the full pane width, with equal
    VISIBLE left/right empty space (right = 48px padding + 12px scrollbar,
    left = 60px padding — see #markdown-editor).
@@ -1858,7 +1858,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 /* GRAPHITE's coloured heading ladder is GONE (2026-10-15). It was asked for on
    13/10/2026 — green, amber, purple, light green, one hue per level, in the edit
    overlay and the view alike — and taken out again after measuring the user's
-   Obsidian screenshot (333.png): there H1…H6 are all #d9d9d9, exactly the grey of
+   reference screenshot (333.png): there H1…H6 are all #d9d9d9, exactly the grey of
    the body text, and the level is told by size and weight alone. With no rule here,
    the base rules above apply and every heading is var(--text-0) in every theme,
    which is what that means.
@@ -1875,7 +1875,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #preview-content a:visited { color: #a07ddc; }
 
 /* Emphasis (_italic_ / *italic*) takes the theme ACCENT colour in the rendered
-   view — serekkr, 28/10/2026, wanting Obsidian's coloured italics. View/reading
+   view — serekkr, 28/10/2026, wanting the reference's coloured italics. View/reading
    mode only (the edit overlay is left plain); both the main preview and the split
    pane. Still italic — just coloured on top. */
 /* A lighter, "more open" green than the accent (serekkr, 29/10/2026) — tweak
@@ -1913,7 +1913,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
      reasoning was that a block is typed in the editor's font and must not change face
      when you leave edit mode, and the note under it said in so many words "pick a
      proportional font for notes and view-mode code follows it". serekkr picked Inter,
-     and the consequence arrived: measured against his Obsidian screenshot of the same
+     and the consequence arrived: measured against his reference screenshot of the same
      note (444.png / 555.png), `export PIKSESNECIL=1` is monospaced there and
      proportional here — "adesso la nostra vista e brutta".
      The old worry is still right, and is answered instead of ignored: edit mode gets
@@ -1926,7 +1926,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
      margins (no overflow past the start/end edges). */
   border-radius: 7px; padding: 16px 20px;
   /* LE RIGHE LUNGHE VANNO A CAPO (2026-10-15), invece di scorrere a destra:
-     "in obsidian lo vedo bene senza la barra per andare su la destra".
+     "nel riferimento lo vedo bene senza la barra per andare su la destra".
      Non e' solo gusto: l'editor manda gia' a capo le righe lunghe (il righello e'
      scritto apposta per contarle, vedi i commenti "soft-wrap aware" sopra
      measureLineTops), quindi finora modifica e vista NON erano d'accordo — la stessa
@@ -1965,7 +1965,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 /* A loose list wraps each item's text in a <p>, whose .8em margins would put the item
    back off the grid. */
 #preview-content li > p { margin: 0; }
-/* Task list (- [ ] / - [x]) — clickable checkbox in view mode, Obsidian style */
+/* Task list (- [ ] / - [x]) — clickable checkbox in view mode */
 #preview-content li.task-list-item { list-style: none; margin-left: -1.4em; }
 #preview-content input[type="checkbox"] { cursor: pointer; width: 15px; height: 15px; margin: 0 8px 0 0; vertical-align: -2px; accent-color: var(--accent); }
 #preview-content li.task-list-item.done { color: var(--text-3); text-decoration: line-through; }
@@ -2697,7 +2697,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
    otherwise a `key: value` file came out key AND value the same green and read as
    one flat block (serekkr, 28/10/2026: "yaml vedo tutto verde e brutto"). */
 .hljs-attr { color: var(--hl-property); }
-/* Tag names red, like Obsidian: measured #fb484d on `<clickhouse>` / `<path>`. The
+/* Tag names red, from the reference: measured #fb484d on `<clickhouse>` / `<path>`. The
    angle brackets come out a dimmer red there (#97393b on a 1px stroke); painting
    .hljs-tag the same red as .hljs-name puts bracket and name on one colour, which is
    what the eye reads at note size anyway. */
@@ -3261,7 +3261,7 @@ body.split-open .pane-flash::after {
 }
 .media-fallback button:hover { background: var(--bg-4); }
 /* A vault image whose file is missing (deleted attachment) → named placeholder,
-   like Obsidian, instead of a broken-image icon. */
+   instead of a broken-image icon. */
 .img-missing {
   display: inline-block; padding: 4px 10px;
   background: var(--bg-2); border: 1px dashed var(--border); border-radius: 6px;
@@ -4554,7 +4554,7 @@ kbd {
 #clear-remote-row { display: flex; justify-content: flex-end; }
 
 /* Inline code `like this` (one or two backticks) carries the same tint as a fenced block
-   while you type, the way Obsidian shows it in live preview (serekkr, 20/10/2026). The whole
+   while you type, the way live preview shows it (serekkr, 20/10/2026). The whole
    run including the backticks sits on the chip; the accent colour marks it as code. Padding
    stays tiny (and only horizontal) so the chip never changes the line height CM measures. */
 #cm-mount .cm-inline-code {

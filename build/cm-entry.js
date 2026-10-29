@@ -209,14 +209,14 @@ function buildDeco(view, fencePositions) {
 // `dedentCodeBlocks` used to shift every fence to column 0 and turn leading tabs into
 // two spaces — on EVERY note loaded into the editor (create + setValue) as well as on
 // paste — so it only looked cosmetic: the next save wrote the shifted text to disk. On
-// the user's imported Obsidian vault (2026-09-23) that was 53 notes whose code sat under
+// the user's imported vault (2026-09-23) that was 53 notes whose code sat under
 // a list item, and tab-indented config/Makefile lines that would have lost their tabs.
 // The editor now holds the file's bytes; how an indented block LOOKS is the decoration's
 // business (codeBlockPlugin), never the text's. See paste-fidelity.cdp.mjs and
 // real-vault-soak.cdp.mjs.
 
 // ── Smart paste: convert clipboard HTML → Markdown ────────────────────────────
-// Sources that render markdown (Obsidian reading mode, web pages, GitHub rendered)
+// Sources that render markdown (reading-mode editors, web pages, GitHub rendered)
 // put FLATTENED text in text/plain (newlines lost) but structured HTML in text/html.
 // When the plain text looks flattened, we rebuild real markdown from the HTML.
 function inlineNode(c) {
@@ -565,9 +565,9 @@ const codeHighlightPlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: (v) => v.decorations });
 
-// ── Heading SIZE + bold in edit mode (Obsidian-style) ──────────────────────────
+// ── Heading SIZE + bold in edit mode (view-mode-style) ──────────────────────────
 // serekkr, 29/10/2026: in edit mode the `# …`/`## …` lines should read at the
-// view-mode size, and `**bold**` should look bold — like Obsidian's editor. Both
+// view-mode size, and `**bold**` should look bold — like a WYSIWYG editor. Both
 // are cheap viewport-scoped decorations (no markdown Lezer parser), and both skip
 // fenced code blocks. Size/weight only — the heading COLOUR stays in view mode.
 const _inFence = (fences, pos) => { for (let i = 0; i + 1 < fences.length; i += 2) { if (pos > fences[i] && pos < fences[i + 1]) return true; } return false; };
@@ -721,7 +721,7 @@ const tickPlugin = ViewPlugin.fromClass(class {
 
 // ── Inline code chip (edit mode) ─────────────────────────────────────────────
 // A span wrapped in ONE or TWO backticks — `code` or ``co`de`` — gets the same
-// tint as a fenced block, the way Obsidian shows it in live preview (serekkr,
+// tint as a fenced block, the way live preview shows it (serekkr,
 // 20/10/2026). Cheap regex over the visible ranges only (like the tag/link
 // plugins — NOT the markdown syntax tree, which is the O(doc) cost this editor
 // avoids), line by line so a match never spans a newline. SKIPPED inside fenced

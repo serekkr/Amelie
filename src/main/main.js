@@ -1341,7 +1341,7 @@ function writeNoteContent(relPath, content, keepModified, dates) {
     // above can only recover `created` from a file that is already here, and on an
     // import there is none — so both dates were stamped with the moment of the copy
     // and years of notes were flattened onto one afternoon. Found on 2026-09-22
-    // after importing 982 Obsidian notes: every one of them said "created today",
+    // after importing 982 imported notes: every one of them said "created today",
     // and the source's own `created: 2025-05-31` was thrown away by the strip below.
     // Only used when the note is NEW here; an existing note's own `created` wins.
     if (dates) {
@@ -1454,7 +1454,7 @@ function createMainWindow() {
   // navigating THIS webContents to an attacker-controlled document, which would
   // then be injected with the `window.inkwell` preload (full vault read/write +
   // openExternal exfil). Note content is untrusted (it syncs over SMB/WebDAV and
-  // imports from Obsidian). Subresources (<img>/<audio>/<embed> via inkwell:// or
+  // external imports). Subresources (<img>/<audio>/<embed> via inkwell:// or
   // http://127.0.0.1 media) do NOT fire will-navigate, so media is unaffected;
   // real external links open in the system browser via the openExternal IPC.
   const _rendererBase = pathToFileURL(path.join(__dirname, '../renderer/')).href;
@@ -2107,8 +2107,8 @@ async function _finalizeRestore(srcDir, passphrase, { move = false, cleanup = nu
   } catch (e) { clean(); return { ok: false, error: e.message }; }
 }
 
-// Is this a backup Amelie made, or an Obsidian vault? Restore swaps the vault for an
-// Amelie backup as it is — its links and folders are already Amelie's. An Obsidian
+// Is this a backup Amelie made, or a foreign vault? Restore swaps the vault for an
+// Amelie backup as it is — its links and folders are already Amelie's. A foreign
 // vault is not in that shape (no notes/, `![[img.png]]` embeds, images anywhere), and
 // swapping it in would bring none of it across: it has to go through the same import
 // as dropping the folder on the sidebar, which converts the links and files the
@@ -2116,9 +2116,9 @@ async function _finalizeRestore(srcDir, passphrase, { move = false, cleanup = nu
 // stessa logica"). Returns the folder to import from, or null for an Amelie backup
 // or for something that is neither, which the restore then rejects as it always did.
 //
-// `.obsidian/` settles it first, because an Obsidian vault may well hold a folder
-// the user happened to call "notes". Without it, notes/ means Amelie. A synced copy
-// can lack .obsidian/ (~/Documents/obsidian-sync does), so any note file at all is
+// The hidden service folder checked below settles it first, because a foreign vault
+// may well hold a folder the user happened to call "notes". Without it, notes/ means
+// Amelie. A synced copy can lack that folder, so any note file at all is
 // the last resort.
 function _obsidianRoot(dir) {
   const has = (n) => { try { return fs.statSync(path.join(dir, n)).isDirectory(); } catch (_) { return false; } };
@@ -2150,7 +2150,7 @@ ipcMain.handle('vault:restoreArchive', async (_, rawFile, passphrase) => {
   try {
     fs.mkdirSync(staging, { recursive: true });
     await require('tar').x({ file, cwd: staging });
-    // An Obsidian vault packed by hand usually sits in one folder of its own inside
+    // A foreign vault packed by hand usually sits in one folder of its own inside
     // the archive; look through that wrapper, and name the import after it.
     let top = staging, rootName = path.basename(file).replace(/\.(tar\.gz|tgz|gz)$/i, '');
     const inside = fs.readdirSync(staging).filter(n => !n.startsWith('.'));
@@ -2265,10 +2265,10 @@ ipcMain.handle('vault:filterDirs', async (_, paths) => {
   return out;
 });
 
-// Import an OBSIDIAN vault folder (read from disk in main — reliable + fast). Copies
+// Import a markdown vault folder (read from disk in main — reliable + fast). Copies
 // notes (structure preserved) + attachments (images→attachments/, pdf→attachments/pdf/,
 // audio/video→attachments/media/), all encrypted at rest via the normal write paths,
-// and rewrites Obsidian embeds ![[file]] into Amelie's format (images inline, other
+// and rewrites wiki embeds ![[file]] into Amelie's format (images inline, other
 // types as 📎/🎵/🎬 links). `destFolder` ('' = root) nests the import under a tree folder.
 ipcMain.handle('vault:importObsidian', async (_, rawSrc, destFolder, flat) => {
   if (!rawSrc) return { ok: false, error: 'Nessuna cartella' };
@@ -2278,8 +2278,8 @@ ipcMain.handle('vault:importObsidian', async (_, rawSrc, destFolder, flat) => {
   return importObsidianFolder(src, destFolder, undefined, !!flat);
 });
 
-// The import itself, shared by the drag-and-drop above and by Restore (which hands an
-// Obsidian folder or archive here instead of swapping the vault — see _obsidianRoot).
+// The import itself, shared by the drag-and-drop above and by Restore (which hands a
+// foreign folder or archive here instead of swapping the vault — see the root-detection helper above).
 // `rootName` names the container folder; it defaults to the source folder's own name,
 // which Restore overrides when the source is a temp dir an archive was unpacked into.
 // `files`: [{ r: path inside the source vault, leaf: stored name under attachments/ }].
@@ -2311,7 +2311,7 @@ function _recordImportedHomes(files, root) {
 }
 
 // `flat`: when true the vault's CONTENTS go straight under `destFolder` (root by default),
-// so the Obsidian root notes/folders appear at the Amelie root exactly as in Obsidian
+// so the source vault's root notes/folders appear at the Amelie root exactly as in the source
 // (serekkr, 21/10/2026). When false (Restore) everything is nested under one container
 // folder named after the source, keeping a dropped/restored vault grouped.
 async function importObsidianFolder(src, destFolder, rootNameOverride, flat = false) {
@@ -2389,14 +2389,14 @@ async function importObsidianFolder(src, destFolder, rootNameOverride, flat = fa
 
   // Phase B: rewrite + write notes (encrypted via writeNoteContent), skipping existing.
   // Nest everything under a container folder named after the dropped folder, so the
-  // import appears as ONE folder with its subfolders inside (preserving the Obsidian
+  // import appears as ONE folder with its subfolders inside (preserving the source
   // hierarchy) rather than scattering the top-level subfolders at the vault root.
   // `flat` → no container folder: the contents land directly under `dest` (root).
   const rootName = flat ? '' : (rootNameOverride || path.basename(src.replace(/[\\/]+$/, '')) || 'import');
   // Dates the note ALREADY has, so importing does not flatten a vault's whole
   // history onto the afternoon it was copied (2026-09-22: 982 notes all landed
   // saying "created today", and the Recent view, which sorts by this, became one
-  // undifferentiated block). Obsidian writes `created:`/`updated:` in its own
+  // undifferentiated block). Source vaults write `created:`/`updated:` in their own
   // frontmatter, in ISO with a T; some notes carry none at all, and those fall back
   // to what the filesystem knows. Everything is normalised to Amelie's own
   // `YYYY-MM-DD HH:MM` — a date written in any other shape would be shown verbatim
@@ -2960,7 +2960,7 @@ function migrateVideosToVideosFolder(key) {
 // match. Mirrors migrateVideosToVideosFolder. Sources: the vault root (drag/paste
 // used to drop audio there) and the old shared media/ bucket (import used to put
 // audio+video together). New audio already lands in audio/ (renderer
-// _attachmentTarget + importObsidian), so on a tidy vault this is a no-op.
+// _attachmentTarget + the import path), so on a tidy vault this is a no-op.
 const AUDIO_EXT_RE = /\.(mp3|wav|m4a|flac|aac|opus|wma|weba)$/i;
 function migrateAudioToAudioFolder(key) {
   if (!ATTACHMENTS_DIR || !fs.existsSync(ATTACHMENTS_DIR)) return 0;
@@ -3326,7 +3326,7 @@ ipcMain.handle('fs:writeNote', async (_, filePath, content, opts) => {
 //
 // It used to be fs.unlinkSync / fs.rmSync: gone, with no undo anywhere in the app —
 // and a delete here asks no question by choice (serekkr's preference), which is only
-// sound if the thing deleted can come back. It is also what Obsidian does, and what
+// sound if the thing deleted can come back. It is the common convention, and what
 // saved his afternoon on 12/10/2026, when the notes he had trashed by hand were still
 // there to restore. Falls back to removing the file when the desktop has no trash to
 // offer (a portal-less session, a vault on a filesystem the trash cannot serve):
@@ -3619,7 +3619,7 @@ async function saveAttachmentBuffer(originalName, buffer) {
     }
   }
   // Keep up to 120 ASCII chars of the name (matches the note-name cap above). 40 was
-  // too tight for real filenames: an Obsidian import of
+  // too tight for real filenames: an import of
   // "FlowSignal_White_Paper_of_Asymmetric_Traffic_Handling_392.pdf" landed as
   // "...Asymmetric_Tra.pdf", unreadable in the tree (serekkr, 21/10/2026). 120 + the
   // extension + the ".enc" at-rest suffix + a "-N" dedup counter stays well under the
@@ -3902,7 +3902,7 @@ function _hexToRgb01(hex) {
 }
 // Resolve symlinks and confirm the real target is still inside `baseDir`. The
 // other guards validate only the path TEXT; because the vault SYNCS (SMB/WebDAV)
-// and imports from Obsidian, a note/attachment on disk could be a SYMLINK
+// and accepts external imports, a note/attachment on disk could be a SYMLINK
 // pointing outside the vault (e.g. ~/.ssh/id_rsa) — reading/serving/opening it
 // would leak the target. Call on the on-disk path right before touching it.
 // Throws on escape (or if the file is missing — callers already handle that).
@@ -4456,7 +4456,7 @@ ipcMain.handle('attachment:removeUnusedMedia', async (_, apply) => {
 // Rename an image and return the new name; also patch all open notes
 // A `file://` URL for a PLAINTEXT attachment, or null when the bytes on disk are
 // ciphertext (only we can read those). This is what lets a player need no server at
-// all: Chromium opens the file itself — the same thing Obsidian does, visible as a
+// all: Chromium opens the file itself — the common approach, visible as a
 // plain file descriptor on its process — and its own loader answers the ranged
 // requests a seek is made of.
 //
@@ -5556,7 +5556,7 @@ function _attachmentUsage() {
 
 // attachment node path → the folders (never the root) whose saved sidebar order
 // lists it. That order is where an attachment NO note uses lives: dropped on a
-// folder, or placed by an import where the source vault kept it (Obsidian holds
+// folder, or placed by an import where the source vault kept it (source vaults hold
 // loose PDFs in any folder; Amelie stores them flat in attachments/, and without
 // this the 2026-09-22 import piled 16 of them at the root). A folder since deleted
 // no longer counts. The order file syncs with the notes, so the place does too.
@@ -5596,7 +5596,7 @@ function _attachmentPlacement() {
     let folders = usage.get(node.attachmentName);
     // An attachment a note links belongs to that note: show it INSIDE the note, never
     // as a separate tree row (serekkr, 22/10/2026 — "non si devono piu' vedere nella
-    // root, non ce li ho messi io"). An Obsidian import links its photos from the notes,
+    // root, non ce li ho messi io"). An imported vault links its photos from the notes,
     // so listing every one scattered a copy across the tree and the root. Covers images,
     // audio and video — but NOT PDFs ("i pdf no"): a linked PDF keeps its row so a
     // document stays reachable from the tree without opening its note. An attachment NO
