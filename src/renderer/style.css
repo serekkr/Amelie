@@ -4693,6 +4693,10 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .kc-sel-item { display: block; width: 100%; text-align: left; background: transparent; border: none; border-radius: 5px; color: var(--text-1); font-family: var(--ui-font); font-size: 14px; padding: 7px 10px; cursor: pointer; white-space: nowrap; }
 .kc-sel-item:hover { background: var(--bg-4); color: var(--text-0); }
 .kc-sel-item.sel { background: color-mix(in srgb, #000 30%, var(--bg-0)); color: var(--text-0); }
+/* Settings <select> replaced by a dark custom dropdown (attachDarkSelect). */
+.dark-select { display: block; width: 100%; min-width: 0; }
+.dark-select .kc-sel-btn { font-size: 13px; padding: 7px 9px; background: var(--bg-2); }
+.dark-select .kc-sel-pop { max-height: 260px; overflow-y: auto; }
 
 /* Custom calendar (dark) */
 /* min-width holds the full localized date+time ("28/10/2026, 14:30") so the

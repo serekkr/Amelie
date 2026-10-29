@@ -11370,6 +11370,48 @@ function setupSettings() {
   attachDarkTimePicker('cfg-local-dailytime');
   attachDarkTimePicker('cfg-remote-dailytime');
 
+  // Dark custom dropdown for the settings <select>s (interval, keep archives): keeps
+  // the native <select> as a HIDDEN value-holder — so every save/load path is unchanged
+  // — and shows a dark menu with no OS blue/purple on hover/selection, like the ToDo
+  // alert (serekkr, 29/10/2026).
+  const attachDarkSelect = (id) => {
+    const sel = $(id);
+    if (!sel || sel._darkSel) return;
+    sel._darkSel = true;
+    sel.style.display = 'none';
+    const wrap = document.createElement('div'); wrap.className = 'kc-sel dark-select';
+    sel.parentNode.insertBefore(wrap, sel);
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'kc-sel-btn';
+    const txt = document.createElement('span'); txt.className = 'kc-sel-txt';
+    const car = document.createElement('span'); car.className = 'kc-sel-caret'; car.textContent = '▾';
+    btn.append(txt, car);
+    const pop = document.createElement('div'); pop.className = 'kc-sel-pop'; pop.style.display = 'none';
+    const syncUI = () => {
+      const o = sel.options[sel.selectedIndex]; txt.textContent = o ? o.textContent : '';
+      // Re-read labels from the (possibly i18n-translated) options each time, so the
+      // custom items track translations and language switches.
+      [...sel.options].forEach((opt, i) => { const it = pop.children[i]; if (it) { it.textContent = opt.textContent; it.classList.toggle('sel', opt.value === sel.value); } });
+    };
+    [...sel.options].forEach(o => {
+      const item = document.createElement('button'); item.type = 'button'; item.dataset.v = o.value;
+      item.className = 'kc-sel-item'; item.textContent = o.textContent;
+      item.addEventListener('click', (e) => { e.stopPropagation(); sel.value = o.value; sel.dispatchEvent(new Event('change', { bubbles: true })); syncUI(); close(); });
+      pop.appendChild(item);
+    });
+    wrap.append(btn, pop);
+    wrap.addEventListener('mouseenter', syncUI);   // belt-and-suspenders: label always current
+    const onDoc = (e) => { if (!wrap.contains(e.target)) close(); };
+    function close() { pop.style.display = 'none'; document.removeEventListener('click', onDoc, true); }
+    function open() { syncUI(); pop.style.display = 'block'; setTimeout(() => document.addEventListener('click', onDoc, true), 0); }
+    btn.addEventListener('click', (e) => { e.stopPropagation(); pop.style.display === 'none' ? open() : close(); });
+    sel.addEventListener('change', syncUI);
+    sel._darkSync = syncUI;   // loadSettings sets .value directly → call this to refresh the label
+    syncUI();
+  };
+  attachDarkSelect('cfg-twoway-interval');
+  attachDarkSelect('cfg-local-interval');
+  attachDarkSelect('cfg-backup-keep');
+
   // One editor at a time: clicking anywhere OUTSIDE an open ToDo editor — another
   // task, a section header, the ToDo tree entry, today/tomorrow — closes it (serekkr,
   // 28/10/2026). Clicks INSIDE the editor (its text field, buttons, and the date-picker
@@ -13154,7 +13196,7 @@ async function openSettings() {
       // A profile saved with the old "realtime" option lands on the shortest
       // interval there is now — the closest thing to what it used to do.
       const twMin = cfg.sync?.twoway?.realtime ? 5 : (parseFloat(cfg.sync?.twoway?.intervalMinutes) || 15);
-      const presets = ['1', '5', '15', '60', '1440'];
+      const presets = ['1', '5', '15', '60'];   // no 'daily' for SYNC (serekkr, 29/10/2026)
       if (presets.includes(String(twMin))) {
         twSel.value = String(twMin);
         if ($('twoway-custom-wrap')) $('twoway-custom-wrap').style.display = 'none';
@@ -13165,6 +13207,8 @@ async function openSettings() {
       }
     }
   }
+  // Refresh the dark custom dropdowns to the values just loaded.
+  ['cfg-twoway-interval', 'cfg-local-interval', 'cfg-backup-keep'].forEach(id => { try { $(id)?._darkSync?.(); } catch (_) {} });
   if ($('cfg-vpn-archive'))        $('cfg-vpn-archive').checked        = !!(cfg.sync?.vpn?.archive || cfg.sync?.samba?.archive);
   // Folder toggle = the inverse of archiveOnly (folder snapshot happens unless
   // "archive only" was set). Defaults to ON for a fresh config.
@@ -19352,7 +19396,10 @@ async function refreshBackupStatusLines() {
 // matched to the destination being viewed. Both can be configured; you see one at a time
 // because the Backup panel shows one destination block at a time.
 function updateDailyTimeWraps() {
-  const daily = ($('cfg-local-interval')?.value === '1440');
+  // Show the time-of-day field for DAILY and WEEKLY backups (serekkr, 29/10/2026:
+  // weekly was missing the time to run it).
+  const iv = $('cfg-local-interval')?.value;
+  const daily = (iv === '1440' || iv === '10080');
   const kind = (typeof currentRemoteKind === 'function') ? currentRemoteKind() : 'local';
   const lw = $('local-dailytime-wrap');
   const rw = $('remote-dailytime-wrap');
