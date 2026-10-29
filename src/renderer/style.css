@@ -4696,13 +4696,14 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 /* Settings <select> replaced by a dark custom dropdown (attachDarkSelect). */
 .dark-select { display: block; width: 100%; min-width: 0; }
 .dark-select .kc-sel-btn { font-size: 13px; padding: 7px 9px; background: var(--bg-2); }
-/* The popup is appended to <body> and fixed so the Settings modal's scroll can't clip it. */
-.dark-select-pop { position: fixed; max-height: 260px; overflow-y: auto; }
+/* The popup is appended to <body>, fixed, and above the Settings modal (z 1000) so it
+   is never clipped NOR stuck behind the modal (that made the options unclickable). */
+.dark-select-pop { position: fixed; z-index: 2200; max-height: 260px; overflow-y: auto; }
 /* More defined borders on the Backup/Sync option fields (serekkr, 29/10/2026 — they
-   barely showed): a near-black edge against the slightly lighter field fill. */
+   barely showed; #000 was too dark). A visible medium grey. */
 .dark-select .kc-sel-btn,
 #settings-modal .sync-section input,
-#settings-modal .sync-section .export-select { border-color: #000; }
+#settings-modal .sync-section .export-select { border-color: #555; }
 
 /* Custom calendar (dark) */
 /* min-width holds the full localized date+time ("28/10/2026, 14:30") so the
