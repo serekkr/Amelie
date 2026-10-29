@@ -4816,7 +4816,7 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .todo-row { display: flex; align-items: flex-start; gap: 11px; padding: 9px 8px; border-radius: 8px; border-bottom: 1px solid var(--border); transition: background .12s; }
 /* Green border (inset, so no layout shift) + soft glow on hover, like the rest of
    the app (serekkr, 28/10/2026: "i bordi verdi nella todo quando faccio hover"). */
-.todo-row:hover { background: color-mix(in srgb, #000 32%, var(--bg-0)); box-shadow: inset 0 0 0 1px var(--border-light); }
+.todo-row:hover { background: color-mix(in srgb, #000 17%, var(--bg-0)); }
 .todo-check { flex-shrink: 0; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%; border: 1.6px solid var(--border-light); background: transparent; color: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; line-height: 1; transition: all .15s; }
 .todo-check:hover { border-color: var(--accent); }
 .todo-row.done .todo-check { background: var(--green); border-color: var(--green); color: #fff; }
