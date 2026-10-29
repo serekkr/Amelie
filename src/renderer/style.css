@@ -1231,7 +1231,9 @@ kbd {
 /* Row 2: dates */
 #note-header-meta {
   display: flex; align-items: center;
-  margin-top: 5px;
+  /* Lowered from 5px so the "created / last edited" line sits level with the
+     new-note / new-folder icon row in the sidebar on the left (serekkr, 30/10/2026). */
+  margin-top: 10px;
   /* Colours bumped one palette step (serekkr, 20/10/2026 — "le leggo appena"): labels and
      separator were --text-3 (#4f4f4f, nearly invisible on the dark bg), dates --text-2.
      Now --text-2 / --text-1 so the row reads clearly while staying below the title. */
