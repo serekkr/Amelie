@@ -759,7 +759,9 @@ html.is-mac #titlebar { padding-left: 72px; }
    lettere piu' accese. Qui il colore serviva all'ICONA della riga, perche' il nome era
    gia' portato a --text-0 piu' sotto. */
 .tree-note.active {
-  background: var(--selected-mask); color: var(--text-0);
+  /* Same dark pill as the Index's selected row and the inline-code chip (serekkr,
+     29/10/2026: "farlo così anche sul lato sinistro dove sono le note/cartelle"). */
+  background: color-mix(in srgb, #000 30%, var(--bg-0)); color: var(--text-0);
 }
 /* La riga su cui il tasto destro sta agendo: un BORDO grigio di 1px a LARGHEZZA PIENA,
    come Obsidian (serekkr 27/10/2026, "in obsidian mi sembrano uguali"). Il bordo NON sta
@@ -3315,11 +3317,11 @@ body.split-open .pane-flash::after {
 .toc-item.h2.active,
 .toc-item.h3.active,
 .toc-item.h4.active {
-  color: var(--accent); border-left-color: var(--accent);
-  /* No bold on the selected Index row (serekkr, 29/10/2026) — the accent colour,
-     background and left border already mark it; the weight bump also made the row
-     reflow a hair. Darker pill than the shared --active-bg (same value as the inline
-     code chip), asked for 29/10/2026. */
+  /* White label on a dark pill, no bold (serekkr, 29/10/2026). The left accent bar
+     marks it; the dark pill (same value as the inline-code chip and the sidebar's
+     selected note) and the white text do the rest. The weight bump also reflowed the
+     row a hair, so it's gone. */
+  color: var(--text-0); border-left-color: var(--accent);
   background: color-mix(in srgb, #000 30%, var(--bg-0)); font-weight: normal;
 }
 
