@@ -4662,9 +4662,11 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .kc-due, .kc-alert {
   background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px;
   color: var(--text-1); font-family: var(--ui-font); font-size: 13px; padding: 5px 7px; outline: none; flex: 1; min-width: 110px;
-  /* Dark native dropdown (no bright cyan/blue system highlight on the selected
-     option) — serekkr, 29/10/2026. */
-  color-scheme: dark;
+  /* Dark native dropdown (no bright cyan/blue/purple system highlight on the
+     selected option) — serekkr, 29/10/2026. color-scheme darkens the menu;
+     accent-color forces the highlighted option to a dark grey instead of the
+     browser's default blue/purple. */
+  color-scheme: dark; accent-color: #1c1c20;
 }
 .kc-due:focus, .kc-alert:focus { border-color: var(--accent); }
 .kc-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
