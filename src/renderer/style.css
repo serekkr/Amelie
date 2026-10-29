@@ -4529,7 +4529,10 @@ kbd {
    run including the backticks sits on the chip; the accent colour marks it as code. Padding
    stays tiny (and only horizontal) so the chip never changes the line height CM measures. */
 #cm-mount .cm-inline-code {
-  background: var(--code-bg); border-radius: 4px; padding: 0 3px; color: var(--accent);
+  /* Darker pill than the shared --code-bg wash (serekkr, 29/10/2026: "più scura").
+     Dedicated value so code blocks / view stay untouched. Tweak the 30% to taste. */
+  background: color-mix(in srgb, #000 30%, var(--bg-0));
+  border-radius: 4px; padding: 0 3px; color: var(--accent);
 }
 
 /* Accent on hover for the ICONS of the two accent-coloured palettes — Green Dark (the
