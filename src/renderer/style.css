@@ -3316,7 +3316,10 @@ body.split-open .pane-flash::after {
 .toc-item.h3.active,
 .toc-item.h4.active {
   color: var(--accent); border-left-color: var(--accent);
-  background: var(--active-bg); font-weight: 600;
+  /* No bold on the selected Index row (serekkr, 29/10/2026) — the accent colour,
+     background and left border already mark it; the weight bump also made the row
+     reflow a hair. */
+  background: var(--active-bg); font-weight: normal;
 }
 
 /* ─── Frontmatter inline date sep ───────────────────────────── */
