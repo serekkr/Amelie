@@ -11322,6 +11322,18 @@ function setupSettings() {
       if (_todoEditorClose) { try { _todoEditorClose(); return; } catch (_) {} }
       try { renderTodoView(); } catch (_) {}
     }, true);
+    // …but an UNSAVED quick-add must not survive being left: when the app is hidden
+    // (minimised, window closed to background), discard the open "new task" editor so
+    // it is NOT still showing its unsaved text next time Amelie is opened (serekkr,
+    // 29/10/2026). It's sticky WITHIN a session, not across leaving the app.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) return;
+      try {
+        const ar = document.getElementById('todo-add-row');
+        const ed = ar && ar.querySelector('.todo-editor');
+        if (ed) { _todoEditorClose = null; ar.innerHTML = ''; ar.appendChild(_todoAddTrigger()); }
+      } catch (_) {}
+    });
   }
 
   // "Backup now": save settings first (so the latest path/mode is used), then
