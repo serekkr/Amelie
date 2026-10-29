@@ -4553,6 +4553,21 @@ async function restoreLastDeletedNote() {
   showToast(window.i18n.t('tree.restored_one', { name: res.name || '' }));
 }
 
+// The next openable item (note / drawing / PDF / image / media — anything but a
+// folder) after `path` in tree order, or the previous one if `path` is the last.
+// Null when it's the only item. Lets deleting the item you're VIEWING land the view
+// on the next item instead of a blank screen (serekkr, 29/10/2026).
+function _nextOpenableItem(path) {
+  const flat = flattenTree(state.notes).filter(n => n.type !== 'folder' && n.path);
+  const i = flat.findIndex(n => n.path === path);
+  if (i === -1) return null;
+  return flat[i + 1] || flat[i - 1] || null;
+}
+async function _openByPath(path) {
+  if (!path) return;
+  try { const n = flattenTree(state.notes).find(x => x.type !== 'folder' && x.path === path); if (n) await openNote(n); } catch (_) {}
+}
+
 async function deleteNote(node, { bulk = false } = {}) {
   // A NOTE goes through without asking — serekkr's choice of 12/10/2026, and what makes
   // it safe is that delete goes to the system trash (main.js: trashOrRemove).
@@ -4571,6 +4586,10 @@ async function deleteNote(node, { bulk = false } = {}) {
     const nome = node.name || String(node.path || '').split('/').pop();
     if (!(await showConfirmModal(window.i18n.t(chiave, { name: nome, n: dentro })))) return;
   }
+  // Deleting the item currently ON SCREEN? Remember the next tree item (any type)
+  // so the view lands on it instead of going blank. Only when it is the one shown.
+  const _viewingThis = !bulk && node.type !== 'folder' && !!state.currentPath && state.currentPath === node.path;
+  const _nextPath = _viewingThis ? (_nextOpenableItem(node.path)?.path || null) : null;
   removeFromTreeOrder(node.path);   // forget the deleted item's manual order
   if (node.type === 'folder') {
     _lastDeletedNote = null;   // a folder is not the single-note undo
@@ -4607,6 +4626,8 @@ async function deleteNote(node, { bulk = false } = {}) {
       else closeTab(tabIdx);
     }
     if (!bulk) await loadTree();
+    // Was viewing this attachment and it closed to nothing → jump to the next item.
+    if (_viewingThis && _nextPath && activeTabIdx === -1) await _openByPath(_nextPath);
     return;
   }
   // Update the VIEW first, THEN delete on disk: jumping to the neighbour used to
@@ -4625,7 +4646,8 @@ async function deleteNote(node, { bulk = false } = {}) {
     if (tabs.length === 0) {
       activeTabIdx = -1;
       state.currentPath = null;
-      if (!bulk) { editorContainer.style.display = 'none'; emptyState.style.display = 'flex'; }
+      // Don't flash the empty state when we're about to open the next tree item below.
+      if (!bulk && !_nextPath) { editorContainer.style.display = 'none'; emptyState.style.display = 'flex'; }
     } else if (wasActive) {
       // Deleted the note the user was on → switch to its neighbour and load it.
       if (bulk) activeTabIdx = Math.min(tabIdx, tabs.length - 1);
@@ -4642,6 +4664,8 @@ async function deleteNote(node, { bulk = false } = {}) {
   // delete is a set we don't rebuild from one note, so it clears the offer instead.
   _lastDeletedNote = bulk ? null : { path: node.path, name: node.name };
   if (!bulk) await loadTree();
+  // Was viewing this note and it closed to nothing → jump to the next tree item.
+  if (_viewingThis && _nextPath && activeTabIdx === -1) await _openByPath(_nextPath);
 }
 
 // Apply a rename once a new name is known (shared by inline editor + any caller).
