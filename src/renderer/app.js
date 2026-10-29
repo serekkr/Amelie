@@ -19516,7 +19516,11 @@ function _todoRow(it) {
   const main = document.createElement('div'); main.className = 'todo-main';
   const title = document.createElement('div'); title.className = 'todo-title'; title.textContent = it.title || '(vuoto)';
   title.addEventListener('click', () => {
-    if (document.querySelector('.todo-editor')) return;   // one editor at a time
+    // Close any editor already open first — including the STICKY new-task quick-add
+    // at the top — so clicking edit on a task switches straight to editing it
+    // (serekkr, 29/10/2026). _todoEditorClose swaps the open editor back for its row
+    // (or the + trigger) in place, no re-render.
+    if (_todoEditorClose) { try { _todoEditorClose(); } catch (_) {} }
     row.replaceWith(_todoInlineEditor(it.bucket, it));
   });
   main.appendChild(title);
@@ -19538,7 +19542,11 @@ function _todoRow(it) {
   ed.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
   ed.addEventListener('click', e => {
     e.stopPropagation();
-    if (document.querySelector('.todo-editor')) return;   // one editor at a time
+    // Close any editor already open first — including the STICKY new-task quick-add
+    // at the top — so clicking edit on a task switches straight to editing it
+    // (serekkr, 29/10/2026). _todoEditorClose swaps the open editor back for its row
+    // (or the + trigger) in place, no re-render.
+    if (_todoEditorClose) { try { _todoEditorClose(); } catch (_) {} }
     row.replaceWith(_todoInlineEditor(it.bucket, it));
   });
   actions.appendChild(ed);
