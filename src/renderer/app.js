@@ -19687,7 +19687,16 @@ function _buildDateField(initial) {
   const onKey = (ev) => { if (ev.key === 'Escape') closePop(); };
   function openPop() {
     renderCal();
+    pop.style.left = '0px';
     pop.style.display = 'block';
+    // Keep the popup inside the viewport: the reminder picker sits far right, so its
+    // calendar+time would overflow the right edge and get clipped — shift it left
+    // by the overflow (serekkr, 29/10/2026).
+    try {
+      const r = pop.getBoundingClientRect();
+      const over = r.right - (window.innerWidth - 10);
+      if (over > 0) pop.style.left = (-Math.ceil(over)) + 'px';
+    } catch (_) {}
     setTimeout(() => {
       document.addEventListener('mousedown', onDocDown, true);
       document.addEventListener('keydown', onKey, true);
