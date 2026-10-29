@@ -11321,6 +11321,7 @@ function setupSettings() {
   };
   _wireDailyTimeSave('cfg-local-dailytime', 'local');
   _wireDailyTimeSave('cfg-remote-dailytime', 'remote');
+  _wireDailyTimeSave('cfg-twoway-dailytime', 'sync');   // sync daily time auto-saves too
 
   // Custom DARK time picker for the backup daily-time fields. The native <input
   // type=time> dropdown paints its selected/hover rows a bright blue we cannot
