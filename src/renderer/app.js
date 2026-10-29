@@ -18080,11 +18080,8 @@ function toggleNoteSearch() {
 function openNoteSearch() {
   const bar = $('note-search-bar');
   bar.style.display = 'flex';
-  // Hands the whole toolbar row to the field (see #editor-toolbar.searching in
-  // style.css): while you are typing what to look for, the formatting buttons are
-  // not what you are reaching for, and sharing the row left the field too short for
-  // a phrase.
-  $('editor-toolbar')?.classList.add('searching');
+  // The field now opens on the dates row (#note-header-meta), in the empty space to
+  // the right, so the formatting toolbar is left untouched — no more .searching takeover.
   $('btn-note-search').classList.add('active');
   const input = $('note-search-input');
   input.value = '';
@@ -18105,7 +18102,6 @@ function clearNoteSearchMarks() {
 
 function closeNoteSearch() {
   $('note-search-bar').style.display = 'none';
-  $('editor-toolbar')?.classList.remove('searching');   // formatting buttons come back
   $('btn-note-search').classList.remove('active');
   clearNoteSearchMarks();
 }

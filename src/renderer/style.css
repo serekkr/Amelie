@@ -3966,7 +3966,9 @@ body.split-open .pane-flash::after {
    both gone, since the row it is in already draws them. */
 #note-search-bar {
   display: flex; align-items: center; gap: 7px;
-  padding: 0; margin-right: 6px; background: transparent;
+  /* margin-left:auto pins it to the right edge of the dates row, in the empty space
+     the "created / last edited" text never fills, directly under the Index lens. */
+  padding: 0; margin-left: auto; margin-right: 0; background: transparent;
   border: none; flex-shrink: 0;
 }
 /* `color: inherit` matters: the prev/next buttons set their own colour (and a
@@ -3985,16 +3987,6 @@ body.split-open .pane-flash::after {
   color: var(--text-0); font-family: var(--editor-font); font-size: 14px;
   padding: 1px 0;
 }
-/* ── Search open (openNoteSearch adds .searching) ──
-   The formatting buttons step aside and the field takes the whole row: a slot next
-   to a full toolbar was never long enough for a phrase. The lens stays — it is what
-   closes the search again — and so does the spacer, whose inline `flex:1` competes
-   for the same slack; !important is the only way past an inline style, and without
-   it half the row would go to empty space. */
-#editor-toolbar.searching #toolbar-buttons > *:not(#note-search-bar):not(#btn-note-search):not(.toolbar-spacer) { display: none; }
-#editor-toolbar.searching .toolbar-spacer { flex: 0 0 0 !important; }
-#editor-toolbar.searching #note-search-bar { flex: 1 1 auto; margin-right: 8px; }
-#editor-toolbar.searching #note-search-input { flex: 1 1 auto; }
 #note-search-input::placeholder { color: var(--text-3); }
 /* The match counter ("3/17") was --text-3, the dimmest step in the palette —
    #4f4f4f here and #344d66 in the inkwell theme, effectively unreadable on the
