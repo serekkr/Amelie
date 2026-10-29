@@ -4797,7 +4797,7 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 #todo-filters-bar { display: flex; gap: 6px; margin-bottom: 16px; -webkit-app-region: no-drag; flex-wrap: wrap; }
 .tv-filter { background: transparent; border: 1px solid var(--border); color: var(--text-2); border-radius: 20px; padding: 5px 14px; font-family: var(--ui-font); font-size: 14px; cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
 .tv-filter:hover { color: var(--text-0); border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
-.tv-filter.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tv-filter.active { background: transparent; border-color: var(--accent); color: var(--text-0); }
 
 /* No hover effect on the section titles — nothing happens on mouse-over (serekkr,
    28/10/2026: "lasciale cosi', quando passo sopra non deve fare niente").
