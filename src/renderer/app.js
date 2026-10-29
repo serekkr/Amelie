@@ -19265,7 +19265,7 @@ function _buildDarkSelect(opts, current, onChange) {
   btn.append(txt, car);
   const pop = document.createElement('div'); pop.className = 'kc-sel-pop'; pop.style.display = 'none';
   opts.forEach(([v, l]) => {
-    const item = document.createElement('button'); item.type = 'button';
+    const item = document.createElement('button'); item.type = 'button'; item.dataset.v = v;
     item.className = 'kc-sel-item' + (v === value ? ' sel' : ''); item.textContent = l;
     item.addEventListener('click', (e) => {
       e.stopPropagation(); value = v; txt.textContent = l;
@@ -19279,7 +19279,12 @@ function _buildDarkSelect(opts, current, onChange) {
   function close() { pop.style.display = 'none'; document.removeEventListener('click', onDoc, true); }
   function open() { pop.style.display = 'block'; setTimeout(() => document.addEventListener('click', onDoc, true), 0); }
   btn.addEventListener('click', (e) => { e.stopPropagation(); (pop.style.display === 'none') ? open() : close(); });
-  return { el: wrap, get: () => value };
+  // Set the value programmatically (updates label + highlight), WITHOUT firing onChange.
+  const set = (v) => {
+    value = v; txt.textContent = labelOf(v);
+    pop.querySelectorAll('.kc-sel-item').forEach(x => x.classList.toggle('sel', x.dataset.v === v));
+  };
+  return { el: wrap, get: () => value, set };
 }
 
 function _fmtDue(due) { const d = new Date(due); if (isNaN(d)) return ''; return d.toLocaleString(undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
@@ -19603,7 +19608,7 @@ function _todoRow(it) {
 }
 
 // Custom calendar (calendar + time selection only, with OK). No manual input.
-function _buildDateField(initial) {
+function _buildDateField(initial, onChange) {
   const wrap = document.createElement('div'); wrap.className = 'dp-wrap';
   let value = initial || '';
   const CAL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
@@ -19673,11 +19678,11 @@ function _buildDateField(initial) {
     const act = document.createElement('div'); act.className = 'dp-actions';
     const clear = document.createElement('button'); clear.type = 'button'; clear.className = 'dp-clear'; clear.textContent = window.i18n.t('todo.clear_date');
     const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'dp-ok'; ok.textContent = 'OK';
-    clear.onclick = () => { value = ''; selDate = null; renderTrigger(); pop.style.display = 'none'; };
+    clear.onclick = () => { value = ''; selDate = null; renderTrigger(); pop.style.display = 'none'; if (onChange) onChange(value); };
     ok.onclick = () => {
       if (selDate) { const y = selDate.getFullYear(), mo = String(selDate.getMonth() + 1).padStart(2, '0'), da = String(selDate.getDate()).padStart(2, '0'); value = `${y}-${mo}-${da}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`; }
       else value = '';
-      renderTrigger(); pop.style.display = 'none';
+      renderTrigger(); pop.style.display = 'none'; if (onChange) onChange(value);
     };
     act.append(clear, ok); pop.appendChild(act);
   }
@@ -19764,7 +19769,15 @@ function _todoInlineEditor(bucket, it) {
     const dt = new Date(it.due).getTime();
     if (!isNaN(dt)) { initRemind = _toLocalInput(dt - parseInt(curAlert, 10) * 60000); initPreset = 'custom'; }
   }
-  const remindPicker = _buildDateField(initRemind);
+  const remindPicker = _buildDateField(initRemind, (newVal) => {
+    // User edited the reminder date/time: if it no longer equals the selected preset
+    // (due − 15 min / 1 hour), the menu switches to Custom (serekkr, 29/10/2026).
+    const sel = alertSel && alertSel.get();
+    if (!sel || sel === 'custom') return;
+    const dm = dueMsOf();
+    const expected = dm != null ? _toLocalInput(dm - parseInt(sel, 10) * 60000) : null;
+    if (newVal !== expected) alertSel.set('custom');
+  });
   remindPicker.el.style.display = initPreset ? '' : 'none';
   // Reminder options kept small (serekkr, 29/10/2026): No reminder, 15 min before,
   // 1 hour before, Custom. The two offsets pre-fill the reminder picker relative to
