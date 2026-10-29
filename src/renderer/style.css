@@ -3318,8 +3318,9 @@ body.split-open .pane-flash::after {
   color: var(--accent); border-left-color: var(--accent);
   /* No bold on the selected Index row (serekkr, 29/10/2026) — the accent colour,
      background and left border already mark it; the weight bump also made the row
-     reflow a hair. */
-  background: var(--active-bg); font-weight: normal;
+     reflow a hair. Darker pill than the shared --active-bg (same value as the inline
+     code chip), asked for 29/10/2026. */
+  background: color-mix(in srgb, #000 30%, var(--bg-0)); font-weight: normal;
 }
 
 /* ─── Frontmatter inline date sep ───────────────────────────── */
