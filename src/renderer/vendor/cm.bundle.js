@@ -19433,6 +19433,16 @@
       return wrap;
     }
   };
+  function _headingRowFactor(text) {
+    const m = /^(#{1,6})(?:\s|$)/.exec(text);
+    if (!m) return 1;
+    const l = m[1].length;
+    return l === 1 ? 1.9 : l === 2 ? 1.45 : l === 3 ? 1.15 : 1;
+  }
+  function _visualRows(block, doc2, lh) {
+    const f = _headingRowFactor(doc2.lineAt(block.from).text);
+    return Math.max(1, Math.round(block.height / (lh * f)));
+  }
   var visualRowNumbers = ViewPlugin.fromClass(class {
     constructor(view) {
       this.first = /* @__PURE__ */ new Map();
@@ -19443,12 +19453,13 @@
     }
     compute(view) {
       const lh = view.defaultLineHeight || 1;
+      const doc2 = view.state.doc;
       const blocks = view.viewportLineBlocks;
       const map = /* @__PURE__ */ new Map();
       let n = blocks.length ? Math.round(blocks[0].top / lh) + 1 : 1;
       for (const b of blocks) {
         map.set(b.from, n);
-        n += Math.max(1, Math.round(b.height / lh));
+        n += _visualRows(b, doc2, lh);
       }
       this.first = map;
     }
@@ -19458,7 +19469,7 @@
       class: "cm-lineNumbers cm-vlnums-gutter",
       lineMarker(view, block) {
         const lh = view.defaultLineHeight || 1;
-        const rows = Math.max(1, Math.round(block.height / lh));
+        const rows = _visualRows(block, view.state.doc, lh);
         const plugin = view.plugin(visualRowNumbers);
         const first = plugin?.first.get(block.from) ?? Math.round(block.top / lh) + 1;
         return new VisualLineNumbers(first, rows);

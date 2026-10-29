@@ -92,17 +92,35 @@ class VisualLineNumbers extends GutterMarker {
 // long note. Counting rows one line after the next inside the viewport cannot skip;
 // only the FIRST number is derived from the position, so any drift becomes a constant
 // offset instead of a hole in the middle of the screen.
+// A heading line is TALLER than a normal line because of its font-size (view-mode
+// sizes, mirrored in edit mode), NOT because it soft-wrapped. So its block.height is
+// ~1.9×/1.45×/1.15× the base line height; dividing by the BASE height would count it
+// as 2 visual rows and print a doubled / skipped number in the gutter (serekkr,
+// 29/10/2026). Divide by the line's OWN row height instead, so a non-wrapped heading
+// is 1 row and a wrapped one still counts its wraps. (A `#` inside a code block is not
+// enlarged, so its real height is 1× and this still yields 1 — no fence check needed.)
+function _headingRowFactor(text) {
+  const m = /^(#{1,6})(?:\s|$)/.exec(text);
+  if (!m) return 1;
+  const l = m[1].length;
+  return l === 1 ? 1.9 : l === 2 ? 1.45 : l === 3 ? 1.15 : 1;
+}
+function _visualRows(block, doc, lh) {
+  const f = _headingRowFactor(doc.lineAt(block.from).text);
+  return Math.max(1, Math.round(block.height / (lh * f)));
+}
 const visualRowNumbers = ViewPlugin.fromClass(class {
   constructor(view) { this.first = new Map(); this.compute(view); }
   update(u) { if (u.docChanged || u.viewportChanged || u.geometryChanged) this.compute(u.view); }
   compute(view) {
     const lh = view.defaultLineHeight || 1;
+    const doc = view.state.doc;
     const blocks = view.viewportLineBlocks;
     const map = new Map();
     let n = blocks.length ? Math.round(blocks[0].top / lh) + 1 : 1;
     for (const b of blocks) {
       map.set(b.from, n);
-      n += Math.max(1, Math.round(b.height / lh));
+      n += _visualRows(b, doc, lh);
     }
     this.first = map;
   }
@@ -113,7 +131,7 @@ function visualLineNumbers() {
     class: 'cm-lineNumbers cm-vlnums-gutter',
     lineMarker(view, block) {
       const lh = view.defaultLineHeight || 1;
-      const rows = Math.max(1, Math.round(block.height / lh));
+      const rows = _visualRows(block, view.state.doc, lh);
       const plugin = view.plugin(visualRowNumbers);
       const first = plugin?.first.get(block.from) ?? (Math.round(block.top / lh) + 1);
       return new VisualLineNumbers(first, rows);
