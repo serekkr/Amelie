@@ -574,7 +574,7 @@ const TRANSLATIONS = {
     'todo.alert_1440':          '1 giorno prima',
 
     // Empty state (full sentence)
-    'empty.select_note':        'Seleziona una nota o creane una nuova',
+    'empty.select_note':        'Seleziona una nota o',
     'empty.create_note':        'Crea una nuova nota',
     'empty.create_draw':        'Crea un nuovo disegno',
     'empty.create_todo':        'Crea un nuovo todo',
@@ -1541,7 +1541,7 @@ const TRANSLATIONS = {
     'todo.alert_1440':          '1 day before',
 
     // Empty state (full sentence)
-    'empty.select_note':        'Select a note or create a new one',
+    'empty.select_note':        'Select a note or',
     'empty.create_note':        'Create a new note',
     'empty.create_draw':        'Create a new draw',
     'empty.create_todo':        'Create a new todo',
@@ -2439,7 +2439,7 @@ const TRANSLATIONS = {
     'todo.alert_none': 'Keine',
     'todo.alert_ontime': 'Zum Fälligkeitszeitpunkt',
     'todo.alert_1440': '1 Tag vorher',
-    'empty.select_note': 'Wähle eine Notiz aus oder erstelle eine neue',
+    'empty.select_note': 'Wähle eine Notiz aus oder',
     'empty.create_note': 'Neue Notiz erstellen',
     'empty.create_draw': 'Neue Zeichnung erstellen',
     'empty.create_todo': 'Neues To-do erstellen',
@@ -3296,7 +3296,7 @@ const TRANSLATIONS = {
     'todo.alert_none': 'Ninguno',
     'todo.alert_ontime': 'A la hora del vencimiento',
     'todo.alert_1440': '1 día antes',
-    'empty.select_note': 'Selecciona una nota o crea una nueva',
+    'empty.select_note': 'Selecciona una nota o',
     'empty.create_note': 'Crear una nueva nota',
     'empty.create_draw': 'Crear un nuevo dibujo',
     'empty.create_todo': 'Crear una nueva tarea',
