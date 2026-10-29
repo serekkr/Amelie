@@ -10407,6 +10407,8 @@ function setupSettings() {
   // survive a reload — see saveSettings()/openSettings().
 
   $('btn-new-note').addEventListener('click', () => createNewNote(newNoteFolder()));
+  // Button on the empty state (shown when all tabs are closed) — same as the "+".
+  $('empty-new-note-btn')?.addEventListener('click', () => createNewNote(newNoteFolder()));
   $('btn-new-folder').addEventListener('click', () => createNewFolder());
   $('btn-collapse-all')?.addEventListener('click', () => toggleAllFolders());
   setupTreeSort();
