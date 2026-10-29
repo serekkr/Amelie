@@ -4650,10 +4650,10 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 /* Inline editor for the card */
 .kanban-card.editing { cursor: default; gap: 8px; }
 .kc-text {
-  width: 100%; box-sizing: border-box; resize: vertical; min-height: 40px;
+  width: 100%; box-sizing: border-box; resize: vertical; min-height: 76px;
   background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px;
   /* Writing a task uses the editor font too, so what you type looks like what you'll read. */
-  color: var(--text-0); font-family: var(--editor-font-family); font-size: 14px; padding: 7px 9px; outline: none;
+  color: var(--text-0); font-family: var(--editor-font-family); font-size: 14.5px; line-height: 1.5; padding: 8px 10px; outline: none;
 }
 /* New-task / edit-task field: focus border a muted off-white that blends with the UI,
    NOT green (serekkr, 28/10/2026: "non farlo verde, farlo bianco scuro per abbinarsi"). */

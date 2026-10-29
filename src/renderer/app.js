@@ -19688,6 +19688,11 @@ let _todoEditorClose = null;
 function _todoInlineEditor(bucket, it) {
   const wrap = document.createElement('div'); wrap.className = 'todo-editor';
   const ta = document.createElement('textarea'); ta.className = 'kc-text'; ta.rows = 1; ta.placeholder = window.i18n.t('todo.new_task'); ta.value = it ? it.text : '';
+  // Grow with content so 2-3+ lines are all visible (capped so it never takes over
+  // the panel) — serekkr, 29/10/2026.
+  const _taGrow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 2, 340) + 'px'; };
+  ta.addEventListener('input', _taGrow);
+  setTimeout(_taGrow, 0);   // size to the initial text (edit mode)
   const meta = document.createElement('div'); meta.className = 'kc-meta';
   const datePicker = _buildDateField(it && it.due ? it.due : '');
   const alert = document.createElement('select'); alert.className = 'kc-alert';
