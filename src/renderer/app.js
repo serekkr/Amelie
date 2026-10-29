@@ -72,6 +72,16 @@ function toggleViewMode() {
 const tabs = [];
 let activeTabIdx = -1;
 let _tabDragFrom = -1;   // index of the tab being dragged (reorder), -1 if none
+// Activation history (most-recently-active LAST), by tab object identity. Lets
+// closing the active tab return to the tab you were on BEFORE it — e.g. open a
+// PDF (new tab at the end), close it, land back on the note you were reading,
+// not on whatever note happens to sit in the vacated slot (which felt random).
+let _tabMRU = [];
+function _tabMRUTouch(tab) {
+  if (!tab) return;
+  _tabMRU = _tabMRU.filter(t => t !== tab && tabs.includes(t));
+  _tabMRU.push(tab);
+}
 
 function getTab(path) { return tabs.find(t => t.path === path); }
 function getActiveTab() { return tabs[activeTabIdx] ?? null; }
@@ -212,9 +222,15 @@ async function closeTab(idx, e) {
     editorContainer.style.display = 'none';
     emptyState.style.display = 'flex';
   } else if (wasActive) {
-    // Closed the ACTIVE tab → move to whichever note slid into its slot and load it.
-    const newIdx = Math.min(idx, tabs.length - 1);
-    switchTab(newIdx);
+    // Closed the ACTIVE tab → return to the tab that was active just BEFORE it
+    // (activation history), so closing a PDF/image you opened to glance at drops
+    // you back on the note you were reading — not on whatever note happens to
+    // slide into the vacated slot (which felt random). Fall back to the neighbour
+    // when there's no history (e.g. first navigation).
+    _tabMRU = _tabMRU.filter(t => t !== tab && tabs.includes(t));
+    const prev = _tabMRU.length ? _tabMRU[_tabMRU.length - 1] : null;
+    const newIdx = prev ? tabs.indexOf(prev) : Math.min(idx, tabs.length - 1);
+    switchTab(newIdx >= 0 ? newIdx : Math.min(idx, tabs.length - 1));
   } else {
     // Closed a BACKGROUND tab → the active note MUST stay active; only its array
     // index shifted. DATA-LOSS FIX: the old code reselected by slot index
@@ -274,6 +290,7 @@ async function switchTab(idx) {
   activeTabIdx = idx;
   const tab = tabs[idx];
   if (!tab) return;
+  _tabMRUTouch(tab);   // record this activation for close-returns-to-previous
 
   // Close the TOC/index when this navigation leaves the note it was built for —
   // a different note, or any special view (draw/pdf). A same-note
@@ -5600,22 +5617,31 @@ function handleToolbarCmd(cmd) {
       // Inline for a single selected word; otherwise a fenced block with an
       // empty line in the middle and the cursor placed there, ready to type.
       if (text && !text.includes('\n')) { insert = `\`${text}\``; break; }
-      // Empty block → an empty middle line with the caret on it. The fences sit
-      // at column 0 like any other line; the code's inset is drawn, not typed.
-      const body = text ? text : '';
-      // Line index of the opening fence BEFORE the insert.
-      const openLineIdx = editor.value.slice(0, sel.s).split('\n').length - 1;
-      const bodyLineCount = body.split('\n').length;
-      insertAtCursor('```\n' + body + '\n```', sel.s, sel.e);
-      // Caret on the FINAL text: end of the last content line = the empty middle
-      // line for an empty block. Same robust method as the manual "``` + Enter" path.
-      const vlines = editor.value.split('\n');
-      const lastIdx = openLineIdx + bodyLineCount;
-      let off = 0;
-      for (let k = 0; k < lastIdx; k++) off += (vlines[k] || '').length + 1;
-      const caret = off + ((vlines[lastIdx] || '').length);
-      editor.selectionStart = editor.selectionEnd = caret;
-      editor.focus();
+      // Multi-line selection → wrap it in a fenced block in place.
+      if (text) {
+        const openLineIdx = editor.value.slice(0, sel.s).split('\n').length - 1;
+        const bodyLineCount = text.split('\n').length;
+        insertAtCursor('```\n' + text + '\n```', sel.s, sel.e);
+        const vlines = editor.value.split('\n');
+        const lastIdx = openLineIdx + bodyLineCount;
+        let off = 0;
+        for (let k = 0; k < lastIdx; k++) off += (vlines[k] || '').length + 1;
+        _setEditorCaret(off + ((vlines[lastIdx] || '').length));
+        return;
+      }
+      // No selection → an EMPTY fenced block with the caret on its middle line.
+      // A code block owns its lines: if the caret sits on a line that ALREADY has
+      // text, the block opens on the line BELOW — we never split or merge into the
+      // current line's content (serekkr, 29/10/2026). On an empty line it opens
+      // right there. The fences sit at column 0; the code's inset is drawn.
+      let lineEnd = editor.value.indexOf('\n', sel.s);
+      if (lineEnd === -1) lineEnd = editor.value.length;
+      const lineStart = editor.value.lastIndexOf('\n', sel.s - 1) + 1;
+      const lineHasText = editor.value.slice(lineStart, lineEnd).trim().length > 0;
+      const at = lineHasText ? lineEnd : lineStart;
+      const lead = lineHasText ? '\n' : '';
+      insertAtCursor(lead + '```\n\n```', at, at);
+      _setEditorCaret(at + lead.length + 4);   // start of the empty middle line
       return;
     }
     case 'link': {
@@ -5695,6 +5721,14 @@ function insertAtCursor(text, start, end) {
   if (document.activeElement !== editor) {
     try { editor.focus(); } catch (_) {}
   }
+}
+
+// Place the caret at an absolute character offset, through the CM engine when it
+// owns the document (setting the hidden textarea's selection doesn't move CM's
+// cursor), else on the plain textarea.
+function _setEditorCaret(pos) {
+  if (_cmActive && _cmHandle) { try { _cmHandle.setSelection(pos, pos); _cmHandle.focus(); } catch (_) {} }
+  else { try { editor.selectionStart = editor.selectionEnd = pos; editor.focus(); } catch (_) {} }
 }
 
 // Attachments foldering: every accepted type has a folder — PDFs → attachments/pdf/,

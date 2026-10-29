@@ -1858,7 +1858,9 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
    view — serekkr, 28/10/2026, wanting Obsidian's coloured italics. View/reading
    mode only (the edit overlay is left plain); both the main preview and the split
    pane. Still italic — just coloured on top. */
-#preview-content em, #preview-content-b em { color: var(--accent); }
+/* A lighter, "more open" green than the accent (serekkr, 29/10/2026) — tweak
+   --em-color to taste; the fallback is the live value. */
+#preview-content em, #preview-content-b em { color: var(--em-color, #56d364); }
 
 #preview-content code {
   /* A word of code inside a sentence reads at the sentence's own size: 1em, the same as
