@@ -55,10 +55,10 @@
      can override these; without an override the classic palette applies. */
   /* Heading ladder (view mode): distinct, common hues per level, no green (green is
      the accent used for inline code + italics). H1 blu, H2 ambra, H3 viola, H4 ciano. */
-  --h1: #61afef;
-  --h2: #e5c07b;
-  --h3: #b3bdfe;
-  --h4: #56b6c2;
+  --h1: #5a84d4;
+  --h2: #5a84d4;
+  --h3: #5a84d4;
+  --h4: #5a84d4;
   --link: #5b8def;
   /* The default font, and the value the very first paint uses — applyAppearance
      overwrites both from the saved pref a moment later, so keep them equal to
@@ -452,10 +452,10 @@
      in the theme, not two that almost match. */
   /* Scala titoli comune: H1 blu, H2 ambra, H3 viola, H4 ciano (no verde — accento).
      serekkr 29/10/2026: su graphite H1 blu, H2 ambra. */
-  --h1: #61afef;
-  --h2: #e5c07b;
-  --h3: #b3bdfe;
-  --h4: #56b6c2;
+  --h1: #5a84d4;
+  --h2: #5a84d4;
+  --h3: #5a84d4;
+  --h4: #5a84d4;
   /* Blue, and the only frankly blue thing in the theme: with a green accent a link
      can keep its own hue, which is the clearest way to say it is not an accent. It
      stayed put through the violet and navy accents that came before. */
