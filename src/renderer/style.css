@@ -54,10 +54,10 @@
   /* Headings & links — themable: every [data-theme] block (built-in or custom)
      can override these; without an override the classic palette applies. */
   /* Heading ladder (view mode): distinct, common hues per level, no green (green is
-     the accent used for inline code + italics). H1 blu, H2 viola, H3 ambra, H4 ciano. */
+     the accent used for inline code + italics). H1 blu, H2 ambra, H3 viola, H4 ciano. */
   --h1: #61afef;
-  --h2: #c678dd;
-  --h3: #e5c07b;
+  --h2: #e5c07b;
+  --h3: #c678dd;
   --h4: #56b6c2;
   --link: #5b8def;
   /* The default font, and the value the very first paint uses — applyAppearance
@@ -450,11 +450,11 @@
      link and a visited link on the same line as a heading.
      The amber is the same #d6a344 as --yellow just above, on purpose: one warm tone
      in the theme, not two that almost match. */
-  /* Scala titoli comune: H1 blu, H2 viola, H3 ambra, H4 ciano (no verde — accento).
-     serekkr 29/10/2026: su graphite l'H1 si vedeva verde, lo voleva blu. */
+  /* Scala titoli comune: H1 blu, H2 ambra, H3 viola, H4 ciano (no verde — accento).
+     serekkr 29/10/2026: su graphite H1 blu, H2 ambra. */
   --h1: #61afef;
-  --h2: #c678dd;
-  --h3: #e5c07b;
+  --h2: #e5c07b;
+  --h3: #c678dd;
   --h4: #56b6c2;
   /* Blue, and the only frankly blue thing in the theme: with a green accent a link
      can keep its own hue, which is the clearest way to say it is not an accent. It
