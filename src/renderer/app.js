@@ -13268,15 +13268,15 @@ function buildSyncConfig(form, prev) {
   const sambaLan = (selKind === 'samba' && !vpn)
     ? { ...smbServer, remoteSubPath: form.backupFolder || '', useWireGuard: false,
         folder: false, archive: true, archiveOnly: true, keepLast, enabled: remoteOn }
-    : { ...(pS.sambaLan || {}), enabled: selKind === 'samba' ? false : keepOrOff(pS.sambaLan && pS.sambaLan.enabled) };
+    : { ...(pS.sambaLan || {}), enabled: selKind === 'samba' ? false : keepOrOff(pS.sambaLan && pS.sambaLan.enabled), keepLast };
   const vpnObj = (selKind === 'samba' && vpn)
     ? { ...(form.vpnCfg || {}), enabled: remoteOn, syncOnly: !!form.vpnSyncOnly, keepLast }
-    : { ...(pS.vpn || {}), enabled: selKind === 'samba' ? false : keepOrOff(pS.vpn && pS.vpn.enabled), syncOnly: !!form.vpnSyncOnly };
+    : { ...(pS.vpn || {}), enabled: selKind === 'samba' ? false : keepOrOff(pS.vpn && pS.vpn.enabled), syncOnly: !!form.vpnSyncOnly, keepLast };
   const webdav = (selKind === 'webdav')
     ? { url: form.webdavUrl || '', username: form.webdavUser || '', password: form.webdavPass || '',
         remotePath: form.backupFolder || 'amelie/backup',
         folder: false, archive: true, archiveOnly: true, keepLast, enabled: remoteOn }
-    : { ...(pS.webdav || {}), enabled: keepOrOff(pS.webdav && pS.webdav.enabled) };
+    : { ...(pS.webdav || {}), enabled: keepOrOff(pS.webdav && pS.webdav.enabled), keepLast };
   // Local backup is INDEPENDENT of the remotes and must be PRESERVED when you are
   // viewing a remote (serekkr, 23/10/2026: Local + WebDAV both green, closed/reopened,
   // clicked WebDAV to look at it → Local turned off). form.localOn is `isLocal && toggle`,
