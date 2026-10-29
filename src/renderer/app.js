@@ -11279,8 +11279,10 @@ function setupSettings() {
 
   // Two-way sync: show the custom-minutes input only when "Custom" is selected.
   $('cfg-twoway-interval')?.addEventListener('change', e => {
-    const w = $('twoway-custom-wrap');
-    if (w) w.style.display = e.target.value === 'custom' ? 'flex' : 'none';
+    // Sync "Daily" (1440) reveals the time-of-day picker (serekkr, 29/10/2026 — sync
+    // now has a settable daily time, and the old "Custom" minutes option is gone).
+    const w = $('twoway-dailytime-wrap');
+    if (w) w.style.display = e.target.value === '1440' ? 'flex' : 'none';
   });
 
   // Backup frequency: the custom-DAYS input shows only for "Custom"; the daily TIME
@@ -11369,6 +11371,7 @@ function setupSettings() {
   };
   attachDarkTimePicker('cfg-local-dailytime');
   attachDarkTimePicker('cfg-remote-dailytime');
+  attachDarkTimePicker('cfg-twoway-dailytime');
 
   // Dark custom dropdown for the settings <select>s (interval, keep archives): keeps
   // the native <select> as a HIDDEN value-holder — so every save/load path is unchanged
@@ -13221,19 +13224,17 @@ async function openSettings() {
   // Restore two-way frequency: Real-time, a preset, or Custom.
   const twSel = $('cfg-twoway-interval');
   if (twSel) {
-    {
-      // A profile saved with the old "realtime" option lands on the shortest
-      // interval there is now — the closest thing to what it used to do.
-      const twMin = cfg.sync?.twoway?.realtime ? 5 : (parseFloat(cfg.sync?.twoway?.intervalMinutes) || 15);
-      const presets = ['1', '5', '15', '60'];   // no 'daily' for SYNC (serekkr, 29/10/2026)
-      if (presets.includes(String(twMin))) {
-        twSel.value = String(twMin);
-        if ($('twoway-custom-wrap')) $('twoway-custom-wrap').style.display = 'none';
-      } else {
-        twSel.value = 'custom';
-        if ($('cfg-twoway-interval-custom')) $('cfg-twoway-interval-custom').value = twMin;
-        if ($('twoway-custom-wrap')) $('twoway-custom-wrap').style.display = 'flex';
-      }
+    // Sync: presets OR "Daily" at a set time (serekkr, 29/10/2026 — Custom minutes gone).
+    const twDaily = (typeof cfg.sync?.twoway?.dailyTime === 'string' && /^\d{1,2}:\d{2}$/.test(cfg.sync.twoway.dailyTime)) ? cfg.sync.twoway.dailyTime : '';
+    const twMin = cfg.sync?.twoway?.realtime ? 5 : (parseFloat(cfg.sync?.twoway?.intervalMinutes) || 15);
+    if (twDaily || String(twMin) === '1440') {
+      twSel.value = '1440';
+      if (twDaily && $('cfg-twoway-dailytime')) $('cfg-twoway-dailytime').value = twDaily;
+      if ($('twoway-dailytime-wrap')) $('twoway-dailytime-wrap').style.display = 'flex';
+    } else {
+      const presets = ['1', '5', '15', '60'];
+      twSel.value = presets.includes(String(twMin)) ? String(twMin) : '15';
+      if ($('twoway-dailytime-wrap')) $('twoway-dailytime-wrap').style.display = 'none';
     }
   }
   // Refresh the dark custom dropdowns to the values just loaded.
@@ -13405,6 +13406,7 @@ function buildSyncConfig(form, prev) {
     subPath: (pS.twoway && pS.twoway.subPath) || '',
     conflictCopies: form.conflictCopies !== false, propagateDeletes: true,
     intervalMinutes: form.syncIntervalMinutes,
+    dailyTime: form.syncDailyTime || '',
   };
   return {
     autoSaveSeconds: form.autoSaveSeconds || 3,
@@ -13699,9 +13701,10 @@ async function saveSettings() {
     keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
     syncIntervalMinutes: (() => {
       const v = $('cfg-twoway-interval')?.value;
-      if (v === 'custom') return parseInt($('cfg-twoway-interval-custom')?.value) || 15;
       return parseFloat(v) || 15;
     })(),
+    // Sync "Daily" at a set time (serekkr, 29/10/2026); empty unless the Daily option.
+    syncDailyTime: ($('cfg-twoway-interval')?.value === '1440') ? ($('cfg-twoway-dailytime')?.value || '') : '',
     conflictCopies: !!$('cfg-twoway-fullsync')?.checked,
     vpnSyncOnly: !!$('cfg-vpn-synconly')?.checked,
     autoSaveSeconds: parseInt($('cfg-autosave')?.value) || 3,

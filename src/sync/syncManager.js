@@ -641,6 +641,24 @@ class SyncManager {
     return at < scheduled.getTime();                   // last run was before today's time
   }
 
+  // Two-way SYNC on a fixed clock time (sync.twoway.dailyTime "HH:MM"), mirroring the
+  // daily backup: run once a day at that time, gated by lastTwowayAt (serekkr, 29/10/2026).
+  _twowayDailyTime() {
+    const v = this.config?.sync?.twoway?.dailyTime;
+    return (typeof v === 'string' && /^\d{1,2}:\d{2}$/.test(v.trim())) ? v.trim() : '';
+  }
+  _twowayDailyDue() {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(this._twowayDailyTime());
+    if (!m) return false;
+    const now = new Date();
+    const scheduled = new Date(now);
+    scheduled.setHours(+m[1], +m[2], 0, 0);
+    if (now < scheduled) return false;
+    const at = Date.parse((this._syncState && this._syncState.lastTwowayAt) || '');
+    if (!Number.isFinite(at)) return true;
+    return at < scheduled.getTime();
+  }
+
   // Stamp "a backup to this destination reached a conclusion now" — the global clock
   // (for interval catch-up) plus the per-destination clocks the daily schedule and the
   // "Ultimo backup" lines read. target null = both (a run that wrote everything).
@@ -743,15 +761,24 @@ class SyncManager {
     }
 
     if (this._twowayConfigured()) {
-      const min = this._twowayIntervalMinutes();
-      const { overdue, sinceMin } = this._overdueBy('lastTwowayAt', min);
-      if (overdue) {
-        console.log(sinceMin == null
-          ? '[Sync] No record of a previous two-way sync — catching up'
-          : `[Sync] Last two-way sync ${sinceMin} min ago, past the ${min} min interval — catching up`);
-        jobs.push({ what: 'twoway', run: () => this._twowayConfigured() && this.runTwoway({ manual: false }) });
+      if (this._twowayDailyTime()) {
+        // Daily mode: catch up on open only if today's scheduled time has passed and
+        // it hasn't run today (NOT on every launch like the interval mode would).
+        if (this._twowayDailyDue()) {
+          console.log(`[Sync] Daily two-way sync ${this._twowayDailyTime()} passed, not done today — catching up`);
+          jobs.push({ what: 'twoway', run: () => this._twowayConfigured() && this.runTwoway({ manual: false }) });
+        }
       } else {
-        console.log(`[Sync] Last two-way sync ${sinceMin} min ago — under the ${min} min interval, nothing to catch up`);
+        const min = this._twowayIntervalMinutes();
+        const { overdue, sinceMin } = this._overdueBy('lastTwowayAt', min);
+        if (overdue) {
+          console.log(sinceMin == null
+            ? '[Sync] No record of a previous two-way sync — catching up'
+            : `[Sync] Last two-way sync ${sinceMin} min ago, past the ${min} min interval — catching up`);
+          jobs.push({ what: 'twoway', run: () => this._twowayConfigured() && this.runTwoway({ manual: false }) });
+        } else {
+          console.log(`[Sync] Last two-way sync ${sinceMin} min ago — under the ${min} min interval, nothing to catch up`);
+        }
       }
     }
 
@@ -843,9 +870,18 @@ class SyncManager {
     // from the connection (smb.remoteSubPath) or a legacy local path/subPath.
     const twHasFolder = this._twowayRemoteFolder();
     if (s.twoway?.enabled && twHasFolder) {
-      const min = this._twowayIntervalMinutes();
-      this._twowayTimer = setInterval(() => this._twowayTick(), min * 60 * 1000);
-      console.log(`[Sync] Two-way sync every ${min} min`);
+      if (this._twowayDailyTime()) {
+        // Daily two-way sync at a fixed clock time: poll every 60 s, run when the
+        // hour has passed and it hasn't run today (gated by lastTwowayAt).
+        this._twowayTimer = setInterval(async () => {
+          if (this._twowayConfigured() && this._twowayDailyDue()) await this.runTwoway({ manual: false });
+        }, 60 * 1000);
+        console.log('[Sync] Daily two-way sync at', this._twowayDailyTime());
+      } else {
+        const min = this._twowayIntervalMinutes();
+        this._twowayTimer = setInterval(() => this._twowayTick(), min * 60 * 1000);
+        console.log(`[Sync] Two-way sync every ${min} min`);
+      }
     }
   }
 

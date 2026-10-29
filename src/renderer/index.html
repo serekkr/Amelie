@@ -844,11 +844,11 @@
                     <option value="5">5 min</option>
                     <option value="15" selected>15 min</option>
                     <option value="60" data-i18n="settings.freq_hourly">Ogni ora</option>
-                    <option value="custom" data-i18n="settings.interval_custom">Custom</option>
+                    <option value="1440" data-i18n="settings.freq_daily">Giornaliero</option>
                   </select>
-                  <div class="sip-custom-wrap" id="twoway-custom-wrap" style="display:none;margin-top:8px">
-                    <input type="number" id="cfg-twoway-interval-custom" min="1" max="1440" value="10" />
-                    <span data-i18n="settings.minutes">minuti</span>
+                  <div class="sip-custom-wrap" id="twoway-dailytime-wrap" style="display:none;margin-top:8px;align-items:center;gap:6px">
+                    <span data-i18n="settings.daily_at">alle</span>
+                    <input type="time" id="cfg-twoway-dailytime" value="03:00" />
                   </div>
                 </div>
                 <div class="field-group toggle-row">
