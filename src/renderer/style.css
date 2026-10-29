@@ -4666,8 +4666,8 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .kc-due:focus, .kc-alert:focus { border-color: var(--accent); }
 .kc-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
 .kc-save, .kc-cancel { min-width: 64px; height: 30px; padding: 0 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-1); cursor: pointer; font-size: 14px; font-family: var(--ui-font); }
-.kc-save { color: var(--accent); background: var(--accent-dim); border-color: var(--accent); font-weight: 500; }
-.kc-save:hover { background: var(--accent); color: #fff; }
+.kc-save { color: var(--text-0); background: var(--bg-2); border-color: var(--border-light); font-weight: 500; }
+.kc-save:hover { background: var(--bg-3); border-color: var(--accent); }
 .kc-cancel { color: var(--text-2); }
 .kc-cancel:hover { color: var(--text-0); border-color: var(--border-light); }
 /* The "minutes before" field goes on its OWN full-width row when shown: its
