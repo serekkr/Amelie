@@ -19561,7 +19561,7 @@ function _todoRow(it) {
   main.appendChild(title);
   if (it.due) {
     const chip = document.createElement('span'); chip.className = 'todo-chip' + ((_isOverdue(it.due) && it.bucket !== 'done') ? ' overdue' : '');
-    chip.textContent = ((it.alert !== '' && it.alert != null) ? '🔔 ' : '🕒 ') + _fmtDue(it.due);
+    chip.textContent = ((it.remind || (it.alert !== '' && it.alert != null)) ? '🔔 ' : '🕒 ') + _fmtDue(it.due);
     main.appendChild(chip);
   }
   const meta = document.createElement('div'); meta.className = 'todo-meta';
@@ -19708,7 +19708,22 @@ function _buildDateField(initial) {
     }
   });
   wrap.append(trigger, pop);
-  return { el: wrap, getValue: () => value };
+  const setValue = (v) => {
+    value = v || '';
+    const d = value && !isNaN(new Date(value)) ? new Date(value) : null;
+    selDate = d;
+    if (d) { view = new Date(d); hh = d.getHours(); mm = d.getMinutes(); }
+    renderTrigger();
+  };
+  return { el: wrap, getValue: () => value, setValue };
+}
+
+// A timestamp (ms) → the local "YYYY-MM-DDTHH:MM" string the pickers and the todo
+// `due`/`remind` fields use.
+function _toLocalInput(ms) {
+  const d = new Date(ms); if (isNaN(d)) return '';
+  const z = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`;
 }
 
 // Close function of the currently-open ToDo editor, if any: restores the editor's
@@ -19726,17 +19741,31 @@ function _todoInlineEditor(bucket, it) {
   setTimeout(_taGrow, 0);   // size to the initial text (edit mode)
   const meta = document.createElement('div'); meta.className = 'kc-meta';
   const datePicker = _buildDateField(it && it.due ? it.due : '');
-  const curAlert = it ? String(it.alert || '') : '';
-  const isCustom = curAlert !== '' && !ALERT_PRESETS.includes(curAlert);
-  const customInp = document.createElement('input'); customInp.type = 'number'; customInp.min = '1'; customInp.className = 'kc-alert-custom';
-  customInp.placeholder = window.i18n.t('todo.minutes_before'); customInp.style.display = isCustom ? '' : 'none';
-  if (isCustom) customInp.value = curAlert;
+  // Reminder = its OWN absolute date+time (serekkr, 29/10/2026). The preset dropdown
+  // pre-fills the reminder picker relative to the due; 'Custom' leaves it free; the
+  // picker is what gets saved (`remind`). Legacy todos (alert = minutes-before) migrate
+  // on save: the picker pre-fills to due − alert.
+  const curRemind = it ? String(it.remind || '') : '';
+  const curAlert  = it ? String(it.alert || '') : '';
+  const dueMsOf = () => { const v = datePicker.getValue(); const t = v ? new Date(v).getTime() : NaN; return isNaN(t) ? null : t; };
+  let initRemind = '', initPreset = '';
+  if (curRemind) { initRemind = curRemind; initPreset = 'custom'; }
+  else if (curAlert && it && it.due) {
+    const dt = new Date(it.due).getTime();
+    if (!isNaN(dt)) { initRemind = _toLocalInput(dt - parseInt(curAlert, 10) * 60000); initPreset = ALERT_PRESETS.includes(curAlert) ? curAlert : 'custom'; }
+  }
+  const remindPicker = _buildDateField(initRemind);
+  remindPicker.el.style.display = initPreset ? '' : 'none';
   const alertSel = _buildDarkSelect(
     ALERT_OPTS.map(([v, k]) => [v, window.i18n.t(k)]),
-    isCustom ? 'custom' : curAlert,
-    (v) => { customInp.style.display = v === 'custom' ? '' : 'none'; if (v === 'custom') customInp.focus(); }
+    initPreset,
+    (v) => {
+      if (v === '') { remindPicker.el.style.display = 'none'; remindPicker.setValue(''); return; }
+      remindPicker.el.style.display = '';
+      if (v !== 'custom') { const dm = dueMsOf(); if (dm != null) remindPicker.setValue(_toLocalInput(dm - parseInt(v, 10) * 60000)); }
+    }
   );
-  meta.append(datePicker.el, alertSel.el, customInp);
+  meta.append(datePicker.el, alertSel.el, remindPicker.el);
   const actions = document.createElement('div'); actions.className = 'kc-actions';
   const save = document.createElement('button'); save.className = 'kc-save'; save.textContent = window.i18n.t('todo.save');
   const cancel = document.createElement('button'); cancel.className = 'kc-cancel'; cancel.textContent = window.i18n.t('common.cancel');
@@ -19750,15 +19779,17 @@ function _todoInlineEditor(bucket, it) {
     catch (_) { try { renderTodoView(); } catch (__) {} }
   };
   _todoEditorClose = closeInPlace;
-  const getAlert = () => alertSel.get() === 'custom' ? (customInp.value ? String(parseInt(customInp.value, 10)) : '') : alertSel.get();
+  const getRemind = () => alertSel.get() === '' ? '' : remindPicker.getValue();
   const doSave = async () => {
     _todoEditorClose = null;
     const text = ta.value.trim();
     if (!text) { renderTodoView({ resetAdd: true }); return; }
-    const av = getAlert();
+    const rem = getRemind();
     const dueVal = datePicker.getValue();
-    if (it) await window.inkwell.todo.update(bucket, it.file, text, dueVal, av);
-    else await window.inkwell.todo.create(bucket, text, dueVal, av);
+    // Save the absolute reminder (`remind`); alert='' — the legacy minutes field is
+    // retired, old todos migrate to `remind` on their next save.
+    if (it) await window.inkwell.todo.update(bucket, it.file, text, dueVal, '', rem);
+    else await window.inkwell.todo.create(bucket, text, dueVal, '', rem);
     renderTodoView({ resetAdd: true }); refreshTodoAlerts();
   };
   save.addEventListener('click', doSave);
@@ -19806,10 +19837,18 @@ async function refreshTodoAlerts() {
   const all = TODO_ALERT_BUCKETS.flatMap(b => _todoCache[b] || []);
   const now = Date.now();
   for (const it of all) {
-    if (!it.due || it.alert === '' || it.alert == null) continue;
-    const dueMs = new Date(it.due).getTime(); if (isNaN(dueMs)) continue;
-    const fireAt = dueMs - parseInt(it.alert || '0', 10) * 60000;
-    const key = it.file + '@' + it.due + '+' + it.alert;
+    let fireAt = NaN, key = '';
+    if (it.remind) {
+      // New model: absolute reminder date+time.
+      fireAt = new Date(it.remind).getTime(); if (isNaN(fireAt)) continue;
+      key = it.file + '@R' + it.remind;
+    } else {
+      // Legacy: minutes-before offset on the due.
+      if (!it.due || it.alert === '' || it.alert == null) continue;
+      const dueMs = new Date(it.due).getTime(); if (isNaN(dueMs)) continue;
+      fireAt = dueMs - parseInt(it.alert || '0', 10) * 60000;
+      key = it.file + '@' + it.due + '+' + it.alert;
+    }
     const delay = fireAt - now;
     if (delay > 0 && delay < 2147483647 && !_todoFireKeySeen(key)) {
       _todoAlertTimers.push(setTimeout(() => { _fireTodoNotif(it); _todoMarkFired(key); updateNotifBell(); }, delay));
@@ -19851,7 +19890,7 @@ function _dueTodos() {
       const m = new Date(it.due).getTime();
       if (isNaN(m)) return false;
       if (m <= now) return true;                                  // overdue
-      return m <= soon && it.alert !== '' && it.alert != null;     // due soon, reminder asked for
+      return m <= soon && (it.remind || (it.alert !== '' && it.alert != null));   // due soon, reminder asked for
     })
     .filter(it => !dis.includes(_notifKey(it)))
     .sort((a, b) => new Date(a.due) - new Date(b.due));

@@ -2455,29 +2455,31 @@ function ensureTodoDirs() {
   TODO_BUCKETS.forEach(b => { const d = path.join(todoRoot(), b); if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
 }
 
-function buildTodoContent(text, due, alert, completed, created) {
+function buildTodoContent(text, due, alert, completed, created, remind) {
   const fm = [];
   if (created) fm.push('created: ' + created);   // when the task was created (human-readable)
   if (due) fm.push('due: ' + due);
-  if (alert !== '' && alert != null) fm.push('alert: ' + alert);
+  if (alert !== '' && alert != null) fm.push('alert: ' + alert);      // legacy: minutes-before offset
+  if (remind !== '' && remind != null) fm.push('remind: ' + remind);  // new: absolute reminder date+time
   if (completed) fm.push('completed: ' + completed);
   const head = fm.length ? '---\n' + fm.join('\n') + '\n---\n' : '';
   return head + (text || '');
 }
 function parseTodoFile(raw, fallbackName) {
-  let due = '', alert = '', completed = '', created = '', text = raw || '';
+  let due = '', alert = '', remind = '', completed = '', created = '', text = raw || '';
   const m = (raw || '').match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (m) {
     for (const l of m[1].split('\n')) {
       const dm = l.match(/^due:\s*(.*)$/);        if (dm) due = dm[1].trim();
       const am = l.match(/^alert:\s*(.*)$/);       if (am) alert = am[1].trim();
+      const rm = l.match(/^remind:\s*(.*)$/);      if (rm) remind = rm[1].trim();
       const cm = l.match(/^completed:\s*(.*)$/);   if (cm) completed = cm[1].trim();
       const crm = l.match(/^created:\s*(.*)$/);    if (crm) created = crm[1].trim();
     }
     text = m[2];
   }
   const title = (text.split('\n')[0] || fallbackName).replace(/^#\s*/, '').trim();
-  return { due, alert, completed, created, text, title };
+  return { due, alert, remind, completed, created, text, title };
 }
 
 // To-do files are markdown like notes, but live under <vault>/todo/<bucket>/ and
@@ -2556,13 +2558,13 @@ ipcMain.handle('todo:list', async () => {
       const cm = f.match(/^(\d{10,})-/);
       const fromContent = p.created ? Date.parse(p.created.replace(' ', 'T')) : NaN;
       const created = !isNaN(fromContent) ? fromContent : (cm ? parseInt(cm[1], 10) : mtime);
-      return { file: f, bucket: b, text: p.text, title: p.title, due: p.due, alert: p.alert, completed: p.completed, created, mtime };
+      return { file: f, bucket: b, text: p.text, title: p.title, due: p.due, alert: p.alert, remind: p.remind, completed: p.completed, created, mtime };
     }).sort((a, b) => b.mtime - a.mtime);
   }
   return out;
 });
 
-ipcMain.handle('todo:create', async (_, bucket, text, due, alert) => {
+ipcMain.handle('todo:create', async (_, bucket, text, due, alert, remind) => {
   ensureTodoDirs();
   if (!TODO_BUCKETS.includes(bucket)) bucket = 'today';
   const body = (text || '').trim();
@@ -2576,18 +2578,18 @@ ipcMain.handle('todo:create', async (_, bucket, text, due, alert) => {
   }
   const created = fmtLocalDate(new Date());   // creation date, stored in the file
   const diskFile = ENCRYPTION_KEY ? file + ENC_EXT : file;   // encrypted todos carry the .enc marker
-  try { writeTodoRaw(path.join(todoRoot(), bucket, diskFile), buildTodoContent(body, due, alert, '', created)); }
+  try { writeTodoRaw(path.join(todoRoot(), bucket, diskFile), buildTodoContent(body, due, alert, '', created, remind)); }
   catch (e) { return { ok: false, error: e.message }; }
   if (syncManager) syncManager.scheduleSync();
   return { ok: true, file, bucket };
 });
 
-ipcMain.handle('todo:update', async (_, bucket, file, text, due, alert) => {
+ipcMain.handle('todo:update', async (_, bucket, file, text, due, alert, remind) => {
   try {
     const full = path.join(todoRoot(), bucket, file);
     let completed = '', created = '';
     try { const prev = parseTodoFile(readTodoRaw(full), ''); completed = prev.completed; created = prev.created; } catch (_) {}
-    writeTodoRaw(full, buildTodoContent((text || '').trim(), due, alert, completed, created));
+    writeTodoRaw(full, buildTodoContent((text || '').trim(), due, alert, completed, created, remind));
   } catch (e) { return { ok: false, error: e.message }; }
   return { ok: true };
 });
@@ -2602,7 +2604,7 @@ ipcMain.handle('todo:move', async (_, file, from, to) => {
     let completed = p.completed;
     if (to === 'done' && !completed) completed = new Date().toISOString();
     if (to !== 'done') completed = '';
-    writeTodoRaw(dst, buildTodoContent(p.text.trim(), p.due, p.alert, completed, p.created));
+    writeTodoRaw(dst, buildTodoContent(p.text.trim(), p.due, p.alert, completed, p.created, p.remind));
     if (dst !== src) fs.unlinkSync(src);
   } catch (e) { return { ok: false, error: e.message }; }
   return { ok: true };

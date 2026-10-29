@@ -65,8 +65,8 @@ contextBridge.exposeInMainWorld('inkwell', {
 
   todo: {
     list:   ()                          => ipcRenderer.invoke('todo:list'),
-    create: (bucket, text, due, alert)  => ipcRenderer.invoke('todo:create', bucket, text, due, alert),
-    update: (bucket, file, t, due, alert) => ipcRenderer.invoke('todo:update', bucket, file, t, due, alert),
+    create: (bucket, text, due, alert, remind)  => ipcRenderer.invoke('todo:create', bucket, text, due, alert, remind),
+    update: (bucket, file, t, due, alert, remind) => ipcRenderer.invoke('todo:update', bucket, file, t, due, alert, remind),
     move:   (file, from, to)            => ipcRenderer.invoke('todo:move', file, from, to),
     remove: (bucket, file)              => ipcRenderer.invoke('todo:delete', bucket, file),
   },
