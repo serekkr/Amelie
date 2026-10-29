@@ -668,7 +668,7 @@ html.is-mac #titlebar { padding-left: 72px; }
    tabs. The strip of icons below does NOT move with it — its padding is
    computed against the note toolbar (alignSidebarStrip), so the extra air here
    comes out of the strip's own and the two bottom rules stay level. */
-#search-wrap { padding: 4px 10px 3px; }
+#search-wrap { padding: 8px 10px 6px; }
 #tags-search-wrap, #bookmarks-search-wrap { padding: 0 10px 8px; }
 /* font-size: the sidebar's own, not a fixed 14px — these three fields sit directly
    above lists that are sized from --tree-font-size, and at 14 they were the largest
@@ -678,14 +678,14 @@ html.is-mac #titlebar { padding-left: 72px; }
 #search-input, #tags-search-input, #bookmarks-search-input {
   width: 100%; background: var(--bg-2); border: 1px solid var(--border);
   border-radius: var(--radius); color: var(--text-1); font-family: var(--ui-font);
-  font-size: var(--tree-font-size, 13px); padding: 4px 10px; outline: none; transition: border-color .2s;
+  font-size: var(--tree-font-size, 13px); padding: 5px 10px; outline: none; transition: border-color .2s;
 }
 #search-input:focus, #tags-search-input:focus, #bookmarks-search-input:focus { border-color: var(--accent-dim); }
 /* Clear (✕) button inside the notes search box — one click wipes the query. Shown only
    while there is something typed (see #search-wrap.has-query). */
 #search-input { padding-right: 30px; }   /* leave room for the ✕ so text doesn't run under it */
 #search-clear {
-  position: absolute; top: 18px; right: 16px; width: 22px; height: 27px;
+  position: absolute; top: 22px; right: 16px; width: 22px; height: 27px;
   display: none; align-items: center; justify-content: center;
   background: transparent; border: none; cursor: pointer; padding: 0;
   color: var(--text-0); font-size: 13px; line-height: 1; border-radius: 4px;
@@ -704,7 +704,7 @@ html.is-mac #titlebar { padding-left: 72px; }
   position: relative;
   /* See #sidebar-views: this is that row's old margin-bottom, moved in here so the gap
      under its rule is painted the tree's colour instead of the sidebar's. */
-  padding-top: calc(6px * var(--toolbar-zoom, 1));
+  padding-top: calc(2px * var(--toolbar-zoom, 1));
   background: var(--tree-bg, transparent);
 }
 
@@ -3897,7 +3897,7 @@ body.split-open .pane-flash::after {
      row instead — which is why the icons sit together on the left rather than spread
      across the sidebar. */
   gap: 10px;
-  padding: 0 10px 5px; flex-shrink: 0;
+  padding: 0 10px 4px; flex-shrink: 0;
   /* A rule under the row, so the actions stop reading as the first entries of
      the note list: the icons sat straight on top of the tree with nothing
      between them, and at a glance the strip and the first notes were one block.

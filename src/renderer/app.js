@@ -1610,7 +1610,15 @@ const STRIP_PAD_KEY = 'amelie.strip-pad';
 // v1.0.83, which had 75.65px stored). There is no single toolbar ROW to line up
 // with once it has wrapped, so past this point the strip keeps its authored
 // padding and simply sits where it was designed to sit.
-const STRIP_PAD_MAX = 48;
+// 6px. Any padding this adds grows the strip's height and so pushes the note list
+// DOWN by the same amount — the strip is a flex item above the tree, and there is no
+// side of it that aligns the bottom to the toolbar without moving the tree. Lining
+// the hairline up with the editor toolbar was costing up to ~17px of empty grey
+// before the first note (delta is already 35 at 700px wide), which read as wasted
+// space (reported 2026-10-29, with a screenshot of a three-line note header). Past
+// this small threshold the strip simply keeps its authored, tight padding and the
+// notes start right under the icons; only a near-perfect match still nudges.
+const STRIP_PAD_MAX = 6;
 function _applyStripPad(strip) {
   if (_stripPad == null) return;                             // nothing measured yet — leave it
   strip.style.paddingTop = strip.style.paddingBottom = _stripPad;
