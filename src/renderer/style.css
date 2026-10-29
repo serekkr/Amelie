@@ -4528,13 +4528,9 @@ kbd {
    while you type, the way Obsidian shows it in live preview (serekkr, 20/10/2026). The whole
    run including the backticks sits on the chip; the accent colour marks it as code. Padding
    stays tiny (and only horizontal) so the chip never changes the line height CM measures. */
-/* Inline code in EDIT mode is deliberately PLAIN — no dark background pill, no
-   accent colour — so it reads like the surrounding text (serekkr, 29/10/2026:
-   the dark "mask" was unwanted; colours belong in VIEW only, like headings and
-   italics). The backticks stay visible. The chip/colour lives on the VIEW side
-   (#preview-content code). The mark class is still emitted by inlineCodePlugin,
-   it just carries no styling here. */
-#cm-mount .cm-inline-code { background: none; color: inherit; }
+#cm-mount .cm-inline-code {
+  background: var(--code-bg); border-radius: 4px; padding: 0 3px; color: var(--accent);
+}
 
 /* Accent on hover for the ICONS of the two accent-coloured palettes — Green Dark (the
    default → no data-theme attribute, see applyTheme) and Serekkr. Icons have no box and
