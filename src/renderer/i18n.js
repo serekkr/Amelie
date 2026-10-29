@@ -576,6 +576,8 @@ const TRANSLATIONS = {
     // Empty state (full sentence)
     'empty.select_note':        'Seleziona una nota o creane una nuova',
     'empty.create_note':        'Crea una nuova nota',
+    'empty.create_draw':        'Crea un nuovo disegno',
+    'empty.create_todo':        'Crea un nuovo todo',
 
     // Settings — general extra
     'settings.interval_1h':       '1 ora',
@@ -1541,6 +1543,8 @@ const TRANSLATIONS = {
     // Empty state (full sentence)
     'empty.select_note':        'Select a note or create a new one',
     'empty.create_note':        'Create a new note',
+    'empty.create_draw':        'Create a new draw',
+    'empty.create_todo':        'Create a new todo',
 
     // Settings — general extra
     'settings.interval_1h':       '1 hour',
@@ -2437,6 +2441,8 @@ const TRANSLATIONS = {
     'todo.alert_1440': '1 Tag vorher',
     'empty.select_note': 'Wähle eine Notiz aus oder erstelle eine neue',
     'empty.create_note': 'Neue Notiz erstellen',
+    'empty.create_draw': 'Neue Zeichnung erstellen',
+    'empty.create_todo': 'Neues To-do erstellen',
     'settings.interval_1h': '1 Stunde',
     'settings.interval_custom': 'Benutzerdefiniert',
     'sync.wg_remote_share': 'VPN mit Samba-Freigabe',
@@ -3292,6 +3298,8 @@ const TRANSLATIONS = {
     'todo.alert_1440': '1 día antes',
     'empty.select_note': 'Selecciona una nota o crea una nueva',
     'empty.create_note': 'Crear una nueva nota',
+    'empty.create_draw': 'Crear un nuevo dibujo',
+    'empty.create_todo': 'Crear una nueva tarea',
     'settings.interval_1h': '1 hora',
     'settings.interval_custom': 'Personalizado',
     'sync.wg_remote_share': 'VPN con recurso compartido Samba',

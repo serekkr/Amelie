@@ -10407,8 +10407,11 @@ function setupSettings() {
   // survive a reload — see saveSettings()/openSettings().
 
   $('btn-new-note').addEventListener('click', () => createNewNote(newNoteFolder()));
-  // Button on the empty state (shown when all tabs are closed) — same as the "+".
+  // Buttons on the empty state (shown when all tabs are closed) — each the same
+  // action as its toolbar/tree counterpart.
   $('empty-new-note-btn')?.addEventListener('click', () => createNewNote(newNoteFolder()));
+  $('empty-new-draw-btn')?.addEventListener('click', () => newDraw());
+  $('empty-new-todo-btn')?.addEventListener('click', () => addTodo());
   $('btn-new-folder').addEventListener('click', () => createNewFolder());
   $('btn-collapse-all')?.addEventListener('click', () => toggleAllFolders());
   setupTreeSort();

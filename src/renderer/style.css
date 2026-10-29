@@ -1089,13 +1089,15 @@ html.is-mac #titlebar { padding-left: 72px; }
 .empty-icon { width: 48px; height: 48px; opacity: .3; }
 .empty-icon svg { width: 100%; height: 100%; }
 #empty-state p { font-style: italic; font-size: 16px; color: var(--text-2); }
-/* Button to create a note straight from the empty state (serekkr, 29/10/2026). */
-#empty-new-note-btn {
-  margin-top: 2px; font-size: 13.5px; padding: 7px 16px; border-radius: 7px;
+/* Buttons to create a note / draw / todo straight from the empty state
+   (serekkr, 29/10/2026). */
+#empty-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 2px; }
+#empty-actions button {
+  font-size: 13.5px; padding: 7px 16px; border-radius: 7px;
   border: 1px solid var(--border); background: var(--bg-2); color: var(--text-0);
   cursor: pointer; transition: background .12s, border-color .12s;
 }
-#empty-new-note-btn:hover {
+#empty-actions button:hover {
   background: color-mix(in srgb, var(--accent) 16%, var(--bg-2)); border-color: var(--accent);
 }
 kbd {
