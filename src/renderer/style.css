@@ -57,7 +57,7 @@
      the accent used for inline code + italics). H1 blu, H2 ambra, H3 viola, H4 ciano. */
   --h1: #61afef;
   --h2: #e5c07b;
-  --h3: #c678dd;
+  --h3: #b3bdfe;
   --h4: #56b6c2;
   --link: #5b8def;
   /* The default font, and the value the very first paint uses — applyAppearance
@@ -454,7 +454,7 @@
      serekkr 29/10/2026: su graphite H1 blu, H2 ambra. */
   --h1: #61afef;
   --h2: #e5c07b;
-  --h3: #c678dd;
+  --h3: #b3bdfe;
   --h4: #56b6c2;
   /* Blue, and the only frankly blue thing in the theme: with a green accent a link
      can keep its own hue, which is the clearest way to say it is not an accent. It
