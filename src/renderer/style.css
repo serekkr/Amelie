@@ -4714,18 +4714,6 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 #settings-close { color: var(--red, #e5534b); }
 #settings-close:hover { color: var(--red, #e5534b); background: color-mix(in srgb, var(--red, #e5534b) 18%, transparent); }
 
-/* Autosave confirmation flash for the Backup/Sync tab (no Save button needed). */
-#tab-sync { position: relative; }
-#backup-autosave-flash {
-  position: absolute; top: 2px; right: 4px; z-index: 6;
-  display: inline-flex; align-items: center; gap: 4px;
-  background: color-mix(in srgb, var(--accent) 16%, var(--bg-2));
-  color: var(--accent); border: 1px solid var(--accent);
-  border-radius: 6px; padding: 3px 9px; font-size: 12px; font-family: var(--ui-font);
-  opacity: 0; pointer-events: none; transition: opacity .2s;
-}
-#backup-autosave-flash.show { opacity: 1; }
-
 /* Settings <select> replaced by a dark custom dropdown (attachDarkSelect). */
 .dark-select { display: block; width: 100%; min-width: 0; }
 .dark-select .kc-sel-btn { font-size: 13px; padding: 7px 9px; background: var(--bg-2); }

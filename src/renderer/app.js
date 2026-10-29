@@ -11441,21 +11441,6 @@ function setupSettings() {
   attachDarkSelect('cfg-local-interval');
   attachDarkSelect('cfg-backup-keep');
 
-  // Autosave confirmation: flash "✓ Salvato" whenever a Backup/Sync field changes (the
-  // existing handlers already persist it). No Save button — the section auto-saves and
-  // this gives the reassurance (serekkr, 29/10/2026).
-  {
-    const flashEl = $('backup-autosave-flash');
-    if (flashEl && !flashEl._wired) {
-      flashEl._wired = true;
-      const flash = () => {
-        flashEl.classList.add('show');
-        clearTimeout(flashEl._t);
-        flashEl._t = setTimeout(() => flashEl.classList.remove('show'), 1600);
-      };
-      $('tab-sync')?.addEventListener('change', flash, true);
-    }
-  }
 
   // One editor at a time: clicking anywhere OUTSIDE an open ToDo editor — another
   // task, a section header, the ToDo tree entry, today/tomorrow — closes it (serekkr,
