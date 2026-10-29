@@ -14918,6 +14918,7 @@ let _pdfDoc = null;           // currently loaded pdf.js document
 let _pdfContainer = null;     // #pdf-embed
 let _pdfZoom = 1.0;           // user zoom multiplier
 let _pdfRenderToken = 0;      // cancels a stale re-render when zoom changes fast
+let _pdfPageIO = null;        // observes page wraps; lazily renders/unrenders each page's heavy content on scroll
 
 // ─── PDF annotation editor (freehand pen / highlighter) ──────────────────────
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -15613,6 +15614,7 @@ async function _placePdfImage(res) {
   });
   if (!dim || !dim.w) { alert(window.i18n.t('pdf.invalid_image')); return false; }
   const page = _currentPdfPage();
+  await _ensurePdfPageRendered(page);   // the page in view may not be filled in yet (lazy render)
   const ol = _pdfContainer?.querySelector(`.pdf-obj-layer[data-page="${page}"]`);
   if (!ol) return false;
   const pageWpt = +ol.dataset.wpt, pageHpt = +ol.dataset.hpt;
@@ -16199,6 +16201,7 @@ async function applyPdfPageOps(asNew) {
 // Without this, every PDF open/close left the previous doc (and each merge
 // source's doc + raw bytes) leaking until GC. Call on reopen and on PDF close.
 async function _destroyPdfDoc() {
+  if (_pdfPageIO) { try { _pdfPageIO.disconnect(); } catch (_) {} _pdfPageIO = null; }
   try { await _pdfDoc?.destroy?.(); } catch (_) {}
   _pdfDoc = null;
   for (const k in _pdfMergeSources) { try { await _pdfMergeSources[k]?.doc?.destroy?.(); } catch (_) {} }
@@ -16262,31 +16265,38 @@ async function renderPdfPages(attachmentName, container) {
   }
 }
 
-async function _renderPdfDoc() {
+// ── Virtualized page rendering ───────────────────────────────────────────────
+// A big PDF (juice-shop.pdf is 422 pages) must NOT rasterize every page into a
+// full-res canvas up front — that's minutes of work and gigabytes of canvas
+// memory. Instead _renderPdfDoc lays out every page as a correctly-SIZED but
+// empty placeholder wrap (so the scrollbar and page geometry are exact and
+// _currentPdfPage still works), and an IntersectionObserver fills in a page's
+// canvas + text/annotation/object/form layers only as it nears the viewport,
+// dropping them again when it scrolls far away to cap memory. All page edits
+// live in _pdfAnnots (and form edits in pdf.annotationStorage), never in the
+// DOM, so a re-rendered page redraws its edits from data — nothing is lost, and
+// save/bake (which read the data, not the DOM) are unaffected.
+
+// Fill one already-sized placeholder wrap with its heavy content. Idempotent:
+// a no-op if the page is already rendered or a render is already in flight, so
+// the observer can fire it freely. Guarded by the render token so a zoom/switch
+// mid-render never attaches to a superseded view.
+async function _renderPdfPageInto(wrap) {
+  if (!wrap || wrap.dataset.rendered === '1' || wrap.dataset.rendering === '1') return;
   const pdf = _pdfDoc, container = _pdfContainer;
   if (!pdf || !container) return;
-  const pdfjsLib = await getPdfJs();
-  const token = _pdfRenderToken;   // callers (renderPdfPages / setPdfZoom) own the bump; we only observe it
-  const dpr = window.devicePixelRatio || 1;
-  const displayScale = PDF_BASE_SCALE * _pdfZoom;
-
-  // Built off-DOM so the user never sees a half-empty container while pages
-  // render progressively.
-  const inner = document.createElement('div');
-  inner.style.cssText =
-    'display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px';
-
-  let firstAttached = false;
-  for (let i = 1; i <= pdf.numPages; i++) {
-    if (token !== _pdfRenderToken) return;   // a newer render started → abort
+  const token = _pdfRenderToken;
+  const i = +wrap.dataset.page;
+  if (!i) return;
+  wrap.dataset.rendering = '1';
+  try {
+    const pdfjsLib = await getPdfJs();
+    const dpr = window.devicePixelRatio || 1;
+    const displayScale = PDF_BASE_SCALE * _pdfZoom;
     const page = await pdf.getPage(i);
+    if (token !== _pdfRenderToken) return;
     const viewport = page.getViewport({ scale: displayScale });          // CSS px
     const renderViewport = page.getViewport({ scale: displayScale * dpr }); // device px
-
-    const wrap = document.createElement('div');
-    wrap.className = 'pdf-page-wrap';
-    wrap.style.width = viewport.width + 'px';
-    wrap.style.height = viewport.height + 'px';
 
     const canvas = document.createElement('canvas');
     canvas.width = renderViewport.width;
@@ -16295,6 +16305,7 @@ async function _renderPdfDoc() {
     canvas.style.height = viewport.height + 'px';
     wrap.appendChild(canvas);
     await page.render({ canvasContext: canvas.getContext('2d'), viewport: renderViewport }).promise;
+    if (token !== _pdfRenderToken) { try { wrap.removeChild(canvas); } catch (_) {} return; }
 
     // Selectable/copyable text layer overlaid on the canvas.
     try {
@@ -16304,6 +16315,7 @@ async function _renderPdfDoc() {
       const textContent = await page.getTextContent();
       const tl = new pdfjsLib.TextLayer({ textContentSource: textContent, container: textDiv, viewport });
       await tl.render();
+      if (token !== _pdfRenderToken) return;
       wrap.appendChild(textDiv);
     } catch (e) { /* text selection not available for this page */ }
 
@@ -16360,8 +16372,86 @@ async function _renderPdfDoc() {
     } catch (e) { /* no forms on this page, or render unsupported — ignore */ }
 
     if (token !== _pdfRenderToken) return;
+    wrap.dataset.rendered = '1';
+  } catch (e) {
+    if (token === _pdfRenderToken) console.warn('PDF page render failed:', i, e);
+  } finally {
+    wrap.dataset.rendering = '';
+  }
+}
+
+// Drop a page's heavy content back to an empty placeholder, freeing its canvas
+// memory. Keeps the wrap's size so the layout never shifts. Skipped while a tool
+// is active (the user is mid-edit; pages must stay put) or when the page holds
+// focus (a form field / text box being typed in). Edits survive in _pdfAnnots /
+// annotationStorage and redraw when the page is rendered again.
+function _unrenderPdfPage(wrap) {
+  if (!wrap || wrap.dataset.rendered !== '1' || wrap.dataset.rendering === '1') return;
+  if (_pdfTool) return;                                   // editing session — keep pages stable
+  const ae = document.activeElement;
+  if (ae && wrap.contains(ae)) return;                    // a field/text box here is focused
+  while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+  wrap.dataset.rendered = '';
+}
+
+// Force a specific page to be rendered right now (used before placing an image /
+// paste on the page in view, in case the observer hasn't filled it yet).
+async function _ensurePdfPageRendered(pageNum) {
+  const wrap = _pdfContainer?.querySelector(`.pdf-page-wrap[data-page="${pageNum}"]`);
+  if (wrap && wrap.dataset.rendered !== '1') await _renderPdfPageInto(wrap);
+  return wrap;
+}
+
+async function _renderPdfDoc() {
+  const pdf = _pdfDoc, container = _pdfContainer;
+  if (!pdf || !container) return;
+  const token = _pdfRenderToken;   // callers (renderPdfPages / setPdfZoom) own the bump; we only observe it
+  const displayScale = PDF_BASE_SCALE * _pdfZoom;
+
+  // Rebuild the layout from scratch (initial load or a zoom change): tear down
+  // the previous observer and re-detect forms as pages re-render.
+  if (_pdfPageIO) { try { _pdfPageIO.disconnect(); } catch (_) {} _pdfPageIO = null; }
+  _pdfHasForm = false;
+
+  // Built off-DOM so the user never sees a half-empty container while the first
+  // page renders; swapped in once page 1 is painted (no blank-placeholder flash).
+  const inner = document.createElement('div');
+  inner.style.cssText =
+    'display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px';
+
+  _pdfPageIO = new IntersectionObserver((entries) => {
+    for (const en of entries) {
+      if (en.isIntersecting) _renderPdfPageInto(en.target);
+      else _unrenderPdfPage(en.target);
+    }
+  }, { root: container, rootMargin: '1500px 0px', threshold: 0 });
+
+  // One correctly-sized placeholder per page. getPage() here only parses the page
+  // dict to read its dimensions (cheap) — it does NOT rasterize. The observer
+  // fills in canvases as pages near the viewport.
+  let firstSwapped = false;
+  for (let i = 1; i <= pdf.numPages; i++) {
+    if (token !== _pdfRenderToken) return;   // a newer render started → abort
+    const page = await pdf.getPage(i);
+    if (token !== _pdfRenderToken) return;
+    const viewport = page.getViewport({ scale: displayScale });   // CSS px
+    const wrap = document.createElement('div');
+    wrap.className = 'pdf-page-wrap';
+    wrap.dataset.page = String(i);
+    wrap.style.width = viewport.width + 'px';
+    wrap.style.height = viewport.height + 'px';
     inner.appendChild(wrap);
-    if (!firstAttached) { container.innerHTML = ''; container.appendChild(inner); firstAttached = true; }
+
+    if (!firstSwapped) {
+      // Paint page 1 before the swap so the container shows a real page, not a
+      // blank placeholder, the instant it appears.
+      await _renderPdfPageInto(wrap);
+      if (token !== _pdfRenderToken) return;
+      container.innerHTML = '';
+      container.appendChild(inner);
+      firstSwapped = true;
+    }
+    _pdfPageIO.observe(wrap);
   }
 }
 
