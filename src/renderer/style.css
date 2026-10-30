@@ -2508,7 +2508,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 /* External file drag (from the OS file manager): frame the WHOLE target folder —
    its row AND its contents — so it is clear where the dropped file(s) will land.
    A dark translucent fill (not the green accent), with a neutral edge. */
-.ext-drop-into { background: rgba(0,0,0,0.20); outline: 1.5px solid var(--border-light); outline-offset: -1px; border-radius: 6px; }
+.ext-drop-into { background: rgba(0,0,0,0.30); outline: 2px solid var(--border-light); outline-offset: -1px; border-radius: 6px; }
 .tree-note[draggable="true"] { cursor: grab; }
 .tree-note[draggable="true"]:active { cursor: grabbing; opacity: .7; }
 .tree-folder[draggable="true"] { cursor: grab; }

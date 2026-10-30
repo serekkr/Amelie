@@ -18515,16 +18515,35 @@ function _homeAttachmentsInFolder(folderPath, attPaths) {
   if (!folderPath || !attPaths || !attPaths.length) return;
   const destArr = levelArray(folderPath);
   if (!destArr) return;   // target folder gone (deleted mid-drag) → leave at root
+  const wanted = new Set(attPaths);
+  // A loose attachment has EXACTLY ONE home. Drop these paths from every OTHER saved
+  // order level — the root and any folder they were homed in before — so the same
+  // physical file is never listed, and so never shown, under two folders at once.
+  // (Without this, dropping the same file on folder A then folder B left it homed in
+  // both: after a reload _attachmentHomes surfaced two rows for one file, and deleting
+  // either one deleted the single file behind both. serekkr, 30/10/2026.)
+  let orderChanged = false;
+  for (const k of Object.keys(treeOrder)) {
+    if (k === folderPath || !Array.isArray(treeOrder[k])) continue;
+    const after = treeOrder[k].filter(p => !wanted.has(p));
+    if (after.length !== treeOrder[k].length) {
+      if (after.length) treeOrder[k] = after; else delete treeOrder[k];
+      orderChanged = true;
+    }
+  }
+  // Strip ALL in-memory copies (a reload may have placed one per stale home), then put
+  // a single copy in the target folder.
   let moved = 0;
   for (const ap of attPaths) {
-    const found = findAndRemoveFromTree(ap, state.notes);
-    if (!found) continue;
-    destArr.push(found.node);
+    let node = null, found;
+    while ((found = findAndRemoveFromTree(ap, state.notes))) node = found.node;
+    if (!node) continue;
+    destArr.push(node);
     moved++;
   }
-  if (!moved) return;
+  if (!moved) { if (orderChanged) { saveTreeOrder(); renderTree(); } return; }
   state.openFolders.add(folderPath);
-  saveManualOrder(folderPath, destArr);
+  saveManualOrder(folderPath, destArr);   // persists treeOrder, including the cleanup above
   renderTree();
 }
 
