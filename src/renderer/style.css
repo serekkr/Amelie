@@ -5240,6 +5240,12 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
   max-width: min(70vw, 560px);
   white-space: normal; overflow-wrap: anywhere; text-overflow: clip;
 }
+/* Note-row tooltip kept INSIDE the sidebar: wraps to as many lines as the path needs,
+   never widening past the panel onto the editor. max-width is set inline (= sidebar
+   width) by place(). */
+#app-tooltip.in-panel {
+  white-space: normal; overflow: visible; overflow-wrap: anywhere; text-overflow: clip;
+}
 
 /* ─── Export-to-PDF modal controls ──────────────────────────────────────────── */
 .export-seg-btn {

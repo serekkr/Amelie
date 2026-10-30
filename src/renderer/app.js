@@ -2914,9 +2914,11 @@ function _tipWhenClipped(row, text, side = 'right') {
     if (n.scrollWidth > n.clientWidth + 1) {
       row.setAttribute('data-tip', text);
       // 'right' = beside the row (default, used by folders); 'below' = under it, like the
-      // open-tab tooltip — asked for the long NOTE names (serekkr, 30/10/2026). See place().
-      if (side === 'right') row.setAttribute('data-tip-side', 'right');
-      else row.removeAttribute('data-tip-side');
+      // open-tab tooltip — asked for the long NOTE names (serekkr, 30/10/2026). A 'below'
+      // tooltip also wraps WITHIN the sidebar (data-tip-wrap=panel) so a deep path never
+      // spills onto the editor pane; it grows in height, not past the panel. See place().
+      if (side === 'right') { row.setAttribute('data-tip-side', 'right'); row.removeAttribute('data-tip-wrap'); }
+      else { row.removeAttribute('data-tip-side'); row.setAttribute('data-tip-wrap', 'panel'); }
     } else {
       row.removeAttribute('data-tip');
     }
@@ -8709,14 +8711,32 @@ function setupTooltips() {
     const text = el.getAttribute('data-tip');
     if (!text) return;
     tip.textContent = text;
+    tip.classList.remove('wide', 'in-panel');
+    tip.style.maxWidth = '';
+    tip.classList.add('show');
+    // Panel-constrained (sidebar note rows): the bubble must stay INSIDE the sidebar and
+    // wrap to more lines rather than spill onto the editor pane (serekkr, 30/10/2026).
+    if (el.getAttribute('data-tip-wrap') === 'panel') {
+      const sb = document.getElementById('sidebar');
+      const sr = sb ? sb.getBoundingClientRect() : { left: 0, right: 300 };
+      tip.classList.add('in-panel');
+      tip.style.maxWidth = Math.max(140, sr.right - sr.left - 16) + 'px';
+      const r = el.getBoundingClientRect();
+      const tw = tip.offsetWidth, th = tip.offsetHeight, vh = window.innerHeight;
+      let left = sr.left + 8;
+      if (left + tw + 4 > sr.right) left = Math.max(4, sr.right - tw - 8);
+      let top = r.bottom + 6;
+      if (top + th + 4 > vh) top = Math.max(4, r.top - th - 6);
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+      return;
+    }
     // Wrap mode BEFORE measuring — the size below depends on it.
     // Decided by MEASURING, not by counting characters: the old `text.length > 60`
     // test was in characters while the bubble's limit is 280 pixels, so anything
     // from roughly 45 to 60 characters — a note two folders deep, say — was cut off
     // with nowrap+ellipsis and never allowed to wrap. Whether it has spaces or
     // hyphens makes no difference; only how wide it draws does.
-    tip.classList.remove('wide');
-    tip.classList.add('show');
     if (tip.scrollWidth > tip.clientWidth) tip.classList.add('wide');
     const r = el.getBoundingClientRect();
     const tw = tip.offsetWidth, th = tip.offsetHeight;
