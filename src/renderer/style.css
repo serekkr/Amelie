@@ -1647,7 +1647,10 @@ kbd {
      a YAML/shell block reading as a wall of green (serekkr, 28/10/2026). */
   --hl-string: #ce9178; --hl-number: #a781ff; --hl-property: #54dedc;
   --hl-var2: #54dedc;   --hl-atom: #a781ff;
-  --md-link: #58a6ff;
+  /* Edit-mode link/URL/image-embed blue — darkened to a navy (serekkr, 30/10/2026:
+     "il blue... piu' scuro tipo blue navy"). Was the bright #58a6ff. View mode uses
+     --link, untouched. */
+  --md-link: #355fb0;
   /* The surface a code block sits on, in BOTH modes, and under a table header. Built
      from the theme's own link blue over its page colour, so it belongs to the palette —
      the flat white wash it replaced read as a grey patch belonging to nothing. The blue
