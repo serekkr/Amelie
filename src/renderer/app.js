@@ -2907,13 +2907,16 @@ function makeTodoTreeEntry() {
 // the cost is one measurement, on the row you are actually pointing at.
 // `data-tip` and not `title`: the tooltip layer (setupTooltips) reads data-tip and would
 // otherwise have to convert the title first, on the very same event.
-function _tipWhenClipped(row, text) {
+function _tipWhenClipped(row, text, side = 'right') {
   row.addEventListener('mouseover', () => {
     const n = row.querySelector('.tree-name');
     if (!n) return;
     if (n.scrollWidth > n.clientWidth + 1) {
       row.setAttribute('data-tip', text);
-      row.setAttribute('data-tip-side', 'right');   // beside the row, see place() in setupTooltips
+      // 'right' = beside the row (default, used by folders); 'below' = under it, like the
+      // open-tab tooltip — asked for the long NOTE names (serekkr, 30/10/2026). See place().
+      if (side === 'right') row.setAttribute('data-tip-side', 'right');
+      else row.removeAttribute('data-tip-side');
     } else {
       row.removeAttribute('data-tip');
     }
@@ -3516,7 +3519,7 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   // (serekkr, 30/10/2026) — so a truncated note in a deep folder is identifiable. For a
   // note it's node.path (e.g. "02 - Work/01 - clients/.../routing.md"); an attachment,
   // whose path is attachments/<type>/<file>, shows its file name instead.
-  _tipWhenClipped(el, (isAttach ? (node.name || displayName) : (node.path || displayName)));
+  _tipWhenClipped(el, (isAttach ? (node.name || displayName) : (node.path || displayName)), 'below');
   el.dataset.path = node.path;
 
   // Le righe dell'albero prendono il FUOCO della tastiera quando le clicchi
