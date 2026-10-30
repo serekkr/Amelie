@@ -8247,13 +8247,21 @@ function jumpToHeadingEl(hEl, text, tocIdx, sourceLineInBody, bodyOffset) {
         const charIdxInBody = lines.slice(0, sourceLineInBody)
           .reduce((s, l) => s + l.length + 1, 0);
         const charIdx = bodyOffset + charIdxInBody;
-        editor.focus();
-        editor.setSelectionRange(charIdx, charIdx + lines[sourceLineInBody].length);
+        // On Android, jumping from the Index must NOT raise the soft keyboard — the keyboard
+        // belongs to tapping the EDITOR to write (serekkr, 30/10/2026). Focusing the editor (or
+        // moving its selection) pops the keyboard up, so on mobile we only SCROLL to the heading;
+        // the caret and keyboard wait until the user taps the text. (scrollToPos dispatches
+        // scrollIntoView and never focuses, so the view moves with the keyboard still down.)
+        const _android = document.documentElement.getAttribute('data-amelie-platform') === 'android';
+        if (!_android) {
+          editor.focus();
+          editor.setSelectionRange(charIdx, charIdx + lines[sourceLineInBody].length);
+        }
         if (_cmActive && _cmHandle) {
           // CM scrolls the position near the top natively (the textarea mirror
           // measurement below is meaningless when the textarea is hidden).
           _cmHandle.scrollToPos(charIdx, 'start');
-        } else {
+        } else if (!_android) {
           // Use a mirror div to measure the EXACT visual Y of the selection start,
           // accounting for line wrapping (the textarea has white-space: pre-wrap).
           const y = measureTextareaCaretY(editor, charIdx);
