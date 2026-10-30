@@ -1023,6 +1023,20 @@ html.is-mac #titlebar { padding-left: 72px; }
 .tree-folder[data-color="peach"]  .tree-name { color: #d4916a; }
 .tree-folder[data-color] .tree-folder-icon { color: inherit; }
 .tree-note .tree-date { font-size: 11px; color: var(--text-3); flex-shrink: 0; }
+/* Obsidian-style type badge on the RIGHT of an attachment/draw row (PDF, PNG, MP4, GIF,
+   MP3…). .tree-name is flex:1 so it eats the slack and pushes the badge to the edge; the
+   badge never shrinks or wraps. Dim, small, uppercase — a quiet tag, not a button. */
+.tree-ext {
+  flex-shrink: 0;
+  font-size: 0.68em;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  pointer-events: none;
+  align-self: center;
+}
+.tree-note.active .tree-ext, .tree-note.open-in-tab .tree-ext { color: var(--text-2); }
 
 /* The About page's feature list. A ring per line, in the accent, sized and placed
    off the text's own line box (em, not px) so it stays on the first line's centre

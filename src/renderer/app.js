@@ -3480,14 +3480,21 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   if (node.type && node.type !== 'note') el.dataset.kind = node.type;
   const colorKey = noteColors[node.path];
   if (colorKey) el.dataset.color = colorKey;
-  // Show the file extension explicitly for PDFs (since the icon has been
-  // removed) so the user can still tell them apart from regular notes.
-  const displayName = node.type === 'draw'
-    ? node.name + '.draw'
-    : node.type === 'pdf'
-      ? (/\.pdf$/i.test(node.name) ? node.name : node.name + '.pdf')
-      : node.name;
-  el.innerHTML = `<span class="tree-name">${escHtml(displayName)}</span>`;
+  // Obsidian-style (serekkr, 30/10/2026): attachments (PDF, image, audio, video) and
+  // drawings DON'T show their extension in the name any more — instead a small type
+  // badge (PDF, PNG, MP4, GIF, MP3, …), derived from the REAL extension, sits on the
+  // RIGHT of the row. Regular notes keep their name and carry no badge.
+  const isAttach = isAttachNode(node);
+  let displayName = node.name;
+  let extBadge = '';
+  if (isAttach || node.type === 'draw') {
+    const fname = node.attachmentName || node.name || '';
+    let ext = (fname.match(/\.([A-Za-z0-9]+)$/) || [, ''])[1];
+    if (!ext) ext = node.type === 'pdf' ? 'pdf' : node.type === 'draw' ? 'draw' : node.type;
+    extBadge = `<span class="tree-ext">${escHtml(ext.toUpperCase())}</span>`;
+    displayName = (node.name || '').replace(/\.[A-Za-z0-9]+$/, '');
+  }
+  el.innerHTML = `<span class="tree-name">${escHtml(displayName)}</span>${extBadge}`;
   _tipWhenClipped(el, displayName);
   el.dataset.path = node.path;
 
@@ -3532,7 +3539,7 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   // Files (notes, draws, pdfs, images) are all freely re-orderable via drag.
   // PDFs/images live in attachments/ on disk, so they only ever REORDER — they
   // are never renamed/moved into a folder (unlike notes/draws).
-  const isAttach = isAttachNode(node);
+  // (isAttach computed above, where the type badge is built.)
 
   el.setAttribute('draggable', 'true');
   // Drag & drop reorder
