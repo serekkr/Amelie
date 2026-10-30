@@ -8052,9 +8052,14 @@ function mdInlineToText(md) {
 // their positions are kept here by renderTOC; _updateTocActive finds the current one.
 let _tocHeadings = [];
 let _tocActiveIdx = -1;
+// After a CLICK the scroll-spy is held off briefly: the jump fires a scroll that would
+// otherwise re-light a neighbouring heading (the one that lands at the top), so the strip
+// jumped off the row you clicked (serekkr, 30/10/2026 — "seleziona quello di sotto/sopra").
+let _tocSpyLockUntil = 0;
 function _updateTocActive() {
   const list = $('toc-list');
   if (!list || !_tocHeadings.length) return;
+  if (Date.now() < _tocSpyLockUntil) return;   // a click just set the active row — leave it
   let idx = -1;
   try {
     if (state.viewMode === 'edit' && _cmActive && _cmHandle && _cmHandle.view) {
@@ -8070,7 +8075,10 @@ function _updateTocActive() {
     } else if (state.viewMode !== 'edit') {
       const pane = $('preview-pane');
       if (!pane) return;
-      const paneTop = pane.getBoundingClientRect().top + 8;
+      // +24, not +8: jumpToHeadingEl parks a clicked heading ~12px below the pane top, so a
+      // tight boundary made the PREVIOUS heading read as current and the green strip landed
+      // on the row above the one you clicked (serekkr, 30/10/2026). 24 clears that offset.
+      const paneTop = pane.getBoundingClientRect().top + 24;
       // The preview streams in: an hEl cached by renderTOC can be stale/null, so re-resolve
       // it against the live preview headings by its flat index when needed.
       const live = pane.querySelectorAll('#preview-content h1,#preview-content h2,#preview-content h3,#preview-content h4,#preview-content h5,#preview-content h6');
@@ -8262,6 +8270,10 @@ function jumpToHeadingEl(hEl, text, tocIdx, sourceLineInBody, bodyOffset) {
   document.querySelectorAll('.toc-item').forEach(el => {
     el.classList.toggle('active', parseInt(el.dataset.idx, 10) === tocIdx);
   });
+  // Keep the clicked row lit: record it and hold the scroll-spy off for a beat so the
+  // jump's own scroll can't bump the strip onto a neighbour.
+  _tocActiveIdx = tocIdx;
+  _tocSpyLockUntil = Date.now() + 700;
 }
 
 // ─── Attachment chips (edit mode) ─────────────────────────────────────────────
