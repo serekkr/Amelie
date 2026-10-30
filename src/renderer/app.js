@@ -2909,19 +2909,24 @@ function makeTodoTreeEntry() {
 // otherwise have to convert the title first, on the very same event.
 // Path tooltip for the Recent / Bookmarks / Tags lists: shown BELOW the hovered row and
 // kept INSIDE the sidebar (wraps instead of spilling out to the side), same as the file
-// tree (serekkr, 30/10/2026). Unlike _tipWhenClipped it is always offered, not only when
-// the name is clipped — the path is extra info (WHERE the note lives), not a repeat of the
-// visible name. data-tip-wrap=panel → place() positions it under the row and clamps it.
+// tree. It appears ONLY when the name is CLIPPED — a name that fits shows nothing, just the
+// pointer cursor (serekkr, 30/10/2026: "su un testo corto non far vedere la scritta di nuovo,
+// lascia solo il dito; quelle con le scritte lunghe lasciamo così"). Measured on hover (reading
+// scrollWidth forces layout, so it is done on the row you point at, not every row at render).
 function _pathTip(el, path) {
-  if (!el) return;
-  if (path) {
-    el.setAttribute('data-tip', path);
-    el.setAttribute('data-tip-wrap', 'panel');
-    el.removeAttribute('data-tip-side');
-    el.removeAttribute('title');
-  } else {
-    el.removeAttribute('data-tip'); el.removeAttribute('data-tip-wrap');
-  }
+  if (!el) { return; }
+  el.removeAttribute('title');
+  if (!path) { el.removeAttribute('data-tip'); el.removeAttribute('data-tip-wrap'); return; }
+  const nameEl = el.querySelector('.simple-name') || el;
+  el.addEventListener('mouseover', () => {
+    if (nameEl.scrollWidth > nameEl.clientWidth + 1) {
+      el.setAttribute('data-tip', path);
+      el.setAttribute('data-tip-wrap', 'panel');
+      el.removeAttribute('data-tip-side');
+    } else {
+      el.removeAttribute('data-tip');
+    }
+  });
 }
 function _tipWhenClipped(row, text, side = 'right') {
   row.addEventListener('mouseover', () => {
