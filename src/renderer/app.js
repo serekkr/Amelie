@@ -2907,6 +2907,22 @@ function makeTodoTreeEntry() {
 // the cost is one measurement, on the row you are actually pointing at.
 // `data-tip` and not `title`: the tooltip layer (setupTooltips) reads data-tip and would
 // otherwise have to convert the title first, on the very same event.
+// Path tooltip for the Recent / Bookmarks / Tags lists: shown BELOW the hovered row and
+// kept INSIDE the sidebar (wraps instead of spilling out to the side), same as the file
+// tree (serekkr, 30/10/2026). Unlike _tipWhenClipped it is always offered, not only when
+// the name is clipped — the path is extra info (WHERE the note lives), not a repeat of the
+// visible name. data-tip-wrap=panel → place() positions it under the row and clamps it.
+function _pathTip(el, path) {
+  if (!el) return;
+  if (path) {
+    el.setAttribute('data-tip', path);
+    el.setAttribute('data-tip-wrap', 'panel');
+    el.removeAttribute('data-tip-side');
+    el.removeAttribute('title');
+  } else {
+    el.removeAttribute('data-tip'); el.removeAttribute('data-tip-wrap');
+  }
+}
 function _tipWhenClipped(row, text, side = 'right') {
   row.addEventListener('mouseover', () => {
     const n = row.querySelector('.tree-name');
@@ -19264,7 +19280,7 @@ function renderRecentView() {
     // title ("Modified <date>"), and with the tooltip on the name alone it
     // vanished as soon as the pointer crossed onto that line, inside what reads
     // and clicks as a single entry.
-    if (it.path) main.title = it.path;
+    _pathTip(main, it.path);
     main.appendChild(name);
     if (mod) { const sub = document.createElement('div'); sub.className = 'simple-sub'; sub.textContent = window.i18n.t('recent.modified') + ' ' + _fmtDateTimeDMY(mod); main.appendChild(sub); }
     main.addEventListener('click', () => _openByPath(it.path, it.name));
@@ -19282,7 +19298,7 @@ function renderBookmarksView() {
     const row = _simpleRow(it.name, () => _openByPath(it.path, it.name), removeFn);
     // Hovering shows where the note lives, as the tags view does for its source notes: the
     // list only has room for the name, and two notes can share one.
-    if (it.path) { const n = row.querySelector('.simple-name'); if (n) n.title = it.path; }
+    _pathTip(row.querySelector('.simple-name'), it.path);
     // For the search bar filter: note name and path.
     row.dataset.name = ((it.name || '') + '\n' + (it.path || '')).toLowerCase();
     // Right-click → remove from bookmarks (no extra tab opened).
@@ -19416,7 +19432,7 @@ async function renderTagsView() {
       tagBtn.className = 'tag-chip';
       tagBtn.textContent = `#${t}`;
       // Hover shows where the tag is: the full path, note name included.
-      tagBtn.title = n.path;
+      _pathTip(tagBtn, n.path);
       tagBtn.addEventListener('click', () => _openByPathAtTag(n.path, n.name, t));
       row.append(tagBtn);
       group.appendChild(row);
