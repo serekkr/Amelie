@@ -1043,6 +1043,10 @@ html.is-mac #titlebar { padding-left: 72px; }
   color: var(--text-0);
   background: color-mix(in srgb, var(--text-0) 20%, transparent);
 }
+/* Same badge inside an open tab (PDF/PNG/MP4/DRAW…). .tab-name is flex:1 and ellipsises;
+   this sits after it, before the ✕, and never shrinks. */
+.tab-ext { font-size: 9px; padding: 1px 4px; }
+.note-tab.active .tab-ext { color: var(--text-0); background: color-mix(in srgb, var(--text-0) 20%, transparent); }
 
 /* The About page's feature list. A ring per line, in the accent, sized and placed
    off the text's own line box (em, not px) so it stays on the first line's centre

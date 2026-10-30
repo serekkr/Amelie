@@ -564,12 +564,29 @@ function renderTabBar() {
 
     const name = document.createElement('span');
     name.className = 'tab-name';
+    // Attachment/draw tabs drop the extension from the title and carry a type badge on the
+    // right (PDF, PNG, MP4, GIF, DRAW…), same logic as the tree (serekkr, 30/10/2026). The
+    // badge is a SIBLING of .tab-name so the name ellipsises and the badge stays visible.
+    let tabExt = '';
     if (tab.type === 'canvas') {
-      name.innerHTML = `<svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3.5a2.121 2.121 0 0 1 3 3L7 18l-4 1 1-4L15.5 3.5z"/><path d="M13 6l3 3"/></svg>${escHtml(tab.name || 'Draw')}.draw`;
+      name.innerHTML = `<svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3.5a2.121 2.121 0 0 1 3 3L7 18l-4 1 1-4L15.5 3.5z"/><path d="M13 6l3 3"/></svg>${escHtml(tab.name || 'Draw')}`;
+      tabExt = 'DRAW';
+    } else if (ATTACH_NODE_TYPES.has(tab.type)) {
+      const fname = tab.attachmentName || tab.name || '';
+      let ext = (fname.match(/\.([A-Za-z0-9]+)$/) || [, ''])[1];
+      if (!ext) ext = tab.type === 'pdf' ? 'pdf' : tab.type;
+      name.textContent = (tab.name || '').replace(/\.[A-Za-z0-9]+$/, '');
+      tabExt = ext.toUpperCase();
     } else {
       name.textContent = tab.name;
     }
     el.appendChild(name);
+    if (tabExt) {
+      const b = document.createElement('span');
+      b.className = 'tree-ext tab-ext';
+      b.textContent = tabExt;
+      el.appendChild(b);
+    }
 
     const close = document.createElement('button');
     close.className = 'tab-close';
