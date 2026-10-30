@@ -3495,7 +3495,11 @@ function makeNoteEl(node, parentArray, folderPath = '') {
     displayName = (node.name || '').replace(/\.[A-Za-z0-9]+$/, '');
   }
   el.innerHTML = `<span class="tree-name">${escHtml(displayName)}</span>${extBadge}`;
-  _tipWhenClipped(el, displayName);
+  // On hover over a clipped row, show the FULL PATH (folders + name), Obsidian-style
+  // (serekkr, 30/10/2026) — so a truncated note in a deep folder is identifiable. For a
+  // note it's node.path (e.g. "02 - Work/01 - clients/.../routing.md"); an attachment,
+  // whose path is attachments/<type>/<file>, shows its file name instead.
+  _tipWhenClipped(el, (isAttach ? (node.name || displayName) : (node.path || displayName)));
   el.dataset.path = node.path;
 
   // Le righe dell'albero prendono il FUOCO della tastiera quando le clicchi
