@@ -4375,15 +4375,37 @@ function renderBreadcrumb(tab) {
   bc.innerHTML = '';
   bc.style.display = 'flex';
 
-  // Folder segments (everything before the file name), each with its cumulative
-  // path so a click can target exactly that folder.
+  // On Android (narrow) a deep path wraps to several lines and the note name ends up alone
+  // on the last one (serekkr, 30/10/2026). Collapse the root-side folders into a single "…"
+  // and keep only the nearest 2, so breadcrumb stays compact with the name in view. The "…"
+  // is clickable → reveals the deepest hidden folder. Desktop keeps the full breadcrumb.
+  const _android = document.documentElement.getAttribute('data-amelie-platform') === 'android';
+  const KEEP = 2;
+  const hideCount = (_android && parts.length > KEEP) ? parts.length - KEEP : 0;
+
+  if (hideCount > 0) {
+    const hiddenPath = parts.slice(0, hideCount).join('/');   // the last hidden folder
+    const ell = document.createElement('span');
+    ell.className = 'crumb crumb-folder crumb-ellipsis';
+    ell.textContent = '…';
+    ell.addEventListener('click', () => revealFolderInTree(hiddenPath));
+    bc.appendChild(ell);
+    const sep = document.createElement('span');
+    sep.className = 'crumb-sep';
+    sep.textContent = '/';
+    bc.appendChild(sep);
+  }
+
+  // Folder segments: every folder's cumulative path is accumulated (so a kept segment's
+  // click targets the right folder), but only the non-hidden ones are rendered.
   let acc = '';
-  for (const part of parts) {
-    acc = acc ? `${acc}/${part}` : part;
+  for (let idx = 0; idx < parts.length; idx++) {
+    acc = acc ? `${acc}/${parts[idx]}` : parts[idx];
+    if (idx < hideCount) continue;   // hidden behind the "…"
     const folderPath = acc;
     const seg = document.createElement('span');
     seg.className = 'crumb crumb-folder';
-    seg.textContent = part;
+    seg.textContent = parts[idx];
     // No title tooltip: hovering the path should only change the cursor to a hand,
     // not pop the folder path (serekkr, 30/10/2026). The click still reveals it in the tree.
     seg.addEventListener('click', () => revealFolderInTree(folderPath));
