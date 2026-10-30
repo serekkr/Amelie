@@ -38,6 +38,7 @@
     "test:recent": "node test/recent-by-date.mjs",
     "test:temps": "node test/attachment-temps-hidden.cdp.mjs",
     "test:drop": "node test/sidebar-media-drop.cdp.mjs",
+    "test:dropfolder": "node test/media-drop-into-folder.cdp.mjs",
     "test:pdfdrop": "node test/pdf-drop-sidebar.cdp.mjs",
     "test:noterefresh": "node test/open-note-refreshed-after-sync.cdp.mjs",
     "test:leftclick": "node test/editor-click-left-of-text.cdp.mjs",

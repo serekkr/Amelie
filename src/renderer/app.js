@@ -18482,18 +18482,50 @@ function _gatherEntries(entries) {
   return Promise.all(entries.map(e => readEntry(e, ''))).then(() => out);
 }
 
-// During an external (file-explorer) drag, highlight the tree folder under the
-// cursor so you can see which folder the dropped note/folder will go into.
+// During an external (file-explorer) drag, highlight the WHOLE tree folder under
+// the cursor — its row AND its contents, Obsidian-style — so it is obvious which
+// folder the dropped file(s) will land in. The frame goes on the folder's wrapper
+// (row + children), not just the row, so an open folder shows one enclosing box.
 let _extDropTarget = '';   // path of that folder ('' = vault root)
 function _highlightExtDropTarget(target) {
-  const folder = target && target.closest ? target.closest('.tree-folder') : null;
-  document.querySelectorAll('.tree-folder.drag-over-folder').forEach(el => { if (el !== folder) el.classList.remove('drag-over-folder'); });
-  if (folder) { folder.classList.add('drag-over-folder'); _extDropTarget = folder.dataset.folder || ''; }
+  let folder = target && target.closest ? target.closest('.tree-folder') : null;
+  // Hovering a note/row INSIDE an open folder targets that enclosing folder too, so
+  // the WHOLE folder area is a drop zone (Obsidian-style), not only its header row.
+  // The folder row is the sibling right before its .tree-folder-children container.
+  if (!folder && target && target.closest) {
+    const kids = target.closest('.tree-folder-children');
+    const prev = kids && kids.previousElementSibling;
+    if (prev && prev.classList && prev.classList.contains('tree-folder')) folder = prev;
+  }
+  const wrap = folder ? folder.parentElement : null;   // the div wrapping row + .tree-folder-children
+  document.querySelectorAll('.ext-drop-into').forEach(el => { if (el !== wrap) el.classList.remove('ext-drop-into'); });
+  if (folder && wrap) { wrap.classList.add('ext-drop-into'); _extDropTarget = folder.dataset.folder || ''; }
   else _extDropTarget = '';
 }
 function _clearExtDropTarget() {
-  document.querySelectorAll('.tree-folder.drag-over-folder').forEach(el => el.classList.remove('drag-over-folder'));
+  document.querySelectorAll('.ext-drop-into').forEach(el => el.classList.remove('ext-drop-into'));
   _extDropTarget = '';
+}
+// Record freshly-imported LOOSE attachments' home = the folder they were dropped on,
+// so they appear INSIDE that folder instead of at the vault root — the same mechanism
+// as dragging an existing attachment onto a folder (saveManualOrder → _attachmentHomes
+// in main). `attPaths` are vault paths ("attachments/images/x.png"). Call AFTER
+// loadTree(), when the new nodes exist (at the root, with no home recorded yet).
+function _homeAttachmentsInFolder(folderPath, attPaths) {
+  if (!folderPath || !attPaths || !attPaths.length) return;
+  const destArr = levelArray(folderPath);
+  if (!destArr) return;   // target folder gone (deleted mid-drag) → leave at root
+  let moved = 0;
+  for (const ap of attPaths) {
+    const found = findAndRemoveFromTree(ap, state.notes);
+    if (!found) continue;
+    destArr.push(found.node);
+    moved++;
+  }
+  if (!moved) return;
+  state.openFolders.add(folderPath);
+  saveManualOrder(folderPath, destArr);
+  renderTree();
 }
 
 function setupFileDrop() {
@@ -18581,15 +18613,11 @@ function setupFileDrop() {
       // is whether the tree actually grew.
       const _rootMediaCount = () => (state.notes || [])
         .filter(n => ['image', 'video', 'audio', 'pdf'].includes(n.type)).length;
-      const _reportMedia = async (before, failed, droppedOnFolder) => {
+      const _reportMedia = async (before, failed) => {
         await loadTree();
         const added = _rootMediaCount() - before;
         if (added > 0) {
           showToast(window.i18n.t(added === 1 ? 'toast.media_added' : 'toast.media_added_many', { n: added }));
-          // Media lives under attachments/ and the tree surfaces it at the ROOT only, so
-          // a drop aimed at a folder does not land inside it. Say so, rather than leave
-          // the user hunting in the folder they aimed at.
-          if (droppedOnFolder) showToast(window.i18n.t('toast.media_at_root'), 4000);
         } else if (!failed) {
           showToast(window.i18n.t('toast.media_already_there'), 4000);
         }
@@ -18597,15 +18625,17 @@ function setupFileDrop() {
       const mediaPaths = _paths.filter(_isDroppedMedia);
       if (mediaPaths.length) {
         e.stopPropagation();
-        const droppedOnFolder = !!_extDropTarget;
+        const dest = _extDropTarget;            // the folder dropped onto ('' = vault root)
         _clearExtDropTarget();
         const before = _rootMediaCount();
         let failed = 0;
+        const importedRel = [];                 // vault paths of what actually landed
         for (const p of mediaPaths) {
-          try { await window.inkwell.importAttachmentPath(p, _sidebarMediaTarget(p.split('/').pop())); }
+          try { const name = await window.inkwell.importAttachmentPath(p, _sidebarMediaTarget(p.split('/').pop())); if (name) importedRel.push('attachments/' + name); }
           catch (err) { failed++; console.error('Sidebar media import failed:', p, err); _attachErrToast(err, p.split('/').pop()); }
         }
-        await _reportMedia(before, failed, droppedOnFolder);
+        await _reportMedia(before, failed);
+        if (dest) _homeAttachmentsInFolder(dest, importedRel);   // land it IN the folder it was dropped on
         return;
       }
       // Not a folder → fall through to the loose-file logic below.
@@ -18619,16 +18649,18 @@ function setupFileDrop() {
     const noteLikeInDrop = flat.some(f => f && /\.(md|markdown|txt|draw)$/i.test(f.name));
     if (!_paths.length && !noteLikeInDrop && mediaFiles.length && !entries.some(en => en.isDirectory)) {
       e.preventDefault(); e.stopPropagation();
-      const droppedOnFolder = !!_extDropTarget;
+      const dest = _extDropTarget;            // the folder dropped onto ('' = vault root)
       _clearExtDropTarget();
       const _rootMediaCount = () => (state.notes || [])
         .filter(n => ['image', 'video', 'audio', 'pdf'].includes(n.type)).length;
       const before = _rootMediaCount();
       let failed = 0;
+      const importedRel = [];
       for (const file of mediaFiles) {
         try {
           const buf = await file.arrayBuffer();
-          await window.inkwell.saveAttachment(_sidebarMediaTarget(file.name), new Uint8Array(buf));
+          const name = await window.inkwell.saveAttachment(_sidebarMediaTarget(file.name), new Uint8Array(buf));
+          if (name) importedRel.push('attachments/' + name);
         } catch (err) {
           failed++;
           console.error('Sidebar media save failed:', file.name, err);
@@ -18639,10 +18671,10 @@ function setupFileDrop() {
       const added = _rootMediaCount() - before;
       if (added > 0) {
         showToast(window.i18n.t(added === 1 ? 'toast.media_added' : 'toast.media_added_many', { n: added }));
-        if (droppedOnFolder) showToast(window.i18n.t('toast.media_at_root'), 4000);
       } else if (!failed) {
         showToast(window.i18n.t('toast.media_already_there'), 4000);
       }
+      if (dest) _homeAttachmentsInFolder(dest, importedRel);   // land it IN the folder it was dropped on
       return;
     }
 
@@ -18772,6 +18804,7 @@ function setupFileDrop() {
     // and linked inside the notes), so we do NOT open a tab per PDF — a vault with many
     // PDFs would otherwise spawn a tab for each.
     let pdfImported = 0;
+    const importedPdfRel = [];                 // vault paths of the PDFs that landed
     for (const g of (hasDir ? [] : pdfFiles)) {
       const file = g.file;
       // Reject >512 MB BEFORE reading the whole file into the renderer heap
@@ -18780,6 +18813,7 @@ function setupFileDrop() {
       try {
         const buf = await file.arrayBuffer();
         const savedName = await window.inkwell.saveAttachment('pdf/' + file.name, new Uint8Array(buf));
+        importedPdfRel.push('attachments/' + savedName);
         const existingIdx = tabs.findIndex(t => t.type === 'pdf' && t.attachmentName === savedName);
         if (existingIdx >= 0) {
           await switchTab(existingIdx);
@@ -18791,7 +18825,10 @@ function setupFileDrop() {
         // No "PDF added" toast — the imported PDF opens in a tab as feedback.
       } catch (err) { console.error('Import pdf failed:', file.name, err); _attachErrToast(err, file.name); }
     }
-    if (pdfImported > 0) await loadTree();
+    if (pdfImported > 0) {
+      await loadTree();
+      if (baseFolder) _homeAttachmentsInFolder(baseFolder, importedPdfRel);   // land it IN the folder it was dropped on
+    }
 
   }, true);
 
