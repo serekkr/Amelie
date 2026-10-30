@@ -6201,6 +6201,9 @@ function setViewMode(mode, opts) {
   // count from the mode we just left would sit in the status bar. Also covers a tab
   // switch, which comes through here.
   try { updateSelectionCount(); } catch (_) {}
+  // Rebuild the Index for the mode we just entered (view mode needs the preview's heading
+  // elements for the scroll-spy; edit mode uses char positions) and re-light the current one.
+  try { if (tocVisible) renderTOC(); } catch (_) {}
 }
 
 // Add a language label (top-left) and a copy button (top-right) to every
@@ -8044,6 +8047,57 @@ function mdInlineToText(md) {
   }
 }
 
+// Scroll-spy for the Index: as you read, the heading you're on lights up with the green
+// strip (serekkr, 30/10/2026 — "la striscia deve seguire la lettura"). The headings and
+// their positions are kept here by renderTOC; _updateTocActive finds the current one.
+let _tocHeadings = [];
+let _tocActiveIdx = -1;
+function _updateTocActive() {
+  const list = $('toc-list');
+  if (!list || !_tocHeadings.length) return;
+  let idx = -1;
+  try {
+    if (state.viewMode === 'edit' && _cmActive && _cmHandle && _cmHandle.view) {
+      const view = _cmHandle.view;
+      const top = view.scrollDOM.scrollTop + 8;   // a hair below the viewport's top edge
+      const docLen = view.state.doc.length;
+      for (let i = 0; i < _tocHeadings.length; i++) {
+        const ci = _tocHeadings[i].charIdx;
+        if (ci == null || ci > docLen) continue;
+        const blockTop = view.lineBlockAt(ci).top;
+        if (blockTop <= top) idx = i; else break;   // headings are in document order
+      }
+    } else if (state.viewMode !== 'edit') {
+      const pane = $('preview-pane');
+      if (!pane) return;
+      const paneTop = pane.getBoundingClientRect().top + 8;
+      // The preview streams in: an hEl cached by renderTOC can be stale/null, so re-resolve
+      // it against the live preview headings by its flat index when needed.
+      const live = pane.querySelectorAll('#preview-content h1,#preview-content h2,#preview-content h3,#preview-content h4,#preview-content h5,#preview-content h6');
+      for (let i = 0; i < _tocHeadings.length; i++) {
+        const h = _tocHeadings[i];
+        const el = (h.hEl && h.hEl.isConnected) ? h.hEl : (h.flatIdx != null ? live[h.flatIdx] : null);
+        if (!el || !el.isConnected) continue;
+        if (el.getBoundingClientRect().top <= paneTop) idx = i; else break;
+      }
+    }
+  } catch (_) { return; }
+  if (idx === _tocActiveIdx) return;
+  _tocActiveIdx = idx;
+  list.querySelectorAll('.toc-item').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.idx, 10) === idx);
+  });
+}
+// Attached ONCE (guarded): a scroll on the editor (CM) or the preview re-evaluates which
+// heading is current. rAF-throttled, and only while the Index is open.
+function _setupTocScrollSpy() {
+  if (window.__tocSpy) return; window.__tocSpy = true;
+  let raf = 0;
+  const onScroll = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; if (tocVisible) _updateTocActive(); }); };
+  try { const cs = _cmScrollEl(); if (cs) cs.addEventListener('scroll', onScroll, { passive: true }); } catch (_) {}
+  try { const pp = $('preview-pane'); if (pp) pp.addEventListener('scroll', onScroll, { passive: true }); } catch (_) {}
+}
+
 function renderTOC() {
   const list = $('toc-list');
   if (!list) return;
@@ -8083,6 +8137,7 @@ function renderTOC() {
               level: t.depth,
               text: cleanText,
               hEl: previewHeadings[flatHeadingIdx] || null,
+              flatIdx: flatHeadingIdx,
               sourceLineInBody,
               bodyOffset,
             });
@@ -8100,6 +8155,14 @@ function renderTOC() {
     return;
   }
 
+  // Char position of each heading in editor.value, for the edit-mode scroll-spy (same
+  // mapping jumpToHeadingEl uses). Kept on the heading so _updateTocActive is cheap.
+  const _bodyLines = body.split('\n');
+  matched.forEach(h => {
+    h.charIdx = h.bodyOffset + _bodyLines.slice(0, h.sourceLineInBody).reduce((s, l) => s + l.length + 1, 0);
+  });
+  _tocHeadings = matched;
+
   matched.forEach((h, idx) => {
     const el = document.createElement('div');
     el.className = `toc-item h${h.level}`;
@@ -8110,6 +8173,9 @@ function renderTOC() {
     el.addEventListener('click', () => jumpToHeadingEl(h.hEl, h.text, idx, h.sourceLineInBody, h.bodyOffset));
     list.appendChild(el);
   });
+  _setupTocScrollSpy();
+  _tocActiveIdx = -1;
+  _updateTocActive();   // initial highlight for the current scroll position
 }
 
 // Measure the visual Y-coordinate of the caret at `pos` inside a textarea.
