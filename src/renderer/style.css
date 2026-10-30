@@ -5243,11 +5243,12 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
   max-width: min(70vw, 560px);
   white-space: normal; overflow-wrap: anywhere; text-overflow: clip;
 }
-/* Note-row tooltip kept INSIDE the sidebar: wraps to as many lines as the path needs,
-   never widening past the panel onto the editor. max-width is set inline (= sidebar
-   width) by place(). */
+/* Note/path tooltip kept INSIDE the sidebar and on ONE line (serekkr, 30/10/2026: niente
+   "a capo" per i titoli lunghi). Never widens past the panel onto the editor — max-width is
+   set inline (= sidebar width) by place(); if the (already shortened) path is still wider,
+   it clips at the end with an ellipsis rather than wrapping. */
 #app-tooltip.in-panel {
-  white-space: normal; overflow: visible; overflow-wrap: anywhere; text-overflow: clip;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 /* ─── Export-to-PDF modal controls ──────────────────────────────────────────── */

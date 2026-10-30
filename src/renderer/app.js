@@ -2916,15 +2916,17 @@ function makeTodoTreeEntry() {
 // forces it on for the Tags list, whose row shows only "#tag" (the path is never a repeat
 // there, it is the one way to tell which note it is). Criterion is the path string, not a
 // clipping measurement — reliable regardless of sidebar width.
-// A deep path (a note five folders down) doesn't fit in the sidebar tooltip, especially on
-// Android — it wrapped to many lines (serekkr, 30/10/2026). Keep the NOTE NAME (always, it
-// is the last segment) plus the nearest few folders, and elide the deeper ancestors with
-// "…/". So "A/B/C/D/E/nota.md" shows "…/D/E/nota.md": the name and where it sits, no wall.
-function _shortPath(path, keep = 4) {
+// A deep path (a note several folders down) doesn't fit in the sidebar tooltip, especially
+// on Android. Keep the NOTE NAME (last segment) plus the nearest couple of folders, dropping
+// the deeper ancestors — and NO "…/" prefix, which the user disliked (serekkr, 30/10/2026:
+// "ultime cartelle + nome, una riga, senza …/"). So "00 Work/01 Clients/DPI/Egypt/nota.md"
+// shows "DPI/Egypt/nota.md". The tooltip itself is one line (.in-panel), clipped at the end
+// if even this is too wide.
+function _shortPath(path, keep = 3) {
   if (!path) return path;
   const parts = String(path).split('/');
-  if (parts.length <= keep) return path;        // already short enough → full path
-  return '…/' + parts.slice(-keep).join('/');   // name + the last (keep-1) folders
+  if (parts.length <= keep) return path;   // already short enough → full path
+  return parts.slice(-keep).join('/');     // name + the nearest (keep-1) folders, no "…/"
 }
 function _pathTip(el, path, always) {
   if (!el) return;
