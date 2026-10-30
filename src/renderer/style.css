@@ -1028,15 +1028,21 @@ html.is-mac #titlebar { padding-left: 72px; }
    badge never shrinks or wraps. Dim, small, uppercase — a quiet tag, not a button. */
 .tree-ext {
   flex-shrink: 0;
-  font-size: 0.68em;
-  font-weight: 600;
+  font-size: 0.64em;
+  font-weight: 700;
   letter-spacing: 0.4px;
-  color: var(--text-3);
+  color: var(--text-1);
+  background: color-mix(in srgb, var(--text-1) 16%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
   text-transform: uppercase;
   pointer-events: none;
   align-self: center;
 }
-.tree-note.active .tree-ext, .tree-note.open-in-tab .tree-ext { color: var(--text-2); }
+.tree-note.active .tree-ext, .tree-note.open-in-tab .tree-ext {
+  color: var(--text-0);
+  background: color-mix(in srgb, var(--text-0) 20%, transparent);
+}
 
 /* The About page's feature list. A ring per line, in the accent, sized and placed
    off the text's own line box (em, not px) so it stays on the first line's centre
