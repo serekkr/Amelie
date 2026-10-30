@@ -2916,11 +2916,21 @@ function makeTodoTreeEntry() {
 // forces it on for the Tags list, whose row shows only "#tag" (the path is never a repeat
 // there, it is the one way to tell which note it is). Criterion is the path string, not a
 // clipping measurement — reliable regardless of sidebar width.
+// A deep path (a note five folders down) doesn't fit in the sidebar tooltip, especially on
+// Android — it wrapped to many lines (serekkr, 30/10/2026). Keep the NOTE NAME (always, it
+// is the last segment) plus the nearest few folders, and elide the deeper ancestors with
+// "…/". So "A/B/C/D/E/nota.md" shows "…/D/E/nota.md": the name and where it sits, no wall.
+function _shortPath(path, keep = 4) {
+  if (!path) return path;
+  const parts = String(path).split('/');
+  if (parts.length <= keep) return path;        // already short enough → full path
+  return '…/' + parts.slice(-keep).join('/');   // name + the last (keep-1) folders
+}
 function _pathTip(el, path, always) {
   if (!el) return;
   el.removeAttribute('title');
   if (path && (always || path.includes('/'))) {
-    el.setAttribute('data-tip', path);
+    el.setAttribute('data-tip', _shortPath(path));   // nome + ultime cartelle, non dalla root
     el.setAttribute('data-tip-wrap', 'panel');
     el.removeAttribute('data-tip-side');
   } else {
@@ -3541,7 +3551,7 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   // (serekkr, 30/10/2026) — so a truncated note in a deep folder is identifiable. For a
   // note it's node.path (e.g. "02 - Work/01 - clients/.../routing.md"); an attachment,
   // whose path is attachments/<type>/<file>, shows its file name instead.
-  _tipWhenClipped(el, (isAttach ? (node.name || displayName) : (node.path || displayName)), 'below');
+  _tipWhenClipped(el, (isAttach ? (node.name || displayName) : _shortPath(node.path || displayName)), 'below');
   el.dataset.path = node.path;
 
   // Le righe dell'albero prendono il FUOCO della tastiera quando le clicchi
