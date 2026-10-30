@@ -5413,6 +5413,19 @@ function setupEditor() {
     }
     e.preventDefault(); e.stopImmediatePropagation();
     if (mediaRejected) showToast(window.i18n.t('attach.unsupported_format'), 4000);
+    // Media dropped INTO the note is filed by type under attachments/ (unchanged), but in
+    // the TREE it should land in the folder of the note you're viewing, not the vault root
+    // (serekkr, 30/10/2026). Same home mechanism as a drop on a folder row: we collect the
+    // vault-relative paths of what landed, then _homeAttachmentsInFolder moves/records them
+    // under the current note's folder. Root note → no folder → left at root (correct).
+    const _curNoteFolder = () => { const c = state.currentPath || ''; const i = c.lastIndexOf('/'); return i >= 0 ? c.slice(0, i) : ''; };
+    const noteFolder = _curNoteFolder();
+    const importedRel = [];
+    const _homeInNoteFolder = async () => {
+      if (!noteFolder || !importedRel.length) return;
+      try { await loadTree(); } catch (_) {}        // surface the new attachment node first
+      _homeAttachmentsInFolder(noteFolder, importedRel);
+    };
     // PATHS FIRST (see the paste handler): media file items are often hollow
     // stubs — when the drag carries file:// URIs, import from disk.
     if (uriPaths.length) {
@@ -5421,8 +5434,10 @@ function setupEditor() {
         try {
           const name = await window.inkwell.importAttachmentPath(p, _attachmentTarget(base));
           insertAttachmentRef(name);
+          if (name) importedRel.push('attachments/' + name);
         } catch (err) { console.error('Drop import failed:', p, err); if (_isTooLargeErr(err)) showToast(window.i18n.t('attach.too_large')); }
       }
+      await _homeInNoteFolder();
       return;
     }
     for (const file of files.filter(f => f.size > 0)) {
@@ -5431,6 +5446,7 @@ function setupEditor() {
         const buf = await file.arrayBuffer();
         const name = await window.inkwell.saveAttachment(_attachmentTarget(file.name || 'file'), new Uint8Array(buf));
         insertAttachmentRef(name);
+        if (name) importedRel.push('attachments/' + name);
       } catch (err) {
         console.error('Drop save failed:', file.name, err);
         if (_isTooLargeErr(err)) showToast(window.i18n.t('attach.too_large'));
@@ -5438,6 +5454,7 @@ function setupEditor() {
         else if (_isMismatchErr(err)) showToast(window.i18n.t('attach.content_mismatch'));
       }
     }
+    await _homeInNoteFolder();
   };
   editor.addEventListener('drop', _editorDropHandler);
 

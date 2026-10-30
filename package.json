@@ -40,6 +40,7 @@
     "test:drop": "node test/sidebar-media-drop.cdp.mjs",
     "test:dropfolder": "node test/media-drop-into-folder.cdp.mjs",
     "test:redrop": "node test/media-redrop-single-home.cdp.mjs",
+    "test:dropnote": "node test/media-drop-into-note-folder.cdp.mjs",
     "test:pdfdrop": "node test/pdf-drop-sidebar.cdp.mjs",
     "test:noterefresh": "node test/open-note-refreshed-after-sync.cdp.mjs",
     "test:leftclick": "node test/editor-click-left-of-text.cdp.mjs",
