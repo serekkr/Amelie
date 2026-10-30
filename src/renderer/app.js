@@ -2908,25 +2908,24 @@ function makeTodoTreeEntry() {
 // `data-tip` and not `title`: the tooltip layer (setupTooltips) reads data-tip and would
 // otherwise have to convert the title first, on the very same event.
 // Path tooltip for the Recent / Bookmarks / Tags lists: shown BELOW the hovered row and
-// kept INSIDE the sidebar (wraps instead of spilling out to the side), same as the file
-// tree. It appears ONLY when the name is CLIPPED — a name that fits shows nothing, just the
-// pointer cursor (serekkr, 30/10/2026: "su un testo corto non far vedere la scritta di nuovo,
-// lascia solo il dito; quelle con le scritte lunghe lasciamo così"). Measured on hover (reading
-// scrollWidth forces layout, so it is done on the row you point at, not every row at render).
-function _pathTip(el, path) {
-  if (!el) { return; }
+// kept INSIDE the sidebar (wraps, never spills out to the side), same as the file tree.
+// It appears only when the path ADDS something over the visible name — i.e. the note lives
+// in a folder (path has a '/'). A ROOT note's path IS its name, so the tooltip would just
+// repeat it: there we show nothing, only the pointer cursor (serekkr, 30/10/2026: "su un
+// testo corto non far vedere la scritta di nuovo; quelle lunghe lasciamo così"). `always`
+// forces it on for the Tags list, whose row shows only "#tag" (the path is never a repeat
+// there, it is the one way to tell which note it is). Criterion is the path string, not a
+// clipping measurement — reliable regardless of sidebar width.
+function _pathTip(el, path, always) {
+  if (!el) return;
   el.removeAttribute('title');
-  if (!path) { el.removeAttribute('data-tip'); el.removeAttribute('data-tip-wrap'); return; }
-  const nameEl = el.querySelector('.simple-name') || el;
-  el.addEventListener('mouseover', () => {
-    if (nameEl.scrollWidth > nameEl.clientWidth + 1) {
-      el.setAttribute('data-tip', path);
-      el.setAttribute('data-tip-wrap', 'panel');
-      el.removeAttribute('data-tip-side');
-    } else {
-      el.removeAttribute('data-tip');
-    }
-  });
+  if (path && (always || path.includes('/'))) {
+    el.setAttribute('data-tip', path);
+    el.setAttribute('data-tip-wrap', 'panel');
+    el.removeAttribute('data-tip-side');
+  } else {
+    el.removeAttribute('data-tip'); el.removeAttribute('data-tip-wrap');
+  }
 }
 function _tipWhenClipped(row, text, side = 'right') {
   row.addEventListener('mouseover', () => {
@@ -19437,7 +19436,7 @@ async function renderTagsView() {
       tagBtn.className = 'tag-chip';
       tagBtn.textContent = `#${t}`;
       // Hover shows where the tag is: the full path, note name included.
-      _pathTip(tagBtn, n.path);
+      _pathTip(tagBtn, n.path, true);   // Tags: always (the row shows only "#tag")
       tagBtn.addEventListener('click', () => _openByPathAtTag(n.path, n.name, t));
       row.append(tagBtn);
       group.appendChild(row);
