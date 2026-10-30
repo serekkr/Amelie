@@ -19284,7 +19284,7 @@ function renderRecentView() {
     // title ("Modified <date>"), and with the tooltip on the name alone it
     // vanished as soon as the pointer crossed onto that line, inside what reads
     // and clicks as a single entry.
-    _pathTip(main, it.path);
+    _pathTip(main, it.path, true);   // Recent: path sempre, come Tags (serekkr, 30/10/2026)
     main.appendChild(name);
     if (mod) { const sub = document.createElement('div'); sub.className = 'simple-sub'; sub.textContent = window.i18n.t('recent.modified') + ' ' + _fmtDateTimeDMY(mod); main.appendChild(sub); }
     main.addEventListener('click', () => _openByPath(it.path, it.name));
@@ -19302,7 +19302,7 @@ function renderBookmarksView() {
     const row = _simpleRow(it.name, () => _openByPath(it.path, it.name), removeFn);
     // Hovering shows where the note lives, as the tags view does for its source notes: the
     // list only has room for the name, and two notes can share one.
-    _pathTip(row.querySelector('.simple-name'), it.path);
+    _pathTip(row.querySelector('.simple-name'), it.path, true);   // Bookmarks: path sempre, come Tags
     // For the search bar filter: note name and path.
     row.dataset.name = ((it.name || '') + '\n' + (it.path || '')).toLowerCase();
     // Right-click → remove from bookmarks (no extra tab opened).
