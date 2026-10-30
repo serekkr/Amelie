@@ -18939,10 +18939,12 @@ function setupFileDrop() {
   setupImagePan();
   $('img-zoom-in')?.addEventListener('click', () => setImgZoom(_imgZoom + 0.2));
   $('img-zoom-out')?.addEventListener('click', () => setImgZoom(_imgZoom - 0.2));
+  $('img-zoom-reset')?.addEventListener('click', () => setImgZoom(1.0));   // torna a 100%
 
   // PDF zoom controls
   $('pdf-zoom-in')?.addEventListener('click', () => setPdfZoom(_pdfZoom + 0.2));
   $('pdf-zoom-out')?.addEventListener('click', () => setPdfZoom(_pdfZoom - 0.2));
+  $('pdf-zoom-reset')?.addEventListener('click', () => setPdfZoom(1.0));   // torna a 100%
   $('pdf-zoom-fit')?.addEventListener('click', () => pdfZoomFitWidth());
   // PDF annotation editor tools
   $('pdf-tool-pen')?.addEventListener('click', () => setPdfTool('pen'));
