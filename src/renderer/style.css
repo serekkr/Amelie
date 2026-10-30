@@ -4832,7 +4832,7 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 /* ─── ToDo view (agenda / lista) ─────────────────────────────── */
 #todo-view { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
 #todo-view-inner { width: 100%; max-width: 1000px; margin: 0 auto; padding: 28px 40px 60px; box-sizing: border-box; }
-.todo-meta { font-family: var(--editor-font); font-size: 12px; color: var(--text-1); margin-top: 2px; }
+.todo-meta { font-family: var(--editor-font); font-size: 10px; color: var(--text-1); margin-top: 2px; }
 #todo-view-head { -webkit-app-region: drag; }
 .todo-view-title { font-family: var(--ui-font); font-size: 27px; font-weight: 600; color: var(--text-0); margin-bottom: 14px; -webkit-app-region: no-drag; }
 #todo-filters-bar { display: flex; gap: 6px; margin-bottom: 16px; -webkit-app-region: no-drag; flex-wrap: wrap; }
@@ -4864,7 +4864,7 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
 .todo-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 /* A task reads like a note: same font family you pick in Settings for the editor. The size
    stays the board's own (14px) — the note zoom belongs to notes. */
-.todo-title { font-family: var(--editor-font-family); font-size: 15px; color: var(--text-0); line-height: 1.4; cursor: pointer; word-break: break-word; }
+.todo-title { font-family: var(--editor-font-family); font-size: 13px; color: var(--text-0); line-height: 1.4; cursor: pointer; word-break: break-word; }
 .todo-row.done .todo-title { color: var(--text-3); text-decoration: line-through; }
 .todo-chip { align-self: flex-start; font-family: var(--editor-font); font-size: 12px; color: var(--text-0); background: var(--bg-3); border-radius: 6px; padding: 2px 7px; }
 .todo-chip.overdue { color: var(--red); }
