@@ -3558,11 +3558,16 @@ function makeNoteEl(node, parentArray, folderPath = '') {
     displayName = (node.name || '').replace(/\.[A-Za-z0-9]+$/, '');
   }
   el.innerHTML = `<span class="tree-name">${escHtml(displayName)}</span>${extBadge}`;
-  // On hover over a clipped row, show the FULL PATH (folders + name), Obsidian-style
-  // (serekkr, 30/10/2026) — so a truncated note in a deep folder is identifiable. For a
-  // note it's node.path (e.g. "02 - Work/01 - clients/.../routing.md"); an attachment,
-  // whose path is attachments/<type>/<file>, shows its file name instead.
-  _tipWhenClipped(el, (isAttach ? (node.name || displayName) : _shortPath(node.path || displayName)), 'below');
+  // Hover tooltip. A NOTE that lives IN A FOLDER shows its FULL PATH on hover, ALWAYS —
+  // not only when the name is clipped (serekkr, 04/11/2026: "B1", uniform with Recent/
+  // Bookmarks/Tags). A ROOT note (path == name, no '/') and an attachment keep the old
+  // behaviour: the tooltip appears only when the name is CLIPPED, to read it in full —
+  // showing a path that is just the name again would be redundant.
+  if (!isAttach && node.path && node.path.includes('/')) {
+    _pathTip(el, node.path, true);   // full path, always on hover, for notes in a folder
+  } else {
+    _tipWhenClipped(el, (isAttach ? (node.name || displayName) : _shortPath(node.path || displayName)), 'below');
+  }
   el.dataset.path = node.path;
 
   // Le righe dell'albero prendono il FUOCO della tastiera quando le clicchi
