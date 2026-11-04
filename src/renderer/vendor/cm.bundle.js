@@ -20430,6 +20430,11 @@
           }
         },
         focus: () => view.focus(),
+        // History: the toolbar Undo/Redo buttons need these because document.execCommand
+        // ('undo'/'redo') does nothing against CodeMirror (only the Mod-z keymap worked).
+        // `undo`/`redo` are the module-level @codemirror/commands history commands.
+        undo: () => { try { const r = undo(view); view.focus(); return r; } catch (_) { return false; } },
+        redo: () => { try { const r = redo(view); view.focus(); return r; } catch (_) { return false; } },
         // Check the rendered DOM still matches the document, and rebuild the view if it
         // does not. Call it whenever the editor BECOMES VISIBLE again (leaving preview,
         // switching to a note tab, closing the split): CM cannot render or measure while

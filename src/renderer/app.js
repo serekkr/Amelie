@@ -5587,9 +5587,20 @@ function setupEditor() {
   // Undo / Redo header buttons — focus the editor first so the native history
   // applies to the note text.
   $('btn-undo')?.addEventListener('mousedown', e => e.preventDefault());
-  $('btn-undo')?.addEventListener('click', () => { if (_editingBlocked()) return; editor.focus(); document.execCommand('undo'); });
+  $('btn-undo')?.addEventListener('click', () => {
+    if (_editingBlocked()) return;
+    // CodeMirror owns its own history — document.execCommand('undo') is a no-op on it
+    // (only the Mod-z keymap worked). Route the button through CM when it's the active
+    // engine (serekkr, 04/11/2026: "l'icona undo non fa niente, ctrl z va").
+    if (_cmActive && _cmHandle) { try { _cmHandle.undo(); } catch (_) {} return; }
+    editor.focus(); document.execCommand('undo');
+  });
   $('btn-redo')?.addEventListener('mousedown', e => e.preventDefault());
-  $('btn-redo')?.addEventListener('click', () => { if (_editingBlocked()) return; editor.focus(); document.execCommand('redo'); });
+  $('btn-redo')?.addEventListener('click', () => {
+    if (_editingBlocked()) return;
+    if (_cmActive && _cmHandle) { try { _cmHandle.redo(); } catch (_) {} return; }
+    editor.focus(); document.execCommand('redo');
+  });
 
   $('btn-prev-note')?.addEventListener('click', () => navigateNote('prev'));
   $('btn-next-note')?.addEventListener('click', () => navigateNote('next'));
