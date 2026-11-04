@@ -1338,7 +1338,13 @@ kbd {
 /* ─── Editor toolbar ────────────────────────────────────────── */
 #editor-toolbar {
   display: flex; align-items: center;
-  padding: 4px 14px; border-bottom: 1px solid var(--border);
+  /* Left padding = 60px so the first button lines up with where the EDITOR TEXT
+     begins (#markdown-editor / #editor-highlight padding-left: 60px), clearing the
+     60px line-number gutter instead of sitting over the numbers (serekkr, 04/11/2026:
+     "spostala dove inizia il testo"). Divided by --toolbar-zoom because this bar is
+     zoomed while the editor text is not, so the rendered gap stays 60px at any icon
+     size. Right/top/bottom unchanged. */
+  padding: 4px 14px 4px calc(60px / var(--toolbar-zoom, 1)); border-bottom: 1px solid var(--border);
   background: var(--bg-1); flex-shrink: 0;
 }
 #toolbar-buttons { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1; }
