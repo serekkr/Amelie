@@ -4629,9 +4629,9 @@ kbd {
   /* Darker pill than the shared --code-bg wash (serekkr, 29/10/2026: "più scura").
      Dedicated value so code blocks / view stay untouched. Tweak the 30% to taste. */
   background: color-mix(in srgb, #000 30%, var(--bg-0));
-  /* Testo del codice inline in un viola aperto/chiaro (serekkr, 30/10/2026: "più aperto
-     di colore… o farlo un viola aperto"): era il blu #5a84d4. */
-  border-radius: 4px; padding: 0 3px; color: #b794f6;
+  /* Testo del codice inline in AMBER/giallo (serekkr, 04/11/2026: "colore amber giallo
+     invece della viola"): era il viola #b794f6, prima ancora il blu #5a84d4. */
+  border-radius: 4px; padding: 0 3px; color: #e3b341;
 }
 
 /* Accent on hover for the ICONS of the two accent-coloured palettes — Green Dark (the

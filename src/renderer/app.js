@@ -8864,10 +8864,14 @@ function setupTooltips() {
       const sb = document.getElementById('sidebar');
       const sr = sb ? sb.getBoundingClientRect() : { left: 0, right: 300 };
       tip.classList.add('in-panel');
-      tip.style.maxWidth = Math.max(140, sr.right - sr.left - 16) + 'px';
       const r = el.getBoundingClientRect();
+      // Hang the bubble just UNDER the hovered row and a bit to the RIGHT of the panel's
+      // left edge (serekkr, 04/11/2026: "subito sotto quella che c'è già e un po' più a
+      // destra"). Still clamped to the sidebar so it never spills onto the editor.
+      const indent = 24;
+      tip.style.maxWidth = Math.max(140, sr.right - sr.left - indent - 8) + 'px';
       const tw = tip.offsetWidth, th = tip.offsetHeight, vh = window.innerHeight;
-      let left = sr.left + 8;
+      let left = sr.left + indent;
       if (left + tw + 4 > sr.right) left = Math.max(4, sr.right - tw - 8);
       let top = r.bottom + 6;
       if (top + th + 4 > vh) top = Math.max(4, r.top - th - 6);
