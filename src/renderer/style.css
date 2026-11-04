@@ -2007,10 +2007,28 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 /* A loose list wraps each item's text in a <p>, whose .8em margins would put the item
    back off the grid. */
 #preview-content li > p { margin: 0; }
-/* Task list (- [ ] / - [x]) — clickable checkbox in view mode */
+/* Task list (- [ ] / - [x]) — clickable in view mode; the whole line toggles. */
 #preview-content li.task-list-item { list-style: none; margin-left: -1.4em; }
-#preview-content input[type="checkbox"] { cursor: pointer; width: 15px; height: 15px; margin: 0 8px 0 0; vertical-align: -2px; accent-color: var(--accent); }
-#preview-content li.task-list-item.done { color: var(--text-3); text-decoration: line-through; }
+/* Dark-mode-friendly box: no stark white native checkbox (serekkr, 04/11/2026: "il bianco
+   è troppo bianco, qualcosa di più bello per il dark mode"). A subtle dark square with a
+   border; when checked it fills with the accent and shows a clean tick. Theme-driven, so
+   it adapts in light themes too. */
+#preview-content input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; box-sizing: border-box;
+  width: 16px; height: 16px; margin: 0 8px 0 0; vertical-align: -3px;
+  border: 1.5px solid var(--border-light); border-radius: 4px; background: var(--bg-2);
+  cursor: pointer; position: relative; flex: none; text-decoration: none;
+  transition: background .12s, border-color .12s;
+}
+#preview-content input[type="checkbox"]:hover { border-color: var(--accent); }
+#preview-content input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+#preview-content input[type="checkbox"]:checked::after {
+  content: ''; position: absolute; left: 4.5px; top: 1px; width: 4px; height: 8px;
+  border: solid var(--bg-0); border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+/* Done: ONLY the line's TEXT is struck through and muted — the box keeps its look. */
+#preview-content li.task-list-item.done { color: var(--text-2); text-decoration: line-through; text-decoration-color: var(--text-3); }
+#preview-content li.task-list-item.done input[type="checkbox"] { text-decoration: none; }
 #preview-content hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
 /* width:auto (not 100%) → columns size to their CONTENT, so a column grows in
    step with the text and only past min-width; width:100% would hand the typed
@@ -2161,11 +2179,11 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   /* Taller by default so even the tallest tab (User Interface, all the "Customize colors"
      rows at the Shortcuts font size) fits WITHOUT scrolling: it needs ~792px and the old
      760px cut it off (serekkr, 04/11/2026 — "si vedono tutte le opzioni senza scroll"). */
-  height: min(880px, 92vh);
+  height: min(880px, 94vh);
   /* Resize can only GROW, never shrink below the default (serekkr, 20/10/2026): the minimum
      equals the default size, so dragging the corner only makes it bigger (up to the max).
      The size is NOT remembered — openSettings/closeSettings clear the inline width/height. */
-  min-width: min(1240px, 90vw); min-height: min(880px, 92vh);
+  min-width: min(1240px, 90vw); min-height: min(880px, 94vh);
   max-width: 96vw; max-height: 94vh;
   resize: both; overflow: hidden;
 }
@@ -2209,7 +2227,9 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .tab-panel { display: none; flex-direction: column; gap: 14px; }
 /* Backup + Sync tabs: roomier vertical rhythm between the form rows and more
    breathing room at the top (user: the layout felt cramped). */
-#tab-sync, #tab-twoway { gap: 20px; padding-top: 10px; }
+/* A touch more compact so the Backup tab fits without a scrollbar on laptop-height
+   screens (serekkr, 04/11/2026: "risparmia spazio per stare tutto dentro"). */
+#tab-sync, #tab-twoway { gap: 14px; padding-top: 6px; }
 /* flex:1 → the panel fills the modal body, so margin-top:auto blocks (the
    About footer in the Vault tab) anchor to the BOTTOM of the window. */
 .tab-panel.active { display: flex; flex: 1; }
@@ -2922,7 +2942,7 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
    at 16 and 20, the General tab its option rows at 22. At 6 these read as a different
    panel from the rest of the window; at 28 (measured before) they read as adrift. */
 .sync-section-list { display: flex; flex-direction: column; }
-.sync-section-list > .sync-section + .sync-section { margin-top: 16px; }
+.sync-section-list > .sync-section + .sync-section { margin-top: 11px; }
 /* The heading lives INSIDE the list, so it is bound to what it names by structure
    rather than by a measurement someone has to keep in step. Left outside it ended up
    26px from its list and 20px from the block above — nearer to the thing it does not
