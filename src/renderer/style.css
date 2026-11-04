@@ -5243,11 +5243,18 @@ html[data-theme="serekkr"] #btn-focus-mode:hover {
   max-width: min(70vw, 560px);
   white-space: normal; overflow-wrap: anywhere; text-overflow: clip;
 }
-/* Note/path tooltip kept INSIDE the sidebar and on ONE line (serekkr, 30/10/2026: niente
-   "a capo" per i titoli lunghi). Never widens past the panel onto the editor — max-width is
-   set inline (= sidebar width) by place(); if the (already shortened) path is still wider,
-   it clips at the end with an ellipsis rather than wrapping. */
+/* Note/path tooltip kept INSIDE the sidebar: on the DESKTOP it WRAPS to as many lines as the
+   full path needs (serekkr, 04/11/2026: "non vedo tutto il path e il nome" — the one-line clip
+   below hid the start of a deep path). It never widens past the panel onto the editor —
+   max-width is set inline (= sidebar width) by place() — so it grows in height, not width.
+   `anywhere` because a path segment may be long with no break point. */
 #app-tooltip.in-panel {
+  white-space: normal; overflow: visible; overflow-wrap: anywhere; text-overflow: clip;
+}
+/* Android only: the narrow panel can't afford the wrap, so keep the (already shortened by
+   _shortPath) path on ONE line, clipped at the end (serekkr, 30/10/2026: niente "a capo").
+   data-amelie-platform is set to "android" only inside the Android WebView. */
+html[data-amelie-platform="android"] #app-tooltip.in-panel {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
