@@ -8876,16 +8876,16 @@ function setupTooltips() {
       const sr = sb ? sb.getBoundingClientRect() : { left: 0, right: 300 };
       tip.classList.add('in-panel');
       const r = el.getBoundingClientRect();
-      // Hang the bubble just UNDER the hovered row and a bit to the RIGHT of the panel's
-      // left edge (serekkr, 04/11/2026: "subito sotto quella che c'è già e un po' più a
-      // destra"). Still clamped to the sidebar so it never spills onto the editor.
-      const indent = 24;
-      tip.style.maxWidth = Math.max(140, sr.right - sr.left - indent - 8) + 'px';
+      // Directly BELOW the hovered row, left edge ALIGNED with the row's own left — same
+      // vertical column, not offset (serekkr, 04/11/2026: "subito sotto allo stesso
+      // livello", correcting the earlier indent that read as crooked). Clamped to the
+      // sidebar so a long wrapped path never spills onto the editor.
+      tip.style.maxWidth = Math.max(140, sr.right - r.left - 8) + 'px';
       const tw = tip.offsetWidth, th = tip.offsetHeight, vh = window.innerHeight;
-      let left = sr.left + indent;
-      if (left + tw + 4 > sr.right) left = Math.max(4, sr.right - tw - 8);
-      let top = r.bottom + 6;
-      if (top + th + 4 > vh) top = Math.max(4, r.top - th - 6);
+      let left = r.left;
+      if (left + tw + 4 > sr.right) left = Math.max(sr.left + 4, sr.right - tw - 8);
+      let top = r.bottom + 4;
+      if (top + th + 4 > vh) top = Math.max(4, r.top - th - 4);
       tip.style.left = left + 'px';
       tip.style.top = top + 'px';
       return;
