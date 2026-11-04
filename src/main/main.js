@@ -4131,6 +4131,17 @@ async function _bakePdfToBuffer(name, annots, formB64) {
         continue;
       }
 
+      if (a.type === 'redact') {
+        // Obfuscation box: an opaque filled rectangle covering the content. a.x/a.y are the
+        // BOTTOM-LEFT corner (displayed coords, y from bottom); w/h the size. NOTE: this
+        // COVERS the area, it does not strip the underlying text from the PDF.
+        if (!fin(+a.x, +a.y, +a.w, +a.h) || +a.w <= 0 || +a.h <= 0) continue;
+        const c = _hexToRgb01(a.color || '#000000');
+        const [rx, ry] = toPage(+a.x, +a.y);
+        pg.drawRectangle({ x: rx, y: ry, width: +a.w, height: +a.h, color: rgb(c.r, c.g, c.b), rotate: _rot });
+        continue;
+      }
+
       if (!Array.isArray(a.points) || a.points.length < 2) continue;
       const c = _hexToRgb01(a.color);
       const color = rgb(c.r, c.g, c.b);

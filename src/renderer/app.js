@@ -15654,6 +15654,7 @@ function setPdfTool(tool) {
   document.getElementById('pdf-tool-hl')?.classList.toggle('active', _pdfTool === 'highlight');
   document.getElementById('pdf-tool-text')?.classList.toggle('active', _pdfTool === 'text');
   document.getElementById('pdf-tool-image')?.classList.toggle('active', _pdfTool === 'image');
+  document.getElementById('pdf-tool-redact')?.classList.toggle('active', _pdfTool === 'redact');
   _syncPdfColorBtn();
 }
 
@@ -15662,6 +15663,18 @@ function _drawPageAnnots(svg, page, scale, pageHpt) {
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   for (const a of _pdfAnnots) {
     if (a.page !== page) continue;
+    if (a.type === 'redact') {
+      // Obfuscation box: an opaque filled rectangle that covers the content under it.
+      // Stored x/y/w/h in PDF points (y = bottom edge from the page bottom).
+      const rect = document.createElementNS(SVGNS, 'rect');
+      rect.setAttribute('x', String(a.x * scale));
+      rect.setAttribute('y', String((pageHpt - (a.y + a.h)) * scale));
+      rect.setAttribute('width', String(a.w * scale));
+      rect.setAttribute('height', String(a.h * scale));
+      rect.setAttribute('fill', a.color || '#000000');
+      svg.appendChild(rect);
+      continue;
+    }
     if (a.type !== 'pen' && a.type !== 'highlight') continue;   // text/image live on the obj layer
     const pl = document.createElementNS(SVGNS, 'polyline');
     pl.setAttribute('points', a.points.map(([x, y]) => `${x * scale},${(pageHpt - y) * scale}`).join(' '));
@@ -15678,18 +15691,38 @@ function _drawPageAnnots(svg, page, scale, pageHpt) {
 // Wire pointer drawing on a page's SVG overlay. Coords stored in PDF points
 // (origin bottom-left) so they survive zoom and feed pdf-lib directly.
 function _wirePdfAnnotLayer(svg, page, scale, pageHpt) {
-  let cur = null, curEl = null;
+  let cur = null, curEl = null, rectStart = null;
   const toPt = (ev) => {
     const r = svg.getBoundingClientRect();
     return [(ev.clientX - r.left) / scale, pageHpt - (ev.clientY - r.top) / scale];
   };
   const redraw = () => curEl?.setAttribute('points',
     cur.points.map(([x, y]) => `${x * scale},${(pageHpt - y) * scale}`).join(' '));
+  // Obfuscation box: a drag-rectangle. Normalise the two corners into x/y/w/h with
+  // y = the BOTTOM edge from the page bottom (PDF points), ready for pdf-lib.
+  const redrawRect = ([x1, y1]) => {
+    const [x0, y0] = rectStart;
+    const left = Math.min(x0, x1), right = Math.max(x0, x1);
+    const bottom = Math.min(y0, y1), top = Math.max(y0, y1);
+    cur.x = left; cur.y = bottom; cur.w = right - left; cur.h = top - bottom;
+    curEl.setAttribute('x', String(left * scale));
+    curEl.setAttribute('y', String((pageHpt - top) * scale));
+    curEl.setAttribute('width', String((right - left) * scale));
+    curEl.setAttribute('height', String((top - bottom) * scale));
+  };
   svg.addEventListener('pointerdown', (ev) => {
     if (!_pdfTool) return;
     ev.preventDefault();
     _deselectPdfText();
     try { svg.setPointerCapture(ev.pointerId); } catch (_) {}
+    if (_pdfTool === 'redact') {
+      rectStart = toPt(ev);
+      cur = { type: 'redact', page, color: '#000000', x: rectStart[0], y: rectStart[1], w: 0, h: 0 };
+      curEl = document.createElementNS(SVGNS, 'rect');
+      curEl.setAttribute('fill', '#000000');
+      svg.appendChild(curEl);
+      return;
+    }
     const st = _pdfToolStyle();
     cur = { type: _pdfTool, page, color: st.color, width: st.width, points: [toPt(ev)] };
     curEl = document.createElementNS(SVGNS, 'polyline');
@@ -15703,14 +15736,16 @@ function _wirePdfAnnotLayer(svg, page, scale, pageHpt) {
   });
   svg.addEventListener('pointermove', (ev) => {
     if (!cur) return;
+    if (cur.type === 'redact') { redrawRect(toPt(ev)); return; }
     cur.points.push(toPt(ev));
     redraw();
   });
   const finish = () => {
     if (!cur) return;
-    if (cur.points.length >= 2) { _pdfAnnots.push(cur); _pdfDirty = true; _updatePdfDirty(); }
+    const keep = cur.type === 'redact' ? (cur.w > 2 && cur.h > 2) : (cur.points.length >= 2);
+    if (keep) { _pdfAnnots.push(cur); _pdfDirty = true; _updatePdfDirty(); }
     else if (curEl) svg.removeChild(curEl);
-    cur = null; curEl = null;
+    cur = null; curEl = null; rectStart = null;
   };
   svg.addEventListener('pointerup', finish);
   svg.addEventListener('pointercancel', finish);
@@ -19158,6 +19193,7 @@ function setupFileDrop() {
   // PDF annotation editor tools
   $('pdf-tool-pen')?.addEventListener('click', () => setPdfTool('pen'));
   $('pdf-tool-hl')?.addEventListener('click', () => setPdfTool('highlight'));
+  $('pdf-tool-redact')?.addEventListener('click', () => setPdfTool('redact'));
   // Colour picker for pen / highlighter
   $('pdf-color')?.addEventListener('click', (e) => { e.stopPropagation(); togglePdfColorPop(); });
   $('pdf-color-input')?.addEventListener('input', (e) => setPdfToolColor(e.target.value));
