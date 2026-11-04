@@ -1301,6 +1301,16 @@ function _backupBeforeShrink(filePath, relPath, oldBody, newBody) {
 }
 
 function writeNoteContent(relPath, content, keepModified, dates) {
+  // BACKSTOP against the note/attachment cross-write (serekkr, 04/11/2026): a note is
+  // always written under notes/, never into the attachments tree. noteFilePath() joins
+  // NOTES_DIR + relPath, so a relPath beginning with "attachments/" would land in
+  // notes/attachments/… and shadow a real attachment. Refuse it loudly instead of
+  // corrupting a PDF/image. Normalise slashes first so "attachments\.." can't slip by.
+  const _rel = String(relPath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  if (/^attachments(\/|$)/i.test(_rel)) {
+    console.error('[Vault] refused to write a note into the attachments tree:', relPath);
+    return;
+  }
   _internalWriteUntil = Date.now() + 1500;   // suppress the vault watcher for our own saves
   const filePath = noteFilePath(relPath);
   const dir = path.dirname(filePath);

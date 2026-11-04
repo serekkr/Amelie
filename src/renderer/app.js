@@ -1269,6 +1269,11 @@ let _cmLightTimer = null;
 function _onCmChange() {
   if (_cmSuppressChange) return;      // programmatic sync, not a user edit
   const tab = getActiveTab();
+  // A CM change only means something for a text NOTE. If the active tab is a pdf/draw/
+  // image/todo (its path points into attachments/), the editor's text is NOT its
+  // content — marking it dirty + autosaving would write a note body onto the attachment
+  // path (serekkr, 04/11/2026). Ignore the event for non-note tabs.
+  if (tab && tab.type && tab.type !== 'note') return;
   if (tab) tab.isDirty = true;
   setSavedState(false);
   scheduleAutosave();
@@ -4009,6 +4014,12 @@ function setupFrontmatter() {
 async function saveCurrentNote() {
   const tab = getActiveTab();
   if (!tab) return;
+  // DATA-LOSS GUARD: only a text NOTE tab (no type, or type 'note') may be written
+  // with the editor's content. A pdf/draw/image/todo tab carries path =
+  // 'attachments/…' (or null) and writeNote prepends notes/, so a stray autosave while
+  // such a tab was active once wrote a note body to notes/attachments/pdf/<file>.pdf,
+  // shadowing the real edited PDF (serekkr, 04/11/2026). Never save onto a non-note tab.
+  if (tab.type && tab.type !== 'note') { tab.isDirty = false; return; }
 
   // New blank tab — use the typed title or prompt for one
   if (!tab.path) {
