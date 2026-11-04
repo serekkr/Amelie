@@ -1773,8 +1773,13 @@
 
 
               </div>
-              <!-- Colors AND font back to the fresh-install look (restoreAppearanceDefaults). -->
-              <button class="btn-test" id="btn-restore-defaults" style="margin-top:8px" data-i18n="theme.restore_defaults">↺ Restore default</button>
+              <!-- Colors AND font back to the fresh-install look (restoreAppearanceDefaults).
+                   Set off BELOW a thin divider line and pushed down, like the sections in the
+                   Backup panel (serekkr, 04/11/2026: "mettilo più in basso e aggiungi una linea
+                   come nel backup"). -->
+              <div style="border-top:1px solid var(--border);margin-top:22px;padding-top:14px">
+                <button class="btn-test" id="btn-restore-defaults" data-i18n="theme.restore_defaults">↺ Restore default</button>
+              </div>
             </div>
 
           </div><!-- tab-ui -->
