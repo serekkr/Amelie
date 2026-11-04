@@ -5747,7 +5747,27 @@ function handleToolbarCmd(cmd) {
       const _isFence = l => /^\s*(```|~~~)/.test(l);
       const cLineStart = editor.value.lastIndexOf('\n', sel.s - 1) + 1;
       const fencesBefore = editor.value.slice(0, cLineStart).split('\n').filter(_isFence).length;
-      if (fencesBefore % 2 === 1) { insert = '```'; break; }
+      if (fencesBefore % 2 === 1) {
+        // Caret is INSIDE a fenced block. Clicking the toolbar button means "another code
+        // block", NOT a literal ``` that would nest/mangle the current one — repeated
+        // clicks used to pile fences inside each other (serekkr, 04/11/2026: "fa sempre un
+        // blocco nuovo e va a capo"). With no selection: find this block's CLOSING fence
+        // and open a fresh empty block on the line right after it. (With a selection inside
+        // a block we still insert literal backticks, as before.)
+        if (!text) {
+          const _lines = editor.value.split('\n');
+          const caretLineIdx = editor.value.slice(0, sel.s).split('\n').length - 1;
+          let closeIdx = -1;
+          for (let i = caretLineIdx; i < _lines.length; i++) { if (_isFence(_lines[i])) { closeIdx = i; break; } }
+          let at;
+          if (closeIdx === -1) { at = editor.value.length; }   // unclosed block → append at end
+          else { at = 0; for (let k = 0; k < closeIdx; k++) at += _lines[k].length + 1; at += _lines[closeIdx].length; }
+          insertAtCursor('\n```\n\n```', at, at);
+          _setEditorCaret(at + 5);   // start of the new empty middle line
+          return;
+        }
+        insert = '```'; break;
+      }
       // Inline for a single selected word; otherwise a fenced block with an
       // empty line in the middle and the cursor placed there, ready to type.
       if (text && !text.includes('\n')) { insert = `\`${text}\``; break; }
