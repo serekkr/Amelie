@@ -173,10 +173,23 @@ function resolveVaultPaths(vaultDir) {
         try { fs.rmdirSync(from); } catch (_) {}
       } else if (!fromDir && !toDir) {
         try {
-          if (fs.readFileSync(from).equals(fs.readFileSync(to))) { fs.rmSync(from, { force: true }); return; }
-          fs.renameSync(to, to + '.bak-premigration');
+          const bFrom = fs.readFileSync(from), bTo = fs.readFileSync(to);
+          if (bFrom.equals(bTo)) { fs.rmSync(from, { force: true }); return; }
+          // Name collision, different content. Do NOT blindly promote the notes/ copy:
+          // on 2026-11-04 that rule replaced a 59 KB edited PDF (in the root) with a
+          // 147-byte note body that had ended up under notes/attachments with the PDF's
+          // name — the real file survived only because it was kept as .bak. Keep the
+          // LARGER file live (a real attachment almost always outweighs a stray text
+          // stub) and the smaller as *.bak-premigration. Never clobber either; warn.
+          console.warn('[Vault] attachment name collision on migration:', to,
+            `(notes/=${bFrom.length}b, root=${bTo.length}b) — keeping larger live, other as .bak-premigration`);
+          if (bFrom.length >= bTo.length) {
+            fs.renameSync(to, to + '.bak-premigration');   // smaller root copy → backup
+            fs.renameSync(from, to);                        // larger notes/ copy → live
+          } else {
+            fs.renameSync(from, to + '.bak-premigration');  // smaller notes/ copy → backup; root (larger) stays live
+          }
         } catch (_) {}
-        fs.renameSync(from, to);
       }
     };
     try {
