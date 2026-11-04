@@ -986,6 +986,20 @@ function enhanceCheckboxes() {
       if (li) li.classList.toggle('done', box.checked);
       toggleCheckboxInSource(idx, box.checked);
     });
+    // Obsidian-style: a click ANYWHERE on the task line toggles it, not only on the tiny
+    // 15px box — "clicco sopra" (serekkr, 04/11/2026). Big help on touch/Android where the
+    // box is a hard target. Clicks on the box itself keep the native toggle; clicks on a
+    // link/button inside the item are left alone so they still work.
+    if (li && !li._amChkWired) {
+      li._amChkWired = true;
+      li.style.cursor = 'pointer';
+      li.addEventListener('click', (e) => {
+        if (e.target === box) return;   // native checkbox toggle already fired
+        if (e.target.closest && e.target.closest('a, button, input, textarea, select, [contenteditable]')) return;
+        box.checked = !box.checked;
+        box.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
   });
 }
 
