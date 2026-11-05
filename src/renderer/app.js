@@ -2793,6 +2793,9 @@ async function init() {
   await loadTree();
   await restoreSession();
   _sessionReady = true;
+  // Session decided (tab restored, or genuinely empty) → stop hiding the empty-state.
+  // If a tab was restored it's already display:none; if not, it now fades in cleanly.
+  try { document.documentElement.removeAttribute('data-booting'); } catch (_) {}
   window.addEventListener('beforeunload', saveSession);
   setupFrontmatter();
   setupEditor();

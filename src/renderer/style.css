@@ -1117,6 +1117,14 @@ html.is-mac #titlebar { padding-left: 72px; }
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px; color: var(--text-3);
 }
+/* Kill the flash of the empty-state on startup: it's hidden while the app boots and the
+   saved tabs are being restored, then revealed — with a soft fade — only if there really
+   are no tabs (serekkr, 05/11/2026). The [data-booting] attribute is set in <head> and
+   removed at the end of init(). */
+html[data-booting] #empty-state { display: none !important; }
+#empty-state { animation: emptyStateFade .22s ease; }
+@keyframes emptyStateFade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #empty-state { animation: none; } }
 .empty-icon { width: 48px; height: 48px; opacity: .3; }
 .empty-logo { width: 96px; height: 96px; object-fit: contain; margin-bottom: 16px; }
 /* Amelie logo pinned low in the empty space of a Settings tab — the Vault tab (under the

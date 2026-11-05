@@ -19,6 +19,10 @@
   <!-- On macOS the native inset traffic-lights are shown, so hide our custom
        titlebar buttons (see WINDOW_CHROME in main.js). Set early to avoid a flash. -->
   <script>try{ if (window.inkwell && window.inkwell.platform === 'darwin') document.documentElement.classList.add('is-mac'); }catch(_){}</script>
+  <!-- Mark the app as booting so the empty-state ("create a new note") stays hidden until
+       the saved tabs are restored — otherwise it flashes for a few ms on startup. Removed
+       at the end of init() once we know whether there really are no tabs. -->
+  <script>try{ document.documentElement.setAttribute('data-booting',''); setTimeout(function(){ try{ document.documentElement.removeAttribute('data-booting'); }catch(_){} }, 10000); }catch(_){}</script>
 </head>
 <body>
   <!-- Custom in-theme tooltip (replaces the native grey title="" bubble) -->
