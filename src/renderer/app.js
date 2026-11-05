@@ -5275,6 +5275,15 @@ function setupEditor() {
   const _isUnsupportedErr = (err) => /Unsupported attachment type/.test(err?.message || String(err || ''));
   // Refused because the bytes are not what the extension says (main reads the head).
   const _isMismatchErr = (err) => /ATTACHMENT_CONTENT_MISMATCH/.test(err?.message || String(err || ''));
+  // One toast for an attachment failure, most specific first. Returns true when it
+  // showed a specific toast, so a loop can skip its generic "import failed" fallback
+  // instead of overwriting the precise reason (e.g. the magic-byte mismatch).
+  const _reportAttachErr = (err) => {
+    if (_isTooLargeErr(err))    { showToast(window.i18n.t('attach.too_large')); return true; }
+    if (_isUnsupportedErr(err)) { showToast(window.i18n.t('attach.unsupported_format')); return true; }
+    if (_isMismatchErr(err))    { showToast(window.i18n.t('attach.content_mismatch')); return true; }
+    return false;
+  };
   // Block the middle-mouse-button "primary selection" paste (X11/Linux/Wayland):
   // a middle click in the editor would otherwise paste whatever text is selected
   // elsewhere. The user only wants explicit Ctrl+V pastes. preventDefault on the
@@ -5326,7 +5335,7 @@ function setupEditor() {
     } catch (_) {}
     if (sysPaths.length) {
       e.preventDefault(); e.stopImmediatePropagation();
-      let imported = 0;
+      let imported = 0, specific = false;
       const importedNames = [];
       for (const p of sysPaths) {
         const base = p.split('/').pop();
@@ -5335,10 +5344,11 @@ function setupEditor() {
           insertAttachmentRef(name);
           importedNames.push(name.split('/').pop());
           imported++;
-        } catch (err) { console.error('Paste import failed:', p, err); }
+        } catch (err) { console.error('Paste import failed:', p, err); if (_reportAttachErr(err)) specific = true; }
       }
-      // Only warn on failure — no toast on a successful import.
-      if (!imported) showToast(window.i18n.t('toast.files_import_failed', { n: 0 }));
+      // Only warn on failure — no toast on a successful import. A specific reason
+      // (too large / unsupported / content mismatch) was already shown if seen.
+      if (!imported && !specific) showToast(window.i18n.t('toast.files_import_failed', { n: 0 }));
       return;
     }
     // Keep only supported media/PDF. Use the FILE predicate (extension OR MIME) so a
@@ -5386,16 +5396,16 @@ function setupEditor() {
     const allPaths = paths.length ? paths : plainPaths;
     if (allPaths.length) {
       e.preventDefault(); e.stopImmediatePropagation();
-      let imported = 0;
+      let imported = 0, specific = false;
       for (const p of allPaths) {
         const base = p.split('/').pop();
         try {
           const name = await window.inkwell.importAttachmentPath(p, _attachmentTarget(base));
           insertAttachmentRef(name);
           imported++;
-        } catch (err) { console.error('Paste import failed:', p, err); }
+        } catch (err) { console.error('Paste import failed:', p, err); if (_reportAttachErr(err)) specific = true; }
       }
-      if (!imported) showToast(window.i18n.t('toast.files_import_failed'));
+      if (!imported && !specific) showToast(window.i18n.t('toast.files_import_failed'));
       return;
     }
     const usableFiles = files.filter(f => f.size > 0);
@@ -5556,7 +5566,7 @@ function setupEditor() {
           const name = await window.inkwell.importAttachmentPath(p, _attachmentTarget(base));
           insertAttachmentRef(name);
           if (name) importedRel.push('attachments/' + name);
-        } catch (err) { console.error('Drop import failed:', p, err); if (_isTooLargeErr(err)) showToast(window.i18n.t('attach.too_large')); }
+        } catch (err) { console.error('Drop import failed:', p, err); _reportAttachErr(err); }
       }
       await _homeInNoteFolder();
       return;
