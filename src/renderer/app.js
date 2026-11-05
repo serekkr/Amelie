@@ -10668,13 +10668,9 @@ function setupSettings() {
     // which is the right place to land when GitHub could not even be reached.
     const t = found === 'newer' ? updateDownloadTarget(latest)
                                 : { href: RELEASES_URL, label: 'about.open_releases' };
-    const link = $('about-update-url');
-    if (link) {
-      link.textContent = t.href;
-      link.title = t.href;
-      link.style.display = '';
-      link.onclick = () => window.inkwell.openExternal(t.href).catch(() => {});
-    }
+    // The textual URL under the button was redundant with the button itself (which
+    // already opens the same address) — removed on request (serekkr, 05/11/2026). The
+    // #about-update-url element stays hidden; resetAboutUpdateLine keeps it cleared.
     if (get) {
       const lbl = get.querySelector('span');
       if (lbl) lbl.textContent = window.i18n.t(t.label);
