@@ -6849,7 +6849,18 @@ function _preprocessMarkdown(body) {
     // ==text== → highlighted span (gentle yellow).
     .replace(/==([^=\n]+?)==/g, '<mark class="md-highlight">$1</mark>')
     // :shortcode: → emoji (only the known ones; unknown ones stay unchanged).
-    .replace(/:([a-z0-9_+-]+):/g, (m, name) => EMOJI_MAP[name] || m));
+    .replace(/:([a-z0-9_+-]+):/g, (m, name) => EMOJI_MAP[name] || m)
+    // Empty task item (`- [ ]` / `- [x]` with NO text after) → marked's GFM task-list
+    // tokenizer needs some content after the box, so an empty one came out as the literal
+    // `[ ]` brackets in reading view (serekkr, 05/11/2026: "si vedono i caratteri come in
+    // edit mode"). Obsidian renders it as an empty checkbox. We append a zero-width space
+    // (U+200B, invisible) so the item has content and marked makes the <input> — the file
+    // on disk is never touched (this is the display string). A NBSP does NOT work here; the
+    // ZWSP does, and it MUST sit after a space (`[ ] <ZWSP>`): GFM needs a space between the
+    // box and the content, so `[ ]<ZWSP>` with no space is still not a task. Must stay in
+    // sync with toggleCheckboxInSource, which already counts empty task lines, so now every
+    // source task maps 1:1 to a rendered checkbox.
+    .replace(/^([ \t]*[-*+][ \t]+\[[ xX]\])[ \t]*$/, '$1 ​'));
 }
 
 function updatePreview() {
