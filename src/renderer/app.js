@@ -19575,13 +19575,21 @@ function setupBookmarkContextMenu() {
   });
 }
 
+let _tagsRenderToken = 0;
 async function renderTagsView() {
+  // This reads EVERY note off disk in a loop, so on a big vault it takes a while.
+  // Without a guard, switching to Tags, away, and back (or any re-entry) left two
+  // runs interleaving their writes to #tags-list — one clearing it while the other
+  // was still appending — which doubled the tag groups ("riempimento anomalo",
+  // serekkr 05/11/2026). A token makes a newer run supersede any slower in-flight one.
+  const myToken = ++_tagsRenderToken;
   const c = $('tags-list'); if (!c) return;
   c.innerHTML = `<div class="view-empty">…</div>`;
   const flat = flattenTree(state.notes || []).filter(n => n.type !== 'folder' && n.path && n.path.endsWith('.md'));
   const tagMap = {};
   for (const n of flat) {
     let content = ''; try { content = await window.inkwell.readNote(n.path); } catch(_) {}
+    if (myToken !== _tagsRenderToken) return;   // superseded while reading — drop this run
     const seen = new Set();
     const add = (t) => {
       const tag = t.trim().replace(/^#/, '');
@@ -19616,6 +19624,7 @@ async function renderTagsView() {
     let mm;
     while ((mm = re.exec(scan)) !== null) add(mm[2]);
   }
+  if (myToken !== _tagsRenderToken) return;   // a newer run started while reading — let it own the list
   const keys = Object.keys(tagMap).sort();
   c.innerHTML = '';
   if (!keys.length) { c.innerHTML = `<div class="view-empty">${window.i18n.t('section.tags_empty')}</div>`; return; }
