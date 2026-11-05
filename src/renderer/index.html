@@ -1831,11 +1831,14 @@
                 <!-- The address itself, after a check: so you know WHERE updates come
                      from without having to press anything. Click opens it. -->
                 <div id="about-update-url" style="font-family:var(--editor-font);font-size:12px;color:var(--link);cursor:pointer;word-break:break-all;display:none" title=""></div>
-                <div style="font-family:var(--ui-font);font-size:14px;color:var(--text-1)">Made by Sebastian "serekkr" Farcas</div>
-                <div style="font-family:var(--editor-font);font-size:13px;color:var(--text-3)"><span data-i18n="about.version">Versione</span> <span id="about-version">—</span></div>
               </div>
-              <!-- Logo at the bottom, same position/size as the Vault tab (shared class). -->
-              <img src="../../assets/icon.png" alt="Amelie" class="tab-bottom-logo" />
+              <!-- Author / logo / version cluster pinned to the bottom (logo roughly at the
+                   same level as the Vault tab's): "Made by" above the logo, version below. -->
+              <div class="about-foot">
+                <div class="about-madeby">Made by Sebastian "serekkr" Farcas</div>
+                <img src="../../assets/icon.png" alt="Amelie" class="about-foot-logo" />
+                <div class="about-version-line"><span data-i18n="about.version">Versione</span> <span id="about-version">—</span></div>
+              </div>
             </div>
           </div>
 
