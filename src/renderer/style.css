@@ -1128,6 +1128,7 @@ html.is-mac #titlebar { padding-left: 72px; }
 .about-foot-logo { width: 100px; height: 100px; object-fit: contain; }
 .about-madeby { font-family: var(--ui-font); font-size: 14px; color: var(--text-1); }
 .about-version-line { font-family: var(--editor-font); font-size: 13px; color: var(--text-3); }
+.about-update { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 2px; }
 
 html[data-booting] #empty-state { display: none !important; }
 #empty-state { animation: emptyStateFade .22s ease; }
