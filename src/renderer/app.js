@@ -5876,8 +5876,19 @@ function handleToolbarCmd(cmd) {
       break;
     }
     case 'image': (async () => {
-        const name = await window.inkwell.openAttachmentDialog();
-        if (name) insertAttachmentRef(name);
+        try {
+          const name = await window.inkwell.openAttachmentDialog();
+          if (name) insertAttachmentRef(name);
+        } catch (err) {
+          // The picker now gates on content too (magic bytes), so a disguised file is
+          // refused here just like on paste/drop — surface the reason instead of letting
+          // the rejected promise fall into silence. Same i18n keys as the other routes.
+          console.error('Image import failed:', err);
+          const m = err?.message || String(err || '');
+          if (/ATTACHMENT_TOO_LARGE/.test(m)) showToast(window.i18n.t('attach.too_large'));
+          else if (/Unsupported attachment type/.test(m)) showToast(window.i18n.t('attach.unsupported_format'));
+          else if (/ATTACHMENT_CONTENT_MISMATCH/.test(m)) showToast(window.i18n.t('attach.content_mismatch'));
+        }
       })(); return;
   }
   insertAtCursor(insert, sel.s, sel.e);

@@ -4385,18 +4385,17 @@ ipcMain.handle('attachment:openDialog', async () => {
   });
   if (result.canceled || !result.filePaths.length) return null;
   const srcPath = result.filePaths[0];
-  const ext = path.extname(srcPath);
-  const base = path.basename(srcPath, ext).replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 40) || 'image';
-
-  let finalName = base + ext;
-  let c = 1;
-  while (attachmentTaken(path.join(ATTACHMENTS_DIR, finalName))) {
-    finalName = `${base}-${c}${ext}`;
-    c++;
-  }
-  // Encrypt at rest (name gets .enc) when the vault is unlocked; plaintext otherwise.
-  writeAttachmentFile(path.join(ATTACHMENTS_DIR, finalName), fs.readFileSync(srcPath));
-  return finalName;   // LOGICAL name (no .enc)
+  // Route the picked file through the SAME gate as paste/drop: the extension allowlist
+  // plus the magic-byte content check inside saveAttachmentBuffer (which also handles
+  // dedup + at-rest encryption). This handler used to write the file straight to the
+  // vault with no content check at all, so the toolbar image button was the one import
+  // path that would store a disguised file (a .png that isn't a PNG) the other routes
+  // refuse — the renderer shows the mismatch toast on the throw (serekkr, 05/11/2026).
+  const _ext = (path.extname(srcPath) || '').slice(1).toLowerCase();
+  if (!IMPORTABLE_ATTACHMENT_EXT.has(_ext)) throw new Error('Unsupported attachment type');
+  const name = await saveAttachmentBuffer(path.basename(srcPath), fs.readFileSync(srcPath));
+  if (syncManager) syncManager.scheduleSync();   // realtime sync: media counts as a change
+  return name;   // LOGICAL name (no .enc)
 });
 
 // ── Remove unused media ──────────────────────────────────────────────────────
