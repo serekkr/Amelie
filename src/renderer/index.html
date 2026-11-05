@@ -1515,7 +1515,7 @@
             </div>
 
             <!-- Amelie logo filling the empty space at the bottom of the Vault tab. -->
-            <img class="vault-tab-logo" src="../../assets/icon.png" alt="Amelie" />
+            <img class="tab-bottom-logo" src="../../assets/icon.png" alt="Amelie" />
 
           </div>
 
@@ -1798,7 +1798,6 @@
           <!-- ── About ──────────────────────────────────────── -->
           <div class="tab-panel" id="tab-about">
             <div style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:28px 16px 8px">
-              <img src="../../assets/icon.png" alt="Amelie" style="width:100px;height:100px;object-fit:contain;margin-top:14px"/>
               <!-- App name + description in one Mr Robot-style green terminal
                    typewriter (CSS-only, runs only while the About tab is visible).
                    Replaces both the old "Amelie" title and the "A privacy-focused
@@ -1817,7 +1816,7 @@
                 <li>Backups on a schedule, encrypted, kept locally or sent to that same server — and a restore that puts a whole vault back.</li>
                 <li>Ten themes, or make your own.</li>
               </ul>
-              <div style="display:flex;flex-direction:column;align-items:center;gap:11px;margin-top:auto;padding-bottom:6px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:11px;padding-bottom:6px">
                 <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
                   <button class="btn-test btn-svg" id="btn-check-updates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg><span data-i18n="about.check_updates">Check for updates</span></button>
                   <!-- Only after a check that FOUND something: an update you cannot get
@@ -1831,6 +1830,8 @@
                 <div style="font-family:var(--ui-font);font-size:14px;color:var(--text-1)">Made by Sebastian "serekkr" Farcas</div>
                 <div style="font-family:var(--editor-font);font-size:13px;color:var(--text-3)"><span data-i18n="about.version">Versione</span> <span id="about-version">—</span></div>
               </div>
+              <!-- Logo at the bottom, same position/size as the Vault tab (shared class). -->
+              <img src="../../assets/icon.png" alt="Amelie" class="tab-bottom-logo" />
             </div>
           </div>
 

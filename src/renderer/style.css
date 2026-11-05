@@ -1119,10 +1119,10 @@ html.is-mac #titlebar { padding-left: 72px; }
 }
 .empty-icon { width: 48px; height: 48px; opacity: .3; }
 .empty-logo { width: 96px; height: 96px; object-fit: contain; margin-bottom: 16px; }
-/* Amelie logo at the bottom of the Settings → Vault tab, filling the empty space under
-   the Cleanup card (serekkr, 05/11/2026). margin-top:auto pushes it to the bottom of the
-   flex-column panel; align-self centres it. */
-.vault-tab-logo {
+/* Amelie logo pinned low in the empty space of a Settings tab — the Vault tab (under the
+   Cleanup card) and the About tab (below the moved-up content). Shared so both sit the
+   same way (serekkr, 05/11/2026). margin auto top+bottom centres it in the free space. */
+.tab-bottom-logo {
   /* auto top AND bottom → the logo centres in the empty space under the Cleanup card,
      instead of sitting on the very bottom edge (serekkr, 05/11/2026: "alza il logo").
      Same image, size and full opacity as the About-page logo (84px) — "usa quello
