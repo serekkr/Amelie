@@ -3003,12 +3003,6 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
    under the credential fields (serekkr, 05/11/2026). */
 #remote-vpn-wizard { border: none; overflow: visible; margin-top: 8px; }
 #remote-vpn-wizard > #remote-vpn-body { padding: 0; border-top: none; background: none; gap: 8px; }
-/* The Samba and WebDAV destination blocks have different natural heights — Samba
-   carries the extra "Import VPN configuration" button — so the shared Test/Clear-config
-   row below them jumped ~60px when switching between the two. Reserve the taller block's
-   height on BOTH so that row, and its buttons, stay in exactly the same place; WebDAV
-   just gets a little empty space under its fields (serekkr, 05/11/2026). */
-#remote-samba-block, #remote-webdav-block { min-height: 200px; }
 
 /* ─── Tab bar ───────────────────────────────────────────────── */
 #tab-bar {
