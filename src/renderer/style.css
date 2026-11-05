@@ -2996,6 +2996,13 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   display: flex; flex-direction: column; gap: 12px;
   background: var(--bg-2);
 }
+/* The VPN-import section is just the compact "Import VPN configuration" button now
+   (the big dashed drop box is gone), so the boxed .sync-section framing left a tall
+   empty card that pushed the Backup panel into a scrollbar. Unwrap THIS section only
+   (the other six keep their box): no border/background/padding, the button sits inline
+   under the credential fields (serekkr, 05/11/2026). */
+#remote-vpn-wizard { border: none; overflow: visible; margin-top: 8px; }
+#remote-vpn-wizard > #remote-vpn-body { padding: 0; border-top: none; background: none; gap: 8px; }
 
 /* ─── Tab bar ───────────────────────────────────────────────── */
 #tab-bar {
