@@ -11280,6 +11280,17 @@ function setupSettings() {
     e.preventDefault(); dropZone.classList.remove('drag-over');
     if (e.dataTransfer.files[0]) loadVpnFile(e.dataTransfer.files[0]);
   });
+  // The "Import VPN configuration" TITLE is the import button now: the empty dashed
+  // box is hidden (CSS), so clicking the title opens the picker and a dropped
+  // .conf/.ovpn loads straight onto it — same action as the old drop zone.
+  const importBtn = $('wg-import-title');
+  if (importBtn) {
+    importBtn.addEventListener('click', () => fileInput.click());
+    importBtn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+    importBtn.addEventListener('dragover', e => { e.preventDefault(); importBtn.classList.add('drag-over'); });
+    importBtn.addEventListener('dragleave', () => importBtn.classList.remove('drag-over'));
+    importBtn.addEventListener('drop', e => { e.preventDefault(); importBtn.classList.remove('drag-over'); if (e.dataTransfer.files[0]) loadVpnFile(e.dataTransfer.files[0]); });
+  }
 
   // The "Drag or select…" import instruction is only useful while no config is
   // loaded yet. Mirror each import desc to its drop-zone's visibility so it
@@ -12128,6 +12139,15 @@ function setupTwowaySetup() {
   drop?.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag-over'); });
   drop?.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
   drop?.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('drag-over'); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+  // Sync wizard: the title is the import button too (click → picker, drop → load).
+  const twImportBtn = $('tw-wg-import-title');
+  if (twImportBtn) {
+    twImportBtn.addEventListener('click', () => file?.click());
+    twImportBtn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file?.click(); } });
+    twImportBtn.addEventListener('dragover', e => { e.preventDefault(); twImportBtn.classList.add('drag-over'); });
+    twImportBtn.addEventListener('dragleave', () => twImportBtn.classList.remove('drag-over'));
+    twImportBtn.addEventListener('drop', e => { e.preventDefault(); twImportBtn.classList.remove('drag-over'); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+  }
 
   const show = (res, ok, txt) => { res.style.display = 'block'; res.className = 'test-result ' + (ok ? 'ok' : 'fail'); res.textContent = txt; };
   const readSmb = () => ({
