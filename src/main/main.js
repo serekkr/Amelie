@@ -2216,9 +2216,9 @@ ipcMain.handle('vault:restoreFolder', async (_, rawDir, passphrase) => {
 // directory we treat it as a folder backup, else as a .tar.gz.)
 ipcMain.handle('vault:pickRestore', async () => {
   const result = await dialog.showOpenDialog(mainWindow || undefined, {
-    title: 'Seleziona un backup: file .tar.gz o cartella',
+    title: (_menuLabels && _menuLabels.dialogRestore) || 'Seleziona un backup: file .tar.gz o cartella',
     properties: ['openFile', 'openDirectory'],
-    filters: [{ name: 'Backup Amelie', extensions: ['tar.gz', 'tgz', 'gz'] }, { name: 'Tutti i file', extensions: ['*'] }],
+    filters: [{ name: 'Backup Amelie', extensions: ['tar.gz', 'tgz', 'gz'] }, { name: (_menuLabels && _menuLabels.dialogAllFiles) || 'Tutti i file', extensions: ['*'] }],
   });
   if (result.canceled || !result.filePaths?.length) return { canceled: true };
   const pth = result.filePaths[0];
@@ -2645,7 +2645,7 @@ ipcMain.handle('todo:delete', async (_, bucket, file) => {
 ipcMain.handle('vault:browseFolder', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory', 'createDirectory'],
-    title: 'Scegli la cartella vault',
+    title: (_menuLabels && _menuLabels.dialogVaultFolder) || 'Scegli la cartella vault',
   });
   if (result.canceled || !result.filePaths.length) return null;
   return result.filePaths[0];
