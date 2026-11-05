@@ -1735,7 +1735,7 @@ const TRANSLATIONS = {
     'about.up_to_date':         'You are on the latest version ({v})',
     'about.update_to':          'Update to {v} available',
     'about.check_failed':       'Could not reach GitHub',
-    'about.open_releases':      'Get it on GitHub',
+    'about.open_releases':      'Download from GitHub',
     'about.download_update':    'Download the update',
 
     // Context menu extra
@@ -2663,7 +2663,7 @@ const TRANSLATIONS = {
     'about.up_to_date':         'Du hast die neueste Version ({v})',
     'about.update_to':          'Update auf {v} verfügbar',
     'about.check_failed':       'GitHub nicht erreichbar',
-    'about.open_releases':      'Auf GitHub holen',
+    'about.open_releases':      'Von GitHub herunterladen',
     'about.download_update':    'Update herunterladen',
     'ctx.new_note': 'Neue Notiz',
     'ctx.new_folder': 'Neuer Ordner',
