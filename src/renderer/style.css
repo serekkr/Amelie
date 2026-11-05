@@ -3003,6 +3003,15 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
    under the credential fields (serekkr, 05/11/2026). */
 #remote-vpn-wizard { border: none; overflow: visible; margin-top: 8px; }
 #remote-vpn-wizard > #remote-vpn-body { padding: 0; border-top: none; background: none; gap: 8px; }
+/* Switching destination (Local / Samba / WebDAV) swaps these blocks via display:none,
+   which pops the new fields in abruptly. A short fade-in on the block that becomes
+   visible softens the change — the animation restarts every time an element goes from
+   display:none to shown, so each switch gets it (serekkr, 05/11/2026). */
+@keyframes destBlockFade { from { opacity: 0; } to { opacity: 1; } }
+#remote-local-block, #remote-samba-block, #remote-webdav-block { animation: destBlockFade .18s ease both; }
+@media (prefers-reduced-motion: reduce) {
+  #remote-local-block, #remote-samba-block, #remote-webdav-block { animation: none; }
+}
 
 /* ─── Tab bar ───────────────────────────────────────────────── */
 #tab-bar {
