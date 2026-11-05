@@ -1131,13 +1131,11 @@ html[data-booting] #empty-state { display: none !important; }
    Cleanup card) and the About tab (below the moved-up content). Shared so both sit the
    same way (serekkr, 05/11/2026). margin auto top+bottom centres it in the free space. */
 .tab-bottom-logo {
-  /* auto top AND bottom → the logo centres in the empty space under the Cleanup card,
-     instead of sitting on the very bottom edge (serekkr, 05/11/2026: "alza il logo").
-     Same image, size and full opacity as the About-page logo (84px) — "usa quello
-     della pagina About, con la stessa dimensione". */
-  margin-top: auto; margin-bottom: auto; align-self: center;
+  /* Pinned a FIXED distance from the bottom (not centred in the free space), so the Vault
+     and About logos sit at the SAME absolute level even though the content above them is
+     a different height (serekkr, 05/11/2026). margin-top:auto eats whatever space is above. */
+  margin-top: auto; margin-bottom: 56px; align-self: center;
   width: 100px; height: 100px; object-fit: contain;
-  transform: translateY(32px);   /* a touch below the centre of the empty space */
 }
 .empty-icon svg { width: 100%; height: 100%; }
 #empty-state p { font-style: italic; font-size: 16px; color: var(--text-2); }
