@@ -2616,24 +2616,29 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .wstep-desc code { font-family: var(--code-font); font-size: 12px; background: var(--bg-3); padding: 1px 5px; border-radius: 3px; color: var(--accent); }
 .wg-drop-zone {
   border: 1.5px dashed var(--border-light); border-radius: var(--radius);
-  padding: 8px 16px; display: flex; flex-direction: row;
-  align-items: center; justify-content: center; gap: 10px;
-  cursor: pointer; transition: border-color .2s, background .2s; text-align: left;
+  padding: 10px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 7px;
+  cursor: pointer; transition: border-color .2s, background .2s; text-align: center;
   /* Same size for ALL drop zones (WireGuard and OpenVPN, Backup and Sync).
-     Compact: icon beside the label (was stacked) so the box is ~half as tall. */
-  min-height: 46px; box-sizing: border-box;
+     COMPACT SQUARE: a full-width banner made the "Import VPN configuration" card so
+     tall it needed a scrollbar on the settings panel (serekkr, 05/11/2026). Now a small
+     fixed square — click still opens the picker, drop still works — left-aligned under
+     the title, leaving the rest of the row free. */
+  width: 104px; height: 96px; box-sizing: border-box;
 }
 .wg-drop-zone:hover,.wg-drop-zone.drag-over { border-color: var(--accent-dim); background: var(--accent-glow); }
-/* Once a .conf is loaded the big drop area is wasted space — collapse it into a
-   compact single-line "replace" bar, keeping the parsed details below visible. */
+/* Once a .conf is loaded the box is no longer a drop target — expand it into a
+   compact single-line "replace" bar (auto size, not the square), keeping the parsed
+   details below visible. */
 .wg-drop-zone.loaded {
   border-color: var(--green); border-style: solid;
   flex-direction: row; gap: 8px; padding: 7px 12px; text-align: left;
-  min-height: 0;   /* the collapsed "replace" bar stays compact */
+  width: auto; height: auto; min-height: 0;   /* the collapsed "replace" bar stays compact */
 }
 .wg-drop-zone.loaded svg { width: 14px; height: 14px; color: var(--green); }
-.wg-drop-zone svg { width: 22px; height: 22px; color: var(--text-3); }
-.wg-drop-zone span { font-size: 13px; color: var(--text-2); line-height: 1.4; }
+.wg-drop-zone svg { width: 26px; height: 26px; color: var(--text-3); }
+.wg-drop-zone span { font-size: 11px; color: var(--text-2); line-height: 1.35; }
+.wg-drop-zone span strong { font-size: 12px; color: var(--text-1); }
 /* "Show config" now reveals ONLY the full raw .conf/.ovpn text (the .vpn-raw
    <pre> injected by _injectVpnRawConfig). The parsed summary rows are redundant
    (everything is already in the raw config) so they're hidden, and the outer
