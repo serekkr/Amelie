@@ -1519,44 +1519,47 @@ function createMainWindow() {
 
   mainWindow.webContents.on('context-menu', (_, params) => {
     const items = [];
+    // Localized labels pushed by the renderer; fall back to the Italian defaults
+    // until the first push arrives.
+    const L = _menuLabels || {};
     // Text formatting (bold/italic/…) belongs ONLY to the note editor. Other
     // editable fields (settings inputs, search, IP boxes…) get just Copy/Paste.
     const inNoteEditor = !!(_ctxNoteTarget && _ctxNoteTarget.isEditor);
     if (params.isEditable && inNoteEditor) {
       if (params.selectionText) {
-        items.push({ role: 'cut', label: 'Taglia' });
-        items.push({ role: 'copy', label: 'Copia' });
+        items.push({ role: 'cut', label: L.cut || 'Taglia' });
+        items.push({ role: 'copy', label: L.copy || 'Copia' });
       }
-      items.push({ role: 'paste', label: 'Incolla' });
+      items.push({ role: 'paste', label: L.paste || 'Incolla' });
       if (params.selectionText) {
         items.push({ type: 'separator' });
-        items.push({ label: 'Grassetto', click: () => mainWindow.webContents.send('editor:cmd', 'bold') });
-        items.push({ label: 'Corsivo',   click: () => mainWindow.webContents.send('editor:cmd', 'italic') });
+        items.push({ label: L.bold   || 'Grassetto', click: () => mainWindow.webContents.send('editor:cmd', 'bold') });
+        items.push({ label: L.italic || 'Corsivo',   click: () => mainWindow.webContents.send('editor:cmd', 'italic') });
         items.push({
-          label: 'Evidenzia',
+          label: L.highlight || 'Evidenzia',
           click: () => mainWindow.webContents.send('editor:cmd', 'highlight'),
         });
         items.push({
-          label: 'Aggiungi colore',
+          label: L.addColor || 'Aggiungi colore',
           submenu: TEXT_COLORS.map((hex, i) => ({
-            label: COLOR_NAMES[i] || hex,
+            label: (L.colors && L.colors[i]) || COLOR_NAMES[i] || hex,
             icon: colorSwatchIcon(hex),
             click: () => mainWindow.webContents.send('editor:cmd', `color:${hex}`),
           })),
         });
         items.push({
-          label: 'Rimuovi colore',
+          label: L.removeColor || 'Rimuovi colore',
           click: () => mainWindow.webContents.send('editor:cmd', 'color-remove'),
         });
       }
       items.push({ type: 'separator' });
-      items.push({ role: 'selectAll', label: 'Seleziona tutto' });
+      items.push({ role: 'selectAll', label: L.selectAll || 'Seleziona tutto' });
     } else if (params.isEditable) {
       // Settings / search / other text fields: only Copy + Paste.
-      if (params.selectionText) items.push({ role: 'copy', label: 'Copia' });
-      items.push({ role: 'paste', label: 'Incolla' });
+      if (params.selectionText) items.push({ role: 'copy', label: L.copy || 'Copia' });
+      items.push({ role: 'paste', label: L.paste || 'Incolla' });
     } else if (params.selectionText) {
-      items.push({ role: 'copy', label: 'Copia' });
+      items.push({ role: 'copy', label: L.copy || 'Copia' });
     }
     // Right-click over a note pane (main or split): offer to detach THAT note
     // into its own window. The renderer set _ctxNoteTarget synchronously just
@@ -1570,31 +1573,31 @@ function createMainWindow() {
         const attPath = path.resolve(ATTACHMENTS_DIR, tgt.media.rel);
         const safe = attPath.startsWith(path.resolve(ATTACHMENTS_DIR) + path.sep);
         items.push({
-          label: 'Apri file',
+          label: L.openFile || 'Apri file',
           click: () => { if (safe) openAttachmentExternally(encDisk(attPath)); },
         });
         items.push({
-          label: 'Apri percorso del file',
+          label: L.openPath || 'Apri percorso del file',
           click: () => { if (safe) shell.showItemInFolder(encDisk(attPath)); },
         });
         items.push({
-          label: 'Rinomina file',
+          label: L.renameFile || 'Rinomina file',
           click: () => mainWindow.webContents.send('editor:cmd', 'media:' + JSON.stringify({ action: 'rename', rel: tgt.media.rel, href: tgt.media.href })),
         });
         items.push({
-          label: 'Elimina file',
+          label: L.deleteFile || 'Elimina file',
           click: () => mainWindow.webContents.send('editor:cmd', 'media:' + JSON.stringify({ action: 'delete', rel: tgt.media.rel, href: tgt.media.href })),
         });
         items.push({ type: 'separator' });
       }
       if (tgt.canGoBack) {
         items.push({
-          label: 'Torna alla nota precedente',
+          label: L.navBack || 'Torna alla nota precedente',
           click: () => mainWindow.webContents.send('editor:cmd', 'nav-back'),
         });
       }
       items.push({
-        label: 'Apri in nuova finestra',
+        label: L.newWindow || 'Apri in nuova finestra',
         click: () => openDetachedNoteWindow({ path: tgt.path, name: tgt.name, theme: tgt.theme }),
       });
     }
@@ -5509,6 +5512,12 @@ ipcMain.on('ctx:set-note-target', (e, info) => {
   _ctxNoteTarget = (info && (info.path || info.isEditor)) ? info : null;
   e.returnValue = true;
 });
+
+// Localized labels for the native context menu, pushed by the renderer (which owns
+// i18n) on startup and on every language change. Until the first push arrives the
+// menu uses its built-in Italian defaults (see the || fallbacks where it is built).
+let _menuLabels = null;
+ipcMain.on('menu:labels', (_, labels) => { _menuLabels = (labels && typeof labels === 'object') ? labels : null; });
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

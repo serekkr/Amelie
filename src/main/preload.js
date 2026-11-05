@@ -141,6 +141,9 @@ contextBridge.exposeInMainWorld('inkwell', {
   // Synchronous: tells main which note sits under a right-click BEFORE the
   // native context menu pops, so it can offer "Open in new window" for it.
   setCtxNoteTarget: (info) => ipcRenderer.sendSync('ctx:set-note-target', info),
+  // Localized labels for the native context menu (built in main, which has no i18n).
+  // Pushed by the renderer on startup and on every language change.
+  setMenuLabels: (labels) => ipcRenderer.send('menu:labels', labels),
 
   // Platform info
   platform: process.platform,
