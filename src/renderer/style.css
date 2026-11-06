@@ -3912,7 +3912,7 @@ body.split-open .pane-flash::after {
 #link-list { padding: 4px 0; overflow-y: auto; max-height: 460px; }
 .link-empty { padding: 10px 12px; color: var(--text-3); font-family: var(--ui-font); font-size: 13px; }
 .link-item {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; row-gap: 2px;
   padding: 7px 12px; cursor: pointer; font-family: var(--ui-font);
   font-size: 14px; color: var(--text-1); transition: background .1s;
 }
@@ -3921,7 +3921,9 @@ body.split-open .pane-flash::after {
 }
 .link-item-icon { font-size: 13px; flex-shrink: 0; }
 .link-item-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.link-item-path { font-size: 13px; color: var(--text-0); font-family: var(--editor-font); padding-left: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; max-width: 60%; }
+/* Link picker: the path goes on its OWN line UNDER the name (stacked), not beside it —
+   same as Android, so long names/paths stay readable (serekkr, 06/11/2026). */
+.link-item-path { flex-basis: 100%; max-width: 100%; padding-left: 26px; font-size: 12px; color: var(--text-3); font-family: var(--editor-font); white-space: normal; word-break: break-word; }
 .link-item-date { flex-shrink: 0; padding-left: 14px; font-size: 12px; color: var(--text-3); font-family: var(--ui-font); white-space: nowrap; }
 
 /* ─── Tables in preview ─────────────────────────────────────── */
