@@ -3878,8 +3878,17 @@ function updateNoteNavButtons() {
   const tab = getActiveTab();
   const list = _navigableNotes();
   const idx = tab?.path ? list.findIndex(n => n.path === tab.path) : -1;
-  prev.disabled = (idx <= 0);
+  // Browser-style back: if you GOT here by following a link (_noteBackStack non-empty),
+  // "<" goes BACK to the note that held the link, not to the adjacent note — so it's
+  // enabled even at the top of the list and its tooltip says so (serekkr, 06/11/2026).
+  const canBack = _noteBackStack.length > 0;
+  prev.disabled = !canBack && (idx <= 0);
   next.disabled = (idx === -1 || idx >= list.length - 1);
+  try {
+    const key = canBack ? 'ctx.menu_nav_back' : 'note.prev';
+    const txt = window.i18n.t(key);
+    prev.title = txt; prev.setAttribute('aria-label', txt); prev.setAttribute('data-i18n-title', key);
+  } catch (_) {}
 }
 
 async function navigateNote(direction) {
@@ -5639,7 +5648,9 @@ function setupEditor() {
     editor.focus(); document.execCommand('redo');
   });
 
-  $('btn-prev-note')?.addEventListener('click', () => navigateNote('prev'));
+  // "<" goes BACK to the note you came from when you followed a link (browser-style);
+  // otherwise it steps to the previous note in the list.
+  $('btn-prev-note')?.addEventListener('click', () => { if (_noteBackStack.length) goBackNote(); else navigateNote('prev'); });
   $('btn-next-note')?.addEventListener('click', () => navigateNote('next'));
 
   // Hide the wiki-link autocomplete popup when focus leaves the editor — but
