@@ -20540,7 +20540,12 @@ function logSyncEventNotif(data) {
     const failKey = `notif.${data.op}_failed`;
     let head = window.i18n.t(failKey);
     if (!head || head === failKey) head = label;
-    addEventNotif(`${head}: ${data.error || window.i18n.t('notif.unknown_error')}`, false, '', '', rep);
+    // COALESCE automatic failures too (serekkr, 06/11/2026): a scheduled backup/sync that
+    // keeps failing every interval used to stack a fresh "Backup failed: …" line each time
+    // (100+ identical notifications). Pass the fail key + coalesce so a recurring automatic
+    // failure refreshes its ONE line (showing the latest error) instead of piling up; manual
+    // runs still add a fresh line (coalesce is false for data.manual).
+    addEventNotif(`${head}: ${data.error || window.i18n.t('notif.unknown_error')}`, false, '', failKey, rep, coalesce);
   }
 }
 
