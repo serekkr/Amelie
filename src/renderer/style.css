@@ -1140,9 +1140,14 @@ html[data-booting] #empty-state { display: none !important; }
   display: flex; align-items: center; justify-content: center;
   background: var(--bg-0); transition: opacity .35s ease;
 }
-#boot-splash img { width: 128px; height: 128px; object-fit: contain; animation: bootSplashPulse 1.5s ease-in-out infinite; }
+#boot-splash img { width: 128px; height: 128px; object-fit: contain; animation: bootSplashBreathe 2s ease-in-out infinite; }
 #boot-splash.hide { opacity: 0; pointer-events: none; }
-@keyframes bootSplashPulse { 0%, 100% { opacity: .55; transform: scale(.97); } 50% { opacity: 1; transform: scale(1); } }
+/* Gentle breathe: opacity + a soft glow, NO scale/movement — the logo must not shift
+   (serekkr, 06/11/2026: "il logo si sposta un po'"). */
+@keyframes bootSplashBreathe {
+  0%, 100% { opacity: .55; filter: drop-shadow(0 0 0 rgba(63,185,80,0)); }
+  50%      { opacity: 1;   filter: drop-shadow(0 0 16px rgba(63,185,80,.30)); }
+}
 @media (prefers-reduced-motion: reduce) { #boot-splash img { animation: none; } }
 #empty-state { animation: emptyStateFade .22s ease; }
 @keyframes emptyStateFade { from { opacity: 0; } to { opacity: 1; } }
