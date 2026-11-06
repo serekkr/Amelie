@@ -25,6 +25,10 @@
   <script>try{ document.documentElement.setAttribute('data-booting',''); setTimeout(function(){ try{ document.documentElement.removeAttribute('data-booting'); }catch(_){} }, 10000); }catch(_){}</script>
 </head>
 <body>
+  <!-- Boot splash: the Amelie logo shown while the app loads (tree + session restore),
+       instead of the half-built UI. Removed (fade) at the end of init(); hidden earlier
+       if the vault is locked so it never covers the unlock prompt. -->
+  <div id="boot-splash"><img src="../../assets/icon.png" alt="Amelie" /></div>
   <!-- Custom in-theme tooltip (replaces the native grey title="" bubble) -->
   <div id="app-tooltip" role="tooltip"></div>
   <div id="app">

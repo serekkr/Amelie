@@ -2711,6 +2711,15 @@ function enforceInputLimits() {
   }, true);
 }
 
+// Fade out and remove the boot splash (the full-screen Amelie logo). Idempotent.
+function hideBootSplash() {
+  const sp = document.getElementById('boot-splash');
+  if (!sp || sp._hiding) return;
+  sp._hiding = true;
+  sp.classList.add('hide');
+  setTimeout(() => { try { sp.remove(); } catch (_) {} }, 400);
+}
+
 async function init() {
   // i18n must be first — applies saved language before any UI renders
   window.i18n.initI18n();
@@ -2796,6 +2805,7 @@ async function init() {
   // Session decided (tab restored, or genuinely empty) → stop hiding the empty-state.
   // If a tab was restored it's already display:none; if not, it now fades in cleanly.
   try { document.documentElement.removeAttribute('data-booting'); } catch (_) {}
+  hideBootSplash();   // the app is ready → fade out the logo splash
   window.addEventListener('beforeunload', saveSession);
   setupFrontmatter();
   setupEditor();
@@ -17091,6 +17101,7 @@ async function checkVaultLock() {
     // BLOCK init here until the user actually unlocks: loadTree()/restoreSession()
     // must run with ENCRYPTION_KEY set, else the tree is empty and encrypted PDFs
     // read as ciphertext ("Invalid PDF structure").
+    hideBootSplash();   // a locked vault needs the unlock prompt — never cover it with the splash
     await showUnlockOverlay();
   }
 }
