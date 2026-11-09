@@ -5363,7 +5363,7 @@ function setupEditor() {
         const base = p.split('/').pop();
         try {
           const name = await window.inkwell.importAttachmentPath(p, _attachmentTarget(base));
-          insertAttachmentRef(name);
+          insertAttachmentRef(name, null, { inline: true });
           importedNames.push(name.split('/').pop());
           imported++;
         } catch (err) { console.error('Paste import failed:', p, err); if (_reportAttachErr(err)) specific = true; }
@@ -5423,7 +5423,7 @@ function setupEditor() {
         const base = p.split('/').pop();
         try {
           const name = await window.inkwell.importAttachmentPath(p, _attachmentTarget(base));
-          insertAttachmentRef(name);
+          insertAttachmentRef(name, null, { inline: true });
           imported++;
         } catch (err) { console.error('Paste import failed:', p, err); if (_reportAttachErr(err)) specific = true; }
       }
@@ -5449,7 +5449,7 @@ function setupEditor() {
           target = _attachmentTarget(file.name || 'pasted-file');
         }
         const name = await window.inkwell.saveAttachment(target, new Uint8Array(buf));
-        insertAttachmentRef(name);
+        insertAttachmentRef(name, null, { inline: true });
         saved++;
       } catch (err) {
         console.error('Paste save failed:', file.name, err);
@@ -6232,7 +6232,13 @@ function _setupVideoResize(video, handle, href) {
 // Everything else (pdf, zip, …) → plain link [📎](url) — an ![](non-image) would
 // render as a broken <img>, and the preview only turns a/v into players.
 // `at` (optional): where to put it — a drop from the sidebar lands where it is let go.
-function insertAttachmentRef(name, at) {
+// `inline:true` (only the PASTE handler passes it): drop the attachment RIGHT AT the
+// caret with just a leading space, no newlines — so a pasted image lands mid-text
+// ("testo qui ![img]") instead of forcing a line of its own with blank lines around it
+// (serekkr 09/11/2026). Everything else (drag&drop, sidebar, the image dialog, the
+// voice recorder) keeps the image on ITS OWN line, which is what you want when you
+// drop a file onto the note.
+function insertAttachmentRef(name, at, { inline = false } = {}) {
   const imageExts = new Set(['.png','.jpg','.jpeg','.gif','.webp','.svg']);
   const ext = name.substring(name.lastIndexOf('.')).toLowerCase();
   const isImg = imageExts.has(ext);
@@ -6247,17 +6253,28 @@ function insertAttachmentRef(name, at) {
   // The preview builds the player/label from the URL, and rename works off the URL.
   const icon = isImg ? '📷' : isAudio ? '🎵' : isVideo ? '🎬' : '📎';
   const bang = (isImg || isAudio || isVideo) ? '!' : '';   // ! → inline embed for media
-  // INLINE at the caret — no forced newlines (which left a blank line above/below the
-  // image, serekkr 09/11/2026: "deve inserirla là dove sono, tipo 'testo qui![img]'").
-  // A single leading space only when the char before the caret is real text, so the
-  // link never glues onto the previous word and never doubles an existing space/newline.
-  const pos  = at != null ? at : editor.selectionStart;
-  const prev = pos > 0 ? editor.value[pos - 1] : '';
-  const lead = (prev && prev !== ' ' && prev !== '\n' && prev !== '\t') ? ' ' : '';
-  const ref = `${lead}${bang}[${icon}](${url})`;
+  let ref, stepBack = false;
+  if (inline) {
+    // PASTE: inline at the caret. A single leading space only when the char before the
+    // caret is real text, so the link never glues onto the previous word and never
+    // doubles an existing space/newline. No trailing newline → the caret stays right
+    // after the ")" and you keep typing on the same line.
+    const pos  = at != null ? at : editor.selectionStart;
+    const prev = pos > 0 ? editor.value[pos - 1] : '';
+    const lead = (prev && prev !== ' ' && prev !== '\n' && prev !== '\t') ? ' ' : '';
+    ref = `${lead}${bang}[${icon}](${url})`;
+  } else {
+    // DROP / sidebar / dialog / recording: the attachment gets its own line.
+    ref = `\n${bang}[${icon}](${url})\n`;
+    stepBack = !!bang;   // media embed: step the caret back over the trailing "\n"
+  }
   if (at != null) insertAtCursor(ref, at, at); else insertAtCursor(ref);
-  // insertAtCursor leaves the caret right after the ")", which is where we want it now
-  // that there is no trailing newline to step back over.
+  // Own-line media embed: insertAtCursor leaves the caret past the trailing "\n" (on
+  // the empty line below) — step it back one char so it sits right after the link.
+  if (stepBack) {
+    const c = editor.selectionStart - 1;
+    if (c >= 0) editor.setSelectionRange(c, c);
+  }
 }
 
 // Pencil (edit) and eye (view) icons for the single mode-toggle button.
