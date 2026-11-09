@@ -6247,15 +6247,17 @@ function insertAttachmentRef(name, at) {
   // The preview builds the player/label from the URL, and rename works off the URL.
   const icon = isImg ? '📷' : isAudio ? '🎵' : isVideo ? '🎬' : '📎';
   const bang = (isImg || isAudio || isVideo) ? '!' : '';   // ! → inline embed for media
-  const ref = `\n${bang}[${icon}](${url})\n`;
+  // INLINE at the caret — no forced newlines (which left a blank line above/below the
+  // image, serekkr 09/11/2026: "deve inserirla là dove sono, tipo 'testo qui![img]'").
+  // A single leading space only when the char before the caret is real text, so the
+  // link never glues onto the previous word and never doubles an existing space/newline.
+  const pos  = at != null ? at : editor.selectionStart;
+  const prev = pos > 0 ? editor.value[pos - 1] : '';
+  const lead = (prev && prev !== ' ' && prev !== '\n' && prev !== '\t') ? ' ' : '';
+  const ref = `${lead}${bang}[${icon}](${url})`;
   if (at != null) insertAtCursor(ref, at, at); else insertAtCursor(ref);
-  // For media embeds: put the caret at the END of the link (after the ")"), not
-  // on the empty line below it. insertAtCursor leaves the caret past the trailing
-  // "\n" — step it back one char so it sits right after the link.
-  if (bang) {
-    const c = editor.selectionStart - 1;
-    if (c >= 0) editor.setSelectionRange(c, c);
-  }
+  // insertAtCursor leaves the caret right after the ")", which is where we want it now
+  // that there is no trailing newline to step back over.
 }
 
 // Pencil (edit) and eye (view) icons for the single mode-toggle button.
