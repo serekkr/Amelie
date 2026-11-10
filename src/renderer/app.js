@@ -9476,6 +9476,24 @@ function setupContextMenu() {
       { name: target.name, folder: dest.split('/').pop() || '' }));
   });
 
+  // "Esporta con i file…" — copia la nota/cartella in una cartella scelta, portandosi
+  // dietro TUTTI gli allegati referenziati (pdf/media/draw), così l'export è autonomo
+  // (serekkr 10/11/2026). Gli allegati restano sotto attachments/ con i link intatti.
+  $('ctx-export-with-files')?.addEventListener('click', async () => {
+    const target = state.contextTarget;
+    menu.style.display = 'none';
+    if (!target || !target.path) return;
+    const isFolder = target.type === 'folder';
+    let res;
+    try { res = await window.inkwell.exportWithFiles(target.path, isFolder); }
+    catch (e) { res = { ok: false, error: String((e && e.message) || e) }; }
+    if (!res || res.canceled) return;
+    if (!res.ok) { showToast(window.i18n.t('export.failed')); return; }
+    const miss = (res.missing && res.missing.length)
+      ? ' ' + window.i18n.t('export.missing', { n: res.missing.length }) : '';
+    showToast(window.i18n.t('export.done', { notes: res.notes, files: res.attachments }) + miss);
+  });
+
   $('ctx-color')?.addEventListener('click', (e) => {
     e.stopPropagation();
     const node = state.contextTarget; if (!node) return;
@@ -9608,6 +9626,10 @@ function showContextMenu(e, node) {
     ctxMove.dataset.i18n = k;
     ctxMove.textContent = window.i18n.t(k);
   }
+  // Export with files — notes, draws and folders (not single attachments: a PDF/image
+  // carries no links to bundle). Copies the target + every attachment it references.
+  const ctxExport = $('ctx-export-with-files');
+  if (ctxExport) ctxExport.style.display = (hasTarget && !isAttachNode(node)) ? '' : 'none';
   // Set color — notes and folders (not PDFs). Always reads "Set color ›"
   // regardless of whether a color is already assigned.
   const ctxColor = $('ctx-color');

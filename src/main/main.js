@@ -2661,6 +2661,147 @@ ipcMain.handle('dialog:pickFolder', async (_, title) => {
   return result.filePaths[0];
 });
 
+// ── Export with files ────────────────────────────────────────────────────────
+// Right-click a note or folder → "Export with files": copy the note(s) AND every
+// attachment they reference into a folder the user picks, keeping the attachments/
+// layout so the markdown links stay intact (serekkr 10/11/2026 — copying a folder
+// by hand left the media behind, since attachments live in the vault's attachments/).
+// Decrypts on the way out, so an encrypted vault exports READABLE files.
+
+// Logical note rel paths (relative to NOTES_DIR) under an on-disk directory.
+// Mirrors listNotesRecursive's .md/.draw/.enc mapping, notes only (no attachments).
+function _listNoteFilesLogical(absDir, baseRel) {
+  const out = [];
+  let items; try { items = fs.readdirSync(absDir, { withFileTypes: true }); } catch (_) { return out; }
+  for (const it of items) {
+    if (!baseRel && it.name === 'attachments') continue;
+    const abs = path.join(absDir, it.name);
+    const rel = baseRel ? `${baseRel}/${it.name}` : it.name;
+    if (it.isDirectory()) { out.push(..._listNoteFilesLogical(abs, rel)); continue; }
+    let logical = null;
+    if (it.name.endsWith('.md') || it.name.endsWith('.draw')) logical = rel;
+    else if (ENCRYPTION_KEY && it.name.endsWith('.draw' + ENC_EXT)) logical = rel.slice(0, -ENC_EXT.length);
+    else if (ENCRYPTION_KEY && it.name.endsWith(ENC_EXT)) logical = rel.slice(0, -ENC_EXT.length) + '.md';
+    if (logical) out.push(logical);
+  }
+  return out;
+}
+
+// basename(logical).toLowerCase() → logical rel path under attachments/, to resolve
+// Obsidian-style ![[embed]] targets that give only a filename.
+function _buildAttachmentIndex() {
+  const idx = new Map();
+  if (!ATTACHMENTS_DIR) return idx;
+  const walk = (dir, base) => {
+    let items; try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+    for (const it of items) {
+      const rel = base ? `${base}/${it.name}` : it.name;
+      if (it.isDirectory()) { walk(path.join(dir, it.name), rel); continue; }
+      const key = stripEnc(it.name).toLowerCase();
+      if (!idx.has(key)) idx.set(key, stripEnc(rel));
+    }
+  };
+  try { walk(ATTACHMENTS_DIR, ''); } catch (_) {}
+  return idx;
+}
+
+// Every attachment rel path (under attachments/) a note body references.
+function _extractAttachmentRels(body, attIndex) {
+  const rels = new Set();
+  // [..](attachments/..) / (inkwell://attachments/..) / src|href="attachments/.."
+  const re = /(?:\(|src=["']|href=["'])\s*(?:inkwell:\/\/)?attachments\/([^)"'\s>]+)/gi;
+  let m;
+  while ((m = re.exec(body))) {
+    let p = m[1]; try { p = decodeURIComponent(p); } catch (_) {}
+    rels.add(p.replace(/^\/+/, ''));
+  }
+  // Obsidian embeds/links to a FILE: ![[name]] or [[name]] with a real extension.
+  const wiki = /!?\[\[([^\]|#\n]+?)(?:[#|][^\]\n]*)?\]\]/g;
+  while ((m = wiki.exec(body))) {
+    const t = m[1].trim();
+    if (!/\.[a-z0-9]{1,6}$/i.test(t)) continue;      // only file-looking targets
+    if (/\.(md|draw)$/i.test(t)) continue;           // a note link, not an attachment
+    if (/^attachments\//i.test(t)) { rels.add(t.replace(/^attachments\//i, '')); continue; }
+    const hit = attIndex.get(path.basename(t).toLowerCase());
+    if (hit) rels.add(hit);
+  }
+  return [...rels];
+}
+
+function _uniqueExportDir(parent, name) {
+  const base = (name || 'export').replace(/[\/\\]/g, '_');
+  let dest = path.join(parent, base);
+  let i = 1;
+  while (fs.existsSync(dest)) dest = path.join(parent, `${base}-${i++}`);
+  return dest;
+}
+
+ipcMain.handle('export:withFiles', async (_, basePath, isFolder) => {
+  if (!NOTES_DIR) return { ok: false, error: 'Nessun vault aperto' };
+  const result = await dialog.showOpenDialog(mainWindow || undefined, {
+    properties: ['openDirectory', 'createDirectory'],
+    title: (_menuLabels && _menuLabels.dialogExportFolder) || 'Esporta in… (scegli la cartella di destinazione)',
+  });
+  if (result.canceled || !result.filePaths.length) return { ok: true, canceled: true };
+  const destParent = result.filePaths[0];
+  try {
+    const clean = String(basePath || '').replace(/^\/+|\/+$/g, '');
+    let notePaths, exportName, baseForRel;
+    if (isFolder) {
+      const absDir = clean ? path.join(NOTES_DIR, clean) : NOTES_DIR;
+      _assertRealInside(NOTES_DIR, absDir);
+      notePaths = _listNoteFilesLogical(absDir, clean);
+      exportName = clean ? path.basename(clean) : (path.basename(path.dirname(NOTES_DIR)) || 'vault');
+      baseForRel = clean;
+    } else {
+      notePaths = [clean];
+      exportName = path.basename(clean).replace(/\.(md|draw)$/i, '');
+      baseForRel = clean.includes('/') ? clean.slice(0, clean.lastIndexOf('/')) : '';
+    }
+    const destRoot = _uniqueExportDir(destParent, exportName);
+    fs.mkdirSync(destRoot, { recursive: true });
+
+    const attIndex = _buildAttachmentIndex();
+    const attRels = new Set();
+    let noteCount = 0;
+    for (const rel of notePaths) {
+      let text;
+      try { text = readNoteContent(rel); } catch (_) { continue; }
+      let sub;
+      if (baseForRel && (rel === baseForRel || rel.startsWith(baseForRel + '/'))) {
+        sub = rel.slice(baseForRel.length).replace(/^\/+/, '');
+      } else {
+        sub = path.basename(rel);
+      }
+      const outPath = path.join(destRoot, sub);
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
+      fs.writeFileSync(outPath, text);
+      noteCount++;
+      for (const a of _extractAttachmentRels(text, attIndex)) attRels.add(a);
+    }
+
+    const missing = [];
+    let attCount = 0;
+    for (const a of attRels) {
+      const logicalAbs = path.join(ATTACHMENTS_DIR, a);
+      try { _assertRealInside(ATTACHMENTS_DIR, logicalAbs); } catch (_) { continue; }
+      const src = encDisk(logicalAbs);
+      if (!fs.existsSync(src)) { missing.push(a); continue; }
+      try {
+        let buf = fs.readFileSync(src);
+        if (ENCRYPTION_KEY && isEncryptedAttachment(src)) buf = decryptAttachmentBuffer(buf, ENCRYPTION_KEY);
+        const outAtt = path.join(destRoot, 'attachments', a);
+        fs.mkdirSync(path.dirname(outAtt), { recursive: true });
+        fs.writeFileSync(outAtt, buf);
+        attCount++;
+      } catch (_) { missing.push(a); }
+    }
+    return { ok: true, dir: destRoot, notes: noteCount, attachments: attCount, missing };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
 ipcMain.handle('vault:changePassphrase', async (_, oldPass, newPass) => {
   // Works whether unlocked at-rest (ENCRYPTION_KEY) or plaintext-while-open (_REENCRYPT_KEY).
   const dek = ENCRYPTION_KEY || _REENCRYPT_KEY;

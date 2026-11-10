@@ -81,6 +81,7 @@ contextBridge.exposeInMainWorld('inkwell', {
   createFolder: (p) => ipcRenderer.invoke('fs:createFolder', p),
   deleteFolder: (p) => ipcRenderer.invoke('fs:deleteFolder', p),
   renameNote: (o, n) => ipcRenderer.invoke('fs:renameNote', o, n),
+  exportWithFiles: (basePath, isFolder) => ipcRenderer.invoke('export:withFiles', basePath, isFolder),  // note/folder + its attachments → chosen folder
 
   // Export note → PDF (returns { ok, path } | { canceled } | { error })
   exportPdf: (name, html, opts) => ipcRenderer.invoke('note:exportPdf', name, html, opts),
