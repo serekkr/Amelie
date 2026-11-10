@@ -9396,6 +9396,22 @@ function setupContextMenu() {
   // Right-click on empty area of file tree → create note/folder at root
   $('file-tree').addEventListener('contextmenu', e => {
     if (!e.target.closest('.tree-note') && !e.target.closest('.tree-folder')) {
+      // #file-tree has ~20px padding-bottom; a right-click in that strip lands on the
+      // tree itself, not the last row, so it used to open the reduced "empty area" menu
+      // even though it visually hugs the last note (serekkr 10/11/2026: "clicco sull'ultima
+      // nota, il menù è più corto, mancano voci"). Snap a click just below the last row to
+      // THAT row, so the menu is identical to right-clicking the note. Clicks further down
+      // (a real empty area, or an empty tree) still open the root create-here menu.
+      const rows = $('file-tree').querySelectorAll('.tree-note, .tree-folder');
+      const last = rows[rows.length - 1];
+      if (last) {
+        const r = last.getBoundingClientRect();
+        if (e.clientY >= r.bottom && e.clientY - r.bottom <= 28) {
+          e.preventDefault();
+          last.dispatchEvent(new MouseEvent('contextmenu', { bubbles: false, clientX: e.clientX, clientY: e.clientY }));
+          return;
+        }
+      }
       showContextMenu(e, null);
     }
   });
@@ -19127,7 +19143,15 @@ function setupFileDrop() {
     // Only notes (.md/.txt), PDFs and drawings (.draw) are imported into the
     // vault — images, audio, video, scripts and everything else are DISCARDED.
     // Own the drop only if there's a folder or an importable md/pdf/draw file.
-    if (!hasDir && !flat.some(f => /\.(md|markdown|txt|pdf|draw)$/i.test(f.name))) return;
+    // IMPORTANT: check `entries` too, not just `flat` (dataTransfer.files). On
+    // Wayland a drop sometimes arrives with `items`/`entries` populated but an EMPTY
+    // `files` list (and getPathForFile then returns nothing either) — in that case
+    // this guard used to return early and the PDF/note, which IS present in `entries`,
+    // was dropped in silence. That is the intermittent "dropped a PDF on the root, it
+    // didn't load, tried 2-3 times" (serekkr 10/11/2026).
+    const _importRe = /\.(md|markdown|txt|pdf|draw)$/i;
+    const entryImportable = entries.some(en => en.isDirectory || _importRe.test(en.name || ''));
+    if (!hasDir && !entryImportable && !flat.some(f => _importRe.test(f.name))) return;
 
     e.preventDefault();
     e.stopPropagation();
