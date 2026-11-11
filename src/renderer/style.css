@@ -425,8 +425,17 @@
   --h2: #7de686;
   --h3: #7de686;
   --h4: #7de686;
-  --link: #5786cc;
+  --link: #4674b8;
 }
+/* Dark Git: the horizontal top bar (window titlebar + tabs + editor toolbar) sits a shade
+   BELOW the page, like Obsidian's near-black header — in every other theme this bar is
+   --bg-1, a shade ABOVE the page (serekkr 11/11/2026: "la barra in Obsidian è quasi nera").
+   The left ribbon and sidebar keep the page/sidebar colours, as in Obsidian. */
+[data-theme="darkgit"] #titlebar,
+[data-theme="darkgit"] #tab-bar,
+[data-theme="darkgit"] #editor-toolbar { background: #0b0f15; }
+[data-theme="darkgit"] #titlebar,
+[data-theme="darkgit"] #editor-toolbar { border-bottom-color: #20262f; }
 
 /* ── THEME: Graphite ───────────────────────────────────────── */
 /* The neutral graphite the user asked for, sampled pixel by pixel from the
