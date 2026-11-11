@@ -8154,10 +8154,23 @@ async function exportNoteToPdf() {
   let viewColW = Math.round((previewContent.clientWidth || 0)
     - parseFloat(pcs.paddingLeft || '0') - parseFloat(pcs.paddingRight || '0'));
   if (!viewColW || viewColW < 80) {
-    // Preview hidden (we were in edit mode) → fall back to the editor's width.
-    const ecs = getComputedStyle(editor);
-    viewColW = Math.round((editor.clientWidth || 700)
-      - parseFloat(ecs.paddingLeft || '0') - parseFloat(ecs.paddingRight || '0')) || 700;
+    // Preview hidden (we were in edit mode) → reproduce the width VIEW mode WOULD use,
+    // so the exported column (and its wrapping) is the same from edit or view. The old
+    // fallback measured the legacy #markdown-editor textarea, but that is display:none
+    // while CodeMirror is active, so its clientWidth was 0 and viewColW collapsed to the
+    // 700px default — a narrow centred column that looked "portrait" on landscape paper
+    // (serekkr 11/11/2026: "export PDF da edit mode esce sempre in portrait").
+    // The visible #editor-pane has the same width as #preview-pane would; the reading
+    // column is that minus the preview pane's own L/R padding (60 + 48), capped to the
+    // readable line length when that view width is on.
+    const pane = $('editor-pane') || $('preview-pane');
+    const pv   = $('preview-pane');
+    const pvcs = pv ? getComputedStyle(pv) : null;
+    const padX = pvcs ? (parseFloat(pvcs.paddingLeft || '0') + parseFloat(pvcs.paddingRight || '0')) : 108;
+    const paneW = (pane && pane.clientWidth) || 0;
+    let w = Math.round((paneW || 808) - padX);
+    if (document.documentElement.getAttribute('data-view-width') === 'readable') w = Math.min(w, 760);
+    viewColW = Math.max(80, w) || 700;
   }
   // Slider scales the view font; 100% = exactly what you see on screen.
   const fontPx = (viewFontPx * (opts.fontPct / 100)).toFixed(2);
