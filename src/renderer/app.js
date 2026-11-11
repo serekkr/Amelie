@@ -11743,9 +11743,11 @@ function setupSettings() {
     await runRestoreFlow(fn);
   });
 
-  // Browse the local folder with the native file manager
+  // Browse the local folder with the native file manager — starts on the path already
+  // set for the backup, when there is one (serekkr 11/11/2026).
   $('btn-browse-local').addEventListener('click', async () => {
-    const picked = await window.inkwell.pickFolder(window.i18n.t('sync.local_path'));
+    const cur = ($('cfg-local-path')?.value || '').trim();
+    const picked = await window.inkwell.pickFolder(window.i18n.t('sync.local_path'), cur);
     if (picked) {
       const input = $('cfg-local-path');
       input.value = picked;

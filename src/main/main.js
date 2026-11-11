@@ -2652,11 +2652,20 @@ ipcMain.handle('vault:browseFolder', async () => {
 });
 
 // Generic folder picker (e.g. local backup folder for Sync)
-ipcMain.handle('dialog:pickFolder', async (_, title) => {
-  const result = await dialog.showOpenDialog(mainWindow || undefined, {
+ipcMain.handle('dialog:pickFolder', async (_, title, defaultPath) => {
+  const opts = {
     properties: ['openDirectory', 'createDirectory'],
     title: title || 'Scegli una cartella',
-  });
+  };
+  // Open the picker already on the folder the user configured (e.g. the local backup
+  // path), when it still exists — only a real, existing directory is honoured so a
+  // stale/typo path can't break the dialog (serekkr 11/11/2026).
+  try {
+    if (defaultPath && fs.existsSync(defaultPath) && fs.statSync(defaultPath).isDirectory()) {
+      opts.defaultPath = defaultPath;
+    }
+  } catch (_) {}
+  const result = await dialog.showOpenDialog(mainWindow || undefined, opts);
   if (result.canceled || !result.filePaths.length) return null;
   return result.filePaths[0];
 });
