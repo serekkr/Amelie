@@ -8085,14 +8085,16 @@ function showExportModal() {
         theme: themeBox.querySelector('.export-seg-btn.active')?.dataset.val || 'light',
         pageSize: pageSel.value,
         margins: marginSel.value,
+        pageNumbers: !!(pageNumBox && pageNumBox.checked),
       };
       const [pw0, ph0] = _PDF_PAGE_PX[o.pageSize] || _PDF_PAGE_PX.A4;
       let pageW = pw0, pageH = ph0;
       if (o.pageSize !== 'Wide' && o.orientation === 'landscape') { pageW = ph0; pageH = pw0; }
+      const bg = (o.theme === 'dark') ? '#1a1b1e' : '#fff';
       pvFrame.style.width = pageW + 'px';
       pvFrame.style.height = pageH + 'px';
-      pvFrame.style.background = (o.theme === 'dark') ? '#0e0e0e' : '#fff';
-      pvWrap.style.background  = (o.theme === 'dark') ? '#0e0e0e' : '#fff';
+      pvFrame.style.background = bg;
+      pvWrap.style.background  = bg;
       pvFrame.srcdoc = _exportPreviewSrcdoc(o, _pvCtx);
       const avail = (pvWrap.clientWidth || 280);
       const s = Math.min(1, avail / pageW);
@@ -8140,6 +8142,7 @@ function showExportModal() {
       themeBox.removeEventListener('click', onTheme);
       pageSel.removeEventListener('change', onOpt);
       marginSel.removeEventListener('change', onOpt);
+      if (pageNumBox) pageNumBox.removeEventListener('change', onOpt);
       okBtn.removeEventListener('click', onOk);
       cancelBtn.removeEventListener('click', onCancel);
       document.removeEventListener('keydown', onKey, true);
@@ -8166,6 +8169,7 @@ function showExportModal() {
     themeBox.addEventListener('click', onTheme);
     pageSel.addEventListener('change', onOpt);
     marginSel.addEventListener('change', onOpt);
+    if (pageNumBox) pageNumBox.addEventListener('change', onOpt);
     okBtn.addEventListener('click', onOk);
     cancelBtn.addEventListener('click', onCancel);
     document.addEventListener('keydown', onKey, true);
@@ -8223,10 +8227,23 @@ function _exportPreviewSrcdoc(opts, ctx) {
   const marginIn = PDF_MARGIN_PRESETS[opts.margins] ?? 0.6;
   const padPx   = Math.round(marginIn * 96);
   const isDark  = opts.theme === 'dark';
+  const bg      = isDark ? '#1a1b1e' : '#ffffff';
   const themeCss = isDark ? PDF_PRINT_CSS_DARK : '';
   const layout = `html,body{margin:0}body{font-size:${fontPx}px;font-family:${ctx.viewFontFamily};line-height:${ctx.viewLineHeight};padding:${padPx}px;}`
     + `.amelie-pdf{max-width:${ctx.viewColW}px;margin:0 auto;}`;
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${PDF_PRINT_CSS}${themeCss}${layout}</style></head><body><article class="amelie-pdf">${ctx.bodyHtml}</article></body></html>`;
+  // A note longer than one page would otherwise bleed straight to the bottom edge of the
+  // preview and look "cut" (serekkr 11/11/2026). The real PDF breaks the page here, so
+  // mask the bottom-margin strip with the page colour — page 1 then ends with a clean
+  // bottom margin — and, when page numbers are on, show the number in it (the PDF's footer
+  // is drawn by Chromium and can't appear in this HTML, so it is simulated).
+  const pnColor = isDark ? '#9a9aa0' : '#6a6a6a';
+  const pnSize  = Math.max(9, Math.round(parseFloat(fontPx) * 0.8));
+  const num     = opts.pageNumbers ? '1' : '';
+  const fade = padPx > 6
+    ? `<div style="position:fixed;left:0;right:0;bottom:${padPx}px;height:16px;pointer-events:none;background:linear-gradient(rgba(0,0,0,0),${bg})"></div>`
+      + `<div style="position:fixed;left:0;right:0;bottom:0;height:${padPx}px;background:${bg};display:flex;align-items:flex-start;justify-content:center;padding-top:7px;font-family:${ctx.viewFontFamily};font-size:${pnSize}px;color:${pnColor}">${num}</div>`
+    : (num ? `<div style="position:fixed;left:0;right:0;bottom:3px;text-align:center;font-family:${ctx.viewFontFamily};font-size:11px;color:${pnColor}">${num}</div>` : '');
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${PDF_PRINT_CSS}${themeCss}${layout}</style></head><body><article class="amelie-pdf">${ctx.bodyHtml}</article>${fade}</body></html>`;
 }
 
 async function exportNoteToPdf() {
