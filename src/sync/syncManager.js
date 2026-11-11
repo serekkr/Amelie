@@ -635,9 +635,17 @@ class SyncManager {
     const scheduled = new Date(now);
     scheduled.setHours(+m[1], +m[2], 0, 0);
     if (now < scheduled) return false;                 // today's time not reached yet
-    const key = which === 'remote' ? 'lastBackupAtRemote' : 'lastBackupAtLocal';
-    const at = Date.parse((this._syncState && this._syncState[key]) || '');
-    if (!Number.isFinite(at)) return true;             // never backed up → due
+    const key    = which === 'remote' ? 'lastBackupAtRemote'    : 'lastBackupAtLocal';
+    const tryKey = which === 'remote' ? 'lastBackupTryAtRemote' : 'lastBackupTryAtLocal';
+    // Count a failed ATTEMPT, not only a success: otherwise a destination that keeps
+    // failing stays "due" and is retried on every 60 s poll (serekkr 11/11/2026). Gating
+    // on the later of (last success, last attempt) means one try per scheduled slot even
+    // when it fails — "Backup now" still forces a retry, and a later success re-advances it.
+    const okAt  = Date.parse((this._syncState && this._syncState[key])    || '');
+    const tryAt = Date.parse((this._syncState && this._syncState[tryKey]) || '');
+    const at = Math.max(Number.isFinite(okAt) ? okAt : -Infinity,
+                        Number.isFinite(tryAt) ? tryAt : -Infinity);
+    if (!Number.isFinite(at)) return true;             // never attempted → due
     // Interval-aware so Weekly / Custom(N days) run every N days AT the set time, not
     // every day (serekkr, 29/10/2026). Daily (interval ≤ 1440) keeps the exact old
     // behaviour: due if the last run was before today's scheduled time.
@@ -674,6 +682,19 @@ class SyncManager {
     const patch = { lastBackupAt: now };
     if (!target || target === 'local')  patch.lastBackupAtLocal  = now;
     if (!target || target === 'remote') patch.lastBackupAtRemote = now;
+    this._updateSyncState(patch);
+  }
+
+  // Stamp "an attempt to this destination CONCLUDED now" — success OR failure. The daily
+  // scheduler gates on this so a destination that FAILS is retried once per scheduled slot
+  // (e.g. once a day), not every 60 s poll (serekkr 11/11/2026: a WebDAV backup that kept
+  // failing filed a "Backup failed" every minute all day). Kept apart from the success
+  // stamp above, which the "Ultimo backup" line and the overdue/missing logic still read.
+  _stampBackupTry(target) {
+    const now = new Date().toISOString();
+    const patch = {};
+    if (!target || target === 'local')  patch.lastBackupTryAtLocal  = now;
+    if (!target || target === 'remote') patch.lastBackupTryAtRemote = now;
     this._updateSyncState(patch);
   }
 
@@ -866,7 +887,7 @@ class SyncManager {
           if (this._localBackupOn()  && this._dailyBackupDue('local'))  await this.runBackup({ force: true, manual: false, target: 'local' });
           if (this._remoteBackupOn() && this._dailyBackupDue('remote')) await this.runBackup({ force: true, manual: false, target: 'remote' });
         }, 60 * 1000);
-        console.log(`[Sync] Daily backup — local ${this._backupDailyTime('local') || '—'}, remote ${this._backupDailyTime('remote') || '—'} (checked every 5 min)`);
+        console.log(`[Sync] Daily backup — local ${this._backupDailyTime('local') || '—'}, remote ${this._backupDailyTime('remote') || '—'} (checked every 60 s, each dest tried once per slot)`);
       } else {
         const min = this._backupIntervalMinutes();
         this._backupTimer = setInterval(() => this.runBackup(), min * 60 * 1000);
@@ -1215,6 +1236,9 @@ class SyncManager {
       this._setStatus('error', e.message, meta);
       return { success: false, error: SyncManager._publicError(e.message) };
     } finally {
+      // Record that an attempt to THIS target concluded (success or failure), so the daily
+      // scheduler won't re-fire it on the next 60 s poll — at most one try per slot.
+      this._stampBackupTry(target);
       this._progress({ op: 'backup', final: true, total: 1 });
     }
   }
