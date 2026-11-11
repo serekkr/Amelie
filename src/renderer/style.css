@@ -406,10 +406,10 @@
      serekkr 11/11/2026 "il pannello destro non è scuro come quello di Obsidian"), so the
      page/editor is declared below Obsidian's #15181d to LOOK like it. */
   --bg-0: #0f1217;
-  --bg-1: #12161b;
-  --bg-2: #171c22;
-  --bg-3: #1f242c;
-  --bg-4: #282f38;
+  --bg-1: #151b21;
+  --bg-2: #1b212a;
+  --bg-3: #232a34;
+  --bg-4: #2c3540;
   --border: #272d35;
   --border-light: #39414c;
   --text-0: #ccd3da;
