@@ -2089,7 +2089,8 @@
   </div>
   <!-- Export-to-PDF options modal -->
   <div id="export-modal" style="display:none;position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.55);align-items:center;justify-content:center">
-    <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:22px 24px 18px;display:flex;flex-direction:row;gap:22px;box-shadow:0 8px 32px rgba(0,0,0,.5);max-width:92vw">
+    <div style="position:relative;background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:22px 24px 18px;display:flex;flex-direction:row;gap:22px;box-shadow:0 8px 32px rgba(0,0,0,.5);max-width:92vw">
+      <button id="export-modal-x" aria-label="Close" title="Close" style="position:absolute;top:10px;right:12px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:none;border:none;border-radius:6px;color:var(--text-2);font-size:20px;line-height:1;cursor:pointer">×</button>
       <div id="export-controls-col" style="width:360px;display:flex;flex-direction:column;gap:18px;flex:0 0 auto">
       <div style="font-family:var(--ui-font);font-size:16px;font-weight:500;color:var(--text-0)" data-i18n="export.title">Export</div>
 

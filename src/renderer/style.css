@@ -5376,6 +5376,9 @@ html[data-amelie-platform="android"] #app-tooltip.in-panel {
 .export-seg-btn.active { background: var(--bg-3); border-color: var(--border-light); color: #fff; }
 .export-seg-btn:hover, #export-modal-ok:hover, #export-modal-cancel:hover { border-color: var(--accent) !important; }
 #export-modal-ok, #export-modal-cancel { transition: border-color .12s; }
+/* Close (×) in the export modal's top-right corner — same role as Annulla/Esc. */
+#export-modal-x { transition: background .12s, color .12s; }
+#export-modal-x:hover { background: var(--bg-3); color: var(--text-0); }
 .export-select {
   background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px;
   color: var(--text-0); font-family: var(--ui-font); font-size: 12px;

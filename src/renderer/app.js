@@ -8060,6 +8060,7 @@ function showExportModal() {
     const pageNumBox = $('export-pagenum');
     const okBtn     = $('export-modal-ok');
     const cancelBtn = $('export-modal-cancel');
+    const xBtn      = $('export-modal-x');
     const pvCol     = $('export-preview-col');
     const pvWrap    = $('export-preview-wrap');
     const pvFrame   = $('export-preview-frame');
@@ -8145,6 +8146,7 @@ function showExportModal() {
       if (pageNumBox) pageNumBox.removeEventListener('change', onOpt);
       okBtn.removeEventListener('click', onOk);
       cancelBtn.removeEventListener('click', onCancel);
+      if (xBtn) xBtn.removeEventListener('click', onCancel);
       document.removeEventListener('keydown', onKey, true);
       resolve(val);
     };
@@ -8172,6 +8174,7 @@ function showExportModal() {
     if (pageNumBox) pageNumBox.addEventListener('change', onOpt);
     okBtn.addEventListener('click', onOk);
     cancelBtn.addEventListener('click', onCancel);
+    if (xBtn) xBtn.addEventListener('click', onCancel);
     document.addEventListener('keydown', onKey, true);
   });
 }
