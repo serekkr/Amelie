@@ -8094,14 +8094,18 @@ function showExportModal() {
       const bg = (o.theme === 'dark') ? '#1a1b1e' : '#fff';
       pvFrame.style.width = pageW + 'px';
       pvFrame.style.height = pageH + 'px';
-      pvFrame.style.background = bg;
-      pvWrap.style.background  = bg;
+      pvFrame.style.background = bg;   // the page itself; the box backdrop stays neutral
       pvFrame.srcdoc = _exportPreviewSrcdoc(o, _pvCtx);
-      const avail = (pvWrap.clientWidth || 280);
-      const s = Math.min(1, avail / pageW);
+      // Fit the page INSIDE the fixed box (contain) and centre it, so the modal keeps the
+      // same size whatever the orientation: portrait fills it, landscape sits letter-boxed.
+      const boxW = pvWrap.clientWidth || 300;
+      const boxH = pvWrap.clientHeight || 400;
+      const pad  = 14;
+      const s = Math.min((boxW - pad) / pageW, (boxH - pad) / pageH);
+      const offX = Math.round((boxW - pageW * s) / 2);
+      const offY = Math.round((boxH - pageH * s) / 2);
       pvFrame.style.transformOrigin = 'top left';
-      pvFrame.style.transform = `scale(${s})`;
-      pvWrap.style.height = Math.round(pageH * s) + 'px';
+      pvFrame.style.transform = `translate(${offX}px, ${offY}px) scale(${s})`;
     };
     // Debounced variant for the font slider (fires rapidly while dragging — reloading
     // the iframe on every tick would thrash).
