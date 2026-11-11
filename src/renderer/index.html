@@ -906,8 +906,11 @@
                      is driven by the kind so existing handlers keep working. -->
                 <input type="checkbox" id="cfg-local-enabled" style="display:none" />
 
-                <!-- Frequency + keep on ONE row. Backup is always a .tar.gz archive now. -->
-                <div class="field-group two-col" style="border-top:1px solid var(--border);padding-top:12px">
+                <!-- Frequency + keep + time on ONE row (3 cols). Putting the time-of-day on
+                     the right, level with the two selects, narrows the selects (which were
+                     too wide) and uses the space that sat empty under "keep" (serekkr,
+                     11/11/2026). Backup is always a .tar.gz archive now. -->
+                <div class="field-group three-col" style="border-top:1px solid var(--border);padding-top:12px">
                   <div>
                     <label data-i18n="settings.backup_freq">Frequenza backup</label>
                     <select id="cfg-local-interval" class="export-select">
@@ -916,20 +919,9 @@
                       <option value="10080" data-i18n="settings.freq_weekly">Settimanale</option>
                       <option value="custom" data-i18n="settings.interval_custom">Custom</option>
                     </select>
-                    <!-- Days (Custom) and the time-of-day sit on the SAME row (serekkr, 29/10/2026). -->
-                    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:8px">
-                      <div class="sip-custom-wrap" id="local-interval-custom-wrap" style="display:none">
-                        <input type="number" id="cfg-local-interval-custom" min="1" max="60" value="2" />
-                        <span data-i18n="settings.days">giorni</span>
-                      </div>
-                      <div class="sip-custom-wrap" id="local-dailytime-wrap" style="display:none;align-items:center;gap:6px">
-                        <input type="time" id="cfg-local-dailytime" value="12:00" />
-                        <span class="dailytime-saved last-backup-saved" style="display:none" data-i18n="settings.backup_saved">✓ Salvato</span>
-                      </div>
-                      <div class="sip-custom-wrap" id="remote-dailytime-wrap" style="display:none;align-items:center;gap:6px">
-                        <input type="time" id="cfg-remote-dailytime" value="12:00" />
-                        <span class="dailytime-saved last-backup-saved" style="display:none" data-i18n="settings.backup_saved">✓ Salvato</span>
-                      </div>
+                    <div class="sip-custom-wrap" id="local-interval-custom-wrap" style="display:none;margin-top:8px">
+                      <input type="number" id="cfg-local-interval-custom" min="1" max="60" value="2" />
+                      <span data-i18n="settings.days">giorni</span>
                     </div>
                   </div>
                   <div>
@@ -940,6 +932,18 @@
                       <option value="10" data-i18n="settings.keep_10">Ultimi 10</option>
                       <option value="0" data-i18n="settings.keep_all">Tutti</option>
                     </select>
+                  </div>
+                  <div>
+                    <label data-i18n="settings.backup_time">Orario</label>
+                    <!-- JS (updateDailyTimeWraps) shows the right one for daily/weekly/custom; both hidden for hourly. -->
+                    <div class="sip-custom-wrap" id="local-dailytime-wrap" style="display:none;align-items:center;gap:6px">
+                      <input type="time" id="cfg-local-dailytime" value="12:00" />
+                      <span class="dailytime-saved last-backup-saved" style="display:none" data-i18n="settings.backup_saved">✓ Salvato</span>
+                    </div>
+                    <div class="sip-custom-wrap" id="remote-dailytime-wrap" style="display:none;align-items:center;gap:6px">
+                      <input type="time" id="cfg-remote-dailytime" value="12:00" />
+                      <span class="dailytime-saved last-backup-saved" style="display:none" data-i18n="settings.backup_saved">✓ Salvato</span>
+                    </div>
                   </div>
                 </div>
 
