@@ -11381,6 +11381,13 @@ function setupSettings() {
    ['cfg-vpn-enabled', 'vpn'], ['cfg-webdav-enabled', 'webdav']].forEach(([id, key]) => {
     $(id)?.addEventListener('change', () => setBackupSectionOpen(key, !!$(id).checked));
   });
+  // Quick "✓ Salvato" confirmation when a BACKUP destination is switched ON (serekkr
+  // 11/11/2026: "deve comparire saved così capisco che è stata salvato"). Registered
+  // AFTER the gates above, which reset a refused toggle to unchecked, so a refusal shows
+  // nothing here — only an accepted enable (its config is autosaved on this same change).
+  // Disabling stays silent.
+  ['cfg-local-enabled', 'cfg-samba-enabled', 'cfg-vpn-enabled', 'cfg-webdav-enabled'].forEach(id =>
+    $(id)?.addEventListener('change', () => { if ($(id)?.checked) showToast('✓ ' + window.i18n.t('sync.saved'), 1500); }));
   // Editing the WebDAV fields invalidates the previous test.
   ['cfg-webdav-url', 'cfg-webdav-user', 'cfg-webdav-pass'].forEach(id =>
     $(id)?.addEventListener('input', () => { state._backupWebdavTested = false; }));
@@ -12202,6 +12209,8 @@ function setupSettings() {
       const err = $('tw-method-error'); if (err) err.style.display = 'none';
       applyTwowayMethodToggle(which);
       try { await saveSettings(); } catch (_) {}
+      // Quick "✓ Salvato" confirmation when a SYNC method is switched ON (serekkr 11/11/2026).
+      if (me.checked) showToast('✓ ' + window.i18n.t('sync.saved'), 1500);
       try { await updateTwowayConnView(); } catch (_) {}
       try { updateSyncButtonVisibility(); } catch (_) {}
       setTimeout(() => { try { updateTunnelStatusInto('tw-wg-badge', 'tw-wg-state'); } catch (_) {} }, 1800);
