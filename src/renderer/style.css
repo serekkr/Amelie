@@ -401,13 +401,17 @@
    Accent is the heading green so folders/active UI sit on the same colour; --yellow
    carries Obsidian's warm folder gold for anything that uses it. */
 [data-theme="darkgit"] {
-  --bg-0: #15181d;
-  --bg-1: #191d23;
-  --bg-2: #1c2127;
-  --bg-3: #232932;
-  --bg-4: #2c333d;
-  --border: #2a3039;
-  --border-light: #3a424e;
+  /* Surfaces run darker than the sampled Obsidian hexes on purpose: Amelie renders ~8
+     levels LIGHTER than Obsidian for the same declared colour (measured side-by-side,
+     serekkr 11/11/2026 "il pannello destro non è scuro come quello di Obsidian"), so the
+     page/editor is declared below Obsidian's #15181d to LOOK like it. */
+  --bg-0: #0f1217;
+  --bg-1: #12161b;
+  --bg-2: #171c22;
+  --bg-3: #1f242c;
+  --bg-4: #282f38;
+  --border: #272d35;
+  --border-light: #39414c;
   --text-0: #ccd3da;
   --text-1: #8a939d;
   --text-2: #6b7480;
