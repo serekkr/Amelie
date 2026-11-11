@@ -16997,8 +16997,12 @@ async function _renderPdfDoc() {
   // Built off-DOM so the user never sees a half-empty container while the first
   // page renders; swapped in once page 1 is painted (no blank-placeholder flash).
   const inner = document.createElement('div');
+  // `safe center`: centre the pages, but when one is WIDER than the viewport (zoomed
+  // past fit) fall back to start-alignment so its LEFT edge stays reachable by scroll
+  // instead of being clipped off-screen (serekkr 11/11/2026: "la vista non è più
+  // centrata dopo un certo passaggio" — same defect fixed on Android).
   inner.style.cssText =
-    'display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px';
+    'display:flex;flex-direction:column;align-items:safe center;gap:12px;padding:20px';
 
   _pdfPageIO = new IntersectionObserver((entries) => {
     for (const en of entries) {
