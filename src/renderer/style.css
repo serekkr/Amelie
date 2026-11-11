@@ -394,6 +394,40 @@
   --link: #8be9fd;
 }
 
+/* ── THEME: Dark Git ───────────────────────────────────────── */
+/* Obsidian-like dark, sampled pixel-by-pixel from the user's Obsidian screenshot
+   (serekkr 11/11/2026): near-black blue-tinted surfaces (page #15181d, sidebar
+   #1c2127), bright green headings (#7de686), cool-grey text (#c8d0d8), blue links.
+   Accent is the heading green so folders/active UI sit on the same colour; --yellow
+   carries Obsidian's warm folder gold for anything that uses it. */
+[data-theme="darkgit"] {
+  --bg-0: #15181d;
+  --bg-1: #191d23;
+  --bg-2: #1c2127;
+  --bg-3: #232932;
+  --bg-4: #2c333d;
+  --border: #2a3039;
+  --border-light: #3a424e;
+  --text-0: #ccd3da;
+  --text-1: #8a939d;
+  --text-2: #6b7480;
+  --text-3: #464e58;
+  --sel-bg: #2b4a7d;
+  --accent: #5fcc6f;
+  --accent-dim: #3a9a4a;
+  --accent-glow: rgba(125,230,134,0.12);
+  --active-bg: rgba(125,230,134,0.10);
+  --active-border: #7de686;
+  --red: #e5675d;
+  --green: #7de686;
+  --yellow: #e7c977;
+  --h1: #7de686;
+  --h2: #7de686;
+  --h3: #7de686;
+  --h4: #7de686;
+  --link: #5786cc;
+}
+
 /* ── THEME: Graphite ───────────────────────────────────────── */
 /* The neutral graphite the user asked for, sampled pixel by pixel from the
    screenshot they sent (font.png) rather than guessed: editor #212121, sidebar

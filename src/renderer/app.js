@@ -1448,6 +1448,7 @@ const THEMES = {
   rose:          { label: 'Rosé Pine',     attr: 'rose'      },
   onedark:       { label: 'One Dark',      attr: 'onedark'   },
   dracula:       { label: 'Dracula',       attr: 'dracula'   },
+  darkgit:       { label: 'Dark Git',      attr: 'darkgit'   },
 };
 
 // The theme a fresh profile gets, and the one anything falls back to (a deleted custom
