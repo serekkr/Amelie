@@ -8060,10 +8060,49 @@ function showExportModal() {
     const pageNumBox = $('export-pagenum');
     const okBtn     = $('export-modal-ok');
     const cancelBtn = $('export-modal-cancel');
+    const pvCol     = $('export-preview-col');
+    const pvWrap    = $('export-preview-wrap');
+    const pvFrame   = $('export-preview-frame');
 
     // Segmented-control helper: highlight the button matching `val`.
     const setSeg = (box, val) => box.querySelectorAll('.export-seg-btn').forEach(b =>
       b.classList.toggle('active', b.dataset.val === val));
+
+    // ── Live preview ────────────────────────────────────────────────────────────
+    // Measure the note once (content doesn't change while the modal is open), then
+    // re-render a scaled page on every option change so the user sees how bigger text /
+    // landscape / margins / theme will look before exporting. Hidden on Android (its
+    // WebView print path differs and the modal is narrow).
+    const _previewable = !window.Capacitor && pvCol && pvFrame && pvWrap;
+    if (pvCol) pvCol.style.display = _previewable ? 'flex' : 'none';
+    let _pvCtx = null, _pvT = null;
+    const renderPreview = () => {
+      if (!_previewable) return;
+      if (!_pvCtx) { try { _pvCtx = _measureExportCtx(); } catch (_) { return; } }
+      const o = {
+        fontPct: parseInt(fontRange.value, 10) || 100,
+        orientation: orientBox.querySelector('.export-seg-btn.active')?.dataset.val || 'portrait',
+        theme: themeBox.querySelector('.export-seg-btn.active')?.dataset.val || 'light',
+        pageSize: pageSel.value,
+        margins: marginSel.value,
+      };
+      const [pw0, ph0] = _PDF_PAGE_PX[o.pageSize] || _PDF_PAGE_PX.A4;
+      let pageW = pw0, pageH = ph0;
+      if (o.pageSize !== 'Wide' && o.orientation === 'landscape') { pageW = ph0; pageH = pw0; }
+      pvFrame.style.width = pageW + 'px';
+      pvFrame.style.height = pageH + 'px';
+      pvFrame.style.background = (o.theme === 'dark') ? '#0e0e0e' : '#fff';
+      pvWrap.style.background  = (o.theme === 'dark') ? '#0e0e0e' : '#fff';
+      pvFrame.srcdoc = _exportPreviewSrcdoc(o, _pvCtx);
+      const avail = (pvWrap.clientWidth || 280);
+      const s = Math.min(1, avail / pageW);
+      pvFrame.style.transformOrigin = 'top left';
+      pvFrame.style.transform = `scale(${s})`;
+      pvWrap.style.height = Math.round(pageH * s) + 'px';
+    };
+    // Debounced variant for the font slider (fires rapidly while dragging — reloading
+    // the iframe on every tick would thrash).
+    const renderPreviewSoon = () => { clearTimeout(_pvT); _pvT = setTimeout(renderPreview, 110); };
 
     // Restore last-used values.
     fontRange.value = _exportOpts.fontPct;
@@ -8080,20 +8119,27 @@ function showExportModal() {
 
     modal.style.display = 'flex';
     setTimeout(() => okBtn.focus(), 60);
+    // Paint the first preview once the modal is laid out (so pvWrap.clientWidth is real).
+    requestAnimationFrame(renderPreview);
 
-    const onFont = () => { fontVal.textContent = fontRange.value + '%'; };
+    const onFont = () => { fontVal.textContent = fontRange.value + '%'; renderPreviewSoon(); };
     const onSeg = (box) => (e) => {
       const b = e.target.closest('.export-seg-btn'); if (!b) return;
       box.querySelectorAll('.export-seg-btn').forEach(x => x.classList.remove('active'));
       b.classList.add('active');
+      renderPreview();
     };
     const onOrient = onSeg(orientBox);
     const onTheme  = onSeg(themeBox);
+    const onOpt    = () => renderPreview();   // page size / margins selects
     const cleanup = (val) => {
       modal.style.display = 'none';
+      clearTimeout(_pvT);
       fontRange.removeEventListener('input', onFont);
       orientBox.removeEventListener('click', onOrient);
       themeBox.removeEventListener('click', onTheme);
+      pageSel.removeEventListener('change', onOpt);
+      marginSel.removeEventListener('change', onOpt);
       okBtn.removeEventListener('click', onOk);
       cancelBtn.removeEventListener('click', onCancel);
       document.removeEventListener('keydown', onKey, true);
@@ -8118,35 +8164,26 @@ function showExportModal() {
     fontRange.addEventListener('input', onFont);
     orientBox.addEventListener('click', onOrient);
     themeBox.addEventListener('click', onTheme);
+    pageSel.addEventListener('change', onOpt);
+    marginSel.addEventListener('change', onOpt);
     okBtn.addEventListener('click', onOk);
     cancelBtn.addEventListener('click', onCancel);
     document.addEventListener('keydown', onKey, true);
   });
 }
 
-async function exportNoteToPdf() {
-  const tab = getActiveTab();
-  if (!tab || tab.type) { showToast(window.i18n.t('pdf.no_note')); return; }
-
-  const opts = await showExportModal();
-  if (!opts) return; // cancelled
-
+// Measure the note's rendered HTML + the VIEW-mode layout metrics (font, family,
+// line-height, reading-column width) ONCE, so the PDF export and its live preview use
+// identical content → the preview faithfully reflects the file.
+function _measureExportCtx() {
   // Make sure the rendered HTML reflects the current editor content.
   try { updatePreview(); } catch (_) {}
-  // Clone the rendered preview and strip the interactive controls that the
-  // editor injects (copy-code button, image/column resize handles) — they're
-  // useless in a PDF and render as stray grey boxes.
+  // Clone the rendered preview and strip the interactive controls the editor injects
+  // (copy-code button, image/column resize handles) — useless in a PDF, render as stray boxes.
   const clone = previewContent.cloneNode(true);
   clone.querySelectorAll('.code-copy-btn, .img-resize-handle, .col-resize-handle')
     .forEach(el => el.remove());
   const bodyHtml = clone.innerHTML || '';
-  const rawName = (tab.name || 'note').replace(/\.md$/i, '');
-
-  // Match the on-screen VIEW mode: export with the same font size and the same
-  // text-column width the user sees in the preview, so line wrapping in the PDF
-  // is identical to view mode (no sentence that wrapped onto two lines suddenly
-  // collapsing onto one because the page is wider). The chosen page size/
-  // orientation just adds paper around that fixed column.
   const pcs = getComputedStyle(previewContent);
   const viewFontPx = parseFloat(pcs.fontSize) || 15;
   const viewFontFamily = pcs.fontFamily || 'sans-serif';
@@ -8155,14 +8192,12 @@ async function exportNoteToPdf() {
     - parseFloat(pcs.paddingLeft || '0') - parseFloat(pcs.paddingRight || '0'));
   if (!viewColW || viewColW < 80) {
     // Preview hidden (we were in edit mode) → reproduce the width VIEW mode WOULD use,
-    // so the exported column (and its wrapping) is the same from edit or view. The old
-    // fallback measured the legacy #markdown-editor textarea, but that is display:none
-    // while CodeMirror is active, so its clientWidth was 0 and viewColW collapsed to the
-    // 700px default — a narrow centred column that looked "portrait" on landscape paper
-    // (serekkr 11/11/2026: "export PDF da edit mode esce sempre in portrait").
+    // so the exported column (and its wrapping) is the same from edit or view. Measuring
+    // the legacy #markdown-editor textarea was wrong — it's display:none while CodeMirror
+    // is active, so its clientWidth was 0 and viewColW collapsed to the 700px default, a
+    // narrow centred column that looked "portrait" on landscape paper (serekkr 11/11/2026).
     // The visible #editor-pane has the same width as #preview-pane would; the reading
-    // column is that minus the preview pane's own L/R padding (60 + 48), capped to the
-    // readable line length when that view width is on.
+    // column is that minus the preview pane's L/R padding (60 + 48), capped to readable.
     const pane = $('editor-pane') || $('preview-pane');
     const pv   = $('preview-pane');
     const pvcs = pv ? getComputedStyle(pv) : null;
@@ -8172,6 +8207,38 @@ async function exportNoteToPdf() {
     if (document.documentElement.getAttribute('data-view-width') === 'readable') w = Math.min(w, 760);
     viewColW = Math.max(80, w) || 700;
   }
+  return { bodyHtml, viewFontPx, viewFontFamily, viewLineHeight, viewColW };
+}
+
+// Page sizes in CSS px at 96dpi (portrait W×H). Wide (16:9) is inherently landscape.
+const _PDF_PAGE_PX = {
+  A4:[794,1123], A3:[1123,1587], A5:[559,794], Letter:[816,1056],
+  Legal:[816,1344], Tabloid:[1056,1632], Wide:[1280,720],
+};
+// Single-page preview document for the export modal — the SAME print CSS the export uses,
+// so the preview matches the file. Margins are shown as body padding for both themes (the
+// export does per-page margins for light / body padding for dark; visually identical here).
+function _exportPreviewSrcdoc(opts, ctx) {
+  const fontPx  = (ctx.viewFontPx * (opts.fontPct / 100)).toFixed(2);
+  const marginIn = PDF_MARGIN_PRESETS[opts.margins] ?? 0.6;
+  const padPx   = Math.round(marginIn * 96);
+  const isDark  = opts.theme === 'dark';
+  const themeCss = isDark ? PDF_PRINT_CSS_DARK : '';
+  const layout = `html,body{margin:0}body{font-size:${fontPx}px;font-family:${ctx.viewFontFamily};line-height:${ctx.viewLineHeight};padding:${padPx}px;}`
+    + `.amelie-pdf{max-width:${ctx.viewColW}px;margin:0 auto;}`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${PDF_PRINT_CSS}${themeCss}${layout}</style></head><body><article class="amelie-pdf">${ctx.bodyHtml}</article></body></html>`;
+}
+
+async function exportNoteToPdf() {
+  const tab = getActiveTab();
+  if (!tab || tab.type) { showToast(window.i18n.t('pdf.no_note')); return; }
+
+  const opts = await showExportModal();
+  if (!opts) return; // cancelled
+
+  const rawName = (tab.name || 'note').replace(/\.md$/i, '');
+  // Measure content + VIEW-mode layout (shared verbatim with the live preview above).
+  const { bodyHtml, viewFontPx, viewFontFamily, viewLineHeight, viewColW } = _measureExportCtx();
   // Slider scales the view font; 100% = exactly what you see on screen.
   const fontPx = (viewFontPx * (opts.fontPct / 100)).toFixed(2);
   const marginIn = PDF_MARGIN_PRESETS[opts.margins] ?? 0.6;

@@ -1951,6 +1951,7 @@
       <button id="ctx-rename" data-i18n="ctx.rename">Rinomina</button>
       <button id="ctx-duplicate" data-i18n="ctx.duplicate">Fai una copia</button>
       <button id="ctx-move" data-i18n="ctx.move_file">Sposta file in…</button>
+      <button id="ctx-export-with-files" data-i18n="ctx.export_with_files">Esporta con i file…</button>
       <button id="ctx-color" data-i18n="ctx.color_set">Imposta colore ›</button>
       <button id="ctx-emoji" data-i18n="ctx.add_emoji">Aggiungi emoji</button>
       <button id="ctx-open-location" data-i18n="ctx.open_location">Apri posizione file</button>
@@ -2088,7 +2089,8 @@
   </div>
   <!-- Export-to-PDF options modal -->
   <div id="export-modal" style="display:none;position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.55);align-items:center;justify-content:center">
-    <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:22px 24px 18px;width:380px;display:flex;flex-direction:column;gap:18px;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+    <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:22px 24px 18px;display:flex;flex-direction:row;gap:22px;box-shadow:0 8px 32px rgba(0,0,0,.5);max-width:92vw">
+      <div id="export-controls-col" style="width:360px;display:flex;flex-direction:column;gap:18px;flex:0 0 auto">
       <div style="font-family:var(--ui-font);font-size:16px;font-weight:500;color:var(--text-0)" data-i18n="export.title">Export</div>
 
       <!-- Font scale slider -->
@@ -2152,6 +2154,17 @@
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:2px">
         <button id="export-modal-cancel" data-i18n="common.cancel" style="background:var(--bg-2);border:1px solid var(--border);border-radius:6px;color:#fff;font-family:var(--ui-font);font-size:14px;padding:7px 16px;cursor:pointer">Annulla</button>
         <button id="export-modal-ok" data-i18n="export.do_export" style="background:var(--bg-3);border:1px solid var(--border-light);border-radius:6px;color:#fff;font-family:var(--ui-font);font-size:14px;padding:7px 20px;cursor:pointer">Esporta</button>
+      </div>
+      </div><!-- /export-controls-col -->
+
+      <!-- Live preview: an iframe rendered with the SAME print CSS the export uses, sized
+           to the real page and scaled down, so changing text size / orientation / margins /
+           theme shows how the PDF will look before exporting. Hidden on Android. -->
+      <div id="export-preview-col" style="display:flex;flex-direction:column;gap:7px;flex:0 0 auto">
+        <span style="font-family:var(--ui-font);font-size:14px;color:var(--text-2)" data-i18n="export.preview">Anteprima</span>
+        <div id="export-preview-wrap" style="width:280px;background:#fff;border:1px solid var(--border);border-radius:4px;overflow:hidden;align-self:flex-start;box-shadow:0 2px 10px rgba(0,0,0,.35)">
+          <iframe id="export-preview-frame" scrolling="no" style="border:0;display:block;background:#fff;width:794px;height:1123px"></iframe>
+        </div>
       </div>
     </div>
   </div>
