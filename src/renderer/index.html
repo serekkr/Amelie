@@ -2164,9 +2164,18 @@
       <div id="export-preview-col" style="display:flex;flex-direction:column;gap:7px;flex:0 0 auto;margin-top:37px">
         <span style="font-family:var(--ui-font);font-size:14px;color:var(--text-2)" data-i18n="export.preview">Anteprima</span>
         <!-- Fixed-size viewport: the page is scaled to FIT inside it and centred, so the
-             modal never changes size when switching portrait↔landscape (serekkr 11/11/2026). -->
+             modal never changes size when switching portrait↔landscape (serekkr 11/11/2026).
+             The inner sizer carries the scaled page size so the box can SCROLL when zoomed in. -->
         <div id="export-preview-wrap" style="position:relative;width:300px;height:400px;background:var(--bg-0);border:1px solid var(--border);border-radius:6px;overflow:hidden;align-self:flex-start">
-          <iframe id="export-preview-frame" scrolling="no" style="position:absolute;top:0;left:0;border:0;display:block;background:#fff;width:794px;height:1123px;box-shadow:0 2px 12px rgba(0,0,0,.4)"></iframe>
+          <div id="export-preview-sizer" style="position:relative;overflow:hidden;margin:0 auto">
+            <iframe id="export-preview-frame" scrolling="no" style="position:absolute;top:0;left:0;border:0;display:block;background:#fff;width:794px;height:1123px;box-shadow:0 2px 12px rgba(0,0,0,.4)"></iframe>
+          </div>
+        </div>
+        <!-- Zoom the preview only (not the PDF): 100% = whole page, above = inspect details. -->
+        <div id="export-preview-zoomrow" style="display:flex;align-items:center;gap:8px;width:300px">
+          <span style="font-family:var(--ui-font);font-size:12px;color:var(--text-2)" data-i18n="export.zoom">Zoom</span>
+          <input id="export-preview-zoom" type="range" min="100" max="400" step="10" value="100" style="flex:1;accent-color:var(--accent);cursor:pointer"/>
+          <span id="export-preview-zoom-val" style="font-family:var(--ui-font);font-size:12px;color:var(--text-0);min-width:40px;text-align:right">100%</span>
         </div>
       </div>
     </div>

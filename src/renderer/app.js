@@ -8063,7 +8063,10 @@ function showExportModal() {
     const xBtn      = $('export-modal-x');
     const pvCol     = $('export-preview-col');
     const pvWrap    = $('export-preview-wrap');
+    const pvSizer   = $('export-preview-sizer');
     const pvFrame   = $('export-preview-frame');
+    const pvZoom    = $('export-preview-zoom');
+    const pvZoomVal = $('export-preview-zoom-val');
 
     // Segmented-control helper: highlight the button matching `val`.
     const setSeg = (box, val) => box.querySelectorAll('.export-seg-btn').forEach(b =>
@@ -8074,9 +8077,28 @@ function showExportModal() {
     // re-render a scaled page on every option change so the user sees how bigger text /
     // landscape / margins / theme will look before exporting. Hidden on Android (its
     // WebView print path differs and the modal is narrow).
-    const _previewable = !window.Capacitor && pvCol && pvFrame && pvWrap;
+    const _previewable = !window.Capacitor && pvCol && pvFrame && pvWrap && pvSizer;
     if (pvCol) pvCol.style.display = _previewable ? 'flex' : 'none';
-    let _pvCtx = null, _pvT = null;
+    let _pvCtx = null, _pvT = null, _pvZoom = 1, _pvPageW = 0, _pvPageH = 0;
+    // Zoom affects ONLY the view (not the exported PDF): 1 = whole page fit in the box,
+    // above 1 = enlarge and let the box scroll so details are readable. Kept separate from
+    // renderPreview so dragging the zoom slider never reloads the iframe (cheap, smooth).
+    const applyZoom = () => {
+      if (!_previewable || !_pvPageW) return;
+      const boxW = pvWrap.clientWidth || 300;
+      const boxH = pvWrap.clientHeight || 400;
+      const pad  = 14;
+      const fit = Math.min((boxW - pad) / _pvPageW, (boxH - pad) / _pvPageH);
+      const scale = fit * _pvZoom;
+      const sw = Math.round(_pvPageW * scale), sh = Math.round(_pvPageH * scale);
+      pvSizer.style.width  = sw + 'px';
+      pvSizer.style.height = sh + 'px';
+      // Centre the page in the box; when zoomed past the box it anchors to top/left and scrolls.
+      pvSizer.style.margin = `${Math.max(0, Math.round((boxH - sh) / 2))}px auto 0`;
+      pvFrame.style.transformOrigin = 'top left';
+      pvFrame.style.transform = `scale(${scale})`;
+      pvWrap.style.overflow = (_pvZoom > 1.001) ? 'auto' : 'hidden';
+    };
     const renderPreview = () => {
       if (!_previewable) return;
       if (!_pvCtx) { try { _pvCtx = _measureExportCtx(); } catch (_) { return; } }
@@ -8096,20 +8118,17 @@ function showExportModal() {
       pvFrame.style.height = pageH + 'px';
       pvFrame.style.background = bg;   // the page itself; the box backdrop stays neutral
       pvFrame.srcdoc = _exportPreviewSrcdoc(o, _pvCtx);
-      // Fit the page INSIDE the fixed box (contain) and centre it, so the modal keeps the
-      // same size whatever the orientation: portrait fills it, landscape sits letter-boxed.
-      const boxW = pvWrap.clientWidth || 300;
-      const boxH = pvWrap.clientHeight || 400;
-      const pad  = 14;
-      const s = Math.min((boxW - pad) / pageW, (boxH - pad) / pageH);
-      const offX = Math.round((boxW - pageW * s) / 2);
-      const offY = Math.round((boxH - pageH * s) / 2);
-      pvFrame.style.transformOrigin = 'top left';
-      pvFrame.style.transform = `translate(${offX}px, ${offY}px) scale(${s})`;
+      _pvPageW = pageW; _pvPageH = pageH;
+      applyZoom();
     };
     // Debounced variant for the font slider (fires rapidly while dragging — reloading
     // the iframe on every tick would thrash).
     const renderPreviewSoon = () => { clearTimeout(_pvT); _pvT = setTimeout(renderPreview, 110); };
+    const onZoom = () => {
+      _pvZoom = (parseInt(pvZoom.value, 10) || 100) / 100;
+      if (pvZoomVal) pvZoomVal.textContent = Math.round(_pvZoom * 100) + '%';
+      applyZoom();
+    };
 
     // Restore last-used values.
     fontRange.value = _exportOpts.fontPct;
@@ -8119,6 +8138,9 @@ function showExportModal() {
     setSeg(orientBox, _exportOpts.orientation);
     setSeg(themeBox, _exportOpts.theme);
     if (pageNumBox) pageNumBox.checked = !!_exportOpts.pageNumbers;
+    // Preview zoom always starts at 100% (whole page) each time the modal opens.
+    if (pvZoom) pvZoom.value = '100';
+    if (pvZoomVal) pvZoomVal.textContent = '100%';
     // Page numbers are a desktop-PDF feature (Chromium footer templates); Android's
     // print path can't honour them, so hide the toggle when running inside Capacitor.
     const pageNumRow = $('export-pagenum-row');
@@ -8148,6 +8170,7 @@ function showExportModal() {
       pageSel.removeEventListener('change', onOpt);
       marginSel.removeEventListener('change', onOpt);
       if (pageNumBox) pageNumBox.removeEventListener('change', onOpt);
+      if (pvZoom) pvZoom.removeEventListener('input', onZoom);
       okBtn.removeEventListener('click', onOk);
       cancelBtn.removeEventListener('click', onCancel);
       if (xBtn) xBtn.removeEventListener('click', onCancel);
@@ -8176,6 +8199,7 @@ function showExportModal() {
     pageSel.addEventListener('change', onOpt);
     marginSel.addEventListener('change', onOpt);
     if (pageNumBox) pageNumBox.addEventListener('change', onOpt);
+    if (pvZoom) pvZoom.addEventListener('input', onZoom);
     okBtn.addEventListener('click', onOk);
     cancelBtn.addEventListener('click', onCancel);
     if (xBtn) xBtn.addEventListener('click', onCancel);
