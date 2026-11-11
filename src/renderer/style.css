@@ -2112,8 +2112,10 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   border: solid var(--bg-0); border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
 /* Done: ONLY the line's TEXT is struck through and muted — the box keeps its look. */
-#preview-content li.task-list-item.done { color: var(--text-2); text-decoration: line-through; text-decoration-color: var(--text-3); }
-#preview-content li.task-list-item.done input[type="checkbox"] { text-decoration: none; }
+/* Strike ONLY the task's own label (.task-label, wrapped in enhanceCheckboxes), never the
+   whole <li>: plain text that CommonMark lazily folds into the item sits after a <br>,
+   outside the label, and must stay upright (serekkr 11/11/2026). */
+#preview-content li.task-list-item.done > .task-label { color: var(--text-2); text-decoration: line-through; text-decoration-color: var(--text-3); }
 #preview-content hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
 /* width:auto (not 100%) → columns size to their CONTENT, so a column grows in
    step with the text and only past min-width; width:100% would hand the typed

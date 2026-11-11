@@ -982,6 +982,22 @@ function enhanceCheckboxes() {
     box.style.cursor = 'pointer';
     const li = box.closest('li');
     if (li) { li.classList.add('task-list-item'); li.classList.toggle('done', box.checked); }
+    // Wrap the task's OWN label (everything from after the checkbox up to the first <br>)
+    // in a span, so the checked-state strikethrough strikes ONLY the label — not the
+    // lazy-continuation lines that CommonMark folds into the same <li> (serekkr 11/11/2026:
+    // "- [x] test" then plain text on the next lines struck the plain text through too).
+    if (li && !li._amLabelWrapped) {
+      li._amLabelWrapped = true;
+      const toMove = [];
+      let n = box.nextSibling;
+      while (n && !(n.nodeType === 1 && n.tagName === 'BR')) { toMove.push(n); n = n.nextSibling; }
+      if (toMove.length) {
+        const label = document.createElement('span');
+        label.className = 'task-label';
+        li.insertBefore(label, toMove[0]);
+        toMove.forEach(node => label.appendChild(node));
+      }
+    }
     box.addEventListener('change', () => {
       if (li) li.classList.toggle('done', box.checked);
       toggleCheckboxInSource(idx, box.checked);
@@ -3910,6 +3926,14 @@ function parseFrontmatter(content) {
   const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!match) return { fm, body: content };
   const yaml = match[1]; const body = match[2];
+  // A leading `---` is FRONTMATTER only when the block between the fences reads as YAML
+  // (its first non-blank line is a `key:` mapping). A note that merely OPENS with a `---`
+  // thematic break followed by prose — e.g. one whose real frontmatter was already stripped
+  // on load, leaving the rule at the very top — must NOT have everything up to the next
+  // `---` swallowed as "yaml" (serekkr 11/11/2026: a whole note rendered as only its last
+  // line, because the top `---` rule and a `---` rule far below were read as a fence pair).
+  const firstKey = yaml.split('\n').find(l => l.trim() !== '');
+  if (!firstKey || !/^\s*[\w][\w.\-]*\s*:(\s|$)/.test(firstKey)) return { fm, body: content };
   for (const line of yaml.split('\n')) {
     const m = line.match(/^(\w+):\s*(.*)$/);
     if (!m) continue;
