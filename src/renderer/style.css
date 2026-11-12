@@ -2253,11 +2253,11 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 .icon-btn.small svg { width: 14px; height: 14px; }
 /* Settings gear: was too faint against the titlebar. No border — just the
    brightest text colour (white in dark themes) so it stands out clearly. */
-#btn-settings { color: var(--text-0); }
-/* Settings (⚙): hover solo sull'icona (accento), niente quadrato — come il "+" accanto
-   (serekkr 12/11/2026). Più specifico di .icon-btn:hover, così batte il suo sfondo; i
+/* A riposo text-1 (come il "+" accanto), hover a bianco (text-0), niente quadrato e niente
+   verde (serekkr 12/11/2026). Più specifico di .icon-btn:hover, così batte il suo sfondo; i
    pulsanti ✕ dei modali (anch'essi .icon-btn) restano col loro hover. */
-#btn-settings:hover { color: var(--accent); background: transparent; }
+#btn-settings { color: var(--text-1); }
+#btn-settings:hover { color: var(--text-0); background: transparent; }
 
 /* ─── Modal ─────────────────────────────────────────────────── */
 .modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
@@ -3235,17 +3235,17 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 #tab-new-btn {
   width: 38px; flex-shrink: 0;
   background: transparent; border: none;   /* its dividers are .titlebar-sep, both sides */
-  /* Same brightest text colour as the settings gear beside it (white in the dark themes):
-     the two sit in the same strip, and one being dimmer read as disabled. */
-  cursor: pointer; color: var(--text-0);
+  /* A riposo un filo più tenue (text-1), così l'hover che schiarisce a bianco si vede
+     (serekkr 12/11/2026). Uguale al gear accanto, così nessuno dei due sembra disabilitato. */
+  cursor: pointer; color: var(--text-1);
   display: flex; align-items: center; justify-content: center;
   transition: color .15s, background .15s;
   -webkit-app-region: no-drag;
 }
 #tab-new-btn svg { width: 17px; height: 17px; }
-/* Hover: solo l'icona si colora (accento), niente quadrato di sfondo — il box era brutto
-   (serekkr 12/11/2026, "highlight solo l'icona senza il quadrato"). */
-#tab-new-btn:hover { color: var(--accent); background: transparent; }
+/* Hover: solo l'icona si schiarisce a BIANCO (text-0), niente quadrato e niente verde
+   (serekkr 12/11/2026, "hover bianco come le altre, non verde; solo l'icona, senza quadrato"). */
+#tab-new-btn:hover { color: var(--text-0); background: transparent; }
 
 /* Focus / reading mode toggle (left of the tabs) */
 #btn-focus-mode {
