@@ -972,15 +972,17 @@ html.is-mac #titlebar { padding-left: 72px; }
    dell'ultima riga (~13px dal fondo, riga ≈ 26px) dove ::after disegna una curva
    arrotondata che punta verso l'ultimo file. Grigio tenue 16%. */
 .tree-folder-children::before {
-  content: ''; position: absolute; left: 8px; top: 0; bottom: 13px; width: var(--tree-guide-w);
+  content: ''; position: absolute; left: 8px; top: 0; bottom: 11px; width: var(--tree-guide-w);
   background: color-mix(in srgb, var(--text-0) 16%, transparent);
   pointer-events: none;
 }
 .tree-folder-children::after {
-  content: ''; position: absolute; left: 8px; bottom: 13px; width: 9px; height: 9px;
+  /* Curva più ampia (raggio 11, braccio più lungo) e più in basso, per agganciare bene
+     il centro dell'ultima riga (serekkr 12/11/2026, "farlo più curvo e correggi le linee"). */
+  content: ''; position: absolute; left: 8px; bottom: 11px; width: 13px; height: 13px;
   border-left: var(--tree-guide-w) solid color-mix(in srgb, var(--text-0) 16%, transparent);
   border-bottom: var(--tree-guide-w) solid color-mix(in srgb, var(--text-0) 16%, transparent);
-  border-bottom-left-radius: 7px;
+  border-bottom-left-radius: 11px;
   pointer-events: none;
 }
 /* Meno linee, come Obsidian: niente guida/gancio per il livello PIÙ ESTERNO (i figli
