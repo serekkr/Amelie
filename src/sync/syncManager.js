@@ -846,7 +846,18 @@ class SyncManager {
   // is left untouched.
   static _webdavBaseUrl(rawUrl, username) {
     let u = String(rawUrl || '').trim().replace(/\/+$/, '');
-    if (/\/remote\.php\/dav\/files$/i.test(u) && username) u += '/' + encodeURIComponent(String(username).trim());
+    const user = username ? '/' + encodeURIComponent(String(username).trim()) : '';
+    // Nextcloud/ownCloud vogliono …/remote.php/dav/files/<user>/ per le operazioni sui file.
+    // Due casi da completare (serekkr 12/11/2026 — "Backup failed: 404 Not Found"):
+    //  • …/remote.php/dav/files   → manca solo lo username  → aggiungi /<user>
+    //  • …/remote.php/dav         → manca TUTTO /files/<user> → aggiungi /files/<user>
+    // Un URL che già porta /files/<user> (o un endpoint qualsiasi non-Nextcloud) è lasciato
+    // com'è. Il test connessione passava lo stesso perché il PROPFIND sulla radice DAV
+    // esiste, ma i PUT nella cartella davano 404.
+    if (user) {
+      if (/\/remote\.php\/dav\/files$/i.test(u)) u += user;
+      else if (/\/remote\.php\/dav$/i.test(u))  u += '/files' + user;
+    }
     return u;
   }
 

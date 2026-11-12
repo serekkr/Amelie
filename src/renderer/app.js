@@ -12057,34 +12057,35 @@ function setupSettings() {
     // The backup format is always .tar.gz now (the format toggle was removed), so
     // there is nothing to gate on — a backup always has something to produce.
     try { await saveSettings(); } catch (_) {}
+    // Se mostriamo il messaggio INLINE nel modale (res presente), NON mostrare anche il
+    // toast: erano una "doppia vista" dello stesso stato (serekkr 12/11/2026, "si vede la
+    // doppia vista 'Backing up'"). Il toast resta solo quando non c'è il messaggio inline.
+    const say = (m) => { if (!res) showToast(m); };
     if (res) { res.style.display = ''; res.textContent = window.i18n.t('toast.backup_running'); res.className = 'test-result'; }
-    showToast(window.i18n.t('toast.backup_running'));
+    say(window.i18n.t('toast.backup_running'));
     const result = await window.inkwell.triggerBackup();
     if (result && result.empty) {
       const msg = window.i18n.t('notif.backup_empty');
       if (res) { res.textContent = msg; res.className = 'test-result'; }
-      showToast(msg);
+      say(msg);
     } else if (result && result.unchanged) {
       const msg = window.i18n.t('notif.backup_unchanged_manual');
       if (res) { res.textContent = '✓ ' + msg; res.className = 'test-result ok'; }
-      showToast('✓ ' + msg);
+      say('✓ ' + msg);
     } else if (result && result.success) {
-      // Same style as the manual sync notification: "Manual backup … (18:36)" —
-      // everywhere: inline result, toast AND the notifications bell.
       const when = (() => { const d = new Date(), p2 = n => String(n).padStart(2, '0'); return p2(d.getHours()) + ':' + p2(d.getMinutes()); })();
       const msgBase = window.i18n.t('toast.manual_backup_ok');
       const msg = msgBase + ' (' + when + ')';
       if (res) { res.textContent = '✓ ' + msg; res.className = 'test-result ok'; }
-      showToast('✓ ' + msg);
-      // Success is shown inline + as a toast; the bell is reserved for failures.
+      say('✓ ' + msg);
     } else if (result && result.noDestination) {
       if (res) { res.textContent = '✗ ' + window.i18n.t('toast.no_backup_dest'); res.className = 'test-result fail'; }
-      showToast('✗ ' + window.i18n.t('toast.no_backup_dest'));
+      say('✗ ' + window.i18n.t('toast.no_backup_dest'));
     } else if (result && result.noFormat) {
       // Destination on, no format: the run would write nothing. Said here too,
       // or the button answers "backup complete" over an empty folder.
       if (res) { res.textContent = '✗ ' + window.i18n.t('toast.no_backup_format'); res.className = 'test-result fail'; }
-      showToast('✗ ' + window.i18n.t('toast.no_backup_format'));
+      say('✗ ' + window.i18n.t('toast.no_backup_format'));
     } else {
       const err = (result && result.error) ? ': ' + result.error : '';
       if (res) { res.textContent = '✗ ' + window.i18n.t('toast.backup_failed') + err; res.className = 'test-result fail'; }
