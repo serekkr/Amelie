@@ -14067,9 +14067,10 @@ function buildFormFromConfig(cfg) {
 // sync/backup toggles off (a blank destination can't run), then saves the emptied config.
 async function clearRemoteConfig() {
   const kind = currentRemoteKind();
-  // Nessuna conferma: "Clear config" cancella direttamente, ovunque (serekkr 12/11/2026,
-  // "se faccio clear config in tutti i posti non chiedermi conferma"). È solo svuotare i
-  // campi di una destinazione (annullabile ricompilandoli), non tocca le note.
+  // Conferma TENUTA (serekkr 12/11/2026): "Clear config" azzera anche password/app-token
+  // della destinazione, fastidiosi da ridigitare — meglio un click di conferma contro un
+  // click accidentale. Non tocca le note.
+  if (!(await showConfirmModal(window.i18n.t('sync.clear_config_confirm')))) return;
   if (kind === 'samba') {
     ['cfg-smb-ip', 'cfg-smb-share', 'cfg-smb-user', 'cfg-smb-pass'].forEach(id => { const el = $(id); if (el) el.value = ''; });
     const g = document.querySelector('.ip-group[data-ip="cfg-smb-ip"]');
