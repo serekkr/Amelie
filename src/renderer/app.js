@@ -3605,16 +3605,10 @@ function makeNoteEl(node, parentArray, folderPath = '') {
     displayName = (node.name || '').replace(/\.[A-Za-z0-9]+$/, '');
   }
   el.innerHTML = `<span class="tree-name">${escHtml(displayName)}</span>${extBadge}`;
-  // Hover tooltip. A NOTE that lives IN A FOLDER shows its FULL PATH on hover, ALWAYS —
-  // not only when the name is clipped (serekkr, 04/11/2026: "B1", uniform with Recent/
-  // Bookmarks/Tags). A ROOT note (path == name, no '/') and an attachment keep the old
-  // behaviour: the tooltip appears only when the name is CLIPPED, to read it in full —
-  // showing a path that is just the name again would be redundant.
-  if (!isAttach && node.path && node.path.includes('/')) {
-    _pathTip(el, node.path, true);   // full path, always on hover, for notes in a folder
-  } else {
-    _tipWhenClipped(el, (isAttach ? (node.name || displayName) : _shortPath(node.path || displayName)), 'below');
-  }
+  // Hover tooltip: SOLO il nome, e solo quando è troncato (per leggerlo per intero) — niente
+  // path (serekkr 12/11/2026, "leva la vista del path della nota, anche per la media"). Prima
+  // una nota in una cartella mostrava sempre il path intero in hover.
+  _tipWhenClipped(el, node.name || displayName, 'below');
   el.dataset.path = node.path;
 
   // Le righe dell'albero prendono il FUOCO della tastiera quando le clicchi
