@@ -968,18 +968,16 @@ html.is-mac #titlebar { padding-left: 72px; }
    text rather than written as `rgba(255,255,255,…)`, so on Light Paper the same rule
    gives a faint DARK line instead of white on white. */
 .tree-folder-children::before {
-  content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: var(--tree-guide-w);
-  /* 16% (era 26%): linee più tenui, per avvicinarle a quelle di Obsidian — misurate
-     ~59 di luminosità contro i ~78 di Amelie (serekkr 12/11/2026, "più tenui, guarda
-     come è su obsidian"). */
-  background: color-mix(in srgb, var(--text-0) 16%, transparent);
+  /* Barra d'accento verticale (serekkr 12/11/2026, "una barra per capire quali sono i
+     file della cartella"): abbraccia i file/sottocartelle di una cartella APERTA sul
+     lato sinistro, così si vede il gruppo. Sostituisce la vecchia hairline grigia.
+     2px in colore accento a opacità media — visibile ma non sgargiante — con angoli
+     morbidi. Vale per OGNI livello, top-level incluso (prima la top-level era tolta). */
+  content: ''; position: absolute; left: 8px; top: 1px; bottom: 1px; width: 2px;
+  background: color-mix(in srgb, var(--accent) 42%, transparent);
+  border-radius: 1px;
   pointer-events: none;
 }
-/* Meno linee, come Obsidian: niente guida per il livello PIÙ ESTERNO (i figli diretti
-   di una cartella top-level). Il wrap di ogni cartella è un <div> senza classe:
-   #file-tree > div > .tree-folder-children è quindi SOLO il contenitore di primo livello,
-   la cui linea era la più a sinistra della "scaletta" (serekkr 12/11/2026, "meno linee"). */
-#file-tree > div > .tree-folder-children::before { display: none; }
 /* No hover reaction. The guides used to brighten — both under the pointer and when the
    parent folder row was hovered — to show which folder you were about to enter; the
    folder row highlights itself anyway, and a line that lights up as the mouse crosses
