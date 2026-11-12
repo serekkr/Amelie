@@ -4347,9 +4347,9 @@ body.split-open .pane-flash::after {
      come #note-header (serekkr 13/11/2026, "farlo come la vista note, più spazio tra il nome
      del pdf e il toolbox"). */
   gap: 14px;
-  /* Padding ridotto sopra/sotto per RIALZARE il blocco (serekkr 13/11/2026, "alzalo un po'
-     più su"); lo spazio nome↔toolbar (gap 14) resta. */
-  padding: 6px 20px 8px; box-sizing: border-box;
+  /* Via di mezzo: 6px era troppo su, 11px troppo giù (serekkr 13/11/2026). Spazio
+     nome↔toolbar (gap 14) invariato. */
+  padding: 9px 20px 10px; box-sizing: border-box;
   border-bottom: 1px solid var(--border);
   background: var(--bg-1); flex-shrink: 0;
   -webkit-app-region: no-drag;
