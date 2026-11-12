@@ -981,20 +981,13 @@ html.is-mac #titlebar { padding-left: 72px; }
   border-bottom: var(--tree-guide-w) solid color-mix(in srgb, var(--text-0) 26%, transparent);
   border-bottom-left-radius: 8px;
   pointer-events: none;
-  transition: border-color .12s;
 }
 /* Meno linee, come Obsidian: niente guida per il livello PIÙ ESTERNO (i figli diretti
    di una cartella top-level). Il wrap di ogni cartella è un <div> senza classe:
    #file-tree > div > .tree-folder-children è quindi SOLO il contenitore di primo livello. */
 #file-tree > div > .tree-folder-children::before { display: none; }
-/* Hover: passando su una nota/cartella, la linea-guida+curva del suo gruppo si SCHIARISCE
-   (grigio 26% → 55%), così si vede a quale gruppo appartiene (serekkr 12/11/2026, "highlight
-   anche il gruppo, quella con la curva"). L'hover sale ai contenitori antenati, quindi su un
-   albero profondo si illuminano anche i gruppi superiori (traccia il percorso). */
-.tree-folder-children:hover::before {
-  border-left-color: color-mix(in srgb, var(--text-0) 55%, transparent);
-  border-bottom-color: color-mix(in srgb, var(--text-0) 55%, transparent);
-}
+/* Niente reazione in hover sulla guida/curva (serekkr 12/11/2026, "non ha senso l'highlight
+   della curva, levalo"): resta una hairline quieta. */
 
 /* Uniform mode (Settings → guides off): no vertical guide lines — a clean, flat indent
    per nesting level. Same 14px step as the guided mode above, and for the same reason;
