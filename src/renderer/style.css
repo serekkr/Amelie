@@ -974,10 +974,13 @@ html.is-mac #titlebar { padding-left: 72px; }
    e curva sono lo stesso tratto, senza doppioni. Si ferma ~11px dal fondo = centro
    dell'ultima riga. Grigio 26%. */
 .tree-folder-children::before {
-  content: ''; position: absolute; left: 8px; top: 0; bottom: 11px; width: 14px;
+  /* width 24 → braccio orizzontale lungo (~15px dopo la curva) che si avvicina alla
+     scritta: prima era corto e l'arco sembrava "un hook da pirata" (serekkr 12/11/2026).
+     Raggio 9 per una curva più morbida. */
+  content: ''; position: absolute; left: 8px; top: 0; bottom: 11px; width: 24px;
   border-left: var(--tree-guide-w) solid color-mix(in srgb, var(--text-0) 26%, transparent);
   border-bottom: var(--tree-guide-w) solid color-mix(in srgb, var(--text-0) 26%, transparent);
-  border-bottom-left-radius: 8px;
+  border-bottom-left-radius: 9px;
   pointer-events: none;
 }
 /* Meno linee, come Obsidian: niente guida per il livello PIÙ ESTERNO (i figli diretti
