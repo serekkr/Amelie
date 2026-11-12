@@ -967,17 +967,27 @@ html.is-mac #titlebar { padding-left: 72px; }
    faint white differs from both without belonging to either. Mixed from the theme's
    text rather than written as `rgba(255,255,255,…)`, so on Light Paper the same rule
    gives a faint DARK line instead of white on white. */
+/* Linea-guida verticale + GANCIO "╰" in fondo (serekkr 12/11/2026, "una curva in fondo
+   come la striscia che ho disegnato"): la linea scende dall'alto fino al centro
+   dell'ultima riga (~13px dal fondo, riga ≈ 26px) dove ::after disegna una curva
+   arrotondata che punta verso l'ultimo file. Grigio tenue 16%. */
 .tree-folder-children::before {
-  /* Barra d'accento verticale (serekkr 12/11/2026, "una barra per capire quali sono i
-     file della cartella"): abbraccia i file/sottocartelle di una cartella APERTA sul
-     lato sinistro, così si vede il gruppo. Sostituisce la vecchia hairline grigia.
-     2px in colore accento a opacità media — visibile ma non sgargiante — con angoli
-     morbidi. Vale per OGNI livello, top-level incluso (prima la top-level era tolta). */
-  content: ''; position: absolute; left: 8px; top: 1px; bottom: 1px; width: 2px;
-  background: color-mix(in srgb, var(--accent) 42%, transparent);
-  border-radius: 1px;
+  content: ''; position: absolute; left: 8px; top: 0; bottom: 13px; width: var(--tree-guide-w);
+  background: color-mix(in srgb, var(--text-0) 16%, transparent);
   pointer-events: none;
 }
+.tree-folder-children::after {
+  content: ''; position: absolute; left: 8px; bottom: 13px; width: 9px; height: 9px;
+  border-left: var(--tree-guide-w) solid color-mix(in srgb, var(--text-0) 16%, transparent);
+  border-bottom: var(--tree-guide-w) solid color-mix(in srgb, var(--text-0) 16%, transparent);
+  border-bottom-left-radius: 7px;
+  pointer-events: none;
+}
+/* Meno linee, come Obsidian: niente guida/gancio per il livello PIÙ ESTERNO (i figli
+   diretti di una cartella top-level). Il wrap di ogni cartella è un <div> senza classe:
+   #file-tree > div > .tree-folder-children è quindi SOLO il contenitore di primo livello. */
+#file-tree > div > .tree-folder-children::before,
+#file-tree > div > .tree-folder-children::after { display: none; }
 /* No hover reaction. The guides used to brighten — both under the pointer and when the
    parent folder row was hovered — to show which folder you were about to enter; the
    folder row highlights itself anyway, and a line that lights up as the mouse crosses
