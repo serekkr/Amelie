@@ -2094,7 +2094,11 @@
       <div id="confirm-modal-msg" style="font-family:var(--ui-font);font-size:15px;color:var(--text-0);line-height:1.5"></div>
       <div style="display:flex;justify-content:flex-end;gap:8px">
         <button id="confirm-modal-cancel" data-i18n="common.cancel" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-2);font-family:var(--ui-font);font-size:14px;padding:7px 16px;cursor:pointer">Annulla</button>
-        <button id="confirm-modal-ok" data-i18n="common.confirm" style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-family:var(--ui-font);font-size:14px;padding:7px 20px;cursor:pointer">Conferma</button>
+        <!-- Conferma NEUTRA, non verde (serekkr 12/11/2026, "il confirm non si deve vedere
+             verde, stessa colore"): su un dialogo di conferma (spesso distruttivo, es. Clear
+             config) il verde = "vai/ok" fuorviante. Stessa palette di Annulla; solo il testo
+             un filo più chiaro (text-0) per distinguere il pulsante primario. -->
+        <button id="confirm-modal-ok" data-i18n="common.confirm" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-0);font-family:var(--ui-font);font-size:14px;padding:7px 20px;cursor:pointer">Conferma</button>
       </div>
     </div>
   </div>
