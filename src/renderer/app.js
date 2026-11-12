@@ -14843,6 +14843,15 @@ function setupSync() {
     if (data.op === 'backup') {
       const justSaved = (data.status === 'ok') ? (data.target || 'all') : null;
       updateBackupDestLines(data, justSaved);
+      // Un backup AUTOMATICO che fallisce deve VEDERSI, non solo finire (coalescato) nella
+      // campanella (serekkr 12/11/2026, "non scrive nel notification che fallisce, deve
+      // scriverlo"). Il backup è giornaliero, quindi al massimo un toast per slot fallito —
+      // niente spam. I run manuali mostrano già il loro messaggio. Mostro anche l'errore,
+      // così si capisce PERCHÉ (es. upload archivio fallito, cartella usata dalla sync…).
+      if (data.status === 'error' && !data.manual) {
+        const base = window.i18n.t('notif.backup_failed');
+        showToast('✗ ' + base + (data.error ? ': ' + data.error : ''), 8000);
+      }
     }
     logSyncEventNotif(data);
   });

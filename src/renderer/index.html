@@ -979,18 +979,19 @@
               <!-- Test connection on the LEFT with its result message right UNDER it (success
                    or fail), Clear config on the right. Before, the message sat at the far
                    bottom-right and ran off the edge (serekkr, 11/11/2026). -->
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
-                <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0">
-                  <div style="display:flex;gap:8px;flex-wrap:wrap">
-                    <!-- WebDAV: its own test button. Samba: a trigger that runs the existing test (the
-                         status lights stay in the VPN card so the import wizard isn't disturbed). Each is
-                         shown only for its kind (applyRemoteUiVisibility). -->
-                    <button class="btn-test" id="btn-test-webdav" data-i18n="sync.test_connection_btn" style="display:none">Testa connessione</button>
-                    <button class="btn-test" id="btn-sb-test-bottom" data-i18n="sync.test_connection_btn" style="display:none">Testa connessione</button>
-                  </div>
-                  <div id="webdav-test-result" class="test-result" style="text-align:left;max-width:520px"></div>
+              <!-- Test connection + Clear config affiancati (gap 8px), non più ai due estremi
+                   con space-between (serekkr 12/11/2026, "troppo distanti, vicini come nelle altre
+                   sezioni"). Il risultato del test resta SOTTO i pulsanti. -->
+              <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                  <!-- WebDAV: its own test button. Samba: a trigger that runs the existing test (the
+                       status lights stay in the VPN card so the import wizard isn't disturbed). Each is
+                       shown only for its kind (applyRemoteUiVisibility). -->
+                  <button class="btn-test" id="btn-test-webdav" data-i18n="sync.test_connection_btn" style="display:none">Testa connessione</button>
+                  <button class="btn-test" id="btn-sb-test-bottom" data-i18n="sync.test_connection_btn" style="display:none">Testa connessione</button>
+                  <button class="btn-test" id="btn-clear-remote" data-i18n="sync.clear_config">Cancella configurazione</button>
                 </div>
-                <button class="btn-test" id="btn-clear-remote" data-i18n="sync.clear_config">Cancella configurazione</button>
+                <div id="webdav-test-result" class="test-result" style="text-align:left;max-width:520px"></div>
               </div>
             </div>
 
