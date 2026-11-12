@@ -14135,6 +14135,12 @@ function syncRemoteTogglesFromKind(kind) {
 
 function applyRemoteUiVisibility() {
   const kind = currentRemoteKind();
+  // Pulisci i messaggi transitori d'esito (backup manuale / test connessione): sono legati
+  // alla destinazione su cui li hai lanciati e NON devono restare visibili passando a
+  // un'altra (serekkr 12/11/2026, "il 'Manual backup successful' lo vedo anche in Samba/Local").
+  ['backup-now-top-result', 'webdav-test-result'].forEach(id => {
+    const el = $(id); if (el) { el.textContent = ''; el.style.display = 'none'; }
+  });
   const local = kind === 'local';
   const vpn = kind === 'samba' && remoteHasVpn();
   try { updateDestinationActiveIcons(); } catch (_) {}
