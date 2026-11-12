@@ -974,18 +974,30 @@ html.is-mac #titlebar { padding-left: 72px; }
    e curva sono lo stesso tratto, senza doppioni. Si ferma ~11px dal fondo = centro
    dell'ultima riga. Grigio 26%. */
 .tree-folder-children::before {
-  /* width 18 → braccio medio (~10px dopo la curva): 24 era troppo lungo, 14 troppo corto
-     (sembrava un hook da pirata). Raggio 8 (serekkr 12/11/2026, "più corto + sistema la curva"). */
-  content: ''; position: absolute; left: 8px; top: 0; bottom: 11px; width: 18px;
+  /* width 16 → braccio corto, lascia spazio alla freccia in punta (vedi ::after).
+     Raggio 8 (serekkr 12/11/2026). */
+  content: ''; position: absolute; left: 8px; top: 0; bottom: 11px; width: 16px;
   border-left: var(--tree-guide-w) solid color-mix(in srgb, var(--text-0) 26%, transparent);
   border-bottom: var(--tree-guide-w) solid color-mix(in srgb, var(--text-0) 26%, transparent);
   border-bottom-left-radius: 8px;
   pointer-events: none;
 }
-/* Meno linee, come Obsidian: niente guida per il livello PIÙ ESTERNO (i figli diretti
-   di una cartella top-level). Il wrap di ogni cartella è un <div> senza classe:
+/* Piccola freccia "›" in punta alla curva, che punta verso la nota (serekkr 12/11/2026,
+   "metti una freccia piccola prima della scritta che punta verso la nota"). Un quadratino
+   con solo bordo-alto + bordo-destro, ruotato 45° = chevron verso destra, centrato sulla
+   riga del braccio (bottom 11px + translateY 50%). */
+.tree-folder-children::after {
+  content: ''; position: absolute; left: 22px; bottom: 11px; width: 4px; height: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--text-0) 34%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--text-0) 34%, transparent);
+  transform: translateY(50%) rotate(45deg);
+  pointer-events: none;
+}
+/* Meno linee, come Obsidian: niente guida/freccia per il livello PIÙ ESTERNO (i figli
+   diretti di una cartella top-level). Il wrap di ogni cartella è un <div> senza classe:
    #file-tree > div > .tree-folder-children è quindi SOLO il contenitore di primo livello. */
-#file-tree > div > .tree-folder-children::before { display: none; }
+#file-tree > div > .tree-folder-children::before,
+#file-tree > div > .tree-folder-children::after { display: none; }
 /* No hover reaction. The guides used to brighten — both under the pointer and when the
    parent folder row was hovered — to show which folder you were about to enter; the
    folder row highlights itself anyway, and a line that lights up as the mouse crosses
