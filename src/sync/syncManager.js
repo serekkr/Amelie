@@ -2085,10 +2085,11 @@ class SyncManager {
    * dopo aver ripulito la sessione, così il chiamante ripiega sul PUT singolo.
    * @param {string} localFile  percorso del file locale da caricare
    * @param {string} finalRelPath  percorso di destinazione RELATIVO alla base …/files/<user>
+   * @param {{url:string,username:string,password:*}} wcfg  config WebDAV (backup o two-way)
    * @returns {Promise<boolean>}
    */
-  async _webdavChunkedUpload(localFile, finalRelPath) {
-    const cfg = this.config.sync.webdav;
+  async _webdavChunkedUpload(localFile, finalRelPath, wcfg) {
+    const cfg = wcfg || this.config.sync.webdav;
     const filesBase = SyncManager._webdavBaseUrl(cfg.url, cfg.username);  // …/remote.php/dav/files/<user>
     // Solo Nextcloud/ownCloud hanno l'endpoint /uploads. Altri WebDAV → PUT singolo.
     if (!/\/remote\.php\/dav\/files\//i.test(filesBase)) return false;
@@ -2162,7 +2163,7 @@ class SyncManager {
     // sul PUT singolo (così non peggioro i server dove già andava).
     let chunked = false;
     try {
-      chunked = await this._webdavChunkedUpload(file, remote.replace(/^\/+/, ''));
+      chunked = await this._webdavChunkedUpload(file, remote.replace(/^\/+/, ''), this.config.sync.webdav);
     } catch (e) {
       console.warn('[WebDAV] chunked upload failed, falling back to single PUT:', e.message);
       chunked = false;
@@ -3023,6 +3024,20 @@ class SyncManager {
         const abs = absOf(rel);
         const dir = rel.split('/').slice(0, -1).join('/');
         if (dir && !dirsDone.has(base + '/' + dir)) await ensureDirs([base + '/' + dir]);
+        // File grandi (es. PDF/video allegati) → upload a CHUNK, come il backup: un allegato
+        // oltre il limite del server (client_max_body_size / timeout) altrimenti fallisce il
+        // suo singolo PUT (serekkr 12/11/2026, "se ho pdf grandi"). Le note piccole restano
+        // al PUT singolo (niente overhead di 3 richieste per un file da pochi KB).
+        let big = false;
+        try { big = fs.statSync(abs).size > 10 * 1024 * 1024; } catch (_) {}
+        if (big) {
+          try {
+            const ok = await this._webdavChunkedUpload(abs, (base + '/' + rel).replace(/^\/+/, ''), wcfg);
+            if (ok) return true;   // caricato a chunk; se false (non Nextcloud) cade al PUT singolo
+          } catch (e) {
+            console.warn('[Two-way WebDAV] chunked upload failed, single PUT:', rel, e.message);
+          }
+        }
         await client.putFileContents(remoteOf(rel), fs.readFileSync(abs), { overwrite: true });
         return true;
       } catch (e) { console.warn('[Two-way WebDAV] upload failed', rel, e.message); return false; }
