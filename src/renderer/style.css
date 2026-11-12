@@ -4245,7 +4245,11 @@ body.split-open .pane-flash::after {
 }
 #img-view-header {
   display: flex; align-items: center; gap: 12px;
-  padding: 0 16px; height: 44px; box-sizing: border-box;
+  /* 50px (not 44): aligns this toolbar's vertical centre (25px) with the note
+     header's first row — #note-header has 10px top padding over a 30px button row,
+     so its icons centre at 25px too. Keeps the three viewers level with the notes
+     (serekkr, 11/11/2026 — "la bara di opzioni allo stesso livello come nelle note"). */
+  padding: 0 16px; height: 50px; box-sizing: border-box;
   border-bottom: 1px solid var(--border);
   background: var(--bg-1); flex-shrink: 0; -webkit-app-region: no-drag;
 }
@@ -4293,7 +4297,8 @@ body.split-open .pane-flash::after {
 }
 #media-view-header {
   display: flex; align-items: center; gap: 12px;
-  padding: 0 16px; height: 44px; box-sizing: border-box;
+  /* 50px: same reason as #img-view-header — centre at 25px, level with the note toolbar. */
+  padding: 0 16px; height: 50px; box-sizing: border-box;
   border-bottom: 1px solid var(--border);
   background: var(--bg-1); flex-shrink: 0; -webkit-app-region: no-drag;
 }
@@ -4315,7 +4320,8 @@ body.split-open .pane-flash::after {
 }
 #pdf-header {
   display: flex; align-items: center; gap: 12px;
-  padding: 0 16px; height: 44px; box-sizing: border-box;
+  /* 50px: same reason as #img-view-header — centre at 25px, level with the note toolbar. */
+  padding: 0 16px; height: 50px; box-sizing: border-box;
   border-bottom: 1px solid var(--border);
   background: var(--bg-1); flex-shrink: 0;
   -webkit-app-region: no-drag;
