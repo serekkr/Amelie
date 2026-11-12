@@ -4275,6 +4275,7 @@ body.split-open .pane-flash::after {
 #img-view-title {
   font-family: var(--ui-font); font-weight: 500;
   font-size: var(--title-font-size); color: var(--text-0); flex: 1;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 #img-view-tools { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 #img-zoom-label { font-size: 13px; color: var(--text-1); min-width: 42px; text-align: center; }
@@ -4324,7 +4325,7 @@ body.split-open .pane-flash::after {
 #media-view-title {
   font-family: var(--ui-font); font-weight: 500;
   font-size: var(--title-font-size); color: var(--text-0); flex: 1;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 #media-view-embed {
   flex: 1; width: 100%; overflow: auto; background: #1a1a1a;
@@ -4348,6 +4349,11 @@ body.split-open .pane-flash::after {
 #pdf-title {
   font-family: var(--ui-font); font-weight: 400;
   font-size: var(--title-font-size); color: var(--text-0); flex: 1;
+  /* Il titolo si TRONCA con "…" e non ruba spazio alla toolbar: senza min-width:0 un nome
+     lungo (fino a 60 char) spingeva i pulsanti fuori a destra (serekkr 13/11/2026,
+     "si perdono pulsanti dal pdf sulla destra"). La toolbar è flex-shrink:0, quindi i
+     pulsanti restano sempre; a restringersi è il titolo. */
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 #pdf-tools { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .pdf-tool-btn {
