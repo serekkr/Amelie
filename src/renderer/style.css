@@ -2254,6 +2254,10 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 /* Settings gear: was too faint against the titlebar. No border — just the
    brightest text colour (white in dark themes) so it stands out clearly. */
 #btn-settings { color: var(--text-0); }
+/* Settings (⚙): hover solo sull'icona (accento), niente quadrato — come il "+" accanto
+   (serekkr 12/11/2026). Più specifico di .icon-btn:hover, così batte il suo sfondo; i
+   pulsanti ✕ dei modali (anch'essi .icon-btn) restano col loro hover. */
+#btn-settings:hover { color: var(--accent); background: transparent; }
 
 /* ─── Modal ─────────────────────────────────────────────────── */
 .modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
@@ -3239,7 +3243,9 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   -webkit-app-region: no-drag;
 }
 #tab-new-btn svg { width: 17px; height: 17px; }
-#tab-new-btn:hover { color: var(--text-0); background: var(--bg-3); }
+/* Hover: solo l'icona si colora (accento), niente quadrato di sfondo — il box era brutto
+   (serekkr 12/11/2026, "highlight solo l'icona senza il quadrato"). */
+#tab-new-btn:hover { color: var(--accent); background: transparent; }
 
 /* Focus / reading mode toggle (left of the tabs) */
 #btn-focus-mode {
