@@ -2954,9 +2954,10 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 /* ENABLED destination (backup or sync on): not a full green fill (serekkr, 29/10/2026 —
    "non mi piace riempiti di verde") but a glowing green dot badge in the corner. The
    button stays dark; the accent BORDER still marks the one being viewed (.active). */
-.vpn-type-btn.dest-active, .vpn-type-btn.dest-active:hover {
-  background: var(--bg-3); color: var(--text-0);
-}
+.vpn-type-btn.dest-active { background: var(--bg-3); color: var(--text-0); }
+/* L'hover cambia colore anche sui pulsanti ABILITATI (prima era bloccato a bg-3 e non
+   reagiva — serekkr 12/11/2026, "in hover queste icone non cambiano colore come le altre"). */
+.vpn-type-btn.dest-active:hover { background: var(--bg-4); color: var(--text-0); }
 /* Status dot on the destination buttons only: dim grey = OFF, glowing green = active
    (serekkr, 29/10/2026). Scoped to #remote-kind-seg[data-remote] so the transport
    pills (WireGuard/OpenVPN) and the Restore button don't get one. */
