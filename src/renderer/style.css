@@ -4347,9 +4347,10 @@ body.split-open .pane-flash::after {
      come #note-header (serekkr 13/11/2026, "farlo come la vista note, più spazio tra il nome
      del pdf e il toolbox"). */
   gap: 14px;
-  /* Via di mezzo: 6px era troppo su, 11px troppo giù (serekkr 13/11/2026). Spazio
-     nome↔toolbar (gap 14) invariato. */
-  padding: 9px 20px 10px; box-sizing: border-box;
+  /* Padding-top 10px come #note-header, così la PRIMA riga (il titolo) cade allo STESSO
+     livello del breadcrumb delle note e non "salta" cambiando tab (serekkr 13/11/2026,
+     "nelle note la riga è perfetta tra tutte"). */
+  padding: 10px 20px 10px; box-sizing: border-box;
   border-bottom: 1px solid var(--border);
   background: var(--bg-1); flex-shrink: 0;
   -webkit-app-region: no-drag;
@@ -4358,6 +4359,10 @@ body.split-open .pane-flash::after {
   font-family: var(--ui-font); font-weight: 400;
   font-size: var(--title-font-size); color: var(--text-0);
   flex: 0 0 auto;   /* riga a sé, niente crescita verticale */
+  /* line-height 30px = altezza della riga del breadcrumb nota (#note-header-top, i pulsanti
+     da 30px): il testo si centra in 30px e, con i 10px di padding-top sopra, il centro cade
+     a 25px come nelle note (serekkr 13/11/2026). */
+  line-height: 30px;
   /* Troncamento con "…": un nome lungo (fino a 60 char) si taglia invece di allargare la riga. */
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
