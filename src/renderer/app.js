@@ -8286,7 +8286,11 @@ function _exportPreviewSrcdoc(opts, ctx) {
   const bg      = isDark ? '#1a1b1e' : '#ffffff';
   const themeCss = isDark ? PDF_PRINT_CSS_DARK : '';
   const layout = `html,body{margin:0}body{font-size:${fontPx}px;font-family:${ctx.viewFontFamily};line-height:${ctx.viewLineHeight};padding:${padPx}px;}`
-    + `.amelie-pdf{max-width:${ctx.viewColW}px;margin:0 auto;}`;
+    + `.amelie-pdf{max-width:${ctx.viewColW}px;margin:0 auto;}`
+    // Il preview è solo da guardare: niente selezione testo né trascinamento di elementi
+    // fuori dall'iframe (serekkr 12/11/2026, "non devo poter selezionare e fare drag dal
+    // preview"). Lo scroll/zoom restano perché non dipendono dalla selezione.
+    + `*{-webkit-user-select:none!important;user-select:none!important;-webkit-user-drag:none!important;}img,svg{pointer-events:none;}`;
   // A note longer than one page would otherwise bleed straight to the bottom edge of the
   // preview and look "cut" (serekkr 11/11/2026). The real PDF breaks the page here, so
   // mask the bottom-margin strip with the page colour — page 1 then ends with a clean
