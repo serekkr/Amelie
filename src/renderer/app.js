@@ -2013,6 +2013,9 @@ const UPDATE_RETRY_MS     = 60 * 1000;
 const UPDATE_MAX_RETRIES  = 5;
 /** True while the sync engine is mid-pass — see the sync:statusUpdate listener. */
 let _syncEngineBusy = false;
+// Ultimo esito ('ok'|'error') di un pass AUTOMATICO per operazione ('backup'|'twoway'),
+// per avvisare con un toast SOLO al cambio di stato (serekkr 12/11/2026).
+let _lastAutoOutcome = {};
 
 function updateCheckEnabled() {
   try { return localStorage.getItem('inkwell-update-check') !== 'off'; } catch (_) { return true; }
@@ -14843,15 +14846,23 @@ function setupSync() {
     if (data.op === 'backup') {
       const justSaved = (data.status === 'ok') ? (data.target || 'all') : null;
       updateBackupDestLines(data, justSaved);
-      // Un backup AUTOMATICO che fallisce deve VEDERSI, non solo finire (coalescato) nella
-      // campanella (serekkr 12/11/2026, "non scrive nel notification che fallisce, deve
-      // scriverlo"). Il backup è giornaliero, quindi al massimo un toast per slot fallito —
-      // niente spam. I run manuali mostrano già il loro messaggio. Mostro anche l'errore,
-      // così si capisce PERCHÉ (es. upload archivio fallito, cartella usata dalla sync…).
-      if (data.status === 'error' && !data.manual) {
-        const base = window.i18n.t('notif.backup_failed');
-        showToast('✗ ' + base + (data.error ? ': ' + data.error : ''), 8000);
+    }
+    // Esito VISIBILE dei pass AUTOMATICI, sia backup che sync (serekkr 12/11/2026, "deve
+    // dire se sono andati bene o falliti sia per backup che per sync"). Un toast SOLO al
+    // cambio di stato: così un fallimento si vede subito (con l'errore, per capire PERCHÉ),
+    // non si ripete a ogni pass se continua a fallire, e quando torna a posto avvisa "✓".
+    // I run manuali mostrano già il proprio messaggio, quindi qui solo gli automatici.
+    if (!data.manual && (data.op === 'backup' || data.op === 'twoway') &&
+        (data.status === 'ok' || data.status === 'error')) {
+      const prev = _lastAutoOutcome[data.op];
+      if (data.status === 'error' && prev !== 'error') {
+        const failKey = data.op === 'backup' ? 'notif.backup_failed' : 'notif.twoway_failed';
+        showToast('✗ ' + window.i18n.t(failKey) + (data.error ? ': ' + data.error : ''), 8000);
+      } else if (data.status === 'ok' && prev === 'error') {
+        const okKey = data.op === 'backup' ? 'notif.backup_auto' : 'notif.twoway_auto';
+        showToast('✓ ' + window.i18n.t(okKey), 4000);
       }
+      _lastAutoOutcome[data.op] = data.status;
     }
     logSyncEventNotif(data);
   });
