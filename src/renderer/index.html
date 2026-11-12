@@ -2093,11 +2093,11 @@
     <div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:22px 24px 18px;width:340px;display:flex;flex-direction:column;gap:16px;box-shadow:0 8px 32px rgba(0,0,0,.5)">
       <div id="confirm-modal-msg" style="font-family:var(--ui-font);font-size:15px;color:var(--text-0);line-height:1.5"></div>
       <div style="display:flex;justify-content:flex-end;gap:8px">
-        <button id="confirm-modal-cancel" data-i18n="common.cancel" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-2);font-family:var(--ui-font);font-size:14px;padding:7px 16px;cursor:pointer">Annulla</button>
-        <!-- Conferma: STESSO colore di Annulla (serekkr 12/11/2026, "il colore di cancel e
-             confirm deve essere uguale") — niente verde, stesso text-2. Si distinguono solo
-             per la scritta (Annulla / Conferma) e il focus. -->
-        <button id="confirm-modal-ok" data-i18n="common.confirm" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-2);font-family:var(--ui-font);font-size:14px;padding:7px 20px;cursor:pointer">Conferma</button>
+        <button id="confirm-modal-cancel" data-i18n="common.cancel" style="background:var(--bg-4);border:1px solid var(--border);border-radius:6px;color:var(--text-0);font-family:var(--ui-font);font-size:14px;padding:7px 16px;cursor:pointer">Annulla</button>
+        <!-- Conferma e Annulla IDENTICI, come i pulsanti .btn-test (Test connection / Clear
+             config): sfondo --bg-4, testo --text-0, e in hover scuriscono a --bg-3 (serekkr
+             12/11/2026, "fai l'hover come su test connection / clear config"). Niente verde. -->
+        <button id="confirm-modal-ok" data-i18n="common.confirm" style="background:var(--bg-4);border:1px solid var(--border);border-radius:6px;color:var(--text-0);font-family:var(--ui-font);font-size:14px;padding:7px 20px;cursor:pointer">Conferma</button>
       </div>
     </div>
   </div>
