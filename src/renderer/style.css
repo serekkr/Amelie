@@ -4342,8 +4342,12 @@ body.split-open .pane-flash::after {
    per metterli bene con gli spazi"): titolo sopra, toolbar sotto a tutta larghezza — così
    i pulsanti hanno tutto lo spazio e un nome lungo non li spinge mai fuori. */
 #pdf-header {
-  display: flex; flex-direction: column; gap: 6px;
-  padding: 8px 16px 10px; box-sizing: border-box;
+  display: flex; flex-direction: column;
+  /* Come la vista nota: più aria tra il nome e la toolbar (gap 14) e margini laterali 20px
+     come #note-header (serekkr 13/11/2026, "farlo come la vista note, più spazio tra il nome
+     del pdf e il toolbox"). */
+  gap: 14px;
+  padding: 11px 20px 12px; box-sizing: border-box;
   border-bottom: 1px solid var(--border);
   background: var(--bg-1); flex-shrink: 0;
   -webkit-app-region: no-drag;
