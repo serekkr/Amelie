@@ -2072,6 +2072,80 @@ class SyncManager {
   }
 
   // Upload a vault .tar.gz to WebDAV
+  /**
+   * Carica un file su WebDAV a BLOCCHI (chunked), usando il protocollo di chunking di
+   * Nextcloud/ownCloud, così un archivio grande non finisce in un unico PUT (che il server
+   * può rifiutare con 413 per client_max_body_size, o far scadere per timeout).
+   *   1. MKCOL  …/remote.php/dav/uploads/<user>/<transfer-id>          (apre la sessione)
+   *   2. PUT    …/uploads/<user>/<transfer-id>/<offset>               (un chunk da 10 MB)
+   *   3. MOVE   …/uploads/<user>/<transfer-id>/.file → …/files/<user>/<dest>  (assembla)
+   * I chunk sono nominati con l'offset di byte, zero-padded a 16 cifre, così il server li
+   * concatena nell'ordine giusto. Ritorna true se ha caricato via chunk, false se il server
+   * NON è Nextcloud (il chiamante fa allora il PUT singolo). Su errore di protocollo lancia,
+   * dopo aver ripulito la sessione, così il chiamante ripiega sul PUT singolo.
+   * @param {string} localFile  percorso del file locale da caricare
+   * @param {string} finalRelPath  percorso di destinazione RELATIVO alla base …/files/<user>
+   * @returns {Promise<boolean>}
+   */
+  async _webdavChunkedUpload(localFile, finalRelPath) {
+    const cfg = this.config.sync.webdav;
+    const filesBase = SyncManager._webdavBaseUrl(cfg.url, cfg.username);  // …/remote.php/dav/files/<user>
+    // Solo Nextcloud/ownCloud hanno l'endpoint /uploads. Altri WebDAV → PUT singolo.
+    if (!/\/remote\.php\/dav\/files\//i.test(filesBase)) return false;
+    const uploadsBase = filesBase.replace(/\/remote\.php\/dav\/files\//i, '/remote.php/dav/uploads/');
+    const transfer   = `amelie-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const sessionUrl = `${uploadsBase}/${transfer}`;
+    const finalUrl   = `${filesBase}/${finalRelPath.split('/').filter(Boolean).map(encodeURIComponent).join('/')}`;
+    const auth = 'Basic ' + Buffer.from(`${cfg.username || ''}:${this._decSecret(cfg.password) || ''}`).toString('base64');
+    const CHUNK = 10 * 1024 * 1024;   // 10 MB: default del client Nextcloud, sotto ogni limite tipico
+    const size  = fs.statSync(localFile).size;
+
+    const req = (method, url, extraHeaders = {}, body = null) => new Promise((resolve, reject) => {
+      let U; try { U = new URL(url); } catch (e) { return reject(e); }
+      const mod = U.protocol === 'http:' ? require('http') : require('https');
+      const r = mod.request({
+        method, hostname: U.hostname, port: U.port || (U.protocol === 'http:' ? 80 : 443),
+        path: U.pathname + U.search,
+        headers: { Authorization: auth, 'User-Agent': 'Amelie', ...extraHeaders },
+      }, res => {
+        const bufs = []; res.on('data', d => bufs.push(d));
+        res.on('end', () => {
+          const sc = res.statusCode || 0;
+          if (sc >= 200 && sc < 300) resolve({ statusCode: sc, body: Buffer.concat(bufs).toString() });
+          else reject(new Error(`${method} ${U.pathname} → HTTP ${sc}`));
+        });
+      });
+      r.on('error', reject);
+      if (body) r.end(body); else r.end();
+    });
+
+    await req('MKCOL', sessionUrl);
+    try {
+      const fd = fs.openSync(localFile, 'r');
+      try {
+        const buf = Buffer.allocUnsafe(CHUNK);
+        let offset = 0;
+        while (offset < size) {
+          const n = fs.readSync(fd, buf, 0, CHUNK, offset);
+          if (n <= 0) break;
+          const name = String(offset).padStart(16, '0');
+          await req('PUT', `${sessionUrl}/${name}`,
+            { 'Content-Type': 'application/octet-stream', 'Content-Length': String(n) },
+            buf.subarray(0, n));
+          offset += n;
+        }
+      } finally { fs.closeSync(fd); }
+      // Assembla i chunk e sposta il file completo nella destinazione finale.
+      await req('MOVE', `${sessionUrl}/.file`,
+        { Destination: finalUrl, Overwrite: 'T', 'OC-Total-Length': String(size) });
+    } catch (e) {
+      try { await req('DELETE', sessionUrl); } catch (_) { /* best-effort cleanup */ }
+      throw e;
+    }
+    console.log('[WebDAV] Archive uploaded in chunks:', finalRelPath, `(${Math.round(size / 1048576)} MB)`);
+    return true;
+  }
+
   async _archiveToWebDAV() {
     const tmpDir = path.join(os.homedir(), '.local', 'share', 'amelie', 'tmp');
     const file = await this.createArchive(tmpDir);
@@ -2081,7 +2155,21 @@ class SyncManager {
     if (await this._webdavHasFile(this.webdavClient, remoteDir, SyncManager._MARK_SYNC))
       throw new Error('Backup: questa cartella WebDAV è usata per la SYNC — elimina il file ".amelie-sync" per usarla come backup.');
     const remote = `${remoteDir}/${path.basename(file)}`;
-    await this.webdavClient.putFileContents(remote, fs.readFileSync(file), { overwrite: true });
+    // Archivio grande (es. 84 MB): un singolo PUT sbatte contro i limiti del server
+    // (nginx client_max_body_size → 413, o timeout del proxy) mentre il test e la sync
+    // per-file passano (serekkr 12/11/2026). Carico a CHUNK da 10 MB con il protocollo
+    // di chunking nativo di Nextcloud; se non è Nextcloud o il chunking fallisce, ripiego
+    // sul PUT singolo (così non peggioro i server dove già andava).
+    let chunked = false;
+    try {
+      chunked = await this._webdavChunkedUpload(file, remote.replace(/^\/+/, ''));
+    } catch (e) {
+      console.warn('[WebDAV] chunked upload failed, falling back to single PUT:', e.message);
+      chunked = false;
+    }
+    if (!chunked) {
+      await this.webdavClient.putFileContents(remote, fs.readFileSync(file), { overwrite: true });
+    }
     try { fs.unlinkSync(file); } catch (_) {}
     try { await this._webdavWriteFile(this.webdavClient, remoteDir, SyncManager._MARK_BACKUP); } catch (_) {}
     // Rotate old archives: keep only the newest `keepLast` .tar.gz. This was
