@@ -973,15 +973,18 @@ html.is-mac #titlebar { padding-left: 72px; }
    arrotondata che punta verso l'ultimo file. Grigio tenue 16%. */
 .tree-folder-children::before {
   content: ''; position: absolute; left: 8px; top: 0; bottom: 11px; width: var(--tree-guide-w);
-  background: color-mix(in srgb, var(--text-0) 16%, transparent);
+  /* 26%: la linea a 16% quasi non si vedeva, restava solo la curva (serekkr 12/11/2026,
+     "non si vede, solo la curva"). */
+  background: color-mix(in srgb, var(--text-0) 26%, transparent);
   pointer-events: none;
 }
 .tree-folder-children::after {
-  /* Curva più ampia (raggio 11, braccio più lungo) e più in basso, per agganciare bene
-     il centro dell'ultima riga (serekkr 12/11/2026, "farlo più curvo e correggi le linee"). */
-  content: ''; position: absolute; left: 8px; bottom: 11px; width: 13px; height: 13px;
-  border-left: var(--tree-guide-w) solid color-mix(in srgb, var(--text-0) 16%, transparent);
-  border-bottom: var(--tree-guide-w) solid color-mix(in srgb, var(--text-0) 16%, transparent);
+  /* Curva ampia (raggio 11) + braccio dritto più lungo verso la scritta: larghezza 20,
+     quindi 20-11 = ~9px di tratto orizzontale dopo la curva (serekkr 12/11/2026,
+     "più curvo" + "allarga la curva verso la scritta"). Opacità 26% come la linea. */
+  content: ''; position: absolute; left: 8px; bottom: 11px; width: 20px; height: 13px;
+  border-left: var(--tree-guide-w) solid color-mix(in srgb, var(--text-0) 26%, transparent);
+  border-bottom: var(--tree-guide-w) solid color-mix(in srgb, var(--text-0) 26%, transparent);
   border-bottom-left-radius: 11px;
   pointer-events: none;
 }
