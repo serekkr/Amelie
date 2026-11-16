@@ -72,6 +72,16 @@ function toggleViewMode() {
 const tabs = [];
 let activeTabIdx = -1;
 let _tabDragFrom = -1;   // index of the tab being dragged (reorder), -1 if none
+// Activation history (most-recently-active LAST), by tab object identity. Lets
+// closing the active tab return to the tab you were on BEFORE it — e.g. open a
+// PDF (new tab at the end), close it, land back on the note you were reading,
+// not on whatever note happens to sit in the vacated slot (which felt random).
+let _tabMRU = [];
+function _tabMRUTouch(tab) {
+  if (!tab) return;
+  _tabMRU = _tabMRU.filter(t => t !== tab && tabs.includes(t));
+  _tabMRU.push(tab);
+}
 
 function getTab(path) { return tabs.find(t => t.path === path); }
 function getActiveTab() { return tabs[activeTabIdx] ?? null; }
@@ -212,9 +222,15 @@ async function closeTab(idx, e) {
     editorContainer.style.display = 'none';
     emptyState.style.display = 'flex';
   } else if (wasActive) {
-    // Closed the ACTIVE tab → move to whichever note slid into its slot and load it.
-    const newIdx = Math.min(idx, tabs.length - 1);
-    switchTab(newIdx);
+    // Closed the ACTIVE tab → return to the tab that was active just BEFORE it
+    // (activation history), so closing a PDF/image you opened to glance at drops
+    // you back on the note you were reading — not on whatever note happens to
+    // slide into the vacated slot (which felt random). Fall back to the neighbour
+    // when there's no history (e.g. first navigation).
+    _tabMRU = _tabMRU.filter(t => t !== tab && tabs.includes(t));
+    const prev = _tabMRU.length ? _tabMRU[_tabMRU.length - 1] : null;
+    const newIdx = prev ? tabs.indexOf(prev) : Math.min(idx, tabs.length - 1);
+    switchTab(newIdx >= 0 ? newIdx : Math.min(idx, tabs.length - 1));
   } else {
     // Closed a BACKGROUND tab → the active note MUST stay active; only its array
     // index shifted. DATA-LOSS FIX: the old code reselected by slot index
@@ -274,6 +290,7 @@ async function switchTab(idx) {
   activeTabIdx = idx;
   const tab = tabs[idx];
   if (!tab) return;
+  _tabMRUTouch(tab);   // record this activation for close-returns-to-previous
 
   // Close the TOC/index when this navigation leaves the note it was built for —
   // a different note, or any special view (draw/pdf). A same-note
@@ -547,12 +564,29 @@ function renderTabBar() {
 
     const name = document.createElement('span');
     name.className = 'tab-name';
+    // Attachment/draw tabs drop the extension from the title and carry a type badge on the
+    // right (PDF, PNG, MP4, GIF, DRAW…), same logic as the tree (serekkr, 30/10/2026). The
+    // badge is a SIBLING of .tab-name so the name ellipsises and the badge stays visible.
+    let tabExt = '';
     if (tab.type === 'canvas') {
-      name.innerHTML = `<svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3.5a2.121 2.121 0 0 1 3 3L7 18l-4 1 1-4L15.5 3.5z"/><path d="M13 6l3 3"/></svg>${escHtml(tab.name || 'Draw')}.draw`;
+      name.innerHTML = `<svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3.5a2.121 2.121 0 0 1 3 3L7 18l-4 1 1-4L15.5 3.5z"/><path d="M13 6l3 3"/></svg>${escHtml(tab.name || 'Draw')}`;
+      tabExt = 'DRAW';
+    } else if (ATTACH_NODE_TYPES.has(tab.type)) {
+      const fname = tab.attachmentName || tab.name || '';
+      let ext = (fname.match(/\.([A-Za-z0-9]+)$/) || [, ''])[1];
+      if (!ext) ext = tab.type === 'pdf' ? 'pdf' : tab.type;
+      name.textContent = (tab.name || '').replace(/\.[A-Za-z0-9]+$/, '');
+      tabExt = ext.toUpperCase();
     } else {
       name.textContent = tab.name;
     }
     el.appendChild(name);
+    if (tabExt) {
+      const b = document.createElement('span');
+      b.className = 'tree-ext tab-ext';
+      b.textContent = tabExt;
+      el.appendChild(b);
+    }
 
     const close = document.createElement('button');
     close.className = 'tab-close';
@@ -938,8 +972,8 @@ function setupEditorToolbarToggle() {
   document.getElementById('cfg-editor-toolbar')?.addEventListener('change', e => applyEditorToolbar(e.target.checked));
 }
 
-// Make the preview checkboxes clickable and kept in sync with the markdown
-// (Obsidian style). marked generates them \`disabled\`: here we re-enable them, and on
+// Make the preview checkboxes clickable and kept in sync with the markdown.
+// marked generates them \`disabled\`: here we re-enable them, and on
 // each click we toggle \`- [ ]\` ↔ \`- [x]\` in the source note.
 function enhanceCheckboxes() {
   const boxes = previewContent.querySelectorAll('input[type="checkbox"]');
@@ -952,6 +986,20 @@ function enhanceCheckboxes() {
       if (li) li.classList.toggle('done', box.checked);
       toggleCheckboxInSource(idx, box.checked);
     });
+    // Obsidian-style: a click ANYWHERE on the task line toggles it, not only on the tiny
+    // 15px box — "clicco sopra" (serekkr, 04/11/2026). Big help on touch/Android where the
+    // box is a hard target. Clicks on the box itself keep the native toggle; clicks on a
+    // link/button inside the item are left alone so they still work.
+    if (li && !li._amChkWired) {
+      li._amChkWired = true;
+      li.style.cursor = 'pointer';
+      li.addEventListener('click', (e) => {
+        if (e.target === box) return;   // native checkbox toggle already fired
+        if (e.target.closest && e.target.closest('a, button, input, textarea, select, [contenteditable]')) return;
+        box.checked = !box.checked;
+        box.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
   });
 }
 
@@ -1235,6 +1283,11 @@ let _cmLightTimer = null;
 function _onCmChange() {
   if (_cmSuppressChange) return;      // programmatic sync, not a user edit
   const tab = getActiveTab();
+  // A CM change only means something for a text NOTE. If the active tab is a pdf/draw/
+  // image/todo (its path points into attachments/), the editor's text is NOT its
+  // content — marking it dirty + autosaving would write a note body onto the attachment
+  // path (serekkr, 04/11/2026). Ignore the event for non-note tabs.
+  if (tab && tab.type && tab.type !== 'note') return;
   if (tab) tab.isDirty = true;
   setSavedState(false);
   scheduleAutosave();
@@ -1383,7 +1436,7 @@ const THEMES = {
   // on; its ACCENT is the same green as Green Dark, which is why the surface colour is
   // what the name has to carry. The id stays 'serekkr': it is DEFAULT_THEME, the value
   // in localStorage and the [data-theme] attribute in style.css, so renaming it would
-  // need a migration (cf. RENAMED, obsidian -> graphite) and would drop the theme of
+  // need a migration (cf. RENAMED, old theme id -> graphite) and would drop the theme of
   // every existing profile. Only the label moved.
   serekkr:       { label: 'Cyan Dark',     attr: 'serekkr'   },
   graphite:      { label: 'Graphite',      attr: 'graphite'  },
@@ -1593,7 +1646,15 @@ const STRIP_PAD_KEY = 'amelie.strip-pad';
 // v1.0.83, which had 75.65px stored). There is no single toolbar ROW to line up
 // with once it has wrapped, so past this point the strip keeps its authored
 // padding and simply sits where it was designed to sit.
-const STRIP_PAD_MAX = 48;
+// 6px. Any padding this adds grows the strip's height and so pushes the note list
+// DOWN by the same amount — the strip is a flex item above the tree, and there is no
+// side of it that aligns the bottom to the toolbar without moving the tree. Lining
+// the hairline up with the editor toolbar was costing up to ~17px of empty grey
+// before the first note (delta is already 35 at 700px wide), which read as wasted
+// space (reported 2026-10-29, with a screenshot of a three-line note header). Past
+// this small threshold the strip simply keeps its authored, tight padding and the
+// notes start right under the icons; only a near-perfect match still nudges.
+const STRIP_PAD_MAX = 6;
 function _applyStripPad(strip) {
   if (_stripPad == null) return;                             // nothing measured yet — leave it
   strip.style.paddingTop = strip.style.paddingBottom = _stripPad;
@@ -1863,7 +1924,7 @@ function maybeShowLangSetup() {
   ov.querySelectorAll('.lang-pill').forEach(p => p.addEventListener('click', () => { ov.style.display = 'none'; }));
 }
 
-// ─── View width (wide ↔ readable line length, Obsidian-style) ────────────────
+// ─── View width (wide ↔ readable line length) ────────────────
 // 'wide'     → editor & preview use the full pane width (almost to the window edge)
 // 'readable' → content centered with a max line length, easier to read
 function applyViewWidth(mode) {
@@ -2865,13 +2926,54 @@ function makeTodoTreeEntry() {
 // the cost is one measurement, on the row you are actually pointing at.
 // `data-tip` and not `title`: the tooltip layer (setupTooltips) reads data-tip and would
 // otherwise have to convert the title first, on the very same event.
-function _tipWhenClipped(row, text) {
+// Path tooltip for the Recent / Bookmarks / Tags lists: shown BELOW the hovered row and
+// kept INSIDE the sidebar (wraps, never spills out to the side), same as the file tree.
+// It appears only when the path ADDS something over the visible name — i.e. the note lives
+// in a folder (path has a '/'). A ROOT note's path IS its name, so the tooltip would just
+// repeat it: there we show nothing, only the pointer cursor (serekkr, 30/10/2026: "su un
+// testo corto non far vedere la scritta di nuovo; quelle lunghe lasciamo così"). `always`
+// forces it on for the Tags list, whose row shows only "#tag" (the path is never a repeat
+// there, it is the one way to tell which note it is). Criterion is the path string, not a
+// clipping measurement — reliable regardless of sidebar width.
+// A deep path (a note several folders down) doesn't fit in the sidebar tooltip ON ANDROID —
+// the narrow panel wrapped it to a wall of lines. There we keep the NOTE NAME (last segment)
+// plus the nearest couple of folders, dropping the deeper ancestors, no "…/" prefix (serekkr,
+// 30/10/2026: "ultime cartelle + nome, una riga, senza …/"): "00 Work/01 Clients/DPI/Egypt/
+// nota.md" → "DPI/Egypt/nota.md", one line (.in-panel), clipped at the end if still too wide.
+// On the DESKTOP the user wants the FULL path from the root on hover (serekkr, 04/11/2026:
+// "non vedo tutto il path e il nome della nota"), so there we never shorten — the desktop
+// .in-panel tooltip wraps to as many lines as the path needs, inside the sidebar.
+function _shortPath(path, keep = 3) {
+  if (!path) return path;
+  // Desktop: full path, never elided. Only Android collapses it.
+  if (document.documentElement.getAttribute('data-amelie-platform') !== 'android') return path;
+  const parts = String(path).split('/');
+  if (parts.length <= keep) return path;   // already short enough → full path
+  return parts.slice(-keep).join('/');     // name + the nearest (keep-1) folders, no "…/"
+}
+function _pathTip(el, path, always) {
+  if (!el) return;
+  el.removeAttribute('title');
+  if (path && (always || path.includes('/'))) {
+    el.setAttribute('data-tip', _shortPath(path));   // nome + ultime cartelle, non dalla root
+    el.setAttribute('data-tip-wrap', 'panel');
+    el.removeAttribute('data-tip-side');
+  } else {
+    el.removeAttribute('data-tip'); el.removeAttribute('data-tip-wrap');
+  }
+}
+function _tipWhenClipped(row, text, side = 'right') {
   row.addEventListener('mouseover', () => {
     const n = row.querySelector('.tree-name');
     if (!n) return;
     if (n.scrollWidth > n.clientWidth + 1) {
       row.setAttribute('data-tip', text);
-      row.setAttribute('data-tip-side', 'right');   // beside the row, see place() in setupTooltips
+      // 'right' = beside the row (default, used by folders); 'below' = under it, like the
+      // open-tab tooltip — asked for the long NOTE names (serekkr, 30/10/2026). A 'below'
+      // tooltip also wraps WITHIN the sidebar (data-tip-wrap=panel) so a deep path never
+      // spills onto the editor pane; it grows in height, not past the panel. See place().
+      if (side === 'right') { row.setAttribute('data-tip-side', 'right'); row.removeAttribute('data-tip-wrap'); }
+      else { row.removeAttribute('data-tip-side'); row.setAttribute('data-tip-wrap', 'panel'); }
     } else {
       row.removeAttribute('data-tip');
     }
@@ -2918,7 +3020,7 @@ function allFolderKeys(nodes = state.notes, out = []) {
   return out;
 }
 
-// The sidebar's close/open-all button, the one Obsidian's file explorer has. One
+// The sidebar's close/open-all button, the one a file explorer has. One
 // button doing two opposite things, so the icon and the tooltip both have to name
 // the NEXT click, not the current state: chevrons together + "close all" while
 // anything is open, chevrons apart + "open all" once nothing is.
@@ -3058,7 +3160,7 @@ async function moveFolderOnDisk(oldPath, newPath) {
 }
 
 // ── Multi-selection in the tree (Shift / Ctrl + click) ──────────────────────
-// Obsidian's gesture, for Obsidian's two reasons: drag a handful of notes into a
+// A familiar gesture, for two reasons: drag a handful of notes into a
 // folder, or delete them in one go. A plain click is untouched — it opens the note
 // and becomes the anchor the next Shift+click measures from.
 //
@@ -3455,15 +3557,31 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   if (node.type && node.type !== 'note') el.dataset.kind = node.type;
   const colorKey = noteColors[node.path];
   if (colorKey) el.dataset.color = colorKey;
-  // Show the file extension explicitly for PDFs (since the icon has been
-  // removed) so the user can still tell them apart from regular notes.
-  const displayName = node.type === 'draw'
-    ? node.name + '.draw'
-    : node.type === 'pdf'
-      ? (/\.pdf$/i.test(node.name) ? node.name : node.name + '.pdf')
-      : node.name;
-  el.innerHTML = `<span class="tree-name">${escHtml(displayName)}</span>`;
-  _tipWhenClipped(el, displayName);
+  // Obsidian-style (serekkr, 30/10/2026): attachments (PDF, image, audio, video) and
+  // drawings DON'T show their extension in the name any more — instead a small type
+  // badge (PDF, PNG, MP4, GIF, MP3, …), derived from the REAL extension, sits on the
+  // RIGHT of the row. Regular notes keep their name and carry no badge.
+  const isAttach = isAttachNode(node);
+  let displayName = node.name;
+  let extBadge = '';
+  if (isAttach || node.type === 'draw') {
+    const fname = node.attachmentName || node.name || '';
+    let ext = (fname.match(/\.([A-Za-z0-9]+)$/) || [, ''])[1];
+    if (!ext) ext = node.type === 'pdf' ? 'pdf' : node.type === 'draw' ? 'draw' : node.type;
+    extBadge = `<span class="tree-ext">${escHtml(ext.toUpperCase())}</span>`;
+    displayName = (node.name || '').replace(/\.[A-Za-z0-9]+$/, '');
+  }
+  el.innerHTML = `<span class="tree-name">${escHtml(displayName)}</span>${extBadge}`;
+  // Hover tooltip. A NOTE that lives IN A FOLDER shows its FULL PATH on hover, ALWAYS —
+  // not only when the name is clipped (serekkr, 04/11/2026: "B1", uniform with Recent/
+  // Bookmarks/Tags). A ROOT note (path == name, no '/') and an attachment keep the old
+  // behaviour: the tooltip appears only when the name is CLIPPED, to read it in full —
+  // showing a path that is just the name again would be redundant.
+  if (!isAttach && node.path && node.path.includes('/')) {
+    _pathTip(el, node.path, true);   // full path, always on hover, for notes in a folder
+  } else {
+    _tipWhenClipped(el, (isAttach ? (node.name || displayName) : _shortPath(node.path || displayName)), 'below');
+  }
   el.dataset.path = node.path;
 
   // Le righe dell'albero prendono il FUOCO della tastiera quando le clicchi
@@ -3507,7 +3625,7 @@ function makeNoteEl(node, parentArray, folderPath = '') {
   // Files (notes, draws, pdfs, images) are all freely re-orderable via drag.
   // PDFs/images live in attachments/ on disk, so they only ever REORDER — they
   // are never renamed/moved into a folder (unlike notes/draws).
-  const isAttach = isAttachNode(node);
+  // (isAttach computed above, where the type badge is built.)
 
   el.setAttribute('draggable', 'true');
   // Drag & drop reorder
@@ -3781,7 +3899,7 @@ function parseFrontmatter(content) {
   return { fm, body };
 }
 
-// An Obsidian-style date block (`---` / `created:` / `updated:` / `---`) that is
+// A frontmatter-style date block (`---` / `created:` / `updated:` / `---`) that is
 // NOT the file's real top frontmatter — e.g. one left a blank line down by an
 // import, so it never gets stripped — otherwise renders horribly: the opening
 // `---` becomes a horizontal rule and the `key: value` lines, "underlined" by
@@ -3816,7 +3934,7 @@ function dividerizeSetextRules(md) {
 }
 
 // The body every preview/TOC path should render: real top frontmatter removed
-// (parseFrontmatter), any stray Obsidian date block shown as plain text
+// (parseFrontmatter), any stray date block shown as plain text
 // (unwrapStrayFrontmatter), and setext `---` headings turned into plain rules
 // (dividerizeSetextRules). Kept in one place so the render, the TOC heading
 // walk, and jump-to-heading all agree on line/char offsets — every transform
@@ -3915,6 +4033,12 @@ function setupFrontmatter() {
 async function saveCurrentNote() {
   const tab = getActiveTab();
   if (!tab) return;
+  // DATA-LOSS GUARD: only a text NOTE tab (no type, or type 'note') may be written
+  // with the editor's content. A pdf/draw/image/todo tab carries path =
+  // 'attachments/…' (or null) and writeNote prepends notes/, so a stray autosave while
+  // such a tab was active once wrote a note body to notes/attachments/pdf/<file>.pdf,
+  // shadowing the real edited PDF (serekkr, 04/11/2026). Never save onto a non-note tab.
+  if (tab.type && tab.type !== 'note') { tab.isDirty = false; return; }
 
   // New blank tab — use the typed title or prompt for one
   if (!tab.path) {
@@ -4285,16 +4409,39 @@ function renderBreadcrumb(tab) {
   bc.innerHTML = '';
   bc.style.display = 'flex';
 
-  // Folder segments (everything before the file name), each with its cumulative
-  // path so a click can target exactly that folder.
+  // On Android (narrow) a deep path wraps to several lines and the note name ends up alone
+  // on the last one (serekkr, 30/10/2026). Collapse the root-side folders into a single "…"
+  // and keep only the nearest 2, so breadcrumb stays compact with the name in view. The "…"
+  // is clickable → reveals the deepest hidden folder. Desktop keeps the full breadcrumb.
+  const _android = document.documentElement.getAttribute('data-amelie-platform') === 'android';
+  const KEEP = 2;
+  const hideCount = (_android && parts.length > KEEP) ? parts.length - KEEP : 0;
+
+  if (hideCount > 0) {
+    const hiddenPath = parts.slice(0, hideCount).join('/');   // the last hidden folder
+    const ell = document.createElement('span');
+    ell.className = 'crumb crumb-folder crumb-ellipsis';
+    ell.textContent = '…';
+    ell.addEventListener('click', () => revealFolderInTree(hiddenPath));
+    bc.appendChild(ell);
+    const sep = document.createElement('span');
+    sep.className = 'crumb-sep';
+    sep.textContent = '/';
+    bc.appendChild(sep);
+  }
+
+  // Folder segments: every folder's cumulative path is accumulated (so a kept segment's
+  // click targets the right folder), but only the non-hidden ones are rendered.
   let acc = '';
-  for (const part of parts) {
-    acc = acc ? `${acc}/${part}` : part;
+  for (let idx = 0; idx < parts.length; idx++) {
+    acc = acc ? `${acc}/${parts[idx]}` : parts[idx];
+    if (idx < hideCount) continue;   // hidden behind the "…"
     const folderPath = acc;
     const seg = document.createElement('span');
     seg.className = 'crumb crumb-folder';
-    seg.textContent = part;
-    seg.title = folderPath;
+    seg.textContent = parts[idx];
+    // No title tooltip: hovering the path should only change the cursor to a hand,
+    // not pop the folder path (serekkr, 30/10/2026). The click still reveals it in the tree.
     seg.addEventListener('click', () => revealFolderInTree(folderPath));
     bc.appendChild(seg);
 
@@ -4309,7 +4456,8 @@ function renderBreadcrumb(tab) {
   const noteSeg = document.createElement('span');
   noteSeg.className = 'crumb crumb-note';
   noteSeg.textContent = noteName;
-  noteSeg.title = tab.path;
+  // No title tooltip on hover — just the hand cursor; the click still reveals + highlights
+  // the note in the left tree (serekkr, 30/10/2026).
   noteSeg.addEventListener('click', () => revealNoteInTree(tab.path));
   // Double click → rename inline directly.
   noteSeg.addEventListener('dblclick', (e) => {
@@ -4488,8 +4636,8 @@ async function createNewNote(folder = '') {
 async function createNewFolder(parent = '') {
   if (typeof parent !== 'string') parent = '';
   // The folder is created and goes STRAIGHT into its inline rename with the name
-  // selected: type, press Enter. That is what Finder, Explorer, VS Code and
-  // Obsidian all do. It used to be created already named with today's date —
+  // selected: type, press Enter. That is what Finder, Explorer and VS Code
+  // all do. It used to be created already named with today's date —
   // a decision the app made for you, and then a second pass to undo it. (A NOTE
   // still takes the date: for a note of the day that name is the point.)
   // Esc, or clicking away, leaves the default name, so nothing is half-created.
@@ -4702,7 +4850,7 @@ let _inlineRenameOpen = false;
 let _treeRefreshHeld = false;
 
 // Inline rename — no popup. Reveals the node in the tree, turns its label into
-// an editable input (Obsidian/VS Code style). Enter or blur confirms, Esc cancels.
+// an editable input (VS Code style). Enter or blur confirms, Esc cancels.
 async function renameNote(node) {
   if (!node) return;
   const isFolder = node.type === 'folder';
@@ -5127,6 +5275,15 @@ function setupEditor() {
   const _isUnsupportedErr = (err) => /Unsupported attachment type/.test(err?.message || String(err || ''));
   // Refused because the bytes are not what the extension says (main reads the head).
   const _isMismatchErr = (err) => /ATTACHMENT_CONTENT_MISMATCH/.test(err?.message || String(err || ''));
+  // One toast for an attachment failure, most specific first. Returns true when it
+  // showed a specific toast, so a loop can skip its generic "import failed" fallback
+  // instead of overwriting the precise reason (e.g. the magic-byte mismatch).
+  const _reportAttachErr = (err) => {
+    if (_isTooLargeErr(err))    { showToast(window.i18n.t('attach.too_large')); return true; }
+    if (_isUnsupportedErr(err)) { showToast(window.i18n.t('attach.unsupported_format')); return true; }
+    if (_isMismatchErr(err))    { showToast(window.i18n.t('attach.content_mismatch')); return true; }
+    return false;
+  };
   // Block the middle-mouse-button "primary selection" paste (X11/Linux/Wayland):
   // a middle click in the editor would otherwise paste whatever text is selected
   // elsewhere. The user only wants explicit Ctrl+V pastes. preventDefault on the
@@ -5178,7 +5335,7 @@ function setupEditor() {
     } catch (_) {}
     if (sysPaths.length) {
       e.preventDefault(); e.stopImmediatePropagation();
-      let imported = 0;
+      let imported = 0, specific = false;
       const importedNames = [];
       for (const p of sysPaths) {
         const base = p.split('/').pop();
@@ -5187,10 +5344,11 @@ function setupEditor() {
           insertAttachmentRef(name);
           importedNames.push(name.split('/').pop());
           imported++;
-        } catch (err) { console.error('Paste import failed:', p, err); }
+        } catch (err) { console.error('Paste import failed:', p, err); if (_reportAttachErr(err)) specific = true; }
       }
-      // Only warn on failure — no toast on a successful import.
-      if (!imported) showToast(window.i18n.t('toast.files_import_failed', { n: 0 }));
+      // Only warn on failure — no toast on a successful import. A specific reason
+      // (too large / unsupported / content mismatch) was already shown if seen.
+      if (!imported && !specific) showToast(window.i18n.t('toast.files_import_failed', { n: 0 }));
       return;
     }
     // Keep only supported media/PDF. Use the FILE predicate (extension OR MIME) so a
@@ -5238,16 +5396,16 @@ function setupEditor() {
     const allPaths = paths.length ? paths : plainPaths;
     if (allPaths.length) {
       e.preventDefault(); e.stopImmediatePropagation();
-      let imported = 0;
+      let imported = 0, specific = false;
       for (const p of allPaths) {
         const base = p.split('/').pop();
         try {
           const name = await window.inkwell.importAttachmentPath(p, _attachmentTarget(base));
           insertAttachmentRef(name);
           imported++;
-        } catch (err) { console.error('Paste import failed:', p, err); }
+        } catch (err) { console.error('Paste import failed:', p, err); if (_reportAttachErr(err)) specific = true; }
       }
-      if (!imported) showToast(window.i18n.t('toast.files_import_failed'));
+      if (!imported && !specific) showToast(window.i18n.t('toast.files_import_failed'));
       return;
     }
     const usableFiles = files.filter(f => f.size > 0);
@@ -5301,8 +5459,8 @@ function setupEditor() {
   _editorDragoverHandler = e => e.preventDefault();
   editor.addEventListener('dragover', _editorDragoverHandler);
   _editorDropHandler = async e => {
-    // An item dragged from the SIDEBAR and let go in the note becomes a link, as in
-    // Obsidian — the drag carries its tree path as text, and the editor used to paste
+    // An item dragged from the SIDEBAR and let go in the note becomes a link
+    // — the drag carries its tree path as text, and the editor used to paste
     // that path verbatim (2026-09-30). A note → [[note]] (spelled with its path when
     // the name is not unique), an attachment → its embed/link, a folder → nothing.
     if (state.draggingNote || state.draggingAttach || state.draggingFolder) {
@@ -5386,6 +5544,19 @@ function setupEditor() {
     }
     e.preventDefault(); e.stopImmediatePropagation();
     if (mediaRejected) showToast(window.i18n.t('attach.unsupported_format'), 4000);
+    // Media dropped INTO the note is filed by type under attachments/ (unchanged), but in
+    // the TREE it should land in the folder of the note you're viewing, not the vault root
+    // (serekkr, 30/10/2026). Same home mechanism as a drop on a folder row: we collect the
+    // vault-relative paths of what landed, then _homeAttachmentsInFolder moves/records them
+    // under the current note's folder. Root note → no folder → left at root (correct).
+    const _curNoteFolder = () => { const c = state.currentPath || ''; const i = c.lastIndexOf('/'); return i >= 0 ? c.slice(0, i) : ''; };
+    const noteFolder = _curNoteFolder();
+    const importedRel = [];
+    const _homeInNoteFolder = async () => {
+      if (!noteFolder || !importedRel.length) return;
+      try { await loadTree(); } catch (_) {}        // surface the new attachment node first
+      _homeAttachmentsInFolder(noteFolder, importedRel);
+    };
     // PATHS FIRST (see the paste handler): media file items are often hollow
     // stubs — when the drag carries file:// URIs, import from disk.
     if (uriPaths.length) {
@@ -5394,8 +5565,10 @@ function setupEditor() {
         try {
           const name = await window.inkwell.importAttachmentPath(p, _attachmentTarget(base));
           insertAttachmentRef(name);
-        } catch (err) { console.error('Drop import failed:', p, err); if (_isTooLargeErr(err)) showToast(window.i18n.t('attach.too_large')); }
+          if (name) importedRel.push('attachments/' + name);
+        } catch (err) { console.error('Drop import failed:', p, err); _reportAttachErr(err); }
       }
+      await _homeInNoteFolder();
       return;
     }
     for (const file of files.filter(f => f.size > 0)) {
@@ -5404,6 +5577,7 @@ function setupEditor() {
         const buf = await file.arrayBuffer();
         const name = await window.inkwell.saveAttachment(_attachmentTarget(file.name || 'file'), new Uint8Array(buf));
         insertAttachmentRef(name);
+        if (name) importedRel.push('attachments/' + name);
       } catch (err) {
         console.error('Drop save failed:', file.name, err);
         if (_isTooLargeErr(err)) showToast(window.i18n.t('attach.too_large'));
@@ -5411,6 +5585,7 @@ function setupEditor() {
         else if (_isMismatchErr(err)) showToast(window.i18n.t('attach.content_mismatch'));
       }
     }
+    await _homeInNoteFolder();
   };
   editor.addEventListener('drop', _editorDropHandler);
 
@@ -5436,9 +5611,20 @@ function setupEditor() {
   // Undo / Redo header buttons — focus the editor first so the native history
   // applies to the note text.
   $('btn-undo')?.addEventListener('mousedown', e => e.preventDefault());
-  $('btn-undo')?.addEventListener('click', () => { if (_editingBlocked()) return; editor.focus(); document.execCommand('undo'); });
+  $('btn-undo')?.addEventListener('click', () => {
+    if (_editingBlocked()) return;
+    // CodeMirror owns its own history — document.execCommand('undo') is a no-op on it
+    // (only the Mod-z keymap worked). Route the button through CM when it's the active
+    // engine (serekkr, 04/11/2026: "l'icona undo non fa niente, ctrl z va").
+    if (_cmActive && _cmHandle) { try { _cmHandle.undo(); } catch (_) {} return; }
+    editor.focus(); document.execCommand('undo');
+  });
   $('btn-redo')?.addEventListener('mousedown', e => e.preventDefault());
-  $('btn-redo')?.addEventListener('click', () => { if (_editingBlocked()) return; editor.focus(); document.execCommand('redo'); });
+  $('btn-redo')?.addEventListener('click', () => {
+    if (_editingBlocked()) return;
+    if (_cmActive && _cmHandle) { try { _cmHandle.redo(); } catch (_) {} return; }
+    editor.focus(); document.execCommand('redo');
+  });
 
   $('btn-prev-note')?.addEventListener('click', () => navigateNote('prev'));
   $('btn-next-note')?.addEventListener('click', () => navigateNote('next'));
@@ -5596,26 +5782,55 @@ function handleToolbarCmd(cmd) {
       const _isFence = l => /^\s*(```|~~~)/.test(l);
       const cLineStart = editor.value.lastIndexOf('\n', sel.s - 1) + 1;
       const fencesBefore = editor.value.slice(0, cLineStart).split('\n').filter(_isFence).length;
-      if (fencesBefore % 2 === 1) { insert = '```'; break; }
+      if (fencesBefore % 2 === 1) {
+        // Caret is INSIDE a fenced block. Clicking the toolbar button means "another code
+        // block", NOT a literal ``` that would nest/mangle the current one — repeated
+        // clicks used to pile fences inside each other (serekkr, 04/11/2026: "fa sempre un
+        // blocco nuovo e va a capo"). With no selection: find this block's CLOSING fence
+        // and open a fresh empty block on the line right after it. (With a selection inside
+        // a block we still insert literal backticks, as before.)
+        if (!text) {
+          const _lines = editor.value.split('\n');
+          const caretLineIdx = editor.value.slice(0, sel.s).split('\n').length - 1;
+          let closeIdx = -1;
+          for (let i = caretLineIdx; i < _lines.length; i++) { if (_isFence(_lines[i])) { closeIdx = i; break; } }
+          let at;
+          if (closeIdx === -1) { at = editor.value.length; }   // unclosed block → append at end
+          else { at = 0; for (let k = 0; k < closeIdx; k++) at += _lines[k].length + 1; at += _lines[closeIdx].length; }
+          insertAtCursor('\n```\n\n```', at, at);
+          _setEditorCaret(at + 5);   // start of the new empty middle line
+          return;
+        }
+        insert = '```'; break;
+      }
       // Inline for a single selected word; otherwise a fenced block with an
       // empty line in the middle and the cursor placed there, ready to type.
       if (text && !text.includes('\n')) { insert = `\`${text}\``; break; }
-      // Empty block → an empty middle line with the caret on it. The fences sit
-      // at column 0 like any other line; the code's inset is drawn, not typed.
-      const body = text ? text : '';
-      // Line index of the opening fence BEFORE the insert.
-      const openLineIdx = editor.value.slice(0, sel.s).split('\n').length - 1;
-      const bodyLineCount = body.split('\n').length;
-      insertAtCursor('```\n' + body + '\n```', sel.s, sel.e);
-      // Caret on the FINAL text: end of the last content line = the empty middle
-      // line for an empty block. Same robust method as the manual "``` + Enter" path.
-      const vlines = editor.value.split('\n');
-      const lastIdx = openLineIdx + bodyLineCount;
-      let off = 0;
-      for (let k = 0; k < lastIdx; k++) off += (vlines[k] || '').length + 1;
-      const caret = off + ((vlines[lastIdx] || '').length);
-      editor.selectionStart = editor.selectionEnd = caret;
-      editor.focus();
+      // Multi-line selection → wrap it in a fenced block in place.
+      if (text) {
+        const openLineIdx = editor.value.slice(0, sel.s).split('\n').length - 1;
+        const bodyLineCount = text.split('\n').length;
+        insertAtCursor('```\n' + text + '\n```', sel.s, sel.e);
+        const vlines = editor.value.split('\n');
+        const lastIdx = openLineIdx + bodyLineCount;
+        let off = 0;
+        for (let k = 0; k < lastIdx; k++) off += (vlines[k] || '').length + 1;
+        _setEditorCaret(off + ((vlines[lastIdx] || '').length));
+        return;
+      }
+      // No selection → an EMPTY fenced block with the caret on its middle line.
+      // A code block owns its lines: if the caret sits on a line that ALREADY has
+      // text, the block opens on the line BELOW — we never split or merge into the
+      // current line's content (serekkr, 29/10/2026). On an empty line it opens
+      // right there. The fences sit at column 0; the code's inset is drawn.
+      let lineEnd = editor.value.indexOf('\n', sel.s);
+      if (lineEnd === -1) lineEnd = editor.value.length;
+      const lineStart = editor.value.lastIndexOf('\n', sel.s - 1) + 1;
+      const lineHasText = editor.value.slice(lineStart, lineEnd).trim().length > 0;
+      const at = lineHasText ? lineEnd : lineStart;
+      const lead = lineHasText ? '\n' : '';
+      insertAtCursor(lead + '```\n\n```', at, at);
+      _setEditorCaret(at + lead.length + 4);   // start of the empty middle line
       return;
     }
     case 'link': {
@@ -5697,6 +5912,14 @@ function insertAtCursor(text, start, end) {
   }
 }
 
+// Place the caret at an absolute character offset, through the CM engine when it
+// owns the document (setting the hidden textarea's selection doesn't move CM's
+// cursor), else on the plain textarea.
+function _setEditorCaret(pos) {
+  if (_cmActive && _cmHandle) { try { _cmHandle.setSelection(pos, pos); _cmHandle.focus(); } catch (_) {} }
+  else { try { editor.selectionStart = editor.selectionEnd = pos; editor.focus(); } catch (_) {} }
+}
+
 // Attachments foldering: every accepted type has a folder — PDFs → attachments/pdf/,
 // video → videos/, audio → audio/, images → images/. Old files still sitting in
 // scripts/ media/ audio/ video/ or at the root keep working (links carry the path;
@@ -5764,7 +5987,7 @@ function _attachmentTarget(name) {
 const _sidebarMediaTarget = _attachmentTarget;
 
 // In the rendered preview, links to AUDIO and VIDEO attachments become inline
-// players, Obsidian-style (the markdown source keeps a plain link — portable
+// players (the markdown source keeps a plain link — portable
 // and diff-friendly). A `{width=N}` right after the link sizes the video and
 // the drag handle persists it back into the markdown. The historical "video
 // can't play" turned out to be the old protocol's broken Range support (fixed
@@ -6107,6 +6330,9 @@ function setViewMode(mode, opts) {
   // count from the mode we just left would sit in the status bar. Also covers a tab
   // switch, which comes through here.
   try { updateSelectionCount(); } catch (_) {}
+  // Rebuild the Index for the mode we just entered (view mode needs the preview's heading
+  // elements for the scroll-spy; edit mode uses char positions) and re-light the current one.
+  try { if (tocVisible) renderTOC(); } catch (_) {}
 }
 
 // Add a language label (top-left) and a copy button (top-right) to every
@@ -6514,12 +6740,12 @@ function _rewriteOutsideCode(body, fn) {
   return lines.join('\n');
 }
 
-// Extensions Amelie files under attachments/ — the set the Obsidian import filters
+// Extensions Amelie files under attachments/ — the set the import filters
 // embeds by (main.js: ATT_ANY_RE). Kept in sync by eye; a new media type added there
 // should be added here too.
 const EMBED_ATT_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp|pdf|mp4|mov|webm|mp3|wav|m4a)$/i;
 
-// Resolve an Obsidian embed target (`![[Serbia diagram.png]]`, possibly a path or a
+// Resolve a wiki embed target (`![[Serbia diagram.png]]`, possibly a path or a
 // name that differs from the stored one by spaces↔underscores↔dashes) to the live
 // attachment node's `attachments/…` path. Mirrors resolveNoteLink's forgiving ladder,
 // but over attachment nodes only. null when nothing in the vault matches.
@@ -6534,7 +6760,7 @@ function _embedAttachmentPath(rawTarget) {
   const tAlpha = normAlpha(basename(target));
   let atts;
   try { atts = flattenTree(state.notes).filter(isAttachNode); } catch (_) { return null; }
-  // 0) a path-qualified target (`attachments/pdf/x.pdf`, or an Obsidian folder path)
+  // 0) a path-qualified target (`attachments/pdf/x.pdf`, or a vault folder path)
   if (target.includes('/')) {
     const tp = target.replace(/^(?:inkwell:\/\/)?attachments\//i, '').toLowerCase();
     const byPath = atts.find(n => n.path.replace(/^attachments\//i, '').toLowerCase() === tp)
@@ -6548,7 +6774,7 @@ function _embedAttachmentPath(rawTarget) {
   return hit ? hit.path : null;
 }
 
-// The markup an embed expands to — IDENTICAL to what the Obsidian import writes into the
+// The markup an embed expands to — IDENTICAL to what the import writes into the
 // file (main.js attMarkup), so a note displayed with a live `![[x]]` reads exactly like
 // one imported long ago: images inline (📷, with {width=N} when the alias is a number),
 // audio/video as the embed form the preview turns into a player (🎵/🎬), everything else
@@ -6566,7 +6792,7 @@ function _embedMarkupFor(attPath, alias) {
 // A picture on its own line, indented with spaces, is read by marked as an INDENTED
 // CODE BLOCK (4+ leading spaces) and PRINTED as text instead of shown. An image is
 // never code: strip the leading whitespace from any line that is ONLY an image — an
-// Obsidian embed `![[pic.png]]` or a markdown `![alt](url)` — so it always renders,
+// wiki embed `![[pic.png]]` or a markdown `![alt](url)` — so it always renders,
 // left-aligned, no matter how far it was indented. Fenced code blocks are left alone.
 function _deindentImageOnlyLines(body) {
   const lines = body.split('\n');
@@ -6590,9 +6816,9 @@ function _deindentImageOnlyLines(body) {
 function _preprocessMarkdown(body) {
   body = _deindentImageOnlyLines(body);
   return _rewriteOutsideCode(body, seg => seg
-    // Obsidian embeds `![[file]]` → the attachment, shown inline. Amelie expanded these
+    // Wiki embeds `![[file]]` → the attachment, shown inline. Amelie expanded these
     // only at IMPORT time, so a note that still carries the raw embed (imported through a
-    // different tool, pasted, synced from Obsidian) showed nothing — the `[[note links]]`
+    // different tool, pasted, synced from elsewhere) showed nothing — the `[[note links]]`
     // rule below even turned the inner `[[file.png]]` into a dead "!note-link". Resolved
     // HERE, display-only: the file on disk is never rewritten. Must run BEFORE the note
     // rule so the brackets are gone before it looks. A target that is not an attachment
@@ -6633,7 +6859,18 @@ function _preprocessMarkdown(body) {
     // ==text== → highlighted span (gentle yellow).
     .replace(/==([^=\n]+?)==/g, '<mark class="md-highlight">$1</mark>')
     // :shortcode: → emoji (only the known ones; unknown ones stay unchanged).
-    .replace(/:([a-z0-9_+-]+):/g, (m, name) => EMOJI_MAP[name] || m));
+    .replace(/:([a-z0-9_+-]+):/g, (m, name) => EMOJI_MAP[name] || m)
+    // Empty task item (`- [ ]` / `- [x]` with NO text after) → marked's GFM task-list
+    // tokenizer needs some content after the box, so an empty one came out as the literal
+    // `[ ]` brackets in reading view (serekkr, 05/11/2026: "si vedono i caratteri come in
+    // edit mode"). Obsidian renders it as an empty checkbox. We append a zero-width space
+    // (U+200B, invisible) so the item has content and marked makes the <input> — the file
+    // on disk is never touched (this is the display string). A NBSP does NOT work here; the
+    // ZWSP does, and it MUST sit after a space (`[ ] <ZWSP>`): GFM needs a space between the
+    // box and the content, so `[ ]<ZWSP>` with no space is still not a task. Must stay in
+    // sync with toggleCheckboxInSource, which already counts empty task lines, so now every
+    // source task maps 1:1 to a rendered checkbox.
+    .replace(/^([ \t]*[-*+][ \t]+\[[ xX]\])[ \t]*$/, '$1 ​'));
 }
 
 function updatePreview() {
@@ -6864,7 +7101,7 @@ function enhancePreviewContent(token, widthsByTable) {
   // Colour #tags blue (after code decoration so code spans are already skipped).
   try { highlightInlineTags(previewContent); } catch (_) {}
 
-  // Task-list checkboxes: make them clickable (Obsidian style)
+  // Task-list checkboxes: make them clickable
   enhanceCheckboxes();
 
   // Audio/video attachment links → inline players (resizable video here:
@@ -6885,7 +7122,7 @@ function enhancePreviewContent(token, widthsByTable) {
     setupImageResize(img, handle);
 
     // A vault image whose file is gone (deleted attachment) → show a placeholder
-    // naming it, like Obsidian's "name not found", instead of a dead broken-image
+    // naming it, like a "name not found" marker, instead of a dead broken-image
     // icon (asked 2026-10-22). Only for attachment images; a remote/data URL that
     // fails for another reason is left alone.
     const _src = img.getAttribute('src') || '';
@@ -7950,6 +8187,65 @@ function mdInlineToText(md) {
   }
 }
 
+// Scroll-spy for the Index: as you read, the heading you're on lights up with the green
+// strip (serekkr, 30/10/2026 — "la striscia deve seguire la lettura"). The headings and
+// their positions are kept here by renderTOC; _updateTocActive finds the current one.
+let _tocHeadings = [];
+let _tocActiveIdx = -1;
+// After a CLICK the scroll-spy is held off briefly: the jump fires a scroll that would
+// otherwise re-light a neighbouring heading (the one that lands at the top), so the strip
+// jumped off the row you clicked (serekkr, 30/10/2026 — "seleziona quello di sotto/sopra").
+let _tocSpyLockUntil = 0;
+function _updateTocActive() {
+  const list = $('toc-list');
+  if (!list || !_tocHeadings.length) return;
+  if (Date.now() < _tocSpyLockUntil) return;   // a click just set the active row — leave it
+  let idx = -1;
+  try {
+    if (state.viewMode === 'edit' && _cmActive && _cmHandle && _cmHandle.view) {
+      const view = _cmHandle.view;
+      const top = view.scrollDOM.scrollTop + 8;   // a hair below the viewport's top edge
+      const docLen = view.state.doc.length;
+      for (let i = 0; i < _tocHeadings.length; i++) {
+        const ci = _tocHeadings[i].charIdx;
+        if (ci == null || ci > docLen) continue;
+        const blockTop = view.lineBlockAt(ci).top;
+        if (blockTop <= top) idx = i; else break;   // headings are in document order
+      }
+    } else if (state.viewMode !== 'edit') {
+      const pane = $('preview-pane');
+      if (!pane) return;
+      // +24, not +8: jumpToHeadingEl parks a clicked heading ~12px below the pane top, so a
+      // tight boundary made the PREVIOUS heading read as current and the green strip landed
+      // on the row above the one you clicked (serekkr, 30/10/2026). 24 clears that offset.
+      const paneTop = pane.getBoundingClientRect().top + 24;
+      // The preview streams in: an hEl cached by renderTOC can be stale/null, so re-resolve
+      // it against the live preview headings by its flat index when needed.
+      const live = pane.querySelectorAll('#preview-content h1,#preview-content h2,#preview-content h3,#preview-content h4,#preview-content h5,#preview-content h6');
+      for (let i = 0; i < _tocHeadings.length; i++) {
+        const h = _tocHeadings[i];
+        const el = (h.hEl && h.hEl.isConnected) ? h.hEl : (h.flatIdx != null ? live[h.flatIdx] : null);
+        if (!el || !el.isConnected) continue;
+        if (el.getBoundingClientRect().top <= paneTop) idx = i; else break;
+      }
+    }
+  } catch (_) { return; }
+  if (idx === _tocActiveIdx) return;
+  _tocActiveIdx = idx;
+  list.querySelectorAll('.toc-item').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.idx, 10) === idx);
+  });
+}
+// Attached ONCE (guarded): a scroll on the editor (CM) or the preview re-evaluates which
+// heading is current. rAF-throttled, and only while the Index is open.
+function _setupTocScrollSpy() {
+  if (window.__tocSpy) return; window.__tocSpy = true;
+  let raf = 0;
+  const onScroll = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; if (tocVisible) _updateTocActive(); }); };
+  try { const cs = _cmScrollEl(); if (cs) cs.addEventListener('scroll', onScroll, { passive: true }); } catch (_) {}
+  try { const pp = $('preview-pane'); if (pp) pp.addEventListener('scroll', onScroll, { passive: true }); } catch (_) {}
+}
+
 function renderTOC() {
   const list = $('toc-list');
   if (!list) return;
@@ -7989,6 +8285,7 @@ function renderTOC() {
               level: t.depth,
               text: cleanText,
               hEl: previewHeadings[flatHeadingIdx] || null,
+              flatIdx: flatHeadingIdx,
               sourceLineInBody,
               bodyOffset,
             });
@@ -8006,6 +8303,14 @@ function renderTOC() {
     return;
   }
 
+  // Char position of each heading in editor.value, for the edit-mode scroll-spy (same
+  // mapping jumpToHeadingEl uses). Kept on the heading so _updateTocActive is cheap.
+  const _bodyLines = body.split('\n');
+  matched.forEach(h => {
+    h.charIdx = h.bodyOffset + _bodyLines.slice(0, h.sourceLineInBody).reduce((s, l) => s + l.length + 1, 0);
+  });
+  _tocHeadings = matched;
+
   matched.forEach((h, idx) => {
     const el = document.createElement('div');
     el.className = `toc-item h${h.level}`;
@@ -8016,6 +8321,9 @@ function renderTOC() {
     el.addEventListener('click', () => jumpToHeadingEl(h.hEl, h.text, idx, h.sourceLineInBody, h.bodyOffset));
     list.appendChild(el);
   });
+  _setupTocScrollSpy();
+  _tocActiveIdx = -1;
+  _updateTocActive();   // initial highlight for the current scroll position
 }
 
 // Measure the visual Y-coordinate of the caret at `pos` inside a textarea.
@@ -8059,13 +8367,21 @@ function jumpToHeadingEl(hEl, text, tocIdx, sourceLineInBody, bodyOffset) {
         const charIdxInBody = lines.slice(0, sourceLineInBody)
           .reduce((s, l) => s + l.length + 1, 0);
         const charIdx = bodyOffset + charIdxInBody;
-        editor.focus();
-        editor.setSelectionRange(charIdx, charIdx + lines[sourceLineInBody].length);
+        // On Android, jumping from the Index must NOT raise the soft keyboard — the keyboard
+        // belongs to tapping the EDITOR to write (serekkr, 30/10/2026). Focusing the editor (or
+        // moving its selection) pops the keyboard up, so on mobile we only SCROLL to the heading;
+        // the caret and keyboard wait until the user taps the text. (scrollToPos dispatches
+        // scrollIntoView and never focuses, so the view moves with the keyboard still down.)
+        const _android = document.documentElement.getAttribute('data-amelie-platform') === 'android';
+        if (!_android) {
+          editor.focus();
+          editor.setSelectionRange(charIdx, charIdx + lines[sourceLineInBody].length);
+        }
         if (_cmActive && _cmHandle) {
           // CM scrolls the position near the top natively (the textarea mirror
           // measurement below is meaningless when the textarea is hidden).
           _cmHandle.scrollToPos(charIdx, 'start');
-        } else {
+        } else if (!_android) {
           // Use a mirror div to measure the EXACT visual Y of the selection start,
           // accounting for line wrapping (the textarea has white-space: pre-wrap).
           const y = measureTextareaCaretY(editor, charIdx);
@@ -8102,6 +8418,10 @@ function jumpToHeadingEl(hEl, text, tocIdx, sourceLineInBody, bodyOffset) {
   document.querySelectorAll('.toc-item').forEach(el => {
     el.classList.toggle('active', parseInt(el.dataset.idx, 10) === tocIdx);
   });
+  // Keep the clicked row lit: record it and hold the scroll-spy off for a beat so the
+  // jump's own scroll can't bump the strip onto a neighbour.
+  _tocActiveIdx = tocIdx;
+  _tocSpyLockUntil = Date.now() + 700;
 }
 
 // ─── Attachment chips (edit mode) ─────────────────────────────────────────────
@@ -8617,14 +8937,36 @@ function setupTooltips() {
     const text = el.getAttribute('data-tip');
     if (!text) return;
     tip.textContent = text;
+    tip.classList.remove('wide', 'in-panel');
+    tip.style.maxWidth = '';
+    tip.classList.add('show');
+    // Panel-constrained (sidebar note rows): the bubble must stay INSIDE the sidebar and
+    // wrap to more lines rather than spill onto the editor pane (serekkr, 30/10/2026).
+    if (el.getAttribute('data-tip-wrap') === 'panel') {
+      const sb = document.getElementById('sidebar');
+      const sr = sb ? sb.getBoundingClientRect() : { left: 0, right: 300 };
+      tip.classList.add('in-panel');
+      const r = el.getBoundingClientRect();
+      // Directly BELOW the hovered row, left edge ALIGNED with the row's own left — same
+      // vertical column, not offset (serekkr, 04/11/2026: "subito sotto allo stesso
+      // livello", correcting the earlier indent that read as crooked). Clamped to the
+      // sidebar so a long wrapped path never spills onto the editor.
+      tip.style.maxWidth = Math.max(140, sr.right - r.left - 8) + 'px';
+      const tw = tip.offsetWidth, th = tip.offsetHeight, vh = window.innerHeight;
+      let left = r.left;
+      if (left + tw + 4 > sr.right) left = Math.max(sr.left + 4, sr.right - tw - 8);
+      let top = r.bottom + 4;
+      if (top + th + 4 > vh) top = Math.max(4, r.top - th - 4);
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+      return;
+    }
     // Wrap mode BEFORE measuring — the size below depends on it.
     // Decided by MEASURING, not by counting characters: the old `text.length > 60`
     // test was in characters while the bubble's limit is 280 pixels, so anything
     // from roughly 45 to 60 characters — a note two folders deep, say — was cut off
     // with nowrap+ellipsis and never allowed to wrap. Whether it has spaces or
     // hyphens makes no difference; only how wide it draws does.
-    tip.classList.remove('wide');
-    tip.classList.add('show');
     if (tip.scrollWidth > tip.clientWidth) tip.classList.add('wide');
     const r = el.getBoundingClientRect();
     const tw = tip.offsetWidth, th = tip.offsetHeight;
@@ -9151,7 +9493,7 @@ function setupContextMenu() {
 
 // The tree row the context menu is currently acting on. A grey 1px border is drawn by a
 // full-width overlay (#tree-ctx-outline) laid over the row — full width at every nesting
-// depth, like Obsidian, with the text left indented. It moves to whatever row you
+// depth, with the text left indented. It moves to whatever row you
 // right-click and is cleared on the next click (menu item or outside).
 let _ctxOutlineEl = null;
 function _ensureCtxOutline() {
@@ -9461,7 +9803,7 @@ let _focusedPane = 'main';    // main | split — last pane the user interacted 
 // transient blur between them makes an activeElement check unreliable — the rAF would read
 // "not in the tree" and grab focus back, sending Canc into the text. This intent flag is set
 // by the row click and cleared once the open has fully settled, and every editor.focus() on
-// the open path honours it. Obsidian-style: a row click SELECTS the note (focus stays on the
+// the open path honours it. By design: a row click SELECTS the note (focus stays on the
 // tree, so Canc deletes it); you click into the editor to type.
 let _keepTreeFocus = false;
 
@@ -10068,8 +10410,8 @@ function sortFolderChildren(folderNode, mode) {
 }
 
 // ── Sort order of the whole tree (the ⇅ button) ─────────────────────────────
-// Obsidian's file explorer offers one sort for the whole tree; this is the same
-// idea, with the one choice Obsidian cannot have — Manual, Amelie's saved drag
+// A file explorer offers one sort for the whole tree; this is the same
+// idea, with one extra choice — Manual, Amelie's saved drag
 // order. The DEFAULT is name A→Z (serekkr, 26/10/2026): an alphabetical order is
 // the SAME on every device without syncing anything, where Manual lives in a
 // per-device .amelie-order.json and so drifts between the desktop and Android.
@@ -10080,7 +10422,7 @@ let treeSortMode = (() => {
   catch (_) { return 'name-asc'; }
 })();
 
-// Folders FIRST at every level, whatever the sort — as in Obsidian, and as the
+// Folders FIRST at every level, whatever the sort — the common convention, and as the
 // manual order's own default does. A date sort reads the date of the item itself;
 // a folder has none on this tree, so folders keep their names' order among
 // themselves instead of all piling up at one end.
@@ -10221,7 +10563,7 @@ function resolveNoteLink(rawTarget) {
 }
 
 // A markdown link to a note — `[Legacy - Easy](Legacy.md)`, `(<with spaces.md>)`,
-// `(Heist%20Box.md#enum)` — resolved the way Obsidian writes them: relative to the
+// `(Heist%20Box.md#enum)` — resolved the way such links are written: relative to the
 // folder of the note it is in, then from the vault root, then by name like a
 // [[link]]. null for web addresses, anchors, attachments and anything not a note.
 // Used by the reading view, which used to treat them as unknown addresses and do
@@ -10373,6 +10715,11 @@ function setupSettings() {
   // survive a reload — see saveSettings()/openSettings().
 
   $('btn-new-note').addEventListener('click', () => createNewNote(newNoteFolder()));
+  // Buttons on the empty state (shown when all tabs are closed) — each the same
+  // action as its toolbar/tree counterpart.
+  $('empty-new-note-btn')?.addEventListener('click', () => createNewNote(newNoteFolder()));
+  $('empty-new-draw-btn')?.addEventListener('click', () => newDraw());
+  $('empty-new-todo-btn')?.addEventListener('click', () => addTodo());
   $('btn-new-folder').addEventListener('click', () => createNewFolder());
   $('btn-collapse-all')?.addEventListener('click', () => toggleAllFolders());
   setupTreeSort();
@@ -10435,7 +10782,7 @@ function setupSettings() {
     if (state.multiSel.size > 1) { try { await deleteTreeSelection(); } catch (_) {} return; }
     // Otherwise the row the tree is pointing at: the one picked with Ctrl+click, or —
     // and this is what was asked for on 12/10/2026, "voglio cancellare anche la nota
-    // selezionata", the way Obsidian does it — the note that is open and highlighted.
+    // selezionata", the familiar behaviour — the note that is open and highlighted.
     // No question, like every other single delete here; what makes that safe is that
     // deleting now goes to the system trash (main.js: trashOrRemove).
     const only = state.multiSel.size === 1 ? [...state.multiSel][0] : (state.selAnchor || state.currentPath);
@@ -11134,7 +11481,7 @@ function setupSettings() {
       r = accepted;
     }
     if (r && r.ok && r.obsidian) {
-      // An Obsidian vault was IMPORTED (links converted, attachments filed), not
+      // A foreign vault was IMPORTED (links converted, attachments filed), not
       // swapped in: nothing reloads, so the tree has to be read again here.
       await loadTree();
       const msg = `${window.i18n.t(r.notes === 1 ? 'toast.note_imported' : 'toast.notes_imported', { n: r.notes || 0 })} · ${r.images || 0} img · ${r.pdfs || 0} pdf`;
@@ -11179,12 +11526,12 @@ function setupSettings() {
     if (!picked) return;
     $('cfg-import-path').value = picked;
     if (res) { res.textContent = window.i18n.t('settings.importing'); res.className = 'test-result'; }
-    // Use the Obsidian importer (same as drag-drop): it copies attachments AND rewrites
+    // Use the vault importer (same as drag-drop): it copies attachments AND rewrites
     // the note links (![[img]] / ![](img) → Amelie's attachment markup), so images show
     // up. The old importFolder copied notes verbatim and left every embed broken
     // (serekkr, 21/10/2026).
     // flat=true: the folder's CONTENTS go to the vault root (root notes + folders show at
-    // the top, like Obsidian) instead of being nested under a container folder (serekkr, 21/10).
+    // the top) instead of being nested under a container folder (serekkr, 21/10).
     const result = await window.inkwell.vault.importObsidian(picked, '', true);
     if (result && result.ok) {
       if (res) {
@@ -11240,8 +11587,10 @@ function setupSettings() {
 
   // Two-way sync: show the custom-minutes input only when "Custom" is selected.
   $('cfg-twoway-interval')?.addEventListener('change', e => {
-    const w = $('twoway-custom-wrap');
-    if (w) w.style.display = e.target.value === 'custom' ? 'flex' : 'none';
+    // Sync "Daily" (1440) reveals the time-of-day picker (serekkr, 29/10/2026 — sync
+    // now has a settable daily time, and the old "Custom" minutes option is gone).
+    const w = $('twoway-dailytime-wrap');
+    if (w) w.style.display = e.target.value === '1440' ? 'flex' : 'none';
   });
 
   // Backup frequency: the custom-DAYS input shows only for "Custom"; the daily TIME
@@ -11266,13 +11615,9 @@ function setupSettings() {
       if (el._saveDebounce) clearTimeout(el._saveDebounce);
       el._saveDebounce = setTimeout(async () => {
         try { await saveSettings(); } catch (_) {}
-        const wrap = el.closest('.sip-custom-wrap');
-        const badge = wrap && wrap.querySelector('.dailytime-saved');
-        if (badge) {
-          badge.style.display = '';
-          if (el._savedTimer) clearTimeout(el._savedTimer);
-          el._savedTimer = setTimeout(() => { badge.style.display = 'none'; }, 1600);
-        }
+        // No per-field "Saved" badge next to the time anymore — the single top-right
+        // "✓ Salvato" flash is the confirmation now (serekkr, 29/10/2026: the two were
+        // redundant).
         try { const st = await window.inkwell.getSyncState?.(); updateBackupDestLines(st || {}, null); } catch (_) {}
       }, 2000);
     });
@@ -11280,6 +11625,7 @@ function setupSettings() {
   };
   _wireDailyTimeSave('cfg-local-dailytime', 'local');
   _wireDailyTimeSave('cfg-remote-dailytime', 'remote');
+  _wireDailyTimeSave('cfg-twoway-dailytime', 'sync');   // sync daily time auto-saves too
 
   // Custom DARK time picker for the backup daily-time fields. The native <input
   // type=time> dropdown paints its selected/hover rows a bright blue we cannot
@@ -11307,10 +11653,10 @@ function setupSettings() {
     const hc = mkCol('H', 24), mc = mkCol('M', 60);
     pop.append(hc.col, mc.col); document.body.appendChild(pop);
     const parse = () => { const m = /^(\d{1,2}):(\d{2})$/.exec(input.value || ''); return m ? [Math.min(23, +m[1]), Math.min(59, +m[2])] : [null, null]; };
-    const mark = () => { const [h, mi] = parse();
+    const mark = () => { let [h, mi] = parse(); if (h == null) { h = 12; mi = 0; }   // default 12:00 shown selected
       hc.list.querySelectorAll('.tp-item').forEach(b => b.classList.toggle('sel', +b.dataset.v === h));
       mc.list.querySelectorAll('.tp-item').forEach(b => b.classList.toggle('sel', +b.dataset.v === mi)); };
-    const setPart = (which, v) => { let [h, mi] = parse(); if (h == null) { h = 18; mi = 0; }
+    const setPart = (which, v) => { let [h, mi] = parse(); if (h == null) { h = 12; mi = 0; }
       if (which === 'h') h = v; else mi = v;
       input.value = String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
       input.dispatchEvent(new Event('change', { bubbles: true })); mark(); };
@@ -11330,6 +11676,79 @@ function setupSettings() {
   };
   attachDarkTimePicker('cfg-local-dailytime');
   attachDarkTimePicker('cfg-remote-dailytime');
+  attachDarkTimePicker('cfg-twoway-dailytime');
+
+  // Dark custom dropdown for the settings <select>s (interval, keep archives): keeps
+  // the native <select> as a HIDDEN value-holder — so every save/load path is unchanged
+  // — and shows a dark menu with no OS blue/purple on hover/selection, like the ToDo
+  // alert (serekkr, 29/10/2026).
+  const attachDarkSelect = (id) => {
+    const sel = $(id);
+    if (!sel || sel._darkSel) return;
+    sel._darkSel = true;
+    sel.style.display = 'none';
+    const wrap = document.createElement('div'); wrap.className = 'kc-sel dark-select';
+    sel.parentNode.insertBefore(wrap, sel);
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'kc-sel-btn';
+    const txt = document.createElement('span'); txt.className = 'kc-sel-txt';
+    const car = document.createElement('span'); car.className = 'kc-sel-caret'; car.textContent = '▾';
+    btn.append(txt, car);
+    // The popup lives on <body> and is position:fixed so the Settings modal's
+    // scroll/overflow can't clip it (that's what looked broken) — same trick as the
+    // dark time picker.
+    const pop = document.createElement('div'); pop.className = 'kc-sel-pop dark-select-pop'; pop.style.display = 'none';
+    const syncUI = () => {
+      const o = sel.options[sel.selectedIndex]; txt.textContent = o ? o.textContent : '';
+      // Re-read labels from the (possibly i18n-translated) options each time, so the
+      // custom items track translations and language switches.
+      [...sel.options].forEach((opt, i) => { const it = pop.children[i]; if (it) { it.textContent = opt.textContent; it.classList.toggle('sel', opt.value === sel.value); } });
+    };
+    [...sel.options].forEach(o => {
+      const item = document.createElement('button'); item.type = 'button'; item.dataset.v = o.value;
+      item.className = 'kc-sel-item'; item.textContent = o.textContent;
+      item.addEventListener('click', (e) => { e.stopPropagation(); sel.value = o.value; sel.dispatchEvent(new Event('change', { bubbles: true })); syncUI(); close(); });
+      pop.appendChild(item);
+    });
+    wrap.appendChild(btn);
+    document.body.appendChild(pop);
+    wrap.addEventListener('mouseenter', syncUI);   // belt-and-suspenders: label always current
+    const onDoc = (e) => { if (!wrap.contains(e.target) && !pop.contains(e.target)) close(); };
+    const onReposition = () => { if (pop.style.display !== 'none') close(); };
+    function close() {
+      pop.style.display = 'none';
+      document.removeEventListener('click', onDoc, true);
+      window.removeEventListener('scroll', onReposition, true);
+      window.removeEventListener('resize', onReposition);
+    }
+    function place() {
+      syncUI();
+      const r = btn.getBoundingClientRect();
+      pop.style.display = 'block';
+      pop.style.minWidth = r.width + 'px';
+      const pw = pop.offsetWidth, ph = pop.offsetHeight;
+      let left = r.left, top = r.bottom + 4;
+      if (left + pw > window.innerWidth - 8) left = window.innerWidth - 8 - pw;
+      if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - 4 - ph);
+      pop.style.left = Math.max(8, left) + 'px';
+      pop.style.top = top + 'px';
+    }
+    function open() {
+      place();
+      setTimeout(() => {
+        document.addEventListener('click', onDoc, true);
+        window.addEventListener('scroll', onReposition, true);
+        window.addEventListener('resize', onReposition);
+      }, 0);
+    }
+    btn.addEventListener('click', (e) => { e.stopPropagation(); pop.style.display === 'none' ? open() : close(); });
+    sel.addEventListener('change', syncUI);
+    sel._darkSync = syncUI;   // loadSettings sets .value directly → call this to refresh the label
+    syncUI();
+  };
+  attachDarkSelect('cfg-twoway-interval');
+  attachDarkSelect('cfg-local-interval');
+  attachDarkSelect('cfg-backup-keep');
+
 
   // One editor at a time: clicking anywhere OUTSIDE an open ToDo editor — another
   // task, a section header, the ToDo tree entry, today/tomorrow — closes it (serekkr,
@@ -13083,7 +13502,7 @@ async function openSettings() {
     const dt = $('cfg-local-dailytime');
     if (dt) dt.value = (/^\d{1,2}:\d{2}$/.test(cfg.sync?.local?.dailyTime || '')) ? cfg.sync.local.dailyTime : '18:00';
     const rdt = $('cfg-remote-dailytime');
-    if (rdt) rdt.value = (/^\d{1,2}:\d{2}$/.test(cfg.sync?.remoteDailyTime || '')) ? cfg.sync.remoteDailyTime : (dt ? dt.value : '18:00');
+    if (rdt) rdt.value = (/^\d{1,2}:\d{2}$/.test(cfg.sync?.remoteDailyTime || '')) ? cfg.sync.remoteDailyTime : (dt ? dt.value : '12:00');
     try { updateDailyTimeWraps(); } catch (_) {}
   }
   if ($('cfg-backup-keep'))    $('cfg-backup-keep').value    = String(cfg.sync?.local?.keepLast ?? 5);
@@ -13111,21 +13530,21 @@ async function openSettings() {
   // Restore two-way frequency: Real-time, a preset, or Custom.
   const twSel = $('cfg-twoway-interval');
   if (twSel) {
-    {
-      // A profile saved with the old "realtime" option lands on the shortest
-      // interval there is now — the closest thing to what it used to do.
-      const twMin = cfg.sync?.twoway?.realtime ? 5 : (parseFloat(cfg.sync?.twoway?.intervalMinutes) || 15);
-      const presets = ['1', '5', '15', '60', '1440'];
-      if (presets.includes(String(twMin))) {
-        twSel.value = String(twMin);
-        if ($('twoway-custom-wrap')) $('twoway-custom-wrap').style.display = 'none';
-      } else {
-        twSel.value = 'custom';
-        if ($('cfg-twoway-interval-custom')) $('cfg-twoway-interval-custom').value = twMin;
-        if ($('twoway-custom-wrap')) $('twoway-custom-wrap').style.display = 'flex';
-      }
+    // Sync: presets OR "Daily" at a set time (serekkr, 29/10/2026 — Custom minutes gone).
+    const twDaily = (typeof cfg.sync?.twoway?.dailyTime === 'string' && /^\d{1,2}:\d{2}$/.test(cfg.sync.twoway.dailyTime)) ? cfg.sync.twoway.dailyTime : '';
+    const twMin = cfg.sync?.twoway?.realtime ? 5 : (parseFloat(cfg.sync?.twoway?.intervalMinutes) || 15);
+    if (twDaily || String(twMin) === '1440') {
+      twSel.value = '1440';
+      if (twDaily && $('cfg-twoway-dailytime')) $('cfg-twoway-dailytime').value = twDaily;
+      if ($('twoway-dailytime-wrap')) $('twoway-dailytime-wrap').style.display = 'flex';
+    } else {
+      const presets = ['1', '5', '15', '60'];
+      twSel.value = presets.includes(String(twMin)) ? String(twMin) : '15';
+      if ($('twoway-dailytime-wrap')) $('twoway-dailytime-wrap').style.display = 'none';
     }
   }
+  // Refresh the dark custom dropdowns to the values just loaded.
+  ['cfg-twoway-interval', 'cfg-local-interval', 'cfg-backup-keep'].forEach(id => { try { $(id)?._darkSync?.(); } catch (_) {} });
   if ($('cfg-vpn-archive'))        $('cfg-vpn-archive').checked        = !!(cfg.sync?.vpn?.archive || cfg.sync?.samba?.archive);
   // Folder toggle = the inverse of archiveOnly (folder snapshot happens unless
   // "archive only" was set). Defaults to ON for a fresh config.
@@ -13234,15 +13653,15 @@ function buildSyncConfig(form, prev) {
   const sambaLan = (selKind === 'samba' && !vpn)
     ? { ...smbServer, remoteSubPath: form.backupFolder || '', useWireGuard: false,
         folder: false, archive: true, archiveOnly: true, keepLast, enabled: remoteOn }
-    : { ...(pS.sambaLan || {}), enabled: selKind === 'samba' ? false : keepOrOff(pS.sambaLan && pS.sambaLan.enabled) };
+    : { ...(pS.sambaLan || {}), enabled: selKind === 'samba' ? false : keepOrOff(pS.sambaLan && pS.sambaLan.enabled), keepLast };
   const vpnObj = (selKind === 'samba' && vpn)
     ? { ...(form.vpnCfg || {}), enabled: remoteOn, syncOnly: !!form.vpnSyncOnly, keepLast }
-    : { ...(pS.vpn || {}), enabled: selKind === 'samba' ? false : keepOrOff(pS.vpn && pS.vpn.enabled), syncOnly: !!form.vpnSyncOnly };
+    : { ...(pS.vpn || {}), enabled: selKind === 'samba' ? false : keepOrOff(pS.vpn && pS.vpn.enabled), syncOnly: !!form.vpnSyncOnly, keepLast };
   const webdav = (selKind === 'webdav')
     ? { url: form.webdavUrl || '', username: form.webdavUser || '', password: form.webdavPass || '',
         remotePath: form.backupFolder || 'amelie/backup',
         folder: false, archive: true, archiveOnly: true, keepLast, enabled: remoteOn }
-    : { ...(pS.webdav || {}), enabled: keepOrOff(pS.webdav && pS.webdav.enabled) };
+    : { ...(pS.webdav || {}), enabled: keepOrOff(pS.webdav && pS.webdav.enabled), keepLast };
   // Local backup is INDEPENDENT of the remotes and must be PRESERVED when you are
   // viewing a remote (serekkr, 23/10/2026: Local + WebDAV both green, closed/reopened,
   // clicked WebDAV to look at it → Local turned off). form.localOn is `isLocal && toggle`,
@@ -13293,6 +13712,7 @@ function buildSyncConfig(form, prev) {
     subPath: (pS.twoway && pS.twoway.subPath) || '',
     conflictCopies: form.conflictCopies !== false, propagateDeletes: true,
     intervalMinutes: form.syncIntervalMinutes,
+    dailyTime: form.syncDailyTime || '',
   };
   return {
     autoSaveSeconds: form.autoSaveSeconds || 3,
@@ -13351,8 +13771,8 @@ function buildFormFromConfig(cfg) {
     webdavUrl: wdSrc.url || '', webdavUser: wdSrc.username || '', webdavPass: wdSrc.password || '',
     backupFolder, syncFolder, localPath: (s.local && s.local.path) || '',
     backupIntervalMinutes: (s.local && s.local.intervalMinutes) || 1440,
-    backupDailyTime: (s.local && /^\d{1,2}:\d{2}$/.test(s.local.dailyTime || '')) ? s.local.dailyTime : '18:00',
-    backupRemoteDailyTime: (/^\d{1,2}:\d{2}$/.test(s.remoteDailyTime || '')) ? s.remoteDailyTime : '20:00',
+    backupDailyTime: (s.local && /^\d{1,2}:\d{2}$/.test(s.local.dailyTime || '')) ? s.local.dailyTime : '12:00',
+    backupRemoteDailyTime: (/^\d{1,2}:\d{2}$/.test(s.remoteDailyTime || '')) ? s.remoteDailyTime : '12:00',
     keepLast: (s.local && s.local.keepLast) != null ? s.local.keepLast
       : (s.vpn && s.vpn.keepLast) != null ? s.vpn.keepLast : 5,
     syncIntervalMinutes: tw.intervalMinutes || 15,
@@ -13498,8 +13918,8 @@ function populateUnifiedBackupUi(cfg) {
   setV('cfg-smb-ip', form.smbIp); setV('cfg-smb-share', form.smbShare);
   setV('cfg-smb-user', form.smbUser); setV('cfg-smb-pass', form.smbPass);
   setV('cfg-webdav-url', form.webdavUrl); setV('cfg-webdav-user', form.webdavUser); setV('cfg-webdav-pass', form.webdavPass);
-  setV('cfg-backup-folder', form.backupFolder);
-  setV('cfg-sync-folder', form.syncFolder);
+  setV('cfg-backup-folder', (form.backupFolder || '').replace(/^\/+/, ''));
+  setV('cfg-sync-folder', (form.syncFolder || '').replace(/^\/+/, ''));
   setV('cfg-smb-path', form.backupFolder);
   setV('cfg-webdav-path', form.backupFolder);
   setC('cfg-backup-remote-on', form.kind === 'local' ? form.localOn : form.backupRemoteOn);
@@ -13546,8 +13966,11 @@ function setupRemoteUi() {
 async function saveSettings() {
   const kind = currentRemoteKind();
   const vpnOn = kind === 'samba' && remoteHasVpn();   // VPN used only if a profile is loaded
-  const backupFolder = ($('cfg-backup-folder')?.value || '').trim();
-  const syncFolder = ($('cfg-sync-folder')?.value || '').trim();
+  // Strip a leading slash so backup and sync paths are stored the same way
+  // (amelie/backup, amelie/sync) — the slash was optional and only cosmetic
+  // inconsistency (serekkr, 29/10/2026).
+  const backupFolder = ($('cfg-backup-folder')?.value || '').trim().replace(/^\/+/, '');
+  const syncFolder = ($('cfg-sync-folder')?.value || '').trim().replace(/^\/+/, '');
   // buildVpnConfig reads cfg-smb-path for the share path → feed it the backup folder.
   if ($('cfg-smb-path')) $('cfg-smb-path').value = backupFolder;
   if ($('cfg-webdav-path')) $('cfg-webdav-path').value = backupFolder;
@@ -13577,19 +14000,21 @@ async function saveSettings() {
     backupDailyTime: (() => {
       const v = $('cfg-local-interval')?.value;
       const t = $('cfg-local-dailytime')?.value || '';
-      return (v === '1440' && /^\d{1,2}:\d{2}$/.test(t)) ? t : '';
+      // A time-of-day applies to Daily, Weekly AND Custom(days) — not to hourly.
+      return (['1440', '10080', 'custom'].includes(v) && /^\d{1,2}:\d{2}$/.test(t)) ? t : '';
     })(),
     backupRemoteDailyTime: (() => {
       const v = $('cfg-local-interval')?.value;
       const t = $('cfg-remote-dailytime')?.value || '';
-      return (v === '1440' && /^\d{1,2}:\d{2}$/.test(t)) ? t : '';
+      return (['1440', '10080', 'custom'].includes(v) && /^\d{1,2}:\d{2}$/.test(t)) ? t : '';
     })(),
     keepLast: parseInt($('cfg-backup-keep')?.value) || 0,
     syncIntervalMinutes: (() => {
       const v = $('cfg-twoway-interval')?.value;
-      if (v === 'custom') return parseInt($('cfg-twoway-interval-custom')?.value) || 15;
       return parseFloat(v) || 15;
     })(),
+    // Sync "Daily" at a set time (serekkr, 29/10/2026); empty unless the Daily option.
+    syncDailyTime: ($('cfg-twoway-interval')?.value === '1440') ? ($('cfg-twoway-dailytime')?.value || '') : '',
     conflictCopies: !!$('cfg-twoway-fullsync')?.checked,
     vpnSyncOnly: !!$('cfg-vpn-synconly')?.checked,
     autoSaveSeconds: parseInt($('cfg-autosave')?.value) || 3,
@@ -15250,6 +15675,7 @@ function setPdfTool(tool) {
   document.getElementById('pdf-tool-hl')?.classList.toggle('active', _pdfTool === 'highlight');
   document.getElementById('pdf-tool-text')?.classList.toggle('active', _pdfTool === 'text');
   document.getElementById('pdf-tool-image')?.classList.toggle('active', _pdfTool === 'image');
+  document.getElementById('pdf-tool-redact')?.classList.toggle('active', _pdfTool === 'redact');
   _syncPdfColorBtn();
 }
 
@@ -15258,6 +15684,18 @@ function _drawPageAnnots(svg, page, scale, pageHpt) {
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   for (const a of _pdfAnnots) {
     if (a.page !== page) continue;
+    if (a.type === 'redact') {
+      // Obfuscation box: an opaque filled rectangle that covers the content under it.
+      // Stored x/y/w/h in PDF points (y = bottom edge from the page bottom).
+      const rect = document.createElementNS(SVGNS, 'rect');
+      rect.setAttribute('x', String(a.x * scale));
+      rect.setAttribute('y', String((pageHpt - (a.y + a.h)) * scale));
+      rect.setAttribute('width', String(a.w * scale));
+      rect.setAttribute('height', String(a.h * scale));
+      rect.setAttribute('fill', a.color || '#000000');
+      svg.appendChild(rect);
+      continue;
+    }
     if (a.type !== 'pen' && a.type !== 'highlight') continue;   // text/image live on the obj layer
     const pl = document.createElementNS(SVGNS, 'polyline');
     pl.setAttribute('points', a.points.map(([x, y]) => `${x * scale},${(pageHpt - y) * scale}`).join(' '));
@@ -15274,18 +15712,38 @@ function _drawPageAnnots(svg, page, scale, pageHpt) {
 // Wire pointer drawing on a page's SVG overlay. Coords stored in PDF points
 // (origin bottom-left) so they survive zoom and feed pdf-lib directly.
 function _wirePdfAnnotLayer(svg, page, scale, pageHpt) {
-  let cur = null, curEl = null;
+  let cur = null, curEl = null, rectStart = null;
   const toPt = (ev) => {
     const r = svg.getBoundingClientRect();
     return [(ev.clientX - r.left) / scale, pageHpt - (ev.clientY - r.top) / scale];
   };
   const redraw = () => curEl?.setAttribute('points',
     cur.points.map(([x, y]) => `${x * scale},${(pageHpt - y) * scale}`).join(' '));
+  // Obfuscation box: a drag-rectangle. Normalise the two corners into x/y/w/h with
+  // y = the BOTTOM edge from the page bottom (PDF points), ready for pdf-lib.
+  const redrawRect = ([x1, y1]) => {
+    const [x0, y0] = rectStart;
+    const left = Math.min(x0, x1), right = Math.max(x0, x1);
+    const bottom = Math.min(y0, y1), top = Math.max(y0, y1);
+    cur.x = left; cur.y = bottom; cur.w = right - left; cur.h = top - bottom;
+    curEl.setAttribute('x', String(left * scale));
+    curEl.setAttribute('y', String((pageHpt - top) * scale));
+    curEl.setAttribute('width', String((right - left) * scale));
+    curEl.setAttribute('height', String((top - bottom) * scale));
+  };
   svg.addEventListener('pointerdown', (ev) => {
     if (!_pdfTool) return;
     ev.preventDefault();
     _deselectPdfText();
     try { svg.setPointerCapture(ev.pointerId); } catch (_) {}
+    if (_pdfTool === 'redact') {
+      rectStart = toPt(ev);
+      cur = { type: 'redact', page, color: '#000000', x: rectStart[0], y: rectStart[1], w: 0, h: 0 };
+      curEl = document.createElementNS(SVGNS, 'rect');
+      curEl.setAttribute('fill', '#000000');
+      svg.appendChild(curEl);
+      return;
+    }
     const st = _pdfToolStyle();
     cur = { type: _pdfTool, page, color: st.color, width: st.width, points: [toPt(ev)] };
     curEl = document.createElementNS(SVGNS, 'polyline');
@@ -15299,14 +15757,16 @@ function _wirePdfAnnotLayer(svg, page, scale, pageHpt) {
   });
   svg.addEventListener('pointermove', (ev) => {
     if (!cur) return;
+    if (cur.type === 'redact') { redrawRect(toPt(ev)); return; }
     cur.points.push(toPt(ev));
     redraw();
   });
   const finish = () => {
     if (!cur) return;
-    if (cur.points.length >= 2) { _pdfAnnots.push(cur); _pdfDirty = true; _updatePdfDirty(); }
+    const keep = cur.type === 'redact' ? (cur.w > 2 && cur.h > 2) : (cur.points.length >= 2);
+    if (keep) { _pdfAnnots.push(cur); _pdfDirty = true; _updatePdfDirty(); }
     else if (curEl) svg.removeChild(curEl);
-    cur = null; curEl = null;
+    cur = null; curEl = null; rectStart = null;
   };
   svg.addEventListener('pointerup', finish);
   svg.addEventListener('pointercancel', finish);
@@ -17955,11 +18415,8 @@ function toggleNoteSearch() {
 function openNoteSearch() {
   const bar = $('note-search-bar');
   bar.style.display = 'flex';
-  // Hands the whole toolbar row to the field (see #editor-toolbar.searching in
-  // style.css): while you are typing what to look for, the formatting buttons are
-  // not what you are reaching for, and sharing the row left the field too short for
-  // a phrase.
-  $('editor-toolbar')?.classList.add('searching');
+  // The field now opens on the dates row (#note-header-meta), in the empty space to
+  // the right, so the formatting toolbar is left untouched — no more .searching takeover.
   $('btn-note-search').classList.add('active');
   const input = $('note-search-input');
   input.value = '';
@@ -17980,7 +18437,6 @@ function clearNoteSearchMarks() {
 
 function closeNoteSearch() {
   $('note-search-bar').style.display = 'none';
-  $('editor-toolbar')?.classList.remove('searching');   // formatting buttons come back
   $('btn-note-search').classList.remove('active');
   clearNoteSearchMarks();
 }
@@ -18359,18 +18815,69 @@ function _gatherEntries(entries) {
   return Promise.all(entries.map(e => readEntry(e, ''))).then(() => out);
 }
 
-// During an external (file-explorer) drag, highlight the tree folder under the
-// cursor so you can see which folder the dropped note/folder will go into.
+// During an external (file-explorer) drag, highlight the WHOLE tree folder under
+// the cursor — its row AND its contents, Obsidian-style — so it is obvious which
+// folder the dropped file(s) will land in. The frame goes on the folder's wrapper
+// (row + children), not just the row, so an open folder shows one enclosing box.
 let _extDropTarget = '';   // path of that folder ('' = vault root)
 function _highlightExtDropTarget(target) {
-  const folder = target && target.closest ? target.closest('.tree-folder') : null;
-  document.querySelectorAll('.tree-folder.drag-over-folder').forEach(el => { if (el !== folder) el.classList.remove('drag-over-folder'); });
-  if (folder) { folder.classList.add('drag-over-folder'); _extDropTarget = folder.dataset.folder || ''; }
+  let folder = target && target.closest ? target.closest('.tree-folder') : null;
+  // Hovering a note/row INSIDE an open folder targets that enclosing folder too, so
+  // the WHOLE folder area is a drop zone (Obsidian-style), not only its header row.
+  // The folder row is the sibling right before its .tree-folder-children container.
+  if (!folder && target && target.closest) {
+    const kids = target.closest('.tree-folder-children');
+    const prev = kids && kids.previousElementSibling;
+    if (prev && prev.classList && prev.classList.contains('tree-folder')) folder = prev;
+  }
+  const wrap = folder ? folder.parentElement : null;   // the div wrapping row + .tree-folder-children
+  document.querySelectorAll('.ext-drop-into').forEach(el => { if (el !== wrap) el.classList.remove('ext-drop-into'); });
+  if (folder && wrap) { wrap.classList.add('ext-drop-into'); _extDropTarget = folder.dataset.folder || ''; }
   else _extDropTarget = '';
 }
 function _clearExtDropTarget() {
-  document.querySelectorAll('.tree-folder.drag-over-folder').forEach(el => el.classList.remove('drag-over-folder'));
+  document.querySelectorAll('.ext-drop-into').forEach(el => el.classList.remove('ext-drop-into'));
   _extDropTarget = '';
+}
+// Record freshly-imported LOOSE attachments' home = the folder they were dropped on,
+// so they appear INSIDE that folder instead of at the vault root — the same mechanism
+// as dragging an existing attachment onto a folder (saveManualOrder → _attachmentHomes
+// in main). `attPaths` are vault paths ("attachments/images/x.png"). Call AFTER
+// loadTree(), when the new nodes exist (at the root, with no home recorded yet).
+function _homeAttachmentsInFolder(folderPath, attPaths) {
+  if (!folderPath || !attPaths || !attPaths.length) return;
+  const destArr = levelArray(folderPath);
+  if (!destArr) return;   // target folder gone (deleted mid-drag) → leave at root
+  const wanted = new Set(attPaths);
+  // A loose attachment has EXACTLY ONE home. Drop these paths from every OTHER saved
+  // order level — the root and any folder they were homed in before — so the same
+  // physical file is never listed, and so never shown, under two folders at once.
+  // (Without this, dropping the same file on folder A then folder B left it homed in
+  // both: after a reload _attachmentHomes surfaced two rows for one file, and deleting
+  // either one deleted the single file behind both. serekkr, 30/10/2026.)
+  let orderChanged = false;
+  for (const k of Object.keys(treeOrder)) {
+    if (k === folderPath || !Array.isArray(treeOrder[k])) continue;
+    const after = treeOrder[k].filter(p => !wanted.has(p));
+    if (after.length !== treeOrder[k].length) {
+      if (after.length) treeOrder[k] = after; else delete treeOrder[k];
+      orderChanged = true;
+    }
+  }
+  // Strip ALL in-memory copies (a reload may have placed one per stale home), then put
+  // a single copy in the target folder.
+  let moved = 0;
+  for (const ap of attPaths) {
+    let node = null, found;
+    while ((found = findAndRemoveFromTree(ap, state.notes))) node = found.node;
+    if (!node) continue;
+    destArr.push(node);
+    moved++;
+  }
+  if (!moved) { if (orderChanged) { saveTreeOrder(); renderTree(); } return; }
+  state.openFolders.add(folderPath);
+  saveManualOrder(folderPath, destArr);   // persists treeOrder, including the cleanup above
+  renderTree();
 }
 
 function setupFileDrop() {
@@ -18416,7 +18923,7 @@ function setupFileDrop() {
     // RELIABLE folder detection: webkitGetAsEntry is flaky for directories on Linux
     // (and Electron 32+ removed File.path), so resolve the real FS path via
     // webUtils.getPathForFile and let MAIN decide which are folders. A dropped FOLDER
-    // → main-process Obsidian import (reads from disk; notes + images + PDFs + embed
+    // → main-process vault import (reads from disk; notes + images + PDFs + embed
     // rewriting). This is the primary path; the webkitGetAsEntry logic below is a fallback.
     const _paths = flat.map(f => { try { return window.inkwell.getPathForFile ? window.inkwell.getPathForFile(f) : ''; } catch (_) { return ''; } }).filter(Boolean);
     if (_paths.length) {
@@ -18458,15 +18965,11 @@ function setupFileDrop() {
       // is whether the tree actually grew.
       const _rootMediaCount = () => (state.notes || [])
         .filter(n => ['image', 'video', 'audio', 'pdf'].includes(n.type)).length;
-      const _reportMedia = async (before, failed, droppedOnFolder) => {
+      const _reportMedia = async (before, failed) => {
         await loadTree();
         const added = _rootMediaCount() - before;
         if (added > 0) {
           showToast(window.i18n.t(added === 1 ? 'toast.media_added' : 'toast.media_added_many', { n: added }));
-          // Media lives under attachments/ and the tree surfaces it at the ROOT only, so
-          // a drop aimed at a folder does not land inside it. Say so, rather than leave
-          // the user hunting in the folder they aimed at.
-          if (droppedOnFolder) showToast(window.i18n.t('toast.media_at_root'), 4000);
         } else if (!failed) {
           showToast(window.i18n.t('toast.media_already_there'), 4000);
         }
@@ -18474,15 +18977,17 @@ function setupFileDrop() {
       const mediaPaths = _paths.filter(_isDroppedMedia);
       if (mediaPaths.length) {
         e.stopPropagation();
-        const droppedOnFolder = !!_extDropTarget;
+        const dest = _extDropTarget;            // the folder dropped onto ('' = vault root)
         _clearExtDropTarget();
         const before = _rootMediaCount();
         let failed = 0;
+        const importedRel = [];                 // vault paths of what actually landed
         for (const p of mediaPaths) {
-          try { await window.inkwell.importAttachmentPath(p, _sidebarMediaTarget(p.split('/').pop())); }
+          try { const name = await window.inkwell.importAttachmentPath(p, _sidebarMediaTarget(p.split('/').pop())); if (name) importedRel.push('attachments/' + name); }
           catch (err) { failed++; console.error('Sidebar media import failed:', p, err); _attachErrToast(err, p.split('/').pop()); }
         }
-        await _reportMedia(before, failed, droppedOnFolder);
+        await _reportMedia(before, failed);
+        if (dest) _homeAttachmentsInFolder(dest, importedRel);   // land it IN the folder it was dropped on
         return;
       }
       // Not a folder → fall through to the loose-file logic below.
@@ -18496,16 +19001,18 @@ function setupFileDrop() {
     const noteLikeInDrop = flat.some(f => f && /\.(md|markdown|txt|draw)$/i.test(f.name));
     if (!_paths.length && !noteLikeInDrop && mediaFiles.length && !entries.some(en => en.isDirectory)) {
       e.preventDefault(); e.stopPropagation();
-      const droppedOnFolder = !!_extDropTarget;
+      const dest = _extDropTarget;            // the folder dropped onto ('' = vault root)
       _clearExtDropTarget();
       const _rootMediaCount = () => (state.notes || [])
         .filter(n => ['image', 'video', 'audio', 'pdf'].includes(n.type)).length;
       const before = _rootMediaCount();
       let failed = 0;
+      const importedRel = [];
       for (const file of mediaFiles) {
         try {
           const buf = await file.arrayBuffer();
-          await window.inkwell.saveAttachment(_sidebarMediaTarget(file.name), new Uint8Array(buf));
+          const name = await window.inkwell.saveAttachment(_sidebarMediaTarget(file.name), new Uint8Array(buf));
+          if (name) importedRel.push('attachments/' + name);
         } catch (err) {
           failed++;
           console.error('Sidebar media save failed:', file.name, err);
@@ -18516,10 +19023,10 @@ function setupFileDrop() {
       const added = _rootMediaCount() - before;
       if (added > 0) {
         showToast(window.i18n.t(added === 1 ? 'toast.media_added' : 'toast.media_added_many', { n: added }));
-        if (droppedOnFolder) showToast(window.i18n.t('toast.media_at_root'), 4000);
       } else if (!failed) {
         showToast(window.i18n.t('toast.media_already_there'), 4000);
       }
+      if (dest) _homeAttachmentsInFolder(dest, importedRel);   // land it IN the folder it was dropped on
       return;
     }
 
@@ -18536,8 +19043,8 @@ function setupFileDrop() {
     const baseFolder = _extDropTarget;
     _clearExtDropTarget();
 
-    // Drop anything inside a hidden/dot segment (.obsidian/.trash/.stversions/.git…) so
-    // an Obsidian vault's service folders never get imported as notes/attachments.
+    // Drop anything inside a hidden/dot segment (.trash/.stversions/.git…) so
+    // a vault's service folders never get imported as notes/attachments.
     const gathered = (entries.length ? await _gatherEntries(entries) : flat.map(f => ({ file: f, rel: f.name })))
       .filter(g => !g.rel.split('/').some(s => s.startsWith('.')));
     const mdFiles   = gathered.filter(g => /\.(md|markdown|txt)$/i.test(g.rel));
@@ -18545,12 +19052,12 @@ function setupFileDrop() {
     const drawFiles = gathered.filter(g => /\.draw$/i.test(g.rel));
     if (!mdFiles.length && !pdfFiles.length && !drawFiles.length) return;
 
-    // ── Obsidian-style import: bring in referenced images/PDFs/media and rewrite
-    // Obsidian embeds (![[file]]) + local links into Amelie's format, so attachments
+    // ── Vault import: bring in referenced images/PDFs/media and rewrite
+    // wiki embeds (![[file]]) + local links into Amelie's format, so attachments
     // survive the import instead of being discarded. Attachments are saved FIRST so the
     // note rewrite can point at their final (sanitized) names. Only for FOLDER drops
     // (hasDir) — a loose file drop keeps its old behaviour (a single PDF opens in a tab
-    // below). Skips hidden dirs (.obsidian/.trash/.stversions/…).
+    // below). Skips hidden dirs (.trash/.stversions/…).
     const IMG_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
     const AV_EXT_RE  = /\.(mp4|mov|webm|mp3|wav|m4a)$/i;
     const ATT_ANY_RE = /\.(png|jpe?g|gif|webp|svg|bmp|pdf|mp4|mov|webm|mp3|wav|m4a)$/i;
@@ -18642,13 +19149,14 @@ function setupFileDrop() {
     }
 
     // Images/audio/video referenced by the notes ARE imported (above) and their
-    // Obsidian embeds rewritten; loose scripts and other unref'd types are skipped.
+    // wiki embeds rewritten; loose scripts and other unref'd types are skipped.
 
     // Loose single-PDF drop → save to attachments/pdf/ and open it in a viewer tab.
     // For a FOLDER import the PDFs are already handled above (saved to attachments/pdf/
     // and linked inside the notes), so we do NOT open a tab per PDF — a vault with many
     // PDFs would otherwise spawn a tab for each.
     let pdfImported = 0;
+    const importedPdfRel = [];                 // vault paths of the PDFs that landed
     for (const g of (hasDir ? [] : pdfFiles)) {
       const file = g.file;
       // Reject >512 MB BEFORE reading the whole file into the renderer heap
@@ -18657,6 +19165,7 @@ function setupFileDrop() {
       try {
         const buf = await file.arrayBuffer();
         const savedName = await window.inkwell.saveAttachment('pdf/' + file.name, new Uint8Array(buf));
+        importedPdfRel.push('attachments/' + savedName);
         const existingIdx = tabs.findIndex(t => t.type === 'pdf' && t.attachmentName === savedName);
         if (existingIdx >= 0) {
           await switchTab(existingIdx);
@@ -18668,7 +19177,10 @@ function setupFileDrop() {
         // No "PDF added" toast — the imported PDF opens in a tab as feedback.
       } catch (err) { console.error('Import pdf failed:', file.name, err); _attachErrToast(err, file.name); }
     }
-    if (pdfImported > 0) await loadTree();
+    if (pdfImported > 0) {
+      await loadTree();
+      if (baseFolder) _homeAttachmentsInFolder(baseFolder, importedPdfRel);   // land it IN the folder it was dropped on
+    }
 
   }, true);
 
@@ -18692,14 +19204,17 @@ function setupFileDrop() {
   setupImagePan();
   $('img-zoom-in')?.addEventListener('click', () => setImgZoom(_imgZoom + 0.2));
   $('img-zoom-out')?.addEventListener('click', () => setImgZoom(_imgZoom - 0.2));
+  $('img-zoom-reset')?.addEventListener('click', () => setImgZoom(1.0));   // torna a 100%
 
   // PDF zoom controls
   $('pdf-zoom-in')?.addEventListener('click', () => setPdfZoom(_pdfZoom + 0.2));
   $('pdf-zoom-out')?.addEventListener('click', () => setPdfZoom(_pdfZoom - 0.2));
+  $('pdf-zoom-reset')?.addEventListener('click', () => setPdfZoom(1.0));   // torna a 100%
   $('pdf-zoom-fit')?.addEventListener('click', () => pdfZoomFitWidth());
   // PDF annotation editor tools
   $('pdf-tool-pen')?.addEventListener('click', () => setPdfTool('pen'));
   $('pdf-tool-hl')?.addEventListener('click', () => setPdfTool('highlight'));
+  $('pdf-tool-redact')?.addEventListener('click', () => setPdfTool('redact'));
   // Colour picker for pen / highlighter
   $('pdf-color')?.addEventListener('click', (e) => { e.stopPropagation(); togglePdfColorPop(); });
   $('pdf-color-input')?.addEventListener('input', (e) => setPdfToolColor(e.target.value));
@@ -18937,7 +19452,7 @@ function renderRecentView() {
     // title ("Modified <date>"), and with the tooltip on the name alone it
     // vanished as soon as the pointer crossed onto that line, inside what reads
     // and clicks as a single entry.
-    if (it.path) main.title = it.path;
+    _pathTip(main, it.path, true);   // Recent: path sempre, come Tags (serekkr, 30/10/2026)
     main.appendChild(name);
     if (mod) { const sub = document.createElement('div'); sub.className = 'simple-sub'; sub.textContent = window.i18n.t('recent.modified') + ' ' + _fmtDateTimeDMY(mod); main.appendChild(sub); }
     main.addEventListener('click', () => _openByPath(it.path, it.name));
@@ -18955,7 +19470,7 @@ function renderBookmarksView() {
     const row = _simpleRow(it.name, () => _openByPath(it.path, it.name), removeFn);
     // Hovering shows where the note lives, as the tags view does for its source notes: the
     // list only has room for the name, and two notes can share one.
-    if (it.path) { const n = row.querySelector('.simple-name'); if (n) n.title = it.path; }
+    _pathTip(row.querySelector('.simple-name'), it.path, true);   // Bookmarks: path sempre, come Tags
     // For the search bar filter: note name and path.
     row.dataset.name = ((it.name || '') + '\n' + (it.path || '')).toLowerCase();
     // Right-click → remove from bookmarks (no extra tab opened).
@@ -19089,7 +19604,7 @@ async function renderTagsView() {
       tagBtn.className = 'tag-chip';
       tagBtn.textContent = `#${t}`;
       // Hover shows where the tag is: the full path, note name included.
-      tagBtn.title = n.path;
+      _pathTip(tagBtn, n.path, true);   // Tags: always (the row shows only "#tag")
       tagBtn.addEventListener('click', () => _openByPathAtTag(n.path, n.name, t));
       row.append(tagBtn);
       group.appendChild(row);
@@ -19212,6 +19727,42 @@ function _reorderTodo(bucket, file, beforeFile) {
 const ALERT_OPTS = [['', 'todo.no_alert'], ['5', 'todo.alert_5'], ['15', 'todo.alert_15'], ['30', 'todo.alert_30'], ['60', 'todo.alert_60'], ['1440', 'todo.alert_1d'], ['custom', 'todo.alert_custom']];
 const ALERT_PRESETS = ['5', '15', '30', '60', '1440'];
 
+// A small DARK custom dropdown replacing a native <select>: Chromium paints the
+// native popup with the OS highlight (blue/cyan/purple on hover and selection)
+// that CSS can't tame, so we draw our own (serekkr, 29/10/2026). opts: [[value,
+// label],…]. Returns { el, get() }. Hover/selection are dark, on-theme.
+function _buildDarkSelect(opts, current, onChange) {
+  const wrap = document.createElement('div'); wrap.className = 'kc-sel';
+  let value = current;
+  const labelOf = (v) => { const o = opts.find(x => x[0] === v); return o ? o[1] : (opts[0] ? opts[0][1] : ''); };
+  const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'kc-sel-btn';
+  const txt = document.createElement('span'); txt.className = 'kc-sel-txt'; txt.textContent = labelOf(value);
+  const car = document.createElement('span'); car.className = 'kc-sel-caret'; car.textContent = '▾';
+  btn.append(txt, car);
+  const pop = document.createElement('div'); pop.className = 'kc-sel-pop'; pop.style.display = 'none';
+  opts.forEach(([v, l]) => {
+    const item = document.createElement('button'); item.type = 'button'; item.dataset.v = v;
+    item.className = 'kc-sel-item' + (v === value ? ' sel' : ''); item.textContent = l;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation(); value = v; txt.textContent = l;
+      pop.querySelectorAll('.kc-sel-item').forEach(x => x.classList.toggle('sel', x === item));
+      close(); if (onChange) onChange(v);
+    });
+    pop.appendChild(item);
+  });
+  wrap.append(btn, pop);
+  const onDoc = (e) => { if (!wrap.contains(e.target)) close(); };
+  function close() { pop.style.display = 'none'; document.removeEventListener('click', onDoc, true); }
+  function open() { pop.style.display = 'block'; setTimeout(() => document.addEventListener('click', onDoc, true), 0); }
+  btn.addEventListener('click', (e) => { e.stopPropagation(); (pop.style.display === 'none') ? open() : close(); });
+  // Set the value programmatically (updates label + highlight), WITHOUT firing onChange.
+  const set = (v) => {
+    value = v; txt.textContent = labelOf(v);
+    pop.querySelectorAll('.kc-sel-item').forEach(x => x.classList.toggle('sel', x.dataset.v === v));
+  };
+  return { el: wrap, get: () => value, set };
+}
+
 function _fmtDue(due) { const d = new Date(due); if (isNaN(d)) return ''; return d.toLocaleString(undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
 // Reminder due date as explicit day/month/year + time (Notifications view).
 function _fmtDueDMY(due) { const d = new Date(due); if (isNaN(d)) return ''; const p = n => String(n).padStart(2, '0'); return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
@@ -19256,13 +19807,10 @@ function updateBackupDestLines(times, savedWhich) {
   const when = fam === 'local' ? (t.lastBackupAtLocal || t.lastBackupAt) : (t.lastBackupAtRemote || t.lastBackupAt);
   const whenEl = row.querySelector('.lastbk-when');
   if (whenEl) whenEl.textContent = when ? _fmtDateTimeDMYS(when) : '—';
-  const flash = savedWhich === 'all' || savedWhich === fam;
+  // No per-destination "saved" badge on activate/save — the single top-right
+  // "✓ Salvato" flash is the only confirmation now (serekkr, 29/10/2026).
   const badge = row.querySelector('.lastbk-saved');
-  if (badge && savedWhich && flash) {
-    badge.style.display = '';
-    if (_lastBackupSavedTimer) clearTimeout(_lastBackupSavedTimer);
-    _lastBackupSavedTimer = setTimeout(() => { badge.style.display = 'none'; }, 4000);
-  }
+  if (badge) badge.style.display = 'none';
 }
 // Populate the lines from the stored state (called when Settings → Backup opens, or the
 // viewed destination changes, so each shows its last backup even with no run this session).
@@ -19277,7 +19825,10 @@ async function refreshBackupStatusLines() {
 // matched to the destination being viewed. Both can be configured; you see one at a time
 // because the Backup panel shows one destination block at a time.
 function updateDailyTimeWraps() {
-  const daily = ($('cfg-local-interval')?.value === '1440');
+  // Show the time-of-day field for DAILY, WEEKLY and CUSTOM(days) backups (serekkr,
+  // 29/10/2026) — so you know exactly when it runs. Not for hourly.
+  const iv = $('cfg-local-interval')?.value;
+  const daily = (iv === '1440' || iv === '10080' || iv === 'custom');
   const kind = (typeof currentRemoteKind === 'function') ? currentRemoteKind() : 'local';
   const lw = $('local-dailytime-wrap');
   const rw = $('remote-dailytime-wrap');
@@ -19318,6 +19869,8 @@ function showTodoView() {
 }
 function openKanban() { openTodoView(); }   // alias (voce ToDo nell'albero / addTodo)
 let _todoReturnPath = null;   // the note the board was opened from
+let _todoOpenAddPending = false;   // one-shot: next renderTodoView opens the quick-add editor (from addTodo)
+let _todoOpenEditFor = null;       // one-shot: next renderTodoView opens THIS task (by .file) in its edit editor
 
 async function closeKanban() {
   if (!_kanbanOpen) return;
@@ -19349,13 +19902,27 @@ async function renderTodoView(opts = {}) {
   const addEd = addRow && addRow.querySelector('.todo-editor');
   const keepAdd = !!addEd && !opts.resetAdd;
   if (!keepAdd) _todoEditorClose = null;   // discard edit editors / a reset add editor
+  // Open the quick-add editor as part of THIS render (not via a delayed click after
+  // it) so "Create a new todo" shows the board with the editor already open, with no
+  // flash of the closed add-row first (serekkr, 29/10/2026). Consume the flag once.
+  const openAdd = !!opts.openAdd || _todoOpenAddPending;
+  _todoOpenAddPending = false;
   const list = $('todo-view-list'); if (!list) return;
   let data; try { data = await window.inkwell.todo.list(); } catch(_) { data = _emptyTodoBuckets(); }
   _todoCache = data;
   document.querySelectorAll('.tv-filter').forEach(b => b.classList.toggle('active', b.dataset.f === _todoFilter));
   if (addRow) {
-    addRow.style.display = (_todoFilter === 'done') ? 'none' : '';
-    if (!keepAdd) { addRow.innerHTML = ''; addRow.appendChild(_todoAddTrigger()); }
+    const onDone = (_todoFilter === 'done');
+    addRow.style.display = onDone ? 'none' : '';
+    if (!keepAdd) {
+      addRow.innerHTML = '';
+      if (openAdd && !onDone) {
+        const bucket = _todoFilter === 'upcoming' ? 'upcoming' : 'today';
+        addRow.appendChild(_todoInlineEditor(bucket, null));   // editor already open
+      } else {
+        addRow.appendChild(_todoAddTrigger());
+      }
+    }
   }
   list.innerHTML = '';
   // "Scaduti" (overdue): a VIRTUAL section at the top gathering every not-done task
@@ -19427,6 +19994,9 @@ function _todoAddTrigger() {
 }
 
 function _todoRow(it) {
+  // Asked to open this task in edit (from a click on its pencil/title while another
+  // editor was open) → render it AS the editor instead of a row.
+  if (_todoOpenEditFor != null && it.file === _todoOpenEditFor) { _todoOpenEditFor = null; return _todoInlineEditor(it.bucket, it); }
   const row = document.createElement('div'); row.className = 'todo-row' + (it.bucket === 'done' ? ' done' : '');
   row.draggable = true;
   row.addEventListener('dragstart', e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/file', it.file); e.dataTransfer.setData('text/from', it.bucket); _todoDragFrom = it.bucket; _todoDragFile = it.file; row.classList.add('dragging'); });
@@ -19462,13 +20032,17 @@ function _todoRow(it) {
   const main = document.createElement('div'); main.className = 'todo-main';
   const title = document.createElement('div'); title.className = 'todo-title'; title.textContent = it.title || '(vuoto)';
   title.addEventListener('click', () => {
-    if (document.querySelector('.todo-editor')) return;   // one editor at a time
-    row.replaceWith(_todoInlineEditor(it.bucket, it));
+    // Open THIS task in edit, closing whatever editor is open first — including the
+    // STICKY new-task quick-add at the top (serekkr, 29/10/2026). Done via a flagged
+    // re-render (resetAdd closes the quick-add; _todoRow opens the editor for this
+    // item) so it's robust regardless of event timing / stale rows.
+    _todoOpenEditFor = it.file;
+    renderTodoView({ resetAdd: true });
   });
   main.appendChild(title);
   if (it.due) {
     const chip = document.createElement('span'); chip.className = 'todo-chip' + ((_isOverdue(it.due) && it.bucket !== 'done') ? ' overdue' : '');
-    chip.textContent = ((it.alert !== '' && it.alert != null) ? '🔔 ' : '🕒 ') + _fmtDue(it.due);
+    chip.textContent = ((it.remind || (it.alert !== '' && it.alert != null)) ? '🔔 ' : '🕒 ') + _fmtDue(it.due);
     main.appendChild(chip);
   }
   const meta = document.createElement('div'); meta.className = 'todo-meta';
@@ -19484,8 +20058,12 @@ function _todoRow(it) {
   ed.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
   ed.addEventListener('click', e => {
     e.stopPropagation();
-    if (document.querySelector('.todo-editor')) return;   // one editor at a time
-    row.replaceWith(_todoInlineEditor(it.bucket, it));
+    // Open THIS task in edit, closing whatever editor is open first — including the
+    // STICKY new-task quick-add at the top (serekkr, 29/10/2026). Done via a flagged
+    // re-render (resetAdd closes the quick-add; _todoRow opens the editor for this
+    // item) so it's robust regardless of event timing / stale rows.
+    _todoOpenEditFor = it.file;
+    renderTodoView({ resetAdd: true });
   });
   actions.appendChild(ed);
   if (it.bucket !== 'done') {
@@ -19506,7 +20084,7 @@ function _todoRow(it) {
 }
 
 // Custom calendar (calendar + time selection only, with OK). No manual input.
-function _buildDateField(initial) {
+function _buildDateField(initial, onChange) {
   const wrap = document.createElement('div'); wrap.className = 'dp-wrap';
   let value = initial || '';
   const CAL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
@@ -19517,7 +20095,7 @@ function _buildDateField(initial) {
   const pop = document.createElement('div'); pop.className = 'dp-pop'; pop.style.display = 'none';
   let view = value && !isNaN(new Date(value)) ? new Date(value) : new Date();
   let selDate = value && !isNaN(new Date(value)) ? new Date(value) : null;
-  let hh = selDate ? selDate.getHours() : 9, mm = selDate ? selDate.getMinutes() : 0;
+  let hh = selDate ? selDate.getHours() : 12, mm = selDate ? selDate.getMinutes() : 0;   // default 12:00
   function renderCal() {
     pop.innerHTML = '';
     // Calendar (left) and time (right) sit side by side in .dp-body, split by a
@@ -19548,7 +20126,9 @@ function _buildDateField(initial) {
     }
     cal.appendChild(grid);
     const timeRow = document.createElement('div'); timeRow.className = 'dp-time';
-    const clk = document.createElement('span'); clk.textContent = '🕒';
+    // Subtle dark SVG clock instead of the bright white 🕒 emoji (serekkr, 29/10/2026).
+    const clk = document.createElement('span'); clk.className = 'dp-time-clk';
+    clk.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9.5V13l2.5 1.5"/><path d="M5 3 2.5 5.5"/><path d="m19 3 2.5 2.5"/></svg>';
     // Dark hour/minute columns — same look as the backup time picker (.tp-*), replacing
     // the native <select> whose dropdown painted a blue we can't theme (serekkr, 28/10).
     const mkTcol = (count, step, cur, set) => {
@@ -19574,11 +20154,11 @@ function _buildDateField(initial) {
     const act = document.createElement('div'); act.className = 'dp-actions';
     const clear = document.createElement('button'); clear.type = 'button'; clear.className = 'dp-clear'; clear.textContent = window.i18n.t('todo.clear_date');
     const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'dp-ok'; ok.textContent = 'OK';
-    clear.onclick = () => { value = ''; selDate = null; renderTrigger(); pop.style.display = 'none'; };
+    clear.onclick = () => { value = ''; selDate = null; renderTrigger(); pop.style.display = 'none'; if (onChange) onChange(value); };
     ok.onclick = () => {
       if (selDate) { const y = selDate.getFullYear(), mo = String(selDate.getMonth() + 1).padStart(2, '0'), da = String(selDate.getDate()).padStart(2, '0'); value = `${y}-${mo}-${da}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`; }
       else value = '';
-      renderTrigger(); pop.style.display = 'none';
+      renderTrigger(); pop.style.display = 'none'; if (onChange) onChange(value);
     };
     act.append(clear, ok); pop.appendChild(act);
   }
@@ -19588,7 +20168,16 @@ function _buildDateField(initial) {
   const onKey = (ev) => { if (ev.key === 'Escape') closePop(); };
   function openPop() {
     renderCal();
+    pop.style.left = '0px';
     pop.style.display = 'block';
+    // Keep the popup inside the viewport: the reminder picker sits far right, so its
+    // calendar+time would overflow the right edge and get clipped — shift it left
+    // by the overflow (serekkr, 29/10/2026).
+    try {
+      const r = pop.getBoundingClientRect();
+      const over = r.right - (window.innerWidth - 48);
+      if (over > 0) pop.style.left = (-Math.ceil(over)) + 'px';
+    } catch (_) {}
     setTimeout(() => {
       document.addEventListener('mousedown', onDocDown, true);
       document.addEventListener('keydown', onKey, true);
@@ -19609,7 +20198,22 @@ function _buildDateField(initial) {
     }
   });
   wrap.append(trigger, pop);
-  return { el: wrap, getValue: () => value };
+  const setValue = (v) => {
+    value = v || '';
+    const d = value && !isNaN(new Date(value)) ? new Date(value) : null;
+    selDate = d;
+    if (d) { view = new Date(d); hh = d.getHours(); mm = d.getMinutes(); }
+    renderTrigger();
+  };
+  return { el: wrap, getValue: () => value, setValue };
+}
+
+// A timestamp (ms) → the local "YYYY-MM-DDTHH:MM" string the pickers and the todo
+// `due`/`remind` fields use.
+function _toLocalInput(ms) {
+  const d = new Date(ms); if (isNaN(d)) return '';
+  const z = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`;
 }
 
 // Close function of the currently-open ToDo editor, if any: restores the editor's
@@ -19620,17 +20224,52 @@ let _todoEditorClose = null;
 function _todoInlineEditor(bucket, it) {
   const wrap = document.createElement('div'); wrap.className = 'todo-editor';
   const ta = document.createElement('textarea'); ta.className = 'kc-text'; ta.rows = 1; ta.placeholder = window.i18n.t('todo.new_task'); ta.value = it ? it.text : '';
+  // Grow with content so 2-3+ lines are all visible (capped so it never takes over
+  // the panel) — serekkr, 29/10/2026.
+  const _taGrow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 2, 340) + 'px'; };
+  ta.addEventListener('input', _taGrow);
+  setTimeout(_taGrow, 0);   // size to the initial text (edit mode)
   const meta = document.createElement('div'); meta.className = 'kc-meta';
   const datePicker = _buildDateField(it && it.due ? it.due : '');
-  const alert = document.createElement('select'); alert.className = 'kc-alert';
-  const curAlert = it ? String(it.alert || '') : '';
-  const isCustom = curAlert !== '' && !ALERT_PRESETS.includes(curAlert);
-  ALERT_OPTS.forEach(([v, k]) => { const o = document.createElement('option'); o.value = v; o.textContent = window.i18n.t(k); if (v === curAlert || (v === 'custom' && isCustom)) o.selected = true; alert.appendChild(o); });
-  const customInp = document.createElement('input'); customInp.type = 'number'; customInp.min = '1'; customInp.className = 'kc-alert-custom';
-  customInp.placeholder = window.i18n.t('todo.minutes_before'); customInp.style.display = isCustom ? '' : 'none';
-  if (isCustom) customInp.value = curAlert;
-  alert.addEventListener('change', () => { customInp.style.display = alert.value === 'custom' ? '' : 'none'; if (alert.value === 'custom') customInp.focus(); });
-  meta.append(datePicker.el, alert, customInp);
+  // Reminder = its OWN absolute date+time (serekkr, 29/10/2026). The preset dropdown
+  // pre-fills the reminder picker relative to the due; 'Custom' leaves it free; the
+  // picker is what gets saved (`remind`). Legacy todos (alert = minutes-before) migrate
+  // on save: the picker pre-fills to due − alert.
+  const curRemind = it ? String(it.remind || '') : '';
+  const curAlert  = it ? String(it.alert || '') : '';
+  const dueMsOf = () => { const v = datePicker.getValue(); const t = v ? new Date(v).getTime() : NaN; return isNaN(t) ? null : t; };
+  let initRemind = '', initPreset = '';
+  if (curRemind) { initRemind = curRemind; initPreset = 'custom'; }
+  else if (curAlert && it && it.due) {
+    // Legacy todo (alert = minutes-before) → pre-fill the reminder to due − alert.
+    const dt = new Date(it.due).getTime();
+    if (!isNaN(dt)) { initRemind = _toLocalInput(dt - parseInt(curAlert, 10) * 60000); initPreset = 'custom'; }
+  }
+  const remindPicker = _buildDateField(initRemind, (newVal) => {
+    // User edited the reminder date/time: if it no longer equals the selected preset
+    // (due − 15 min / 1 hour), the menu switches to Custom (serekkr, 29/10/2026).
+    const sel = alertSel && alertSel.get();
+    if (!sel || sel === 'custom') return;
+    const dm = dueMsOf();
+    const expected = dm != null ? _toLocalInput(dm - parseInt(sel, 10) * 60000) : null;
+    if (newVal !== expected) alertSel.set('custom');
+  });
+  remindPicker.el.style.display = initPreset ? '' : 'none';
+  // Reminder options kept small (serekkr, 29/10/2026): No reminder, 15 min before,
+  // 1 hour before, Custom. The two offsets pre-fill the reminder picker relative to
+  // the due; Custom leaves it free; either way the picker (absolute date+time) is
+  // what's saved.
+  const REMIND_OPTS = [['', 'todo.no_alert'], ['15', 'todo.alert_15'], ['60', 'todo.alert_60'], ['custom', 'todo.alert_custom']];
+  const alertSel = _buildDarkSelect(
+    REMIND_OPTS.map(([v, k]) => [v, window.i18n.t(k)]),
+    initPreset,
+    (v) => {
+      if (v === '') { remindPicker.el.style.display = 'none'; remindPicker.setValue(''); return; }
+      remindPicker.el.style.display = '';
+      if (v !== 'custom') { const dm = dueMsOf(); if (dm != null) remindPicker.setValue(_toLocalInput(dm - parseInt(v, 10) * 60000)); }
+    }
+  );
+  meta.append(datePicker.el, alertSel.el, remindPicker.el);
   const actions = document.createElement('div'); actions.className = 'kc-actions';
   const save = document.createElement('button'); save.className = 'kc-save'; save.textContent = window.i18n.t('todo.save');
   const cancel = document.createElement('button'); cancel.className = 'kc-cancel'; cancel.textContent = window.i18n.t('common.cancel');
@@ -19644,15 +20283,17 @@ function _todoInlineEditor(bucket, it) {
     catch (_) { try { renderTodoView(); } catch (__) {} }
   };
   _todoEditorClose = closeInPlace;
-  const getAlert = () => alert.value === 'custom' ? (customInp.value ? String(parseInt(customInp.value, 10)) : '') : alert.value;
+  const getRemind = () => alertSel.get() === '' ? '' : remindPicker.getValue();
   const doSave = async () => {
     _todoEditorClose = null;
     const text = ta.value.trim();
     if (!text) { renderTodoView({ resetAdd: true }); return; }
-    const av = getAlert();
+    const rem = getRemind();
     const dueVal = datePicker.getValue();
-    if (it) await window.inkwell.todo.update(bucket, it.file, text, dueVal, av);
-    else await window.inkwell.todo.create(bucket, text, dueVal, av);
+    // Save the absolute reminder (`remind`); alert='' — the legacy minutes field is
+    // retired, old todos migrate to `remind` on their next save.
+    if (it) await window.inkwell.todo.update(bucket, it.file, text, dueVal, '', rem);
+    else await window.inkwell.todo.create(bucket, text, dueVal, '', rem);
     renderTodoView({ resetAdd: true }); refreshTodoAlerts();
   };
   save.addEventListener('click', doSave);
@@ -19667,12 +20308,14 @@ function _todoInlineEditor(bucket, it) {
 }
 
 async function addTodo() {
-  const wasOpen = _kanbanOpen;
-  openTodoView();   // re-renders, clearing any stray open editor
-  setTimeout(() => {
-    const t = $('todo-add-row')?.querySelector('.todo-add-trigger');
-    if (t && !document.querySelector('.todo-editor')) t.click();
-  }, wasOpen ? 30 : 150);
+  // Show the board with the quick-add ALREADY open (no closed-then-open flash). The
+  // flag is consumed by the next renderTodoView: when we're not on the board yet it
+  // fires through openTodoView → switchTab → showTodoView → renderTodoView; when we
+  // already are, openTodoView would no-op, so we render here.
+  const already = _kanbanOpen && $('todo-view') && $('todo-view').style.display !== 'none';
+  _todoOpenAddPending = true;
+  if (already) await renderTodoView({ openAdd: true, resetAdd: true });
+  else openTodoView();
 }
 
 // ── Notifiche ToDo (scadenze + avvisi) ─────────────────────────────────────
@@ -19698,10 +20341,18 @@ async function refreshTodoAlerts() {
   const all = TODO_ALERT_BUCKETS.flatMap(b => _todoCache[b] || []);
   const now = Date.now();
   for (const it of all) {
-    if (!it.due || it.alert === '' || it.alert == null) continue;
-    const dueMs = new Date(it.due).getTime(); if (isNaN(dueMs)) continue;
-    const fireAt = dueMs - parseInt(it.alert || '0', 10) * 60000;
-    const key = it.file + '@' + it.due + '+' + it.alert;
+    let fireAt = NaN, key = '';
+    if (it.remind) {
+      // New model: absolute reminder date+time.
+      fireAt = new Date(it.remind).getTime(); if (isNaN(fireAt)) continue;
+      key = it.file + '@R' + it.remind;
+    } else {
+      // Legacy: minutes-before offset on the due.
+      if (!it.due || it.alert === '' || it.alert == null) continue;
+      const dueMs = new Date(it.due).getTime(); if (isNaN(dueMs)) continue;
+      fireAt = dueMs - parseInt(it.alert || '0', 10) * 60000;
+      key = it.file + '@' + it.due + '+' + it.alert;
+    }
     const delay = fireAt - now;
     if (delay > 0 && delay < 2147483647 && !_todoFireKeySeen(key)) {
       _todoAlertTimers.push(setTimeout(() => { _fireTodoNotif(it); _todoMarkFired(key); updateNotifBell(); }, delay));
@@ -19743,7 +20394,7 @@ function _dueTodos() {
       const m = new Date(it.due).getTime();
       if (isNaN(m)) return false;
       if (m <= now) return true;                                  // overdue
-      return m <= soon && it.alert !== '' && it.alert != null;     // due soon, reminder asked for
+      return m <= soon && (it.remind || (it.alert !== '' && it.alert != null));   // due soon, reminder asked for
     })
     .filter(it => !dis.includes(_notifKey(it)))
     .sort((a, b) => new Date(a.due) - new Date(b.due));
