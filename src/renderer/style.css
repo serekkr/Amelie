@@ -2580,13 +2580,20 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
   position: fixed; z-index: 2000;
   background: var(--bg-3); border: 1px solid var(--border-light);
   border-radius: var(--radius); padding: 4px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.5); min-width: 130px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  /* Fixed width so the menu is the SAME size no matter what you right-click
+     (note / folder / attachment / empty space): with a min-width it grew to fit
+     the longest visible label, so an attachment menu ("Go to the note that uses it",
+     "Open with external app"…) came out wider than a note's — "cambia dimensione".
+     240px fits the longest label in IT/EN/DE on one line (serekkr, 16/11/2026). */
+  width: 240px; box-sizing: border-box;
 }
 #context-menu button {
   display: block; width: 100%; background: none; border: none;
   color: var(--text-1); font-family: var(--ui-font); font-size: 14px;
   padding: 7px 12px; text-align: left; cursor: pointer;
   border-radius: 3px; transition: background .1s, color .1s;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #context-menu button:hover { background: var(--bg-4); color: var(--text-0); }
 #ctx-delete:hover { color: var(--red) !important; }
