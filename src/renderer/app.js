@@ -4762,6 +4762,29 @@ async function _openByPath(path) {
   try { const n = flattenTree(state.notes).find(x => x.type !== 'folder' && x.path === path); if (n) await openNote(n); } catch (_) {}
 }
 
+// Remove a node (note/attachment, by path) from state.notes IN PLACE — no DOM work, no
+// vault re-read. Used by the fluid single-delete path so the tree doesn't fully rebuild.
+function _removeNodeFromState(path) {
+  const strip = (arr) => {
+    if (!Array.isArray(arr)) return false;
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i] && arr[i].path === path) { arr.splice(i, 1); return true; }
+      if (arr[i] && arr[i].children && strip(arr[i].children)) return true;
+    }
+    return false;
+  };
+  strip(state.notes);
+}
+
+// Repaint ONLY the active-note highlight across the existing tree rows (no rebuild), so a
+// fluid update that skipped renderTree still moves the highlight onto the open note.
+function _paintActiveTreeNote() {
+  if (!fileTree) return;
+  fileTree.querySelectorAll('.tree-note').forEach(el => {
+    el.classList.toggle('active', !!state.currentPath && el.getAttribute('data-path') === state.currentPath);
+  });
+}
+
 async function deleteNote(node, { bulk = false } = {}) {
   // A NOTE goes through without asking — serekkr's choice of 12/10/2026, and what makes
   // it safe is that delete goes to the system trash (main.js: trashOrRemove).
@@ -4784,13 +4807,8 @@ async function deleteNote(node, { bulk = false } = {}) {
   // so the view lands on it instead of going blank. Only when it is the one shown.
   const _viewingThis = !bulk && node.type !== 'folder' && !!state.currentPath && state.currentPath === node.path;
   const _nextPath = _viewingThis ? (_nextOpenableItem(node.path)?.path || null) : null;
-  // Make the row VANISH NOW, before the system-trash call (~250 ms) and the loadTree
-  // that follows it. On a single delete the item you clicked used to sit in the tree
-  // the whole time those two awaits ran, which read as lag ("se cancello un item o
-  // nota sembra un po' lenta", serekkr 17/11/2026). This only removes the DOM row (and,
-  // for a folder, its descendant rows); loadTree below rebuilds the tree for real from
-  // disk, and if the delete throws, that same rebuild brings the row back. Bulk delete
-  // does its own single re-read at the end, so it is left out.
+  // Make the row VANISH NOW, before the system-trash call (~250 ms). On a single delete
+  // the item you clicked used to sit in the tree the whole time, which read as lag.
   if (!bulk && fileTree) {
     try {
       const pref = node.path + '/';
@@ -4800,6 +4818,14 @@ async function deleteNote(node, { bulk = false } = {}) {
       });
     } catch (_) {}
   }
+  // Drop the node from state NOW too, BEFORE we open the next note. Opening a note runs a
+  // renderTree, which rebuilds every row from state.notes — if the deleted node were still
+  // in there, that rebuild would put the just-removed row straight back, and only a later
+  // loadTree would take it away again: the row flashing back then vanishing is exactly the
+  // "lo vedo ancora per un po', poi un refresh strano, non fluido" (serekkr 17/11/2026).
+  // Removing it first means that single renderTree already paints the correct tree — one
+  // clean repaint, no loadTree, no flicker. Folders keep their own loadTree path below.
+  if (!bulk && node.type !== 'folder') _removeNodeFromState(node.path);
   removeFromTreeOrder(node.path);   // forget the deleted item's manual order
   if (node.type === 'folder') {
     _lastDeletedNote = null;   // a folder is not the single-note undo
@@ -4884,13 +4910,26 @@ async function deleteNote(node, { bulk = false } = {}) {
     }
     if (!bulk) renderTabBar();
   }
-  await window.inkwell.deleteNote(node.path);
+  try {
+    await window.inkwell.deleteNote(node.path);
+  } catch (e) {
+    // The row was already removed optimistically; a failed delete means the file is still
+    // on disk, so rebuild from disk to bring the row back and stay truthful.
+    if (!bulk) { try { await loadTree(); } catch (_) {} }
+    throw e;
+  }
   // Remember it for "Annulla eliminazione" — but only a single, deliberate delete. A bulk
   // delete is a set we don't rebuild from one note, so it clears the offer instead.
   _lastDeletedNote = bulk ? null : { path: node.path, name: node.name };
-  if (!bulk) await loadTree();
+  if (!bulk) {
+    // No loadTree here: the node was already dropped from state up front, so opening the
+    // next note already painted the correct tree once. Just make sure the active-row
+    // highlight is on the open note and drop any orphaned bookmark. No re-read, no flash.
+    _paintActiveTreeNote();
+    pruneSidebarOrphans();
+  }
   // The next-tree-item jump already happened up front (see _jumpToNext), before the
-  // trash call, so the view never waited on it — nothing to do here.
+  // trash call, so the view never waited on it.
 }
 
 // Apply a rename once a new name is known (shared by inline editor + any caller).
