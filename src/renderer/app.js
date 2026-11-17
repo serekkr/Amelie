@@ -7571,7 +7571,23 @@ function makeCellEditable(table, cell) {
   // Undo the browser's block fillers as they appear (see _flattenCellStructure). Only
   // touches the DOM when a filler is actually present, so ordinary typing — a lone text
   // node beside the handle — never triggers it and the caret is left alone.
-  cell.addEventListener('input', () => { _flattenCellStructure(cell); });
+  cell.addEventListener('input', () => {
+    _flattenCellStructure(cell);
+    // When the delete left the cell EMPTY, Chromium can park the caret at the right edge,
+    // up against the (absolutely-pinned) resize handle — serekkr showed it sitting bottom-
+    // right after a deletion. Pull it back to the START of the cell, where the next
+    // character will actually go. Only runs on an empty cell, so live typing is untouched.
+    if (!cell.textContent.replace(/​/g, '')) {
+      try {
+        const sel = window.getSelection();
+        const r = document.createRange();
+        r.selectNodeContents(cell);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+      } catch (_) {}
+    }
+  });
   // A cell is ONE LINE: never let the browser insert a paragraph or line break. Enter is
   // already caught in keydown (it blurs the cell), but a line break can also arrive via
   // paste or an IME/composition path that keydown never sees — and each one makes the row
