@@ -3,7 +3,27 @@
 // so app.js can drive CodeMirror without importing ESM modules directly.
 import { EditorView, keymap, lineNumbers, gutter, GutterMarker, drawSelection, highlightActiveLine, Decoration, ViewPlugin } from '@codemirror/view';
 import { EditorState, Compartment, Transaction, RangeSetBuilder, StateField, StateEffect } from '@codemirror/state';
-import { defaultKeymap, history, historyKeymap, indentWithTab, deleteCharBackward, deleteCharForward, insertNewline } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab, indentMore, indentLess, deleteCharBackward, deleteCharForward, insertNewline } from '@codemirror/commands';
+
+// Tab INSERTS a tab at the caret, where the user put it, instead of indenting the whole
+// line. CM's stock `indentWithTab` runs `indentMore`, which adds indentation at the LINE
+// START regardless of caret position — so typing at the end of a line and pressing Tab
+// pushed a tab to the FRONT of the line ("demo@example.com<Tab>" → tab davanti alla riga,
+// serekkr 17/11/2026). A MULTI-LINE selection still indents (the genuinely useful case);
+// a caret, or a selection within one line, gets a literal tab where it sits. Shift-Tab
+// keeps dedent.
+const insertTabOrIndent = {
+  key: 'Tab',
+  run: (view) => {
+    const { state } = view;
+    const multiLine = state.selection.ranges.some(r =>
+      r.from !== r.to && state.doc.lineAt(r.from).number !== state.doc.lineAt(r.to).number);
+    if (multiLine) return indentMore(view);
+    view.dispatch(state.update(state.replaceSelection('\t'), { scrollIntoView: true, userEvent: 'input' }));
+    return true;
+  },
+  shift: indentLess,
+};
 import { StringStream } from '@codemirror/language';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { python } from '@codemirror/legacy-modes/mode/python';
@@ -1218,7 +1238,7 @@ window.AmelieCM = {
           EditorView.lineWrapping,
           fenceAutoClose,
           pasteNormalize,
-          keymap.of([fenceEnterNoop, fenceEnter, plainEnter, ...defaultKeymap, ...historyKeymap, indentWithTab]),
+          keymap.of([fenceEnterNoop, fenceEnter, plainEnter, ...defaultKeymap, ...historyKeymap, insertTabOrIndent]),
           fenceField,
           codeBlockPlugin,
           // codeHighlightPlugin DELIBERATELY OFF (serekkr, 28/10/2026): the code-block

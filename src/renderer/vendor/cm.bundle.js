@@ -17422,7 +17422,6 @@
     { key: "Alt-A", mac: "Ctrl-A", run: toggleBlockComment },
     { key: "Ctrl-m", mac: "Shift-Alt-m", run: toggleTabFocusMode }
   ].concat(standardKeymap);
-  var indentWithTab = { key: "Tab", run: indentMore, shift: indentLess };
 
   // node_modules/@codemirror/legacy-modes/mode/shell.js
   var words = {};
@@ -19403,6 +19402,17 @@
   });
 
   // build/cm-entry.js
+  var insertTabOrIndent = {
+    key: "Tab",
+    run: (view) => {
+      const { state } = view;
+      const multiLine = state.selection.ranges.some((r) => r.from !== r.to && state.doc.lineAt(r.from).number !== state.doc.lineAt(r.to).number);
+      if (multiLine) return indentMore(view);
+      view.dispatch(state.update(state.replaceSelection("	"), { scrollIntoView: true, userEvent: "input" }));
+      return true;
+    },
+    shift: indentLess
+  };
   var plainEnter = {
     key: "Enter",
     run(view) {
@@ -20399,7 +20409,7 @@
             EditorView.lineWrapping,
             fenceAutoClose,
             pasteNormalize,
-            keymap.of([fenceEnterNoop, fenceEnter, plainEnter, ...defaultKeymap, ...historyKeymap, indentWithTab]),
+            keymap.of([fenceEnterNoop, fenceEnter, plainEnter, ...defaultKeymap, ...historyKeymap, insertTabOrIndent]),
             fenceField,
             codeBlockPlugin,
             // codeHighlightPlugin DELIBERATELY OFF (serekkr, 28/10/2026): the code-block
@@ -20430,11 +20440,6 @@
           }
         },
         focus: () => view.focus(),
-        // History: the toolbar Undo/Redo buttons need these because document.execCommand
-        // ('undo'/'redo') does nothing against CodeMirror (only the Mod-z keymap worked).
-        // `undo`/`redo` are the module-level @codemirror/commands history commands.
-        undo: () => { try { const r = undo(view); view.focus(); return r; } catch (_) { return false; } },
-        redo: () => { try { const r = redo(view); view.focus(); return r; } catch (_) { return false; } },
         // Check the rendered DOM still matches the document, and rebuild the view if it
         // does not. Call it whenever the editor BECOMES VISIBLE again (leaving preview,
         // switching to a note tab, closing the split): CM cannot render or measure while
