@@ -7573,15 +7573,20 @@ function makeCellEditable(table, cell) {
   // node beside the handle — never triggers it and the caret is left alone.
   cell.addEventListener('input', () => {
     _flattenCellStructure(cell);
-    // When the delete left the cell EMPTY, Chromium can park the caret at the right edge,
-    // up against the (absolutely-pinned) resize handle — serekkr showed it sitting bottom-
-    // right after a deletion. Pull it back to the START of the cell, where the next
-    // character will actually go. Only runs on an empty cell, so live typing is untouched.
+    // When the delete left the cell EMPTY, Chromium parks the caret at the right edge, up
+    // against the (absolutely-pinned) resize handle. Put it back at the LEFT — but INSIDE a
+    // zero-width text anchor, not at the cell-element level: an empty element gives the
+    // caret the cell's taller line box ("il cursore è più alto", serekkr 17/11/2026),
+    // whereas a caret inside a text node takes the TEXT height. ZWSP is zero-width so the
+    // caret still sits at the start; sync strips it, so the markdown stays clean.
     if (!cell.textContent.replace(/​/g, '')) {
       try {
+        let anchor = [...cell.childNodes].find(n => n.nodeType === 3);
+        if (!anchor) { anchor = document.createTextNode('​'); cell.insertBefore(anchor, cell.firstChild); }
+        else if (anchor.nodeValue !== '​') anchor.nodeValue = '​';
         const sel = window.getSelection();
         const r = document.createRange();
-        r.selectNodeContents(cell);
+        r.setStart(anchor, anchor.nodeValue.length);
         r.collapse(true);
         sel.removeAllRanges();
         sel.addRange(r);
