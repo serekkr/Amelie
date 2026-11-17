@@ -3023,6 +3023,11 @@ function renderTree() {
   // (Waiting for that frame before renaming is not an option: an occluded
   // window gets no animation frames at all, and the rename would never start.)
   if (_inlineRenameOpen) { _treeRefreshHeld = true; return; }
+  // Keep the tree scrolled where it was: `innerHTML = ''` below drops every row and resets
+  // scrollTop to 0, so a rebuild (e.g. after opening the next note on delete) made the tree
+  // jump to the top and the browser then scrolled back to the active row — "va giù e dopo
+  // va su" (serekkr 17/11/2026). Save it now, put it back after the rows are rebuilt.
+  const _savedScroll = fileTree ? fileTree.scrollTop : 0;
   const query = state.searchQuery.toLowerCase();
   fileTree.innerHTML = '';
   // The "ToDo" entry is no longer shown in the tree: the ToDo board is
@@ -3039,6 +3044,8 @@ function renderTree() {
   [...state.multiSel].forEach(p => { if (!alive.has(p)) state.multiSel.delete(p); });
   _paintMultiSel();
   persistOpenFolders();
+  // Restore the scroll position the rebuild wiped (see _savedScroll above).
+  try { if (fileTree && _savedScroll) fileTree.scrollTop = _savedScroll; } catch (_) {}
 }
 
 // Every folder key in the tree, flat — what "open everything" has to put into
@@ -11190,7 +11197,10 @@ function setupSettings() {
     (function walk(nodes) { for (const n of nodes || []) { if (n.path) byPath.set(n.path, n); walk(n.children); } })(state.notes);
     const node = byPath.get(only);
     clearMultiSel();
-    if (node) { await deleteNote(node); await loadTree(); }
+    // No loadTree() here: deleteNote already updates the tree in place (fluid, one repaint).
+    // A second loadTree re-read the whole vault and rebuilt the tree AGAIN right after the
+    // next note had opened — the tree "va giù e dopo va su" the user saw (serekkr 17/11/2026).
+    if (node) { await deleteNote(node); }
   });
 
   // Sync section accordion headers
