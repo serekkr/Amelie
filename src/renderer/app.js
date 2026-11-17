@@ -4850,7 +4850,22 @@ async function deleteNote(node, { bulk = false } = {}) {
   // spliced), so nothing stale is flushed anywhere.
   // Close the tab if this note is open
   const tabIdx = tabs.findIndex(t => t.path === node.path);
-  if (tabIdx !== -1) {
+  // Deleting the note we're LOOKING AT → land on the next tree item DOWN. _nextPath
+  // already prefers flat[i+1] (the note below), falling back to flat[i-1] only when we
+  // deleted the very last note. Do it regardless of how many other tabs are open: before,
+  // with 2+ tabs, delete jumped to the neighbouring TAB (tab order, often a note ABOVE in
+  // the tree) instead of down ("deve andare su la prossima in coda cioè in giù", serekkr
+  // 17/11/2026).
+  const _jumpToNext = !bulk && _viewingThis && !!_nextPath;
+  if (_jumpToNext) {
+    // Drop the viewed note's tab first (nothing stale flushes to the path we're about to
+    // delete — the 28/10 guard), then switch the view to the next note NOW, before the
+    // trash call, so it stays instant. _openByPath opens it, or re-activates its tab if
+    // it was already open.
+    if (tabIdx !== -1) { tabs.splice(tabIdx, 1); if (activeTabIdx > tabIdx) activeTabIdx--; }
+    await _openByPath(_nextPath);
+    if (!bulk) renderTabBar();
+  } else if (tabIdx !== -1) {
     const wasActive = (tabIdx === activeTabIdx);
     tabs.splice(tabIdx, 1);
     if (tabs.length === 0) {
@@ -4874,8 +4889,8 @@ async function deleteNote(node, { bulk = false } = {}) {
   // delete is a set we don't rebuild from one note, so it clears the offer instead.
   _lastDeletedNote = bulk ? null : { path: node.path, name: node.name };
   if (!bulk) await loadTree();
-  // Was viewing this note and it closed to nothing → jump to the next tree item.
-  if (_viewingThis && _nextPath && activeTabIdx === -1) await _openByPath(_nextPath);
+  // The next-tree-item jump already happened up front (see _jumpToNext), before the
+  // trash call, so the view never waited on it — nothing to do here.
 }
 
 // Apply a rename once a new name is known (shared by inline editor + any caller).
