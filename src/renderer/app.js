@@ -7572,6 +7572,17 @@ function makeCellEditable(table, cell) {
   // touches the DOM when a filler is actually present, so ordinary typing — a lone text
   // node beside the handle — never triggers it and the caret is left alone.
   cell.addEventListener('input', () => { _flattenCellStructure(cell); });
+  // A cell is ONE LINE: never let the browser insert a paragraph or line break. Enter is
+  // already caught in keydown (it blurs the cell), but a line break can also arrive via
+  // paste or an IME/composition path that keydown never sees — and each one makes the row
+  // grow downward ("se faccio invio si allarga in giù", serekkr 17/11/2026). Block it at
+  // the input source; the input handler above sweeps up anything that still slips through.
+  cell.addEventListener('beforeinput', e => {
+    if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') {
+      e.preventDefault();
+      cell.blur();
+    }
+  });
   cell.addEventListener('focus', () => {
     cell.dataset.origText = cell.textContent;
   });
