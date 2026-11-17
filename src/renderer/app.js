@@ -4784,6 +4784,22 @@ async function deleteNote(node, { bulk = false } = {}) {
   // so the view lands on it instead of going blank. Only when it is the one shown.
   const _viewingThis = !bulk && node.type !== 'folder' && !!state.currentPath && state.currentPath === node.path;
   const _nextPath = _viewingThis ? (_nextOpenableItem(node.path)?.path || null) : null;
+  // Make the row VANISH NOW, before the system-trash call (~250 ms) and the loadTree
+  // that follows it. On a single delete the item you clicked used to sit in the tree
+  // the whole time those two awaits ran, which read as lag ("se cancello un item o
+  // nota sembra un po' lenta", serekkr 17/11/2026). This only removes the DOM row (and,
+  // for a folder, its descendant rows); loadTree below rebuilds the tree for real from
+  // disk, and if the delete throws, that same rebuild brings the row back. Bulk delete
+  // does its own single re-read at the end, so it is left out.
+  if (!bulk && fileTree) {
+    try {
+      const pref = node.path + '/';
+      fileTree.querySelectorAll('[data-path]').forEach(el => {
+        const p = el.getAttribute('data-path');
+        if (p === node.path || (p && p.startsWith(pref))) el.remove();
+      });
+    } catch (_) {}
+  }
   removeFromTreeOrder(node.path);   // forget the deleted item's manual order
   if (node.type === 'folder') {
     _lastDeletedNote = null;   // a folder is not the single-note undo
