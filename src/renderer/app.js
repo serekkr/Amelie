@@ -7540,12 +7540,38 @@ function setupTableColumnResize(table, tableIdx, widths) {
   });
 }
 
+// A preview table cell is a SINGLE LINE of text plus its (absolutely-pinned, non-
+// editable) resize handle. Chromium, left to itself, inserts block fillers into a
+// contentEditable: emptying the cell leaves a bogus <br>, and some deletes/pastes wrap
+// the text in a <div>. Either one stacks a line above the handle and makes the cell
+// grow TALLER — "se cancello nella tabella mi mette la riga in giù", the row dropping
+// down (serekkr 17/11/2026, reproduced: cell 32px→50px, innerHTML gained a <br>).
+// Strip those fillers back out, keeping only text nodes and the handle, so the cell
+// stays one line. Returns true if it changed anything.
+function _flattenCellStructure(cell) {
+  let changed = false;
+  for (const node of [...cell.childNodes]) {
+    if (node.nodeType === 1 && node.classList && node.classList.contains('col-resize-handle')) continue;
+    if (node.nodeType === 3) continue;                       // keep text nodes
+    if (node.nodeName === 'BR') { node.remove(); changed = true; continue; }
+    // Any other element (div/p/span the browser inserted) → unwrap: lift its contents
+    // out in place, then drop the wrapper.
+    while (node.firstChild) cell.insertBefore(node.firstChild, node);
+    node.remove(); changed = true;
+  }
+  return changed;
+}
+
 function makeCellEditable(table, cell) {
   if (cell.dataset.editable === '1') return;
   cell.dataset.editable = '1';
   cell.contentEditable = 'true';
   capField(cell);          // opt in to the 254-char cap
   cell.spellcheck = false;
+  // Undo the browser's block fillers as they appear (see _flattenCellStructure). Only
+  // touches the DOM when a filler is actually present, so ordinary typing — a lone text
+  // node beside the handle — never triggers it and the caret is left alone.
+  cell.addEventListener('input', () => { _flattenCellStructure(cell); });
   cell.addEventListener('focus', () => {
     cell.dataset.origText = cell.textContent;
   });
