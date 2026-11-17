@@ -19859,7 +19859,8 @@ function setupBookmarkContextMenu() {
 
 let _tagsRenderToken = 0;
 async function renderTagsView() {
-  // This reads EVERY note off disk in a loop, so on a big vault it takes a while.
+  // This reads EVERY note off disk (now concurrently, see the worker pool below),
+  // so even parallelised a big vault takes a moment and re-entry can overlap.
   // Without a guard, switching to Tags, away, and back (or any re-entry) left two
   // runs interleaving their writes to #tags-list — one clearing it while the other
   // was still appending — which doubled the tag groups ("riempimento anomalo",
@@ -19868,10 +19869,29 @@ async function renderTagsView() {
   const c = $('tags-list'); if (!c) return;
   c.innerHTML = `<div class="view-empty">…</div>`;
   const flat = flattenTree(state.notes || []).filter(n => n.type !== 'folder' && n.path && n.path.endsWith('.md'));
+  // Read every note's content UP FRONT, concurrently. This used to be a plain
+  // sequential `await readNote` inside the loop below — one IPC round-trip per note,
+  // in single file — so on a vault of hundreds of notes switching to Tags (e.g.
+  // Bookmarks → Tags) stalled for seconds, though the reads never depend on each
+  // other. A small worker pool runs them together; 16 at a time saturates the disk
+  // without a burst the IPC layer chokes on (serekkr 17/11/2026).
+  const contents = new Array(flat.length).fill('');
+  {
+    let next = 0;
+    const worker = async () => {
+      for (let i = next++; i < flat.length; i = next++) {
+        try { contents[i] = await window.inkwell.readNote(flat[i].path); } catch(_) {}
+        if (myToken !== _tagsRenderToken) return;   // superseded — stop reading
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(16, flat.length) }, worker));
+  }
+  if (myToken !== _tagsRenderToken) return;   // superseded while reading — drop this run
+
   const tagMap = {};
-  for (const n of flat) {
-    let content = ''; try { content = await window.inkwell.readNote(n.path); } catch(_) {}
-    if (myToken !== _tagsRenderToken) return;   // superseded while reading — drop this run
+  for (let _i = 0; _i < flat.length; _i++) {
+    const n = flat[_i];
+    const content = contents[_i];
     const seen = new Set();
     const add = (t) => {
       const tag = t.trim().replace(/^#/, '');
