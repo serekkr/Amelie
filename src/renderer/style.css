@@ -1008,7 +1008,12 @@ html.is-mac #titlebar { padding-left: 72px; }
   background: transparent; color: var(--text-0);
   border: none; border-radius: 3px;
   font-family: inherit; font-size: inherit;
-  padding: 1px 4px; margin: -1px 0; outline: none;
+  /* The 4px horizontal padding gives the box breathing room, but .tree-name (the label
+     it replaces) has NO padding — so without compensation the text/caret jumped 4px to
+     the right the moment rename opened ("si sposta il puntatore di uno spazio", serekkr
+     17/11/2026). The negative horizontal margin pulls the box back by the same 4px, so
+     the text stays exactly where the label's was while the box still extends outward. */
+  padding: 1px 4px; margin: -1px -4px; outline: none;
 }
 
 /* Folder name prominence.
