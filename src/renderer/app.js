@@ -7614,11 +7614,27 @@ function makeCellEditable(table, cell) {
   cell.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      cell.blur();
+      // Spreadsheet-style: Enter commits and drops into the cell BELOW in the same column.
+      // It used to blur the cell — in an empty cell that just removed focus and the caret
+      // vanished ("se faccio invio nella colonna vuota sparisce il cursore", serekkr
+      // 17/11/2026). Moving to the cell below focuses it, which blurs+syncs this one.
+      const below = _cellInColumn(table, cell, +1);
+      // No row below (the empty last row is exactly where the caret was vanishing): keep
+      // the caret in the cell instead of blurring it away. Edits still commit on blur when
+      // the user clicks elsewhere or Tabs out.
+      if (below) _placeCaretInCell(below, 'end');
     } else if (e.key === 'Escape') {
       e.preventDefault();
       cell.textContent = cell.dataset.origText || '';
       cell.blur();
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      // A cell is one line, so Up/Down can't move WITHIN it — carry the caret to the cell
+      // directly above/below in the SAME column, like a spreadsheet (before, Up/Down did
+      // nothing between table rows). Only on a collapsed caret; a selection is left alone.
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !sel.isCollapsed) return;
+      const dest = _cellInColumn(table, cell, e.key === 'ArrowDown' ? +1 : -1);
+      if (dest) { e.preventDefault(); _placeCaretInCell(dest, 'end'); }
     } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       // Each cell is its OWN contentEditable (plus an absolutely-positioned resize
       // handle), so the caret used to stop dead at a cell edge instead of moving on
@@ -7662,6 +7678,19 @@ function _adjacentTableCell(table, cell, dir) {
   const i = cells.indexOf(cell);
   if (i < 0) return null;
   return cells[i + dir] || null;
+}
+
+// The editable cell one row away (dir +1 = below, -1 = above) in the SAME column.
+// Used by Enter and Up/Down to move vertically through a table like a spreadsheet.
+function _cellInColumn(table, cell, dir) {
+  const row = cell.closest('tr'); if (!row) return null;
+  const col = [...row.children].filter(c => c.tagName === 'TD' || c.tagName === 'TH').indexOf(cell);
+  if (col < 0) return null;
+  const rows = [...table.querySelectorAll('tr')];
+  const target = rows[rows.indexOf(row) + dir];
+  if (!target) return null;
+  const dest = [...target.children].filter(c => c.tagName === 'TD' || c.tagName === 'TH')[col];
+  return (dest && dest.dataset.editable === '1') ? dest : null;
 }
 
 // Focus a cell and drop the caret at the start or the END OF ITS TEXT (before the
