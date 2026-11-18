@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('inkwell', {
   },
 
   showItemInFolder: (relPath) => ipcRenderer.invoke('shell:showItemInFolder', relPath),
+  openFolderPath: (absPath) => ipcRenderer.invoke('shell:openFolderAbs', absPath),
 
   // Custom themes (<app-data>/themes): list CSS, create/delete a theme file
   themes: {

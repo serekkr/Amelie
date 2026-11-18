@@ -4833,6 +4833,32 @@ ipcMain.handle('shell:showItemInFolder', async (_, relPath) => {
   return true;
 });
 
+// Open an ARBITRARY local folder in the system file manager — used by the Backup
+// panel's "open folder" button so the user can SEE the .tar.gz archives inside the
+// local backup folder (serekkr 17/11/2026: the folder PICKER shows only subfolders,
+// so a backup folder with just files looked empty — "così non vedo niente"). This is
+// NOT vault-confined on purpose: the backup folder lives outside the vault, and the
+// path is the user's own, typed in the settings on their own machine. Same xdg-open
+// path as showItemInFolder, which beats Electron's shell.openPath (a silent no-op in
+// the sandboxed AppImage on KDE/Wayland).
+ipcMain.handle('shell:openFolderAbs', async (_, rawPath) => {
+  try {
+    let p = String(rawPath || '').trim();
+    if (!p) return { ok: false, error: 'empty' };
+    p = p.replace(/^~(?=$|[/\\])/, os.homedir());
+    const resolved = path.resolve(p);
+    let st; try { st = fs.statSync(resolved); } catch (_) { return { ok: false, error: 'not_found' }; }
+    const dir = st.isDirectory() ? resolved : path.dirname(resolved);
+    try {
+      const { spawn } = require('child_process');
+      spawn('xdg-open', [dir], { detached: true, stdio: 'ignore' }).unref();
+    } catch (_) {
+      try { await shell.openPath(dir); } catch (_) {}
+    }
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
 // Open an external URL with the system default browser. Accepts http(s)://
 // and bare URLs (e.g. starting with www.) — those get a leading https:// added.
 // Native OS desktop notification (todo reminders). Fired from main via Electron's

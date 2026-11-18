@@ -11948,6 +11948,21 @@ function setupSettings() {
     }
   });
 
+  // Open the local backup folder in the file manager so its CONTENTS are visible — the
+  // .tar.gz archives. The folder PICKER (Sfoglia) shows only subfolders, so a backup
+  // folder full of files looked empty: "così non vedo niente, che senso ha" (serekkr
+  // 17/11/2026). This reveals the real folder, where the archives show up.
+  $('btn-open-local')?.addEventListener('click', async () => {
+    const p = ($('cfg-local-path')?.value || '').trim();
+    if (!p) { showToast(window.i18n.t('error.path_empty')); return; }
+    try {
+      const r = await window.inkwell.openFolderPath(p);
+      if (r && !r.ok) {
+        showToast(r.error === 'not_found' ? window.i18n.t('sync.folder_missing') : window.i18n.t('status.error'));
+      }
+    } catch (_) { showToast(window.i18n.t('status.error')); }
+  });
+
   // Import a folder of .md notes into the current vault (browse with the file manager)
   $('btn-import-folder')?.addEventListener('click', async () => {
     const res = $('import-result');
