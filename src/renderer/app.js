@@ -489,7 +489,14 @@ async function switchTab(idx) {
   // seeds from the right note.
   try { _applyTabSplit(tab); } catch (_) {}
   renderTabBar();
-  renderTree();
+  // Switching tabs does NOT change the tree STRUCTURE — only which note is active. The
+  // full renderTree() here cost ~19ms on a 500-note vault (it does innerHTML='' then
+  // rebuilds every row), more than half of a whole tab switch, so clicking tab-to-tab
+  // dropped frames and felt jumpy, not fluid (serekkr, 21/11/2026: "salta da un tab
+  // all'altro... non fluido come Obsidian"). Just repaint the active-row highlight
+  // (~0.16ms, no innerHTML, so no scroll jump either). Structure changes (create/
+  // rename/move/delete/sync) still call renderTree()/loadTree() on their own paths.
+  _paintActiveTreeNote();
   // switchTab can fire programmatically (sync refresh, session restore…)
   // while the SPLIT pane owns the header title: re-assert the focused pane's
   // title so the bare `noteTitle.value = tab.name` above can't clobber it.
