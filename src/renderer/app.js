@@ -7773,7 +7773,66 @@ function makeCellEditable(table, cell) {
       }
     }
   });
+  // Spreadsheet-style paste: multi-LINE clipboard text spreads DOWN one row per line
+  // (and TAB-separated parts spread ACROSS columns), starting from this cell — so 3
+  // lines copied from the editor land in 3 consecutive rows, not folded into one cell
+  // (serekkr, 21/11/2026). A single plain value (no newline, no tab) falls through to
+  // the browser's normal in-cell paste; `input` + _flattenCellStructure keep it one
+  // line and blur syncs it. Existing cells only: it never grows the table.
+  cell.addEventListener('paste', e => {
+    const cd = e.clipboardData || window.clipboardData;
+    if (!cd) return;
+    let raw = cd.getData('text/plain');
+    if (raw == null || raw === '') return;
+    const rows = raw.replace(/\r\n?/g, '\n').replace(/\n+$/, '').split('\n');
+    const multiRow = rows.length > 1;
+    const multiCol = rows.some(r => r.includes('\t'));
+    if (!multiRow && !multiCol) return;   // ordinary single value → let the browser paste
+    e.preventDefault();
+    e.stopPropagation();
+    distributePasteIntoTable(table, cell, rows);
+  });
   cell.addEventListener('blur', () => syncCellToMarkdown(table, cell));
+}
+
+// Replace a preview cell's text WITHOUT disturbing its (absolutely-pinned, non-editable)
+// resize handle. An empty value keeps the zero-width anchor so the caret still sits at
+// the left at text height (see makeCellEditable's input handler).
+function _setCellText(cell, text) {
+  const handle = cell.querySelector('.col-resize-handle');
+  [...cell.childNodes].forEach(n => { if (n !== handle) n.remove(); });
+  const node = document.createTextNode(text !== '' ? text : '​');
+  if (handle) cell.insertBefore(node, handle); else cell.appendChild(node);
+}
+
+// Spread pasted rows across a table starting at `startCell`: line r → the cell r rows
+// below in the same column; each line's TAB-separated parts → successive columns to the
+// right. Fills only cells that already exist (never adds rows/columns), replacing each
+// one's whole content, then writes every changed cell back to the markdown.
+function distributePasteIntoTable(table, startCell, rows) {
+  const allRows = [...table.querySelectorAll('tr')];
+  const startRow = startCell.closest('tr');
+  const startRowIdx = allRows.indexOf(startRow);
+  const rowCells = tr => [...tr.children].filter(c => c.tagName === 'TD' || c.tagName === 'TH');
+  const startColIdx = rowCells(startRow).indexOf(startCell);
+  if (startRowIdx < 0 || startColIdx < 0) return;
+  const changed = [];
+  for (let r = 0; r < rows.length; r++) {
+    const targetRow = allRows[startRowIdx + r];
+    if (!targetRow) break;                       // no more rows → stop, don't grow the table
+    const cells = rowCells(targetRow);
+    const cols = rows[r].split('\t');
+    for (let c = 0; c < cols.length; c++) {
+      const target = cells[startColIdx + c];
+      if (!target || target.dataset.editable !== '1') continue;   // past the last column → skip
+      const old = target.textContent;
+      _setCellText(target, cols[c].replace(/​/g, ''));
+      target.dataset.origText = old;             // so syncCellToMarkdown sees old→new
+      changed.push(target);
+    }
+  }
+  for (const c of changed) syncCellToMarkdown(table, c);
+  _placeCaretInCell(startCell, 'end');
 }
 
 // Where the caret sits within a preview table cell, ignoring the zero-width-space
