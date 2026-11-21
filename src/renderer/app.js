@@ -436,6 +436,10 @@ async function switchTab(idx) {
   // Load content if not yet cached
   if (!tab.content && tab.path) {
     tab.content = await window.inkwell.readNote(tab.path).catch(() => '');
+    // Drop any legacy `<!-- amelie:colw -->` line (widths migrate to localStorage) so
+    // the stray "amelie" text is gone from the source too — in memory only, no dirty
+    // flag: the file is rewritten clean on the note's next real edit, not on open.
+    tab.content = _migrateStripColwComments(tab.path, tab.content);
     editor.value = tab.content;
     applyEditorHighlight();
   }
@@ -7036,9 +7040,16 @@ function updatePreview() {
   marked.setOptions({ breaks: true, gfm: true });
   const body = _previewBody(editor.value);
 
-  // Strip column-width markers (`<!-- amelie:colw=N,N,N -->`) so they don't
-  // render; remember widths positionally to re-apply to each table.
+  // Strip any legacy column-width markers (`<!-- amelie:colw=N,N,N -->`) so they
+  // don't render; widths now live in localStorage (per note). Overlay the locally
+  // saved widths on top of any legacy in-note ones (local wins), and migrate a
+  // legacy width into localStorage when nothing local exists yet for that table.
   const { cleanedBody, widthsByTable } = extractTableWidthMarkers(body);
+  const _localW = _loadTableWidths(state.currentPath);
+  for (let i = 0; i < widthsByTable.length; i++) {
+    if (_localW[i] && _localW[i].length) widthsByTable[i] = _localW[i];
+    else if (widthsByTable[i] && widthsByTable[i].length) _saveTableWidthsFor(state.currentPath, i, widthsByTable[i]);
+  }
 
   const processedBody = _preprocessMarkdown(cleanedBody);
   // The blank-line spacers need the file's blank lines, and rendered HTML has none
@@ -7473,6 +7484,40 @@ function extractTableWidthMarkers(body) {
   return { cleanedBody: cleanedLines.join('\n'), widthsByTable };
 }
 
+// Per-note table column widths, stored LOCALLY (localStorage) instead of inside the
+// note as an `<!-- amelie:colw=… -->` comment. That comment polluted the markdown: it
+// showed up as a stray "amelie:colw=…" line just above the table whenever the source
+// was visible (edit mode / split editor pane) — serekkr, 21/11/2026 ("compare una
+// scritta strana amelie in alto della tabella" when resizing a column). Keyed by the
+// note path; the value maps a positional table index → the array of column widths.
+function _tableWidthsKey(notePath) { return 'amelie.colw:' + (notePath || ''); }
+function _loadTableWidths(notePath) {
+  try { const v = JSON.parse(localStorage.getItem(_tableWidthsKey(notePath)) || '{}'); return (v && typeof v === 'object') ? v : {}; }
+  catch (_) { return {}; }
+}
+function _saveTableWidthsFor(notePath, tableIdx, widths) {
+  try {
+    const all = _loadTableWidths(notePath);
+    all[tableIdx] = widths;
+    localStorage.setItem(_tableWidthsKey(notePath), JSON.stringify(all));
+  } catch (_) {}
+}
+// Strip any legacy `<!-- amelie:colw=… -->` comment lines out of a note's text,
+// migrating each table's saved widths into localStorage FIRST so nothing is lost.
+// Returns the cleaned text (unchanged when the note carries no such comment). Lets
+// older notes shed the stray "amelie" line the moment they are opened or resized.
+function _migrateStripColwComments(notePath, text) {
+  if (!/<!--\s*amelie:colw=/.test(text)) return text;
+  const { cleanedBody, widthsByTable } = extractTableWidthMarkers(text);
+  const existing = _loadTableWidths(notePath);
+  let touched = false;
+  widthsByTable.forEach((w, i) => {
+    if (w && w.length && !(existing[i] && existing[i].length)) { existing[i] = w; touched = true; }
+  });
+  if (touched) { try { localStorage.setItem(_tableWidthsKey(notePath), JSON.stringify(existing)); } catch (_) {} }
+  return cleanedBody;
+}
+
 function setupTableColumnResize(table, tableIdx, widths) {
   const firstRow = table.querySelector('tr');
   if (!firstRow) return;
@@ -7536,9 +7581,9 @@ function setupTableColumnResize(table, tableIdx, widths) {
     // were clamped to under-measured any cell holding a `code` chip or bold text by
     // 30-50px (see _columnContentMins). Adopt the resolution rather than argue with
     // it: give each <col> the width actually used and re-pin the table to that total,
-    // which is self-consistent and stable on every later render. The note's own
-    // `amelie:colw` comment is deliberately left untouched — the next drag rewrites it
-    // with numbers that hold.
+    // which is self-consistent and stable on every later render. The saved widths
+    // (localStorage) are deliberately left untouched here — the next drag rewrites
+    // them with numbers that hold.
     if (allSet) {
       const resolved = headerCells.map(c => Math.round(c.getBoundingClientRect().width));
       if (resolved.some((w, i) => w > clamped[i] + 1)) {
@@ -7985,38 +8030,25 @@ function startColumnResize(e, table, cols, cells, colIdx, isLast) {
 
 function persistTableColumnWidths(tableIdx, widths) {
   if (!Number.isFinite(tableIdx) || tableIdx < 0) return;
-  const marker = `<!-- amelie:colw=${widths.join(',')} -->`;
-  const lines = editor.value.split('\n');
-  let found = 0;
-  for (let i = 0; i < lines.length; i++) {
-    const isHeader = lines[i].includes('|')
-      && i + 1 < lines.length
-      && isMdTableSeparatorRow(lines[i + 1]);
-    if (!isHeader) continue;
-    if (found === tableIdx) {
-      const prev = i > 0 ? lines[i - 1] : '';
-      if (/^\s*<!--\s*amelie:colw=/.test(prev)) {
-        lines[i - 1] = marker;
-      } else {
-        lines.splice(i, 0, marker);
-      }
-      editor.value = lines.join('\n');
-      // v1.0.984: do NOT dispatch 'input' — that schedules a full preview rebuild,
-      // and the freshly re-rendered table (table-layout:auto) lands a sub-pixel off
-      // from where the drag left it, so the table appeared to "shift a little" right
-      // after release. The on-screen table is already correct (fixed layout, exact px
-      // from the drag); we only need to persist the marker + mark the note dirty. Run
-      // just the bookkeeping the 'input' handler does that matters for a comment-only
-      // edit — skip the highlight/preview/overlay work that caused the shift.
-      const tab = getActiveTab();
-      if (tab) { tab.isDirty = true; tab.content = editor.value; }
-      setSavedState(false);
-      updateWordCount();
-      scheduleAutosave();
-      return;
-    }
-    found++;
+  // Widths live in localStorage now (per note), NEVER back in the note as an
+  // `<!-- amelie:colw -->` comment — writing that comment is what put the stray
+  // "amelie" line above the table in the source view (serekkr, 21/11/2026).
+  _saveTableWidthsFor(state.currentPath, tableIdx, widths);
+  // If this note still carries a legacy width comment, shed it now (its widths are
+  // migrated into localStorage by the helper first). Touch the note ONLY when a
+  // comment was actually there, so a plain resize no longer mutates the markdown.
+  const cleaned = _migrateStripColwComments(state.currentPath, editor.value);
+  if (cleaned !== editor.value) {
+    editor.value = cleaned;
+    const tab = getActiveTab();
+    if (tab) { tab.isDirty = true; tab.content = editor.value; }
+    setSavedState(false);
+    updateWordCount();
+    scheduleAutosave();
   }
+  // No 'input' dispatch either way: the on-screen table is already exactly where the
+  // drag left it (fixed layout, exact px), and a full re-render would land it a
+  // sub-pixel off — the "shift a little right after release" this path used to avoid.
 }
 
 function updateWordCount() {
