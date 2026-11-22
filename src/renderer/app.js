@@ -4623,7 +4623,12 @@ function renameNoteInBreadcrumb(noteSeg, path) {
 // Briefly highlight a tree element after scrolling it into view.
 function flashTreeEl(el) {
   if (!el) return;
-  el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  // Center the revealed row in the sidebar — with 'nearest' a folder/note just below
+  // the fold scrolls the bare minimum and lands pinned at the very bottom edge, barely
+  // visible (serekkr, 22/11/2026: clicking a breadcrumb path left the target "giù in
+  // basso, non si vede bene"). The shell can't be dragged out of view: _pinShell snaps
+  // <html>/<body> back to 0 on any scroll.
+  el.scrollIntoView({ block: 'center', inline: 'nearest' });
   el.classList.remove('tree-flash');
   // Force reflow so re-adding the class restarts the animation.
   void el.offsetWidth;
