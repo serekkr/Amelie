@@ -493,6 +493,131 @@ const codeBlockPlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: (v) => v.decorations });
 
+// ── Markdown tables: monospace + auto-align (edit mode) ───────────────────────
+// Raw markdown tables look ragged in edit mode because the editor font is proportional
+// and the pipes never line up (serekkr, 22/11/2026: "adesso è brutto così … come fosse
+// una tabella vera"). Two parts: (1) a line decoration puts each table line in the
+// monospace code font so columns CAN align; (2) when the caret LEAVES a table its cells
+// are padded so the columns DO align — on leave, never mid-typing, so the caret is never
+// reflowed out from under you.
+const tableLineDeco = Decoration.line({ class: 'cm-mdtable' });
+function _tableSplitRow(line) {
+  const s = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+  return s.split(/(?<!\\)\|/).map((c) => c.trim());
+}
+function _isTableSep(line) {
+  const cells = _tableSplitRow(line);
+  return cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c));
+}
+// The 1-based {from,to} line range of the table `ln` belongs to, or null. A table is a
+// header line containing '|' whose NEXT line is a separator, then the run of following
+// lines that still contain '|'.
+function _tableBlockAt(doc, ln) {
+  const n = doc.lines;
+  const has = (k) => k >= 1 && k <= n && doc.line(k).text.includes('|');
+  if (!has(ln)) return null;
+  let top = ln;
+  while (top > 1 && has(top - 1)) top--;
+  if (top + 1 > n || !_isTableSep(doc.line(top + 1).text) || _isTableSep(doc.line(top).text)) return null;
+  let bottom = top + 1;
+  while (bottom + 1 <= n && has(bottom + 1)) bottom++;
+  return (ln >= top && ln <= bottom) ? { from: top, to: bottom } : null;
+}
+function _alignTableLines(lines) {
+  const rows = lines.map(_tableSplitRow);
+  const sepIdx = 1;
+  const ncol = Math.max(...rows.map((r) => r.length));
+  const sep = rows[sepIdx] || [];
+  const aligns = [];
+  for (let c = 0; c < ncol; c++) {
+    const t = (sep[c] || '').trim();
+    const l = t.startsWith(':'), r = t.endsWith(':');
+    aligns[c] = (l && r) ? 'c' : r ? 'r' : l ? 'l' : '';
+  }
+  const widths = [];
+  for (let c = 0; c < ncol; c++) {
+    let w = Math.max(3, 1 + (aligns[c] === 'c' ? 2 : aligns[c] ? 1 : 0));
+    for (let r = 0; r < rows.length; r++) {
+      if (r === sepIdx) continue;
+      const cell = rows[r][c] || '';
+      if (cell.length > w) w = cell.length;
+    }
+    widths[c] = w;
+  }
+  const center = (s, w) => { const t = w - s.length, l = Math.floor(t / 2); return ' '.repeat(Math.max(0, l)) + s + ' '.repeat(Math.max(0, t - l)); };
+  return rows.map((r, ri) => {
+    const fields = [];
+    for (let c = 0; c < ncol; c++) {
+      const w = widths[c];
+      if (ri === sepIdx) {
+        const a = aligns[c];
+        let body = a === 'c' ? ':' + '-'.repeat(Math.max(1, w - 2)) + ':'
+                 : a === 'r' ? '-'.repeat(Math.max(1, w - 1)) + ':'
+                 : a === 'l' ? ':' + '-'.repeat(Math.max(1, w - 1))
+                 : '-'.repeat(w);
+        fields.push(body.length < w ? body.padEnd(w, '-') : body.slice(0, w));
+      } else {
+        let cell = r[c] || '';
+        const a = aligns[c];
+        cell = a === 'r' ? cell.padStart(w) : a === 'c' ? center(cell, w) : cell.padEnd(w);
+        fields.push(cell);
+      }
+    }
+    return '| ' + fields.join(' | ') + ' |';
+  });
+}
+const tableFormatPlugin = ViewPlugin.fromClass(class {
+  constructor(view) { this.decorations = this.build(view); this.prev = this._caretBlock(view); }
+  _caretBlock(view) {
+    const doc = view.state.doc;
+    return _tableBlockAt(doc, doc.lineAt(view.state.selection.main.head).number);
+  }
+  update(u) {
+    if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view);
+    const cur = this._caretBlock(u.view);
+    // Align only when the caret LEAVES a table, on a pure selection move (no doc edit
+    // this transaction): the stored block's line numbers are still valid and nothing
+    // reflows while you are typing inside the table.
+    if (u.selectionSet && !u.docChanged && this.prev && (!cur || cur.from !== this.prev.from)) {
+      this._reformat(u.view, this.prev);
+    }
+    this.prev = cur;
+  }
+  _reformat(view, block) {
+    const doc = view.state.doc;
+    if (block.from < 1 || block.to > doc.lines) return;
+    const lines = [];
+    for (let k = block.from; k <= block.to; k++) lines.push(doc.line(k).text);
+    if (lines.length < 2 || !_isTableSep(lines[1])) return;
+    let aligned;
+    try { aligned = _alignTableLines(lines); } catch (_) { return; }
+    const newText = aligned.join('\n');
+    const from = doc.line(block.from).from, to = doc.line(block.to).to;
+    if (doc.sliceString(from, to) === newText) return;   // already aligned → no-op
+    // A synchronous dispatch inside update() is illegal; defer to a microtask.
+    Promise.resolve().then(() => {
+      try {
+        const d = view.state.doc;
+        if (to > d.length || d.sliceString(from, to) === newText) return;
+        view.dispatch({ changes: { from, to, insert: newText } });
+      } catch (_) {}
+    });
+  }
+  build(view) {
+    const builder = new RangeSetBuilder();
+    const doc = view.state.doc;
+    for (const { from, to } of view.visibleRanges) {
+      let p = from;
+      while (p <= to) {
+        const line = doc.lineAt(p);
+        if (line.text.includes('|') && _tableBlockAt(doc, line.number)) builder.add(line.from, line.from, tableLineDeco);
+        p = line.to + 1;
+      }
+    }
+    return builder.finish();
+  }
+}, { decorations: (v) => v.decorations });
+
 // ── Code-block SYNTAX HIGHLIGHTING (edit mode), viewport-scoped & cheap ─────────
 // Per-line stream tokenizers (legacy CM5 modes) run manually over ONLY the visible
 // code lines of each fenced block; language picked from the fence tag. Cost is
@@ -1236,6 +1361,7 @@ window.AmelieCM = {
           keymap.of([fenceEnterNoop, fenceEnter, plainEnter, ...defaultKeymap, ...historyKeymap, insertTabOrIndent]),
           fenceField,
           codeBlockPlugin,
+          tableFormatPlugin,
           // codeHighlightPlugin DELIBERATELY OFF (serekkr, 28/10/2026): the code-block
           // CONTENT must stay PLAIN in edit mode — syntax colours belong to view/reading
           // mode only. codeBlockPlugin stays, so blocks keep their grey background box

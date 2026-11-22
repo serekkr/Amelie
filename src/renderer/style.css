@@ -1744,6 +1744,10 @@ kbd {
    protect, kept here while changing what the two agree ON. */
 #cm-mount .cm-codeblock { background: var(--code-bg); padding-left: 2ch; padding-right: 2ch;
   font-family: var(--code-font); }
+/* Markdown table lines in edit mode: the monospace code font so the padded cells
+   (auto-aligned when the caret leaves the table, see tableFormatPlugin) line up into
+   real columns instead of the ragged pipes a proportional font gives. */
+#cm-mount .cm-mdtable { font-family: var(--code-font); }
 /* Breathing above/below the fence lines = 0.3× the line height (the legacy inkGap),
    proportional so it stays right when the font is zoomed. */
 #cm-mount .cm-cb-first { border-top-left-radius: 7px; border-top-right-radius: 7px; padding-top: calc(0.14 * var(--editor-line-height) * 1em); }
