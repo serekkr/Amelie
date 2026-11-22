@@ -193,28 +193,24 @@ function updateFencePositions(oldPos, changes, newDoc) {
   for (let i = 0; i < out.length; i++) { if (i === 0 || out[i] !== out[i - 1]) dedup.push(out[i]); }
   return dedup;
 }
-// Build the grey-mask decorations by pairing consecutive fences.
-// KEY: an ODD number of fences means a block is being typed (one fence still
-// open). Pairing greedily top-down would marry that new opening fence to the
-// NEXT existing block's fence and grey the normal text between them ("mask
-// appears while I type ```"). So when odd, we DROP the fence nearest the caret
-// (the one being typed) and pair the rest — the half-typed block masks nothing
-// until you close it.
+// Build the grey-mask decorations by pairing consecutive fences TOP-DOWN:
+// (F1,F2), (F3,F4), … — exactly how CommonMark closes fenced blocks (the first
+// ``` after an opener closes it, whatever sits between). An ODD number of fences
+// means the LAST one opens a block still left open; the `i + 1 < list.length`
+// loop below leaves it UNPAIRED, so an unclosed block simply masks nothing until
+// it is closed. This pairing is CARET-INDEPENDENT on purpose: an earlier version
+// dropped "the fence nearest the caret" when odd, which made the grey mask LEAP
+// between blocks every time you merely clicked into a note that had an unclosed
+// ``` (serekkr, 22/11/2026 — the mask landed on the "### 2" heading between two
+// blocks and moved on each click). The only cost of dropping that heuristic is
+// that typing a NEW opening ``` ABOVE an existing block briefly greys the gap
+// until you close it — rare and transient, unlike the jump it replaces.
 function buildDeco(view, fencePositions) {
   const doc = view.state.doc;
   const builder = new RangeSetBuilder();
   // fencePositions is a sorted list of line-start positions → line numbers (cheap:
   // O(fences · log lines), fences are few even in code-heavy notes).
-  let list = fencePositions.map((p) => doc.lineAt(p).number);
-  if (list.length % 2 === 1) {
-    const curLine = doc.lineAt(view.state.selection.main.head).number;
-    let bestIdx = 0, bestDist = Infinity;
-    for (let i = 0; i < list.length; i++) {
-      const d = Math.abs(list[i] - curLine);
-      if (d < bestDist) { bestDist = d; bestIdx = i; }
-    }
-    list = list.slice(0, bestIdx).concat(list.slice(bestIdx + 1));
-  }
+  const list = fencePositions.map((p) => doc.lineAt(p).number);
   for (let i = 0; i + 1 < list.length; i += 2) {
     const s = list[i], e = list[i + 1];
     for (let k = s; k <= e; k++) {
@@ -488,11 +484,10 @@ const fenceField = StateField.define({
 const codeBlockPlugin = ViewPlugin.fromClass(class {
   constructor(view) { this.decorations = buildDeco(view, view.state.field(fenceField)); }
   update(u) {
+    // Pairing is caret-INDEPENDENT (see buildDeco), so it only needs rebuilding when
+    // the DOCUMENT changes — NOT on selection moves. Re-pairing on every caret move is
+    // what made the mask jump when clicking a note with an unclosed fence.
     if (u.docChanged) {
-      this.decorations = buildDeco(u.view, u.state.field(fenceField));
-    } else if (u.selectionSet && u.state.field(fenceField).length % 2 === 1) {
-      // Only re-pair on caret move while a block is half-typed (odd fences):
-      // the "nearest fence to caret" can change. Cheap (no re-scan).
       this.decorations = buildDeco(u.view, u.state.field(fenceField));
     }
   }

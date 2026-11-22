@@ -59,6 +59,7 @@
     "test:tablecols": "node test/table-columns-fit.cdp.mjs",
     "test:tableclip": "node test/table-clipboard.cdp.mjs",
     "test:tablereading": "node test/table-reading-mode.cdp.mjs",
+    "test:fencemask": "node test/editor-code-fence-mask.cdp.mjs",
     "test:inputcap": "node test/input-cap-vs-editor.cdp.mjs",
     "test:updatecheck": "node test/update-check.cdp.mjs",
     "test:viewicons": "node test/view-icon-toggle.cdp.mjs",

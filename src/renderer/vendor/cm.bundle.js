@@ -19525,19 +19525,7 @@
   function buildDeco(view, fencePositions) {
     const doc2 = view.state.doc;
     const builder = new RangeSetBuilder();
-    let list = fencePositions.map((p) => doc2.lineAt(p).number);
-    if (list.length % 2 === 1) {
-      const curLine = doc2.lineAt(view.state.selection.main.head).number;
-      let bestIdx = 0, bestDist = Infinity;
-      for (let i2 = 0; i2 < list.length; i2++) {
-        const d = Math.abs(list[i2] - curLine);
-        if (d < bestDist) {
-          bestDist = d;
-          bestIdx = i2;
-        }
-      }
-      list = list.slice(0, bestIdx).concat(list.slice(bestIdx + 1));
-    }
+    const list = fencePositions.map((p) => doc2.lineAt(p).number);
     for (let i2 = 0; i2 + 1 < list.length; i2 += 2) {
       const s = list[i2], e = list[i2 + 1];
       for (let k = s; k <= e; k++) {
@@ -19767,8 +19755,6 @@
     }
     update(u) {
       if (u.docChanged) {
-        this.decorations = buildDeco(u.view, u.state.field(fenceField));
-      } else if (u.selectionSet && u.state.field(fenceField).length % 2 === 1) {
         this.decorations = buildDeco(u.view, u.state.field(fenceField));
       }
     }
