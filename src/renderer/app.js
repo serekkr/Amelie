@@ -7790,7 +7790,23 @@ function makeCellEditable(table, cell) {
     if (!multiRow && !multiCol) return;   // ordinary single value → let the browser paste
     e.preventDefault();
     e.stopPropagation();
-    distributePasteIntoTable(table, cell, rows);
+    // Start at the TOPMOST/leftmost cell of the selection, not this one. When you drag a
+    // selection across rows, the paste fires on the cell where the drag ENDED (the focus
+    // end), which for a top→bottom drag is the LAST row — so distributing down from there
+    // skipped the first selected row and spilled off the bottom (serekkr, 22/11/2026:
+    // "seleziono due righe … non incolla ognuno nella sua riga"). A Range's startContainer
+    // is always the earliest point in document order regardless of drag direction, so it
+    // lands on the first selected cell. No selection → it's this cell, unchanged.
+    let startCell = cell;
+    try {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        const sc = sel.getRangeAt(0).startContainer;
+        const scCell = (sc.nodeType === 1 ? sc : sc.parentElement)?.closest('td,th');
+        if (scCell && table.contains(scCell) && scCell.dataset.editable === '1') startCell = scCell;
+      }
+    } catch (_) {}
+    distributePasteIntoTable(table, startCell, rows);
   });
   cell.addEventListener('blur', () => syncCellToMarkdown(table, cell));
 }

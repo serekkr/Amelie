@@ -146,6 +146,22 @@ check('paste: TAB si spande sulle colonne (P,Q,R)', pa && JSON.stringify(pa.row1
 check('paste: la tabella NON cresce in overflow', pa && pa.grew === false, pa);
 check('paste: il markdown riflette i valori incollati', pa && /\\|\\s*X\\s*\\|/.test(pa.md) && /\\|\\s*P\\s*\\|/.test(pa.md), pa && pa.md);
 
+// paste over a cross-cell SELECTION (drag over two rows, top→bottom) must start at the
+// TOP selected row, not where the drag ended.
+const psel = await ev(`(async () => {
+  const rows=document.querySelectorAll('#preview-content table tbody tr');
+  const a=rows[0].querySelectorAll('td')[0], b=rows[1].querySelectorAll('td')[0];
+  const sel=window.getSelection(); const r=document.createRange();
+  r.setStart(a.firstChild||a,0); r.setEnd(b.firstChild||b,(b.textContent||'').length);
+  sel.removeAllRanges(); sel.addRange(r);           // selection ends on the LOWER cell
+  const focus=(sel.focusNode&&sel.focusNode.nodeType===1?sel.focusNode:sel.focusNode&&sel.focusNode.parentElement)&&(sel.focusNode.nodeType===1?sel.focusNode:sel.focusNode.parentElement).closest('td');
+  (${mkPaste})(focus||b,'HOST=h\\nPORT=8123');
+  await new Promise(x=>setTimeout(x,150));
+  return [rows[0].querySelectorAll('td')[0].textContent.replace(/\\u200b/g,''), rows[1].querySelectorAll('td')[0].textContent.replace(/\\u200b/g,'')];
+})()`);
+check('paste su selezione 2 righe (alto→basso): riga1=HOST, riga2=PORT',
+  psel && psel[0]==='HOST=h' && psel[1]==='PORT=8123', psel);
+
 const failed = results.filter(r => !r).length;
 console.log(`\n${results.length - failed}/${results.length} passed`);
 try { process.kill(-child.pid, 'SIGKILL'); } catch (_) {}
