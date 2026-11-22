@@ -19779,7 +19779,7 @@
     while (bottom + 1 <= n && has(bottom + 1)) bottom++;
     return ln >= top3 && ln <= bottom ? { from: top3, to: bottom } : null;
   }
-  function _alignTableLines(lines) {
+  function _alignParts(lines) {
     const rows = lines.map(_tableSplitRow);
     const sepIdx = 1;
     const ncol = Math.max(...rows.map((r) => r.length));
@@ -19804,7 +19804,7 @@
       const t2 = w - s.length, l = Math.floor(t2 / 2);
       return " ".repeat(Math.max(0, l)) + s + " ".repeat(Math.max(0, t2 - l));
     };
-    return rows.map((r, ri) => {
+    const out = rows.map((r, ri) => {
       const fields = [];
       for (let c = 0; c < ncol; c++) {
         const w = widths[c];
@@ -19821,11 +19821,38 @@
       }
       return "| " + fields.join(" | ") + " |";
     });
+    return { out, widths, aligns, cells: rows };
+  }
+  function _caretRCO(lineText, colInLine, ncol) {
+    const pipes = [];
+    for (let i2 = 0; i2 < lineText.length; i2++) if (lineText[i2] === "|" && (i2 === 0 || lineText[i2 - 1] !== "\\")) pipes.push(i2);
+    let C2 = -1;
+    for (let j = 0; j + 1 < pipes.length; j++) if (colInLine > pipes[j] && colInLine <= pipes[j + 1]) {
+      C2 = j;
+      break;
+    }
+    if (C2 < 0) C2 = colInLine <= (pipes[0] ?? 0) ? 0 : Math.max(0, pipes.length - 2);
+    if (C2 > ncol - 1) C2 = Math.max(0, ncol - 1);
+    const rawStart = (pipes[C2] ?? -1) + 1, rawEnd = pipes[C2 + 1] ?? lineText.length;
+    const raw = lineText.slice(rawStart, rawEnd);
+    const lead = raw.length - raw.trimStart().length;
+    const trimmed = raw.trim();
+    let O = colInLine - (rawStart + lead);
+    O = Math.max(0, Math.min(O, trimmed.length));
+    return { C: C2, O };
+  }
+  function _colInAligned(widths, aligns, cellLens, C2, O) {
+    let start = 2;
+    for (let k = 0; k < C2; k++) start += widths[k] + 3;
+    const w = widths[C2] || 3, len = cellLens[C2] || 0, a = aligns[C2];
+    const pad = a === "r" ? w - len : a === "c" ? Math.floor((w - len) / 2) : 0;
+    return start + Math.max(0, pad) + Math.min(O, len);
   }
   var tableFormatPlugin = ViewPlugin.fromClass(class {
     constructor(view) {
       this.decorations = this.build(view);
       this.prev = this._caretBlock(view);
+      this._t = 0;
     }
     _caretBlock(view) {
       const doc2 = view.state.doc;
@@ -19833,32 +19860,63 @@
     }
     update(u) {
       if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view);
-      const cur = this._caretBlock(u.view);
-      if (u.selectionSet && !u.docChanged && this.prev && (!cur || cur.from !== this.prev.from)) {
-        this._reformat(u.view, this.prev);
+      const view = u.view;
+      const cur = this._caretBlock(view);
+      if (u.docChanged && cur) {
+        clearTimeout(this._t);
+        this._t = setTimeout(() => {
+          try {
+            const b = this._caretBlock(view);
+            if (b) this._alignNow(view, b);
+          } catch (_) {
+          }
+        }, 380);
+      } else if (u.selectionSet && !u.docChanged && this.prev && (!cur || cur.from !== this.prev.from)) {
+        clearTimeout(this._t);
+        this._alignNow(view, this.prev);
       }
       this.prev = cur;
     }
-    _reformat(view, block) {
+    _alignNow(view, block) {
       const doc2 = view.state.doc;
-      if (block.from < 1 || block.to > doc2.lines) return;
+      if (!block || block.from < 1 || block.to > doc2.lines) return;
       const lines = [];
       for (let k = block.from; k <= block.to; k++) lines.push(doc2.line(k).text);
       if (lines.length < 2 || !_isTableSep(lines[1])) return;
-      let aligned;
+      let parts;
       try {
-        aligned = _alignTableLines(lines);
+        parts = _alignParts(lines);
       } catch (_) {
         return;
       }
-      const newText = aligned.join("\n");
+      const newText = parts.out.join("\n");
       const from = doc2.line(block.from).from, to = doc2.line(block.to).to;
       if (doc2.sliceString(from, to) === newText) return;
+      let newCaret = null;
+      try {
+        const head = view.state.selection.main.head;
+        const hl = doc2.lineAt(head);
+        if (hl.number >= block.from && hl.number <= block.to) {
+          const R = hl.number - block.from;
+          const rco = _caretRCO(hl.text, head - hl.from, parts.widths.length);
+          const lens = (parts.cells[R] || []).map((c) => (c || "").length);
+          while (lens.length < parts.widths.length) lens.push(0);
+          if (R === 1) for (let i2 = 0; i2 < lens.length; i2++) lens[i2] = parts.widths[i2];
+          const col = _colInAligned(parts.widths, parts.aligns, lens, rco.C, rco.O);
+          let off = 0;
+          for (let r = 0; r < R; r++) off += parts.out[r].length + 1;
+          newCaret = from + off + col;
+        }
+      } catch (_) {
+        newCaret = null;
+      }
       Promise.resolve().then(() => {
         try {
           const d = view.state.doc;
           if (to > d.length || d.sliceString(from, to) === newText) return;
-          view.dispatch({ changes: { from, to, insert: newText } });
+          const tr = { changes: { from, to, insert: newText } };
+          if (newCaret != null) tr.selection = { anchor: Math.max(from, Math.min(newCaret, from + newText.length)) };
+          view.dispatch(tr);
         } catch (_) {
         }
       });

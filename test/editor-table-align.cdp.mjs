@@ -81,6 +81,26 @@ check('allineamento: nessun contenuto perso (host + valore interi)',
 console.log('--- tabella allineata ---');
 lines.filter(l => /\|/.test(l)).forEach(l => console.log('   ' + l));
 
+// LIVE: typing a long value into a cell re-aligns the table WITHOUT leaving it, and the
+// caret stays in that cell.
+const live = await ev(`(async()=>{
+  const cm=_cmHandle.view; const s=cm.state.doc.toString();
+  const i = s.indexOf('8123');                        // the '8123' cell (already padded)
+  cm.dispatch({ selection: { anchor: i, head: i+4 } });
+  cm.dispatch(cm.state.replaceSelection('porta-molto-lunga-9999'));
+  await new Promise(r=>setTimeout(r,600));            // past the ~380ms debounce
+  const doc=cm.state.doc.toString();
+  const head=cm.state.selection.main.head;
+  const hl=cm.state.doc.lineAt(head);
+  return { doc, headLine: hl.text, caretCol: head - hl.from };
+})()`);
+const L = (live.doc||'').split('\n');
+const lh = L.find(x=>/Chiave/.test(x))||'', lr = L.find(x=>/porta-molto-lunga/.test(x))||'';
+check('LIVE: si allinea mentre scrivo (senza uscire dalla tabella)',
+  lh && lr && col2(lh) === col2(lr), { lh, lr });
+check('LIVE: il cursore resta nella cella dove scrivo',
+  /porta-molto-lunga/.test(live.headLine) && live.caretCol > lr.indexOf('porta-molto-lunga'), { headLine: live.headLine, caretCol: live.caretCol });
+
 const failed = results.filter(r => !r).length;
 console.log(`\n${results.length - failed}/${results.length} passed`);
 try { process.kill(-child.pid, 'SIGKILL'); } catch (_) {}
