@@ -19848,6 +19848,42 @@
     const pad = a === "r" ? w - len : a === "c" ? Math.floor((w - len) / 2) : 0;
     return start + Math.max(0, pad) + Math.min(O, len);
   }
+  function _alignAllTables(view) {
+    const doc2 = view.state.doc;
+    const changes = [];
+    let ln = 1;
+    while (ln <= doc2.lines) {
+      const line = doc2.line(ln);
+      const b = line.text.includes("|") ? _tableBlockAt(doc2, ln) : null;
+      if (b && b.from === ln) {
+        const lines = [];
+        for (let k = b.from; k <= b.to; k++) lines.push(doc2.line(k).text);
+        if (lines.length >= 2 && _isTableSep(lines[1])) {
+          let parts = null;
+          try {
+            parts = _alignParts(lines);
+          } catch (_) {
+            parts = null;
+          }
+          if (parts) {
+            const newText = parts.out.join("\n");
+            const from = doc2.line(b.from).from, to = doc2.line(b.to).to;
+            if (doc2.sliceString(from, to) !== newText) changes.push({ from, to, insert: newText });
+          }
+        }
+        ln = b.to + 1;
+        continue;
+      }
+      ln++;
+    }
+    if (!changes.length) return false;
+    try {
+      view.dispatch({ changes });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
   var tableFormatPlugin = ViewPlugin.fromClass(class {
     constructor(view) {
       this.decorations = this.build(view);
@@ -19871,49 +19907,56 @@
           } catch (_) {
           }
         }, 380);
-      } else if (u.selectionSet && !u.docChanged && this.prev && (!cur || cur.from !== this.prev.from)) {
+      } else if (u.selectionSet && !u.docChanged && this.prev?.from !== cur?.from) {
         clearTimeout(this._t);
-        this._alignNow(view, this.prev);
+        if (this.prev) this._alignNow(view, this.prev);
+        if (cur) this._alignNow(view, cur);
       }
       this.prev = cur;
     }
+    // Re-pad `block` (captured as 1-based line numbers) into aligned columns. The whole
+    // computation — re-reading the lines, _alignParts, the new text, the offsets and the
+    // caret target — is done INSIDE the deferred step against the LIVE document, never
+    // pre-computed and re-applied a tick later: that was the bug that wrote stale, uneven
+    // padding (each row to a different width) when the table had changed in between. A
+    // synchronous dispatch inside update() is illegal anyway, so the defer is required.
     _alignNow(view, block) {
-      const doc2 = view.state.doc;
-      if (!block || block.from < 1 || block.to > doc2.lines) return;
-      const lines = [];
-      for (let k = block.from; k <= block.to; k++) lines.push(doc2.line(k).text);
-      if (lines.length < 2 || !_isTableSep(lines[1])) return;
-      let parts;
-      try {
-        parts = _alignParts(lines);
-      } catch (_) {
-        return;
-      }
-      const newText = parts.out.join("\n");
-      const from = doc2.line(block.from).from, to = doc2.line(block.to).to;
-      if (doc2.sliceString(from, to) === newText) return;
-      let newCaret = null;
-      try {
-        const head = view.state.selection.main.head;
-        const hl = doc2.lineAt(head);
-        if (hl.number >= block.from && hl.number <= block.to) {
-          const R = hl.number - block.from;
-          const rco = _caretRCO(hl.text, head - hl.from, parts.widths.length);
-          const lens = (parts.cells[R] || []).map((c) => (c || "").length);
-          while (lens.length < parts.widths.length) lens.push(0);
-          if (R === 1) for (let i2 = 0; i2 < lens.length; i2++) lens[i2] = parts.widths[i2];
-          const col = _colInAligned(parts.widths, parts.aligns, lens, rco.C, rco.O);
-          let off = 0;
-          for (let r = 0; r < R; r++) off += parts.out[r].length + 1;
-          newCaret = from + off + col;
-        }
-      } catch (_) {
-        newCaret = null;
-      }
+      if (!block) return;
+      const fromLn = block.from, toLn = block.to;
       Promise.resolve().then(() => {
         try {
-          const d = view.state.doc;
-          if (to > d.length || d.sliceString(from, to) === newText) return;
+          const doc2 = view.state.doc;
+          if (fromLn < 1 || toLn > doc2.lines) return;
+          const lines = [];
+          for (let k = fromLn; k <= toLn; k++) lines.push(doc2.line(k).text);
+          if (lines.length < 2 || !_isTableSep(lines[1])) return;
+          let parts;
+          try {
+            parts = _alignParts(lines);
+          } catch (_) {
+            return;
+          }
+          const newText = parts.out.join("\n");
+          const from = doc2.line(fromLn).from, to = doc2.line(toLn).to;
+          if (doc2.sliceString(from, to) === newText) return;
+          let newCaret = null;
+          try {
+            const head = view.state.selection.main.head;
+            const hl = doc2.lineAt(head);
+            if (hl.number >= fromLn && hl.number <= toLn) {
+              const R = hl.number - fromLn;
+              const rco = _caretRCO(hl.text, head - hl.from, parts.widths.length);
+              const lens = (parts.cells[R] || []).map((c) => (c || "").length);
+              while (lens.length < parts.widths.length) lens.push(0);
+              if (R === 1) for (let i2 = 0; i2 < lens.length; i2++) lens[i2] = parts.widths[i2];
+              const col = _colInAligned(parts.widths, parts.aligns, lens, rco.C, rco.O);
+              let off = 0;
+              for (let r = 0; r < R; r++) off += parts.out[r].length + 1;
+              newCaret = from + off + col;
+            }
+          } catch (_) {
+            newCaret = null;
+          }
           const tr = { changes: { from, to, insert: newText } };
           if (newCaret != null) tr.selection = { anchor: Math.max(from, Math.min(newCaret, from + newText.length)) };
           view.dispatch(tr);
@@ -20662,6 +20705,16 @@
           scroller.scrollTop = n;
         },
         setLineNumbers: (on) => view.dispatch({ effects: lineNumbersComp.reconfigure(on ? visualLineNumbers() : []) }),
+        // Align every markdown table in the note at once (used when edit mode opens, so
+        // ragged tables show real columns without clicking into them). Returns true if
+        // anything changed.
+        alignTables: () => {
+          try {
+            return _alignAllTables(view);
+          } catch (_) {
+            return false;
+          }
+        },
         destroy: () => view.destroy()
       };
     }

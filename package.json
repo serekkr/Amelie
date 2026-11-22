@@ -61,6 +61,7 @@
     "test:tablereading": "node test/table-reading-mode.cdp.mjs",
     "test:fencemask": "node test/editor-code-fence-mask.cdp.mjs",
     "test:tablealign": "node test/editor-table-align.cdp.mjs",
+    "test:tablealignopen": "node test/editor-table-align-onopen.cdp.mjs",
     "test:inputcap": "node test/input-cap-vs-editor.cdp.mjs",
     "test:updatecheck": "node test/update-check.cdp.mjs",
     "test:viewicons": "node test/view-icon-toggle.cdp.mjs",

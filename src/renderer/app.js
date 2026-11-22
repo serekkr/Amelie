@@ -6473,6 +6473,10 @@ function setViewMode(mode, opts) {
       // frozen. Verify and rebuild BEFORE the user can type. Cheap: one length compare,
       // and it skips out immediately on a virtualized (big) note.
       try { if (_cmActive && _cmHandle && _cmHandle.checkSync) _cmHandle.checkSync('view->edit'); } catch (_) {}
+      // Show markdown tables as real, aligned columns the moment edit mode opens — not
+      // only after the caret visits each one. Only tables that aren't already aligned
+      // change (table-free notes dispatch nothing, so they're never marked dirty).
+      try { if (_cmActive && _cmHandle && _cmHandle.alignTables) _cmHandle.alignTables(); } catch (_) {}
       _applyScrollFrac(_cmScrollEl(), _frac);
     });
   } else {
