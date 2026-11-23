@@ -1,6 +1,9 @@
 // Edit-mode markdown tables: rendered in the monospace code font (.cm-mdtable) and
-// AUTO-ALIGNED when the caret leaves the table, so the raw source reads like a real
-// table instead of ragged pipes (serekkr, 22/11/2026: "come fosse una tabella vera").
+// AUTO-ALIGNED once, when edit mode opens (serekkr, 22/11/2026: "come fosse una tabella
+// vera"). NOT re-aligned live while you type, nor when the caret leaves the table —
+// serekkr, 23/11/2026: that live re-pad fought edits, you could not delete a column
+// (the padding snapped back ~380ms after each keystroke). This test proves both: aligned
+// at open, and an edit inside the table is left alone.
 //
 //   run: npm run test:tablealign     (needs a display; uses xvfb-run when present)
 import fs from 'node:fs';
@@ -57,12 +60,14 @@ const mono = await ev(`(async()=>{ await new Promise(x=>setTimeout(x,200));
 check('monospace: le righe tabella hanno la classe .cm-mdtable',
   Array.isArray(mono) && mono.length >= 4 && mono.some(l => /Chiave/.test(l)), mono);
 
+// Opening in edit mode already aligned the table (alignTables runs on edit-open). Moving
+// the caret in and then out must NOT be required for that, and must not disturb it.
 const aligned = await ev(`(async()=>{
   const cm=_cmHandle.view; const s=cm.state.doc.toString();
   cm.dispatch({ selection: { anchor: s.indexOf('my test') } });   // caret INTO the table
   await new Promise(x=>setTimeout(x,120));
   cm.dispatch({ selection: { anchor: s.indexOf('dopo la tabella') } }); // caret OUT of it
-  await new Promise(x=>setTimeout(x,300));                          // deferred reformat
+  await new Promise(x=>setTimeout(x,300));
   return cm.state.doc.toString();
 })()`);
 const lines = (aligned || '').split('\n');
@@ -70,36 +75,53 @@ const hdr = lines.find(l => /Chiave/.test(l)) || '';
 const sep = lines.find(l => /^\|\s*-/.test(l)) || '';
 const row = lines.find(l => /my test/.test(l)) || '';
 const col2 = s => s.indexOf('|', s.indexOf('|') + 1);
-check('allineamento: le pipe della 2a colonna sono incolonnate',
+check('apertura: le pipe della 2a colonna sono incolonnate',
   hdr && sep && row && col2(hdr) === col2(row) && col2(hdr) === col2(sep), { hdr, sep, row });
-check('allineamento: header, separatore e righe hanno la stessa lunghezza',
+check('apertura: header, separatore e righe hanno la stessa lunghezza',
   hdr.length === sep.length && hdr.length === row.length, { h: hdr.length, s: sep.length, r: row.length });
 // the long cell sets the column width, and nothing is truncated
-check('allineamento: nessun contenuto perso (host + valore interi)',
+check('apertura: nessun contenuto perso (host + valore interi)',
   /CLICKHOUSE_DDL_HOST/.test(aligned) && /flowsignal-clickhouse/.test(aligned) && /8123/.test(aligned), null);
 
-console.log('--- tabella allineata ---');
+console.log('--- tabella allineata (apertura) ---');
 lines.filter(l => /\|/.test(l)).forEach(l => console.log('   ' + l));
 
-// LIVE: typing a long value into a cell re-aligns the table WITHOUT leaving it, and the
-// caret stays in that cell.
+// NUOVA REGOLA (serekkr, 23/11/2026): dentro edit mode la tabella NON si ri-allinea da
+// sola. Scrivere un valore lungo in una cella deve restare com'è — niente ri-pad
+// automatico delle altre righe dopo l'ex-debounce di ~380ms — così puoi modificare e
+// cancellare colonne senza che il padding torni.
 const live = await ev(`(async()=>{
   const cm=_cmHandle.view; const s=cm.state.doc.toString();
   const i = s.indexOf('8123');                        // the '8123' cell (already padded)
   cm.dispatch({ selection: { anchor: i, head: i+4 } });
   cm.dispatch(cm.state.replaceSelection('porta-molto-lunga-9999'));
-  await new Promise(r=>setTimeout(r,600));            // past the ~380ms debounce
+  const headAfter = cm.state.selection.main.head;     // dove resta il cursore subito dopo
+  await new Promise(r=>setTimeout(r,700));            // ben oltre l'ex-debounce (~380ms)
   const doc=cm.state.doc.toString();
-  const head=cm.state.selection.main.head;
-  const hl=cm.state.doc.lineAt(head);
-  return { doc, headLine: hl.text, caretCol: head - hl.from };
+  return { doc, moved: cm.state.selection.main.head !== headAfter };
 })()`);
 const L = (live.doc||'').split('\n');
 const lh = L.find(x=>/Chiave/.test(x))||'', lr = L.find(x=>/porta-molto-lunga/.test(x))||'';
-check('LIVE: si allinea mentre scrivo (senza uscire dalla tabella)',
-  lh && lr && col2(lh) === col2(lr), { lh, lr });
-check('LIVE: il cursore resta nella cella dove scrivo',
-  /porta-molto-lunga/.test(live.headLine) && live.caretCol > lr.indexOf('porta-molto-lunga'), { headLine: live.headLine, caretCol: live.caretCol });
+// The long value makes that row longer than the header: if a live re-pad had fired, every
+// row would be padded back to the same width. It must NOT.
+check('edit: il valore lungo resta come scritto (niente ri-pad automatico)',
+  /porta-molto-lunga-9999/.test(live.doc) && lr.length > lh.length, { lh, lr });
+check('edit: nessun reflow sposta il cursore mentre scrivi',
+  live.moved === false, { moved: live.moved });
+
+// Cancellare una pipe (togliere una colonna) resta cancellato, non torna da solo.
+const pipesBefore = (live.doc.match(/\|/g) || []).length;
+const del = await ev(`(async()=>{
+  const cm=_cmHandle.view; const s=cm.state.doc.toString();
+  const rs = s.indexOf('| my test');
+  const rl = cm.state.doc.lineAt(rs);
+  const lastPipe = rl.from + rl.text.lastIndexOf('|');
+  cm.dispatch({ changes: { from: lastPipe, to: lastPipe + 1, insert: '' } });  // togli una pipe
+  await new Promise(r=>setTimeout(r,700));
+  return cm.state.doc.toString();
+})()`);
+check('edit: cancellare una pipe resta cancellato (non torna da solo)',
+  (del.match(/\|/g) || []).length === pipesBefore - 1, { before: pipesBefore, after: (del.match(/\|/g) || []).length });
 
 const failed = results.filter(r => !r).length;
 console.log(`\n${results.length - failed}/${results.length} passed`);

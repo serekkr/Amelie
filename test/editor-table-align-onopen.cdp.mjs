@@ -1,8 +1,9 @@
 // A note whose markdown table is RAGGED (uneven pipes — e.g. built by pasting into cells
 // in reading mode) must show as real, aligned columns as soon as EDIT MODE opens, without
-// the caret ever visiting the table; and clicking into a ragged table must align it on
-// entry, not only when the caret later leaves. (serekkr, 22/11/2026, image #9: the source
-// looked ragged / unevenly padded in edit mode.)
+// the caret ever visiting the table; and a re-ragged table must re-align on the view→edit
+// toggle. (serekkr, 22/11/2026, image #9: the source looked ragged / unevenly padded in
+// edit mode.) NB: on 23/11/2026 the align-on-caret-entry was removed so columns can be
+// deleted in edit mode; the triggers are now edit-open and the view→edit toggle.
 //
 //   run: npm run test:tablealignopen     (needs a display; uses xvfb-run when present)
 import fs from 'node:fs';
@@ -78,9 +79,11 @@ check('APERTURA: niente contenuto perso (yyyy… intatto)', /yyyyyyyyyyyyyyyy/.t
 console.log('--- doc dopo apertura ---');
 L1.filter(l => /\|/.test(l)).forEach(l => console.log('   ' + l));
 
-// Now prove click-INTO a freshly-raggedized table aligns on ENTRY. Re-ragged the first
-// table via a raw dispatch (as a reading-mode cell-sync would leave it), move the caret
-// OUT, then move it INTO the table and confirm it snaps aligned without any typing.
+// Now prove it re-aligns on the view→edit toggle (serekkr's other stated trigger). It no
+// longer aligns on a mere caret entry — that live behaviour was removed on 23/11/2026 so
+// columns can be deleted. Re-ragged the first table via a raw dispatch (as a reading-mode
+// cell-sync would leave it), toggle to reading and back to edit, and confirm it snaps
+// aligned — without any caret visit or typing.
 const entry = await ev(`(async()=>{
   try {
     const NL=String.fromCharCode(10);
@@ -88,19 +91,18 @@ const entry = await ev(`(async()=>{
     const d0=cm.state.doc, h=d0.toString().indexOf('|'), top=d0.lineAt(h).number;
     const fromPos=d0.line(top).from, toPos=d0.line(top+3).to;
     const ragged=['| zzz | dd |   |','| --- | --- | --- |','|  |   | ccc |','| CLICKHOUSE_DDL_PORT=8123 |  |  |'].join(NL);
-    cm.dispatch({ changes:{ from:fromPos, to:toPos, insert:ragged }, selection:{ anchor: 0 } }); // caret OUT of the table (doc start)
+    cm.dispatch({ changes:{ from:fromPos, to:toPos, insert:ragged }, selection:{ anchor: 0 } });
     await new Promise(r=>setTimeout(r,250));
-    const zi=cm.state.doc.toString().indexOf('zzz');
-    cm.dispatch({ selection:{ anchor: zi } });        // caret INTO the ragged table
-    await new Promise(r=>setTimeout(r,300));           // on-enter align + its microtask
-    return cm.state.doc.toString();
+    setViewMode('view'); await new Promise(r=>setTimeout(r,250));
+    setViewMode('edit'); await new Promise(r=>setTimeout(r,450));   // alignTables() fires on edit-open
+    return _cmHandle.view.state.doc.toString();
   } catch(e) { return 'ERR:'+e.message; }
 })()`);
-if (typeof entry !== 'string' || entry.startsWith('ERR:') || entry.startsWith('EXC:')) console.log('   (click-into eval returned:', JSON.stringify(entry), ')');
+if (typeof entry !== 'string' || entry.startsWith('ERR:') || entry.startsWith('EXC:')) console.log('   (view->edit eval returned:', JSON.stringify(entry), ')');
 const Le = (typeof entry === 'string' ? entry : '').split('\n').filter(l => /\|/.test(l)).slice(0, 4);
-check('CLIC DENTRO: la tabella si allinea entrando col cursore (senza scrivere)', pipesEqual(Le), Le);
-check('CLIC DENTRO: contenuto intatto (zzz + host)', /zzz/.test(entry) && /CLICKHOUSE_DDL_PORT=8123/.test(entry), null);
-console.log('--- doc dopo clic-dentro ---');
+check('VIEW→EDIT: la tabella si riallinea tornando in edit (senza scrivere)', pipesEqual(Le), Le);
+check('VIEW→EDIT: contenuto intatto (zzz + host)', /zzz/.test(entry) && /CLICKHOUSE_DDL_PORT=8123/.test(entry), null);
+console.log('--- doc dopo view->edit ---');
 Le.forEach(l => console.log('   ' + l));
 
 const failed = results.filter(r => !r).length;

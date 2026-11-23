@@ -19896,23 +19896,6 @@
     }
     update(u) {
       if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view);
-      const view = u.view;
-      const cur = this._caretBlock(view);
-      if (u.docChanged && cur) {
-        clearTimeout(this._t);
-        this._t = setTimeout(() => {
-          try {
-            const b = this._caretBlock(view);
-            if (b) this._alignNow(view, b);
-          } catch (_) {
-          }
-        }, 380);
-      } else if (u.selectionSet && !u.docChanged && this.prev?.from !== cur?.from) {
-        clearTimeout(this._t);
-        if (this.prev) this._alignNow(view, this.prev);
-        if (cur) this._alignNow(view, cur);
-      }
-      this.prev = cur;
     }
     // Re-pad `block` (captured as 1-based line numbers) into aligned columns. The whole
     // computation — re-reading the lines, _alignParts, the new text, the offsets and the

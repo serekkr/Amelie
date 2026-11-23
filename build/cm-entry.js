@@ -630,25 +630,14 @@ const tableFormatPlugin = ViewPlugin.fromClass(class {
     return _tableBlockAt(doc, doc.lineAt(view.state.selection.main.head).number);
   }
   update(u) {
+    // Decorations only (the monospace table lines). Alignment is NOT re-done here —
+    // not while you type, not when the caret enters/leaves a table. That live re-pad
+    // (debounced ~380ms after each keystroke) fought your edits: you could not delete a
+    // column, because removing a `|` snapped the padding straight back. Tables are now
+    // aligned ONCE, when edit mode opens — i.e. opening/switching a note, or toggling
+    // reading→edit — via _alignAllTables (see the `alignTables` handle). Inside edit mode
+    // you can freely add or delete columns; they re-align next time the note opens in edit.
     if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view);
-    const view = u.view;
-    const cur = this._caretBlock(view);
-    if (u.docChanged && cur) {
-      // Typing inside a table → re-align it LIVE, but debounced: fire ~380ms after you
-      // stop, so the columns snap into place while you edit without reflowing on every
-      // keystroke. The caret is carried to the same cell (see _alignNow). Recompute the
-      // block at fire time (it may have grown/shrunk).
-      clearTimeout(this._t);
-      this._t = setTimeout(() => { try { const b = this._caretBlock(view); if (b) this._alignNow(view, b); } catch (_) {} }, 380);
-    } else if (u.selectionSet && !u.docChanged && (this.prev?.from) !== (cur?.from)) {
-      // The caret crossed a table boundary (no typing). Align BOTH the table we just
-      // left AND the one we just entered — so clicking into a ragged table snaps it
-      // into columns at once, not only when you later leave it.
-      clearTimeout(this._t);
-      if (this.prev) this._alignNow(view, this.prev);   // the one we left
-      if (cur) this._alignNow(view, cur);               // the one we entered
-    }
-    this.prev = cur;
   }
   // Re-pad `block` (captured as 1-based line numbers) into aligned columns. The whole
   // computation — re-reading the lines, _alignParts, the new text, the offsets and the
