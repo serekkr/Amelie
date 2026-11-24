@@ -5885,9 +5885,17 @@ function setupNoteZoom() {
   document.addEventListener('keydown', e => {
     if (!(e.ctrlKey || e.metaKey)) return;
     const active = document.activeElement;
-    // Only act when the focus is inside the note area
+    // Act when the focus is inside the note area...
     const inNote = targets.some(t => t === active || (t && t.contains && t.contains(active)));
-    if (!inNote) return;
+    // ...OR we're in reading mode, where the preview pane isn't focusable so `inNote` is
+    // false even though the whole right panel IS the note. Without this, Ctrl+=/-/0 in
+    // reading mode fell through to Chromium's page zoom, which doesn't persist; routed
+    // here it goes through _noteZoom (saved to localStorage, applied to the preview via
+    // --editor-font-size), so the reading-mode zoom now survives a restart. Still leave a
+    // focused text field / editable cell alone. (serekkr, 24/11/2026.)
+    const viewNote = state.viewMode !== 'edit'
+      && !(active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable));
+    if (!inNote && !viewNote) return;
     if (e.key === '=' || e.key === '+') { e.preventDefault(); changeNoteZoom(10); }
     else if (e.key === '-' || e.key === '_') { e.preventDefault(); changeNoteZoom(-10); }
     else if (e.key === '0') { e.preventDefault(); _noteZoom = 100; localStorage.setItem(NOTE_ZOOM_KEY, '100'); applyNoteZoom(); }
