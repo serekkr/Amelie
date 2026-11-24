@@ -4471,14 +4471,11 @@ function renderBreadcrumb(tab) {
   bc.innerHTML = '';
   bc.style.display = 'flex';
 
-  // On Android (narrow) a deep path wraps to several lines and the note name ends up alone
-  // on the last one (serekkr, 30/10/2026). Collapse the root-side folders into a single "…"
-  // and keep only the nearest 1, so percorso + titolo stanno su UNA riga (serekkr 24/11/2026:
-  // "… / production-setup / preinstall-serbia-admin" — una sola cartella). The "…" is
-  // clickable → reveals the deepest hidden folder. Desktop keeps the full breadcrumb.
-  const _android = document.documentElement.getAttribute('data-amelie-platform') === 'android';
-  const KEEP = 1;
-  const hideCount = (_android && parts.length > KEEP) ? parts.length - KEEP : 0;
+  // No "…" collapse: show the FULL path on every platform. On Android it used to collapse
+  // root folders behind a clickable "…" to keep it compact, but serekkr (24/11/2026) prefers
+  // the WHOLE path on one line that you drag left↔right to read it all (horizontal scroll set
+  // up in mobile.css) over the "…" collapse. Desktop already showed the full path.
+  const hideCount = 0;
 
   if (hideCount > 0) {
     const hiddenPath = parts.slice(0, hideCount).join('/');   // the last hidden folder
