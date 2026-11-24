@@ -105,6 +105,39 @@ check('VIEW→EDIT: contenuto intatto (zzz + host)', /zzz/.test(entry) && /CLICK
 console.log('--- doc dopo view->edit ---');
 Le.forEach(l => console.log('   ' + l));
 
+// COLONNA IN CODA SENZA CONTENUTO: una colonna di coda vuota ovunque (header + tutte le
+// righe) viene BUTTATA all'allineamento; una che ha anche solo un residuo di testo RESTA.
+// (serekkr, 24/11/2026: se non ci sono le righe principali non ricreare la colonna — ma
+// solo se del tutto vuota, altrimenti non puoi mai cancellare colonne: ncol=max() la
+// faceva rinascere su ogni riga.)
+const trim = await ev(`(async()=>{
+  try {
+    const NL=String.fromCharCode(10);
+    const cm=_cmHandle.view;
+    // due tabelle: la 1a con una colonna di coda VUOTA, la 2a con un residuo 'zz' in coda
+    const tbl=[
+      '| h1 | h2 |   |', '| --- | --- | --- |', '| a | b |   |', '| c | d |   |', '',
+      '| k1 | k2 |   |', '| --- | --- | --- |', '| e | f |   |', '| g | h | zz |'
+    ].join(NL);
+    cm.dispatch({ changes:{ from:0, to:cm.state.doc.length, insert: tbl }, selection:{ anchor: 0 } });
+    await new Promise(r=>setTimeout(r,200));
+    setViewMode('view'); await new Promise(r=>setTimeout(r,250));
+    setViewMode('edit'); await new Promise(r=>setTimeout(r,450));
+    return _cmHandle.view.state.doc.toString();
+  } catch(e) { return 'ERR:'+e.message; }
+})()`);
+const TL = (typeof trim === 'string' ? trim : '').split('\n').filter(l => /\|/.test(l));
+const pipesOf = s => (s.match(/\|/g) || []).length;
+const tr1 = TL.slice(0, 4), tr2 = TL.slice(4, 7);
+// 1a tabella: colonna di coda vuota buttata -> 2 colonne (3 pipe) su ogni riga
+check('CODA VUOTA: la colonna di coda vuota viene rimossa (3 pipe = 2 colonne)',
+  tr1.length === 4 && tr1.every(l => pipesOf(l) === 3), tr1);
+// 2a tabella: la colonna di coda con 'zz' RESTA -> 3 colonne (4 pipe), zz intatto
+check('CODA CON TESTO: la colonna con un residuo (zz) resta (4 pipe = 3 colonne)',
+  tr2.length === 3 && tr2.every(l => pipesOf(l) === 4) && /zz/.test(trim), tr2);
+console.log('--- doc dopo trim colonne ---');
+TL.forEach(l => console.log('   ' + l));
+
 const failed = results.filter(r => !r).length;
 console.log(`\n${results.length - failed}/${results.length} passed`);
 try { process.kill(-child.pid, 'SIGKILL'); } catch (_) {}

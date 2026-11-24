@@ -526,7 +526,26 @@ function _tableBlockAt(doc, ln) {
 function _alignParts(lines) {
   const rows = lines.map(_tableSplitRow);
   const sepIdx = 1;
-  const ncol = Math.max(...rows.map((r) => r.length));
+  let ncol = Math.max(...rows.map((r) => r.length));
+  // Drop TRAILING columns that carry no content — header empty AND every body cell empty
+  // (the separator row is dashes by definition, so it does not count as content). Without
+  // this, a phantom trailing column left behind by editing is padded back onto every row:
+  // ncol = max() meant a single leftover cell or stray pipe resurrected the whole column,
+  // so you could never delete it. A column keeps its place the moment ANY row — header or
+  // body — has text in it, so a column with real content (even one stray 'aa') is never
+  // lost (serekkr, 24/11/2026: butta la colonna in coda solo se del tutto vuota).
+  while (ncol > 1) {
+    const c = ncol - 1;
+    let empty = true;
+    for (let r = 0; r < rows.length; r++) {
+      if (r === sepIdx) continue;
+      if ((rows[r][c] || '').trim() !== '') { empty = false; break; }
+    }
+    if (!empty) break;
+    ncol--;
+  }
+  // Truncate every row to the surviving column count (the cells dropped were all empty).
+  for (let r = 0; r < rows.length; r++) if (rows[r].length > ncol) rows[r] = rows[r].slice(0, ncol);
   const sep = rows[sepIdx] || [];
   const aligns = [];
   for (let c = 0; c < ncol; c++) {

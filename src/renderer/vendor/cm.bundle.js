@@ -19782,7 +19782,21 @@
   function _alignParts(lines) {
     const rows = lines.map(_tableSplitRow);
     const sepIdx = 1;
-    const ncol = Math.max(...rows.map((r) => r.length));
+    let ncol = Math.max(...rows.map((r) => r.length));
+    while (ncol > 1) {
+      const c = ncol - 1;
+      let empty = true;
+      for (let r = 0; r < rows.length; r++) {
+        if (r === sepIdx) continue;
+        if ((rows[r][c] || "").trim() !== "") {
+          empty = false;
+          break;
+        }
+      }
+      if (!empty) break;
+      ncol--;
+    }
+    for (let r = 0; r < rows.length; r++) if (rows[r].length > ncol) rows[r] = rows[r].slice(0, ncol);
     const sep = rows[sepIdx] || [];
     const aligns = [];
     for (let c = 0; c < ncol; c++) {
