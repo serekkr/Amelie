@@ -20712,6 +20712,24 @@
             return false;
           }
         },
+        // Undo / redo the editor's own history — so the toolbar undo/redo buttons work
+        // (they called _cmHandle.undo()/redo() which did not exist, so the icon did
+        // nothing), and so an edit made from reading mode (e.g. delete table row/column)
+        // can be reverted. Returns whether anything changed.
+        undo: () => {
+          try {
+            return undo(view);
+          } catch (_) {
+            return false;
+          }
+        },
+        redo: () => {
+          try {
+            return redo(view);
+          } catch (_) {
+            return false;
+          }
+        },
         destroy: () => view.destroy()
       };
     }

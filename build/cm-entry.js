@@ -3,7 +3,7 @@
 // so app.js can drive CodeMirror without importing ESM modules directly.
 import { EditorView, keymap, lineNumbers, gutter, GutterMarker, drawSelection, highlightActiveLine, Decoration, ViewPlugin } from '@codemirror/view';
 import { EditorState, Compartment, Transaction, RangeSetBuilder, StateField, StateEffect } from '@codemirror/state';
-import { defaultKeymap, history, historyKeymap, indentWithTab, indentMore, indentLess, deleteCharBackward, deleteCharForward, insertNewline } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, undo, redo, indentWithTab, indentMore, indentLess, deleteCharBackward, deleteCharForward, insertNewline } from '@codemirror/commands';
 
 // Tab INSERTS a tab at the caret, where the user put it, instead of indenting the whole
 // line. CM's stock `indentWithTab` runs `indentMore`, which adds indentation at the LINE
@@ -1522,6 +1522,12 @@ window.AmelieCM = {
       // ragged tables show real columns without clicking into them). Returns true if
       // anything changed.
       alignTables: () => { try { return _alignAllTables(view); } catch (_) { return false; } },
+      // Undo / redo the editor's own history — so the toolbar undo/redo buttons work
+      // (they called _cmHandle.undo()/redo() which did not exist, so the icon did
+      // nothing), and so an edit made from reading mode (e.g. delete table row/column)
+      // can be reverted. Returns whether anything changed.
+      undo: () => { try { return undo(view); } catch (_) { return false; } },
+      redo: () => { try { return redo(view); } catch (_) { return false; } },
       destroy: () => view.destroy(),
     };
   },

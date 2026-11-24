@@ -2168,6 +2168,12 @@ html[data-view-width="readable"] #editor-pane.line-numbers #cm-mount .cm-scrolle
 /* NOTE: overridden by the #preview-content th rule further down (equal specificity,
    later in the file) — kept in step with it so the two never disagree. */
 #preview-content th { background: var(--code-bg); color: var(--text-0); font-weight: 500; }
+/* Light highlight on the row + column the right-click table menu will act on, so it's
+   clear which element an Insert/Delete targets (serekkr, 24/11/2026: "cosi capisco che
+   sono sul elemento coretto", non troppo). Translucent accent so it reads over both the
+   plain cell and the tinted header. */
+#preview-content th.amelie-tbl-ctx-hl,
+#preview-content td.amelie-tbl-ctx-hl { background: var(--accent-glow); }
 #preview-content .col-resize-handle {
   position: absolute; top: 0; right: -3px;
   width: 6px; height: 100%;

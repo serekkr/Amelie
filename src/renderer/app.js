@@ -5749,18 +5749,38 @@ function setupEditor() {
   // applies to the note text.
   $('btn-undo')?.addEventListener('mousedown', e => e.preventDefault());
   $('btn-undo')?.addEventListener('click', () => {
+    // NOT gated by _editingBlocked(): reading mode now makes real edits too (delete/
+    // insert table row/column from the right-click menu), so undo must work there. The
+    // CM api must actually expose undo()/redo() — see cm-entry.js; without it this threw
+    // and the icon did nothing (serekkr, 04/11/2026: "l'icona undo non fa niente, ctrl z va").
+    if (_cmActive && _cmHandle) { try { _cmHandle.undo(); _afterReadingUndoRedo(); } catch (_) {} return; }
     if (_editingBlocked()) return;
-    // CodeMirror owns its own history — document.execCommand('undo') is a no-op on it
-    // (only the Mod-z keymap worked). Route the button through CM when it's the active
-    // engine (serekkr, 04/11/2026: "l'icona undo non fa niente, ctrl z va").
-    if (_cmActive && _cmHandle) { try { _cmHandle.undo(); } catch (_) {} return; }
     editor.focus(); document.execCommand('undo');
   });
   $('btn-redo')?.addEventListener('mousedown', e => e.preventDefault());
   $('btn-redo')?.addEventListener('click', () => {
+    if (_cmActive && _cmHandle) { try { _cmHandle.redo(); _afterReadingUndoRedo(); } catch (_) {} return; }
     if (_editingBlocked()) return;
-    if (_cmActive && _cmHandle) { try { _cmHandle.redo(); } catch (_) {} return; }
     editor.focus(); document.execCommand('redo');
+  });
+
+  // Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y) also undo/redo from READING mode, where
+  // CM is display:none so its own keymap never receives the key — that's why neither the
+  // icon nor Ctrl+Z could revert a delete-row/column done from the preview (serekkr,
+  // 24/11/2026). In edit mode CM's keymap owns these, so we stay out of its way. We also
+  // leave a focused text field / editable cell alone so native text undo still works there.
+  document.addEventListener('keydown', (e) => {
+    if (state.viewMode === 'edit') return;
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const k = (e.key || '').toLowerCase();
+    const isUndo = k === 'z' && !e.shiftKey;
+    const isRedo = (k === 'z' && e.shiftKey) || k === 'y';
+    if (!isUndo && !isRedo) return;
+    const a = document.activeElement;
+    if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return;
+    if (!(_cmActive && _cmHandle)) return;
+    e.preventDefault();
+    try { if (isRedo) _cmHandle.redo(); else _cmHandle.undo(); _afterReadingUndoRedo(); } catch (_) {}
   });
 
   // "<" goes BACK to the note you came from when you followed a link (browser-style);
@@ -18181,8 +18201,38 @@ function insertTable(rows, cols) {
 let tableCtxCell = null;
 let tableCtxRange = null;
 
+// Cells currently tinted to show which row/column the table menu will act on.
+let _tblCtxHl = [];
+function _clearTableCtxHl() {
+  for (const c of _tblCtxHl) { try { c.classList.remove('amelie-tbl-ctx-hl'); } catch (_) {} }
+  _tblCtxHl = [];
+}
+// Tint the whole row AND the whole column the cell sits in (subtle, via CSS), so a
+// right-click makes the target of Insert/Delete obvious.
+function _highlightTableCtx(cell) {
+  _clearTableCtxHl();
+  const info = getTableInfo(cell);
+  if (!info) return;
+  const hit = new Set();
+  const row = cell.closest('tr');
+  if (row) row.querySelectorAll('th,td').forEach(c => hit.add(c));
+  for (const r of info.rows) {
+    const cells = [...r.querySelectorAll('th,td')];
+    if (cells[info.colIdx]) hit.add(cells[info.colIdx]);
+  }
+  hit.forEach(c => { try { c.classList.add('amelie-tbl-ctx-hl'); } catch (_) {} _tblCtxHl.push(c); });
+}
+// Hide the table context menu and drop the row/column tint — used by every path that
+// closes the menu (click-away, an action, a clipboard op).
+function _hideTableCtxMenu() {
+  const m = $('table-ctx-menu');
+  if (m) m.style.display = 'none';
+  _clearTableCtxHl();
+}
+
 function showTableContextMenu(e, cell) {
   tableCtxCell = cell;
+  _highlightTableCtx(cell);
   // The cell is a contentEditable, so clicking a menu item will blur it and the
   // selection collapses. Capture it now (if it lies inside this cell) and restore
   // it before Cut/Copy/Paste run on it.
@@ -18222,7 +18272,7 @@ function _restoreTableCtxSelection(wholeCellIfEmpty) {
 }
 
 async function tableClipboard(action) {
-  $('table-ctx-menu').style.display = 'none';
+  _hideTableCtxMenu();
   const cell = _restoreTableCtxSelection(action !== 'paste');
   if (!cell) return;
   const strip = (s) => (s || '').replace(/​/g, '');
@@ -18254,7 +18304,7 @@ function setupTableContextMenu() {
   if (!menu) return;
 
   document.addEventListener('click', e => {
-    if (!e.target.closest('#table-ctx-menu')) menu.style.display = 'none';
+    if (!e.target.closest('#table-ctx-menu')) _hideTableCtxMenu();
   });
 
   $('tctx-cut')?.addEventListener('click',   () => tableClipboard('cut'));
@@ -18282,9 +18332,47 @@ function getTableInfo(cell) {
   return { table, rows, rowIdx, colIdx, colCount };
 }
 
+// Apply a structural table change made from READING mode (row/column insert or delete)
+// to the note. It goes through editor.value → CM as ONE transaction, so the toolbar
+// undo/redo buttons and Ctrl+Z revert it in a single step (previously it dispatched a
+// raw 'input' and the change could not be undone from reading mode). The preview is
+// refreshed in place and the reading position is pinned across the re-render, so the
+// view no longer jumps to the top ("effetto finestra che si sposta veloce").
+function _applyReadingTableEdit(newContent) {
+  const pv = $('preview-pane');
+  const top = pv ? pv.scrollTop : 0;
+  editor.value = newContent;                 // → _cmHandle.setValue, an undoable step
+  const tab = getActiveTab();
+  if (tab) { tab.isDirty = true; tab.content = newContent; }
+  setSavedState(false);
+  scheduleAutosave();
+  try { updateWordCount(); } catch (_) {}
+  updatePreview();
+  if (pv) requestAnimationFrame(() => { pv.scrollTop = top; requestAnimationFrame(() => { pv.scrollTop = top; }); });
+}
+
+// After an undo/redo routed through CM from the toolbar button: keep the tab content and
+// dirty flag in step and — when in READING mode, where CM is hidden and _onCmChange does
+// not re-render — refresh the preview in place (reading position pinned) so the revert is
+// actually visible. In edit mode CM is on screen and already shows it, so only the
+// bookkeeping runs.
+function _afterReadingUndoRedo() {
+  const tab = getActiveTab();
+  if (tab) { tab.isDirty = true; tab.content = editor.value; }
+  setSavedState(false);
+  scheduleAutosave();
+  try { updateWordCount(); } catch (_) {}
+  if (state.viewMode !== 'edit') {
+    const pv = $('preview-pane');
+    const top = pv ? pv.scrollTop : 0;
+    updatePreview();
+    if (pv) requestAnimationFrame(() => { pv.scrollTop = top; requestAnimationFrame(() => { pv.scrollTop = top; }); });
+  }
+}
+
 function tableEditRow(action) {
   if (!tableCtxCell) return;
-  $('table-ctx-menu').style.display = 'none';
+  _hideTableCtxMenu();
   const info = getTableInfo(tableCtxCell);
   if (!info) return;
 
@@ -18315,14 +18403,12 @@ function tableEditRow(action) {
     newLines.splice(mdRowIdx, 1);
   }
 
-  const newContent = newLines.join('\n');
-  editor.value = newContent;
-  editor.dispatchEvent(new Event('input'));
+  _applyReadingTableEdit(newLines.join('\n'));
 }
 
 function tableEditCol(action) {
   if (!tableCtxCell) return;
-  $('table-ctx-menu').style.display = 'none';
+  _hideTableCtxMenu();
   const info = getTableInfo(tableCtxCell);
   if (!info) return;
 
@@ -18349,8 +18435,7 @@ function tableEditCol(action) {
     newLines[i] = '| ' + cells.join('|') + ' |';
   }
 
-  editor.value = newLines.join('\n');
-  editor.dispatchEvent(new Event('input'));
+  _applyReadingTableEdit(newLines.join('\n'));
 }
 
 function findMarkdownTable(lines, colCount) {
