@@ -23,6 +23,18 @@ process.on('uncaughtException', (err) => {
   console.error('[main] Uncaught exception:', err);
 });
 
+// Linux: a held LETTER key should REPEAT the character, not pop the input-method
+// "long-press accent" chooser (ś š ş ß §) that appears for keys with accented variants
+// (serekkr 24/11/2026: "s va così, j ripete"). The simple GTK input context keeps
+// Compose / dead-key sequences but drops that long-press menu, so every key repeats on
+// hold. Must be set before GTK initialises (here, at module load, is early enough). Only
+// when the user hasn't already chosen an input module, and never overridden if preset.
+// NB: on a native Wayland session Chromium uses its own text-input path and may ignore
+// this — the fallback is running the app under X11 (see startupFlags / ozone-platform).
+if (process.platform === 'linux' && !process.env.GTK_IM_MODULE) {
+  process.env.GTK_IM_MODULE = 'gtk-im-context-simple';
+}
+
 // Every pre-ready Chromium switch is decided in startupFlags() — one place, one
 // rule: a switch that works around ONE machine is opt-in, only a switch that is
 // right everywhere is unconditional. See src/main/startupFlags.js for what each
