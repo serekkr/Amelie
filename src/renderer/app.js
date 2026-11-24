@@ -7744,6 +7744,11 @@ function makeCellEditable(table, cell) {
   // (non-editable) resize handle pinned to the right, which can leave the caret
   // mis-placed or unset — force it to the clicked point, else the cell start.
   cell.addEventListener('mousedown', e => {
+    // Block the middle-mouse "primary selection" paste (Linux/X11/Wayland): a middle
+    // click in an editable cell would otherwise paste the current selection/clipboard
+    // into it (serekkr 24/11/2026: "cliccando … mi metteva jumpbox che avevo in
+    // clipboard"). Remember the time so a paste firing right after is dropped too.
+    if (e.button === 1) { _middleDownAt = performance.now(); e.preventDefault(); return; }
     if (e.target.classList && e.target.classList.contains('col-resize-handle')) return;
     setTimeout(() => {
       const sel = window.getSelection();
@@ -7814,7 +7819,14 @@ function makeCellEditable(table, cell) {
   // (serekkr, 21/11/2026). A single plain value (no newline, no tab) falls through to
   // the browser's normal in-cell paste; `input` + _flattenCellStructure keep it one
   // line and blur syncs it. Existing cells only: it never grows the table.
+  // auxclick also fires for the middle button on some platforms — block it too, so the
+  // primary-selection paste never reaches the cell (belt and braces with the paste guard).
+  cell.addEventListener('auxclick', e => { if (e.button === 1) { e.preventDefault(); } });
   cell.addEventListener('paste', e => {
+    // Drop the primary-selection paste a middle click triggers (not an explicit Ctrl+V):
+    // preventDefault on mousedown isn't always enough (esp. Wayland), so also drop any
+    // paste that fires right after a middle-down (serekkr 24/11/2026: no auto-paste on click).
+    if (performance.now() - _middleDownAt < 700) { e.preventDefault(); e.stopImmediatePropagation(); return; }
     const cd = e.clipboardData || window.clipboardData;
     if (!cd) return;
     let raw = cd.getData('text/plain');

@@ -84,6 +84,22 @@ check('menu vicino al bordo basso resta dentro la finestra (non tagliato)',
 const cleared = await ev(`(()=>{ document.body.click(); return document.querySelectorAll('#preview-content .amelie-tbl-ctx-hl').length; })()`);
 check('chiudendo il menu il tint sparisce', cleared === 0, cleared);
 
+// 2c) a middle click must NOT auto-paste into a cell (Linux primary-selection paste):
+// the guard drops a paste that fires right after a middle-down; a normal single-value
+// paste is left to the browser (serekkr, 24/11/2026: "non deve fare paste da click").
+const mid = await ev(`(()=>{
+  const tds=[...document.querySelectorAll('#preview-content td')];
+  const cell=tds.find(td=>td.textContent.trim()==='b2') || tds[0];
+  const mk=(txt)=>{ const dt=new DataTransfer(); dt.setData('text/plain', txt); return new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true}); };
+  const pNorm = mk('x'); cell.dispatchEvent(pNorm);                 // no middle-down -> not blocked
+  cell.dispatchEvent(new MouseEvent('mousedown',{button:1,bubbles:true,cancelable:true}));
+  const pMid = mk('jumpbox'); cell.dispatchEvent(pMid);            // right after middle-down -> blocked
+  return JSON.stringify({ normalPrevented: pNorm.defaultPrevented, midPrevented: pMid.defaultPrevented });
+})()`);
+const M = JSON.parse(mid || '{}');
+check('click centrale: il paste automatico nella cella viene bloccato', M.midPrevented === true, M);
+check('paste normale (valore singolo) NON viene bloccato', M.normalPrevented === false, M);
+
 // 3) delete the row containing b2 → '| a2 | b2 | c2 |' gone, scroll kept, undoable
 const before = await ev(`JSON.stringify({ scroll: document.getElementById('preview-pane').scrollTop, hasRow: /a2\\s*\\|\\s*b2\\s*\\|\\s*c2/.test(editor.value) })`);
 const del = await ev(`(async()=>{
