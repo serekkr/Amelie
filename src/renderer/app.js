@@ -4540,9 +4540,7 @@ function showCrumbContextMenu(e, seg, path) {
   _crumbCtx = { seg, path };
   const menu = $('crumb-context-menu');
   if (!menu) return;
-  menu.style.display = 'block';
-  menu.style.left = e.clientX + 'px';
-  menu.style.top = e.clientY + 'px';
+  _placeMenuInViewport(menu, e.clientX, e.clientY);
 }
 
 function setupCrumbContextMenu() {
@@ -10272,9 +10270,7 @@ function showTabContextMenu(e, idx) {
         ? window.i18n.t('ctx.unbookmark') : window.i18n.t('ctx.bookmark');
     }
   }
-  menu.style.display = 'block';
-  menu.style.left = e.clientX + 'px';
-  menu.style.top = e.clientY + 'px';
+  _placeMenuInViewport(menu, e.clientX, e.clientY);
 }
 
 function setupTabContextMenu() {
@@ -15670,9 +15666,7 @@ function setupCanvas() {
     ct.addEventListener('contextmenu', (e) => {
       e.preventDefault(); e.stopPropagation();
       const menu = $('draw-context-menu'); if (!menu) return;
-      menu.style.display = 'block';
-      menu.style.left = e.clientX + 'px';
-      menu.style.top = e.clientY + 'px';
+      _placeMenuInViewport(menu, e.clientX, e.clientY);
     });
   }
   setupDrawContextMenu();
@@ -18238,6 +18232,25 @@ function _hideTableCtxMenu() {
   _clearTableCtxHl();
 }
 
+// Show `menu` (a fixed-position DOM context menu) at a click point, clamped so it stays
+// fully inside the viewport — near the bottom/right edge it would otherwise run off-screen
+// and its last items get cut off (serekkr, 24/11/2026). Measures the menu while hidden so
+// the clamp uses its real size, then reveals it.
+function _placeMenuInViewport(menu, clientX, clientY) {
+  if (!menu) return;
+  menu.style.visibility = 'hidden';
+  menu.style.display = 'block';
+  const pad = 8;
+  const mw = menu.offsetWidth || 200;
+  const mh = menu.offsetHeight || 0;
+  let x = clientX, y = clientY;
+  if (x + mw > window.innerWidth  - pad) x = Math.max(pad, window.innerWidth  - mw - pad);
+  if (y + mh > window.innerHeight - pad) y = Math.max(pad, window.innerHeight - mh - pad);
+  menu.style.left = x + 'px';
+  menu.style.top  = y + 'px';
+  menu.style.visibility = '';
+}
+
 function showTableContextMenu(e, cell) {
   tableCtxCell = cell;
   _highlightTableCtx(cell);
@@ -18251,10 +18264,7 @@ function showTableContextMenu(e, cell) {
       tableCtxRange = sel.getRangeAt(0).cloneRange();
     }
   } catch (_) {}
-  const menu = $('table-ctx-menu');
-  menu.style.left = e.clientX + 'px';
-  menu.style.top  = e.clientY + 'px';
-  menu.style.display = 'block';
+  _placeMenuInViewport($('table-ctx-menu'), e.clientX, e.clientY);
 }
 
 // Re-focus the cell and restore the selection we saved when the menu opened, so
@@ -18826,9 +18836,7 @@ function showImageContextMenu(e, img) {
 
   const menu = $('img-ctx-menu');
   $('img-ctx-name').textContent = filename;
-  menu.style.left    = Math.min(e.clientX, window.innerWidth - 220) + 'px';
-  menu.style.top     = Math.min(e.clientY, window.innerHeight - 200) + 'px';
-  menu.style.display = 'block';
+  _placeMenuInViewport(menu, e.clientX, e.clientY);
 }
 
 function openImagePicker() {
@@ -20238,9 +20246,7 @@ function showBookmarkContextMenu(e, path) {
   _bmCtxPath = path;
   const menu = $('bookmark-context-menu');
   if (!menu) return;
-  menu.style.display = 'block';
-  menu.style.left = e.clientX + 'px';
-  menu.style.top = e.clientY + 'px';
+  _placeMenuInViewport(menu, e.clientX, e.clientY);
 }
 
 function setupBookmarkContextMenu() {

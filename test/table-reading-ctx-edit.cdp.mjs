@@ -66,6 +66,20 @@ const marked = JSON.parse(hl || '[]');
 check('right-click tinge riga + colonna del cell (b2)',
   ['B','a2','b1','b2','b3','c2'].every(x=>marked.includes(x)) && marked.length === 6, marked);
 
+// 1b) right-click near the BOTTOM edge → menu must stay fully inside the viewport
+// (serekkr, 24/11/2026: "non si vede tutta la finestra" — era tagliato in basso).
+const fit = await ev(`(()=>{
+  const tds=[...document.querySelectorAll('#preview-content td')];
+  const cell=tds.find(td=>td.textContent.trim()==='b2') || tds[0];
+  showTableContextMenu({clientX: window.innerWidth-10, clientY: window.innerHeight-10}, cell);
+  const m=document.getElementById('table-ctx-menu');
+  const r=m.getBoundingClientRect();
+  return JSON.stringify({ bottom:r.bottom, right:r.right, top:r.top, left:r.left, W:window.innerWidth, H:window.innerHeight });
+})()`);
+const F = JSON.parse(fit || '{}');
+check('menu vicino al bordo basso resta dentro la finestra (non tagliato)',
+  F.bottom <= F.H && F.right <= F.W && F.top >= 0 && F.left >= 0, F);
+
 // 2) close menu (click away) clears the tint
 const cleared = await ev(`(()=>{ document.body.click(); return document.querySelectorAll('#preview-content .amelie-tbl-ctx-hl').length; })()`);
 check('chiudendo il menu il tint sparisce', cleared === 0, cleared);
