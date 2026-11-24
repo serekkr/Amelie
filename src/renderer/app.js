@@ -4473,10 +4473,11 @@ function renderBreadcrumb(tab) {
 
   // On Android (narrow) a deep path wraps to several lines and the note name ends up alone
   // on the last one (serekkr, 30/10/2026). Collapse the root-side folders into a single "…"
-  // and keep only the nearest 2, so breadcrumb stays compact with the name in view. The "…"
-  // is clickable → reveals the deepest hidden folder. Desktop keeps the full breadcrumb.
+  // and keep only the nearest 1, so percorso + titolo stanno su UNA riga (serekkr 24/11/2026:
+  // "… / production-setup / preinstall-serbia-admin" — una sola cartella). The "…" is
+  // clickable → reveals the deepest hidden folder. Desktop keeps the full breadcrumb.
   const _android = document.documentElement.getAttribute('data-amelie-platform') === 'android';
-  const KEEP = 2;
+  const KEEP = 1;
   const hideCount = (_android && parts.length > KEEP) ? parts.length - KEEP : 0;
 
   if (hideCount > 0) {

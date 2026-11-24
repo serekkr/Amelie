@@ -3934,7 +3934,9 @@ body.split-open .pane-flash::after {
 }
 .tp-title {
   font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
-  color: var(--text-3); font-family: var(--editor-font); margin-bottom: 8px;
+  /* White, not the dim --text-3: the "INSERT TABLE" label was hard to read on the dark
+     popup (serekkr, 24/11/2026: "farlo di colore bianco così lo vedo meglio"). */
+  color: var(--text-0); font-family: var(--editor-font); margin-bottom: 8px;
 }
 .tp-grid {
   display: grid; grid-template-columns: repeat(8, 20px);
